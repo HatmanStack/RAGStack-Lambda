@@ -72,10 +72,9 @@ def lambda_handler(event, context):
             full_text = full_text[:30000]
 
         logger.info("Generating text embedding...")
-        text_embedding = bedrock_client.generate_text_embedding(
+        text_embedding = bedrock_client.generate_embedding(
             text=full_text,
-            model_id=TEXT_EMBED_MODEL,
-            document_id=document_id
+            model_id=TEXT_EMBED_MODEL
         )
 
         # Save text embedding
@@ -110,8 +109,7 @@ def lambda_handler(event, context):
             # Generate embedding
             image_embedding = bedrock_client.generate_image_embedding(
                 image_bytes=image_bytes,
-                model_id=IMAGE_EMBED_MODEL,
-                document_id=document_id
+                model_id=IMAGE_EMBED_MODEL
             )
 
             # Save image embedding
