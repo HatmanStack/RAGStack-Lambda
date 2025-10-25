@@ -94,6 +94,12 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldOutputs
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -102,7 +108,7 @@ Resources:
               - GET
               - HEAD
             AllowedOrigins:
-              - '*'
+              - '*'  # TODO Phase 6: Restrict to CloudFront distribution
             MaxAge: 3000
 
   WorkingBucket:
@@ -143,6 +149,12 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldVectors
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -205,6 +217,8 @@ Resources:
     Properties:
       TableName: !Sub '${ProjectName}-Metering'
       BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
       AttributeDefinitions:
