@@ -8,13 +8,11 @@
 set -e
 
 STACK_NAME=${1:-RAGStack-prod}
-REGION=${2:-us-east-1}
 
 echo "Getting CloudFront distribution ID from stack: $STACK_NAME"
 
 DIST_ID=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
-  --region "$REGION" \
   --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
   --output text)
 
@@ -25,10 +23,10 @@ fi
 
 echo "Invalidating CloudFront cache for distribution: $DIST_ID"
 
+# Note: CloudFront is a global service, no region parameter needed
 aws cloudfront create-invalidation \
   --distribution-id "$DIST_ID" \
-  --paths "/*" \
-  --region "$REGION"
+  --paths "/*"
 
 echo "✓ Cache invalidation initiated"
 echo "Note: Invalidation may take a few minutes to complete"

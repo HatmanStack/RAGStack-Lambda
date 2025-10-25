@@ -2,7 +2,7 @@ version = 0.1
 
 [default]
 [default.global.parameters]
-stack_name = "RAGStack-prod"
+stack_name = "RAGStack-dev"
 
 [default.build.parameters]
 cached = true
@@ -10,9 +10,15 @@ parallel = true
 
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
-confirm_changeset = false
+confirm_changeset = true
 resolve_s3 = true
 region = "us-east-1"
+parameter_overrides = [
+  "ProjectName=RAGStack-dev",
+  "AdminEmail=your-email@example.com",
+  "OcrBackend=textract",
+  "BedrockOcrModelId=anthropic.claude-3-5-haiku-20241022-v1:0"
+]
 
 [default.package.parameters]
 resolve_s3 = true
@@ -25,3 +31,18 @@ warm_containers = "EAGER"
 
 [default.local_start_lambda.parameters]
 warm_containers = "EAGER"
+
+# Production environment
+[prod]
+[prod.deploy.parameters]
+stack_name = "RAGStack-prod"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+resolve_s3 = true
+parameter_overrides = [
+  "ProjectName=RAGStack-prod",
+  "AdminEmail=your-email@example.com",
+  "OcrBackend=textract",
+  "BedrockOcrModelId=anthropic.claude-3-5-haiku-20241022-v1:0"
+]

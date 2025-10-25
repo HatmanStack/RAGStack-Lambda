@@ -4,205 +4,6 @@
 
 RAGStack-Lambda is a serverless document processing pipeline that extracts text from documents using OCR, generates embeddings, and indexes them in a Bedrock Knowledge Base for semantic search.
 
-## Architecture Diagram
-
-```
-┌─────────────┐
-│   User      │
-└──────┬──────┘
-       │ HTTPS
-       ↓
-┌─────────────────┐
-│  CloudFront     │ (CDN + HTTPS)
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────┐
-│   React UI      │ (S3 Static Hosting)
-└────────┬────────┘
-         │ GraphQL
-         ↓
-┌─────────────────┐
-│  AppSync API    │ (GraphQL + Cognito Auth)
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────────────────────────────────────┐
-│              Lambda Functions                    │
-│  • ProcessDocument                               │
-│  • GenerateEmbeddings                            │
-│  • QueryKB                                       │
-│  • AppSync Resolvers                             │
-└─────┬──────────────┬─────────────┬──────────────┘
-      │              │             │
-      ↓              ↓             ↓
-┌──────────┐  ┌─────────────┐  ┌────────────┐
-│   S3     │  │ DynamoDB    │  │  Bedrock   │
-│ Buckets  │  │  Tables     │  │            │
-│          │  │             │  │ • OCR      │
-│ • Input  │  │ • Tracking  │  │ • Embed    │
-│ • Output │  │ • Metering  │  │ • KB       │
-│ • Vectors│  │             │  │            │
-│ • Working│  │             │  │            │
-└──────────┘  └─────────────┘  └────────────┘
-```
-
-## Components
-
-### Frontend
-
-**React UI (CloudScape)**
-- User authentication (Cognito)
-- Document upload with drag-drop
-- Processing status dashboard
-- Knowledge Base search interface
-- Built with CloudScape Design System
-- Served via CloudFront for HTTPS
-
-### API Layer
-
-**AppSync GraphQL API**
-- Authenticated via Cognito User Pool
-- Resolvers implemented as Lambda functions
-- Queries: getDocument, listDocuments, queryKnowledgeBase
-- Mutations: createUploadUrl
-
-### Processing Pipeline
-
-**Step Functions State Machine**
-Orchestrates document processing:
-
-1. **ProcessDocument** → OCR and text extraction
-2. **GenerateEmbeddings** → Text and image embeddings
-3. **Mark as Indexed** → Final status update
-
-**Lambda Functions:**
-
-| Function | Purpose | Timeout | Memory |
-|----------|---------|---------|--------|
-| ProcessDocument | OCR, format conversion, text extraction | 15 min | 3008 MB |
-| GenerateEmbeddings | Generate text/image embeddings | 15 min | 2048 MB |
-| QueryKB | Query Knowledge Base | 60 sec | 512 MB |
-| AppSyncResolvers | Handle GraphQL queries | 30 sec | 512 MB |
-
-### Storage
-
-**S3 Buckets:**
-- **Input** - User uploads, triggers processing
-- **Output** - Extracted text and images
-- **Vectors** - Embeddings for Knowledge Base
-- **Working** - Temporary files (auto-cleanup after 7 days)
-- **UI** - Static website assets
-
-**DynamoDB Tables:**
-- **Tracking** - Document processing status
-- **Metering** - Token usage and cost tracking
-
-### Knowledge Base
-
-**Amazon Bedrock Knowledge Base**
-- Vector store: S3 Vectors (cost-optimized)
-- Embedding model: Titan Embed Text V2
-- Image embeddings: Titan Embed Image
-- Chunking: Fixed-size, 300 tokens, 15% overlap
-
-### Authentication
-
-**Cognito:**
-- User Pool for authentication
-- Identity Pool for AWS credentials
-- MFA optional
-- Password policies enforced
-
-## Data Flow
-
-### Document Upload Flow
-
-```
-1. User drags PDF to UI
-2. UI requests presigned URL from AppSync
-3. AppSync Lambda creates tracking record
-4. UI uploads directly to S3 input bucket
-5. S3 event → EventBridge → Step Functions
-6. Step Functions starts processing
-```
-
-### Processing Flow
-
-```
-1. ProcessDocument Lambda:
-   - Download from S3 input bucket
-   - Detect document type (PDF vs image vs Office)
-   - Convert if needed (Office → PDF)
-   - Check if PDF is text-native
-   - If text-native: extract text directly (PyMuPDF)
-   - If scanned: run OCR (Textract or Bedrock)
-   - Extract embedded images
-   - Save text + images to S3 output bucket
-   - Update DynamoDB tracking
-
-2. GenerateEmbeddings Lambda:
-   - Read text from S3 output bucket
-   - Generate text embedding (Titan Embed Text V2)
-   - For each image:
-     - Read image bytes
-     - Generate image embedding (Titan Embed Image)
-   - Save embeddings to S3 vector bucket
-   - Update DynamoDB tracking
-
-3. Knowledge Base Auto-Sync:
-   - S3 vector bucket monitors for new files
-   - Bedrock KB automatically indexes new embeddings
-   - Document becomes searchable
-```
-
-### Search Flow
-
-```
-1. User enters query in UI
-2. UI sends GraphQL query to AppSync
-3. QueryKB Lambda invokes Bedrock Knowledge Base
-4. KB performs vector similarity search
-5. Returns top-k results with source references
-6. UI displays results with relevance scores
-```
-
-## Security
-
-- **Encryption at rest**: S3 SSE, DynamoDB encryption
-- **Encryption in transit**: HTTPS/TLS everywhere
-- **IAM**: Least-privilege policies for all resources
-- **Cognito**: MFA optional, password policies enforced
-- **S3**: Public access blocked
-- **CloudFront**: HTTPS-only, OAI for S3 access
-- **VPC**: Not required (all services are AWS-managed)
-
-## Scalability
-
-- **Concurrent uploads**: Limited by Cognito (default: 10k RPS)
-- **Processing**: Limited by Lambda concurrency (default: 1000)
-- **Textract**: Default 20 concurrent requests (can increase)
-- **Bedrock**: Rate limits vary by model (see quotas)
-- **DynamoDB**: On-demand scaling (no limits)
-- **S3**: Unlimited scalability
-
-## Monitoring
-
-- **CloudWatch Logs**: All Lambda function logs
-- **DynamoDB**: Document tracking and status
-- **Metering**: Token usage tracked in DynamoDB
-- **X-Ray**: Optional distributed tracing
-
-Refer to Phase 7 for comprehensive monitoring setup with CloudWatch dashboards and alarms.
-
-## Cost Optimization
-
-1. **Text-native PDF detection** - Skip OCR when possible
-2. **S3 Vectors** - Cheaper than OpenSearch Serverless
-3. **S3 lifecycle policies** - Auto-delete old files
-4. **DynamoDB on-demand** - Pay per request
-5. **CloudFront** - Reduce origin requests
-
 ## Architecture Decision Records (ADRs)
 
 ### ADR-001: Use SAM Instead of Raw CloudFormation
@@ -460,29 +261,215 @@ sam local invoke ProcessDocumentFunction -e tests/events/process_document.json
 sam local start-api
 
 # 4. Deploy to dev environment
-sam deploy --config-env dev --parameter-overrides ProjectName=RAGStack-dev
+./publish.sh --env dev
 
 # 5. Run integration tests
 pytest tests/integration/ --env dev
 
 # 6. Deploy to production
-sam deploy --config-env prod --parameter-overrides ProjectName=RAGStack-prod
+./publish.sh --env prod
 ```
 
 **Environment Configuration:**
-Create `samconfig.toml`:
-```toml
-version = 0.1
+`samconfig.toml` contains dev and prod environment configurations with stack names, regions, and parameter overrides.
 
-[default.deploy.parameters]
-stack_name = "RAGStack-dev"
-region = "us-east-1"
-capabilities = "CAPABILITY_IAM"
-parameter_overrides = "ProjectName=RAGStack-dev"
+---
 
-[prod.deploy.parameters]
-stack_name = "RAGStack-prod"
-region = "us-east-1"
-capabilities = "CAPABILITY_IAM"
-parameter_overrides = "ProjectName=RAGStack-prod"
+## Architecture Diagram
+
 ```
+┌─────────────┐
+│   User      │
+└──────┬──────┘
+       │ HTTPS
+       ↓
+┌─────────────────┐
+│  CloudFront     │ (CDN + HTTPS)
+└────────┬────────┘
+         │
+         ↓
+┌─────────────────┐
+│   React UI      │ (S3 Static Hosting)
+└────────┬────────┘
+         │ GraphQL
+         ↓
+┌─────────────────┐
+│  AppSync API    │ (GraphQL + Cognito Auth)
+└────────┬────────┘
+         │
+         ↓
+┌─────────────────────────────────────────────────┐
+│              Lambda Functions                    │
+│  • ProcessDocument                               │
+│  • GenerateEmbeddings                            │
+│  • QueryKB                                       │
+│  • AppSync Resolvers                             │
+└─────┬──────────────┬─────────────┬──────────────┘
+      │              │             │
+      ↓              ↓             ↓
+┌──────────┐  ┌─────────────┐  ┌────────────┐
+│   S3     │  │ DynamoDB    │  │  Bedrock   │
+│ Buckets  │  │  Tables     │  │            │
+│          │  │             │  │ • OCR      │
+│ • Input  │  │ • Tracking  │  │ • Embed    │
+│ • Output │  │ • Metering  │  │ • KB       │
+│ • Vectors│  │             │  │            │
+│ • Working│  │             │  │            │
+└──────────┘  └─────────────┘  └────────────┘
+```
+
+## Components
+
+### Frontend
+
+**React UI (CloudScape)**
+- User authentication (Cognito)
+- Document upload with drag-drop
+- Processing status dashboard
+- Knowledge Base search interface
+- Built with CloudScape Design System
+- Served via CloudFront for HTTPS
+
+### API Layer
+
+**AppSync GraphQL API**
+- Authenticated via Cognito User Pool
+- Resolvers implemented as Lambda functions
+- Queries: getDocument, listDocuments, queryKnowledgeBase
+- Mutations: createUploadUrl
+
+### Processing Pipeline
+
+**Step Functions State Machine**
+Orchestrates document processing:
+
+1. **ProcessDocument** → OCR and text extraction
+2. **GenerateEmbeddings** → Text and image embeddings
+3. **Mark as Indexed** → Final status update
+
+**Lambda Functions:**
+
+| Function | Purpose | Timeout | Memory |
+|----------|---------|---------|--------|
+| ProcessDocument | OCR, format conversion, text extraction | 15 min | 3008 MB |
+| GenerateEmbeddings | Generate text/image embeddings | 15 min | 2048 MB |
+| QueryKB | Query Knowledge Base | 60 sec | 512 MB |
+| AppSyncResolvers | Handle GraphQL queries | 30 sec | 512 MB |
+
+### Storage
+
+**S3 Buckets:**
+- **Input** - User uploads, triggers processing
+- **Output** - Extracted text and images
+- **Vectors** - Embeddings for Knowledge Base
+- **Working** - Temporary files (auto-cleanup after 7 days)
+- **UI** - Static website assets
+
+**DynamoDB Tables:**
+- **Tracking** - Document processing status
+- **Metering** - Token usage and cost tracking
+
+### Knowledge Base
+
+**Amazon Bedrock Knowledge Base**
+- Vector store: S3 Vectors (cost-optimized)
+- Embedding model: Titan Embed Text V2
+- Image embeddings: Titan Embed Image
+- Chunking: Fixed-size, 300 tokens, 15% overlap
+
+### Authentication
+
+**Cognito:**
+- User Pool for authentication
+- Identity Pool for AWS credentials
+- MFA optional
+- Password policies enforced
+
+## Data Flow
+
+### Document Upload Flow
+
+```
+1. User drags PDF to UI
+2. UI requests presigned URL from AppSync
+3. AppSync Lambda creates tracking record
+4. UI uploads directly to S3 input bucket
+5. S3 event → EventBridge → Step Functions
+6. Step Functions starts processing
+```
+
+### Processing Flow
+
+```
+1. ProcessDocument Lambda:
+   - Download from S3 input bucket
+   - Detect document type (PDF vs image vs Office)
+   - Convert if needed (Office → PDF)
+   - Check if PDF is text-native
+   - If text-native: extract text directly (PyMuPDF)
+   - If scanned: run OCR (Textract or Bedrock)
+   - Extract embedded images
+   - Save text + images to S3 output bucket
+   - Update DynamoDB tracking
+
+2. GenerateEmbeddings Lambda:
+   - Read text from S3 output bucket
+   - Generate text embedding (Titan Embed Text V2)
+   - For each image:
+     - Read image bytes
+     - Generate image embedding (Titan Embed Image)
+   - Save embeddings to S3 vector bucket
+   - Update DynamoDB tracking
+
+3. Knowledge Base Auto-Sync:
+   - S3 vector bucket monitors for new files
+   - Bedrock KB automatically indexes new embeddings
+   - Document becomes searchable
+```
+
+### Search Flow
+
+```
+1. User enters query in UI
+2. UI sends GraphQL query to AppSync
+3. QueryKB Lambda invokes Bedrock Knowledge Base
+4. KB performs vector similarity search
+5. Returns top-k results with source references
+6. UI displays results with relevance scores
+```
+
+## Security
+
+- **Encryption at rest**: S3 SSE, DynamoDB encryption
+- **Encryption in transit**: HTTPS/TLS everywhere
+- **IAM**: Least-privilege policies for all resources
+- **Cognito**: MFA optional, password policies enforced
+- **S3**: Public access blocked
+- **CloudFront**: HTTPS-only, OAI for S3 access
+- **VPC**: Not required (all services are AWS-managed)
+
+## Scalability
+
+- **Concurrent uploads**: Limited by Cognito (default: 10k RPS)
+- **Processing**: Limited by Lambda concurrency (default: 1000)
+- **Textract**: Default 20 concurrent requests (can increase)
+- **Bedrock**: Rate limits vary by model (see quotas)
+- **DynamoDB**: On-demand scaling (no limits)
+- **S3**: Unlimited scalability
+
+## Monitoring
+
+- **CloudWatch Logs**: All Lambda function logs
+- **DynamoDB**: Document tracking and status
+- **Metering**: Token usage tracked in DynamoDB
+- **X-Ray**: Optional distributed tracing
+
+Refer to Phase 7 for comprehensive monitoring setup with CloudWatch dashboards and alarms.
+
+## Cost Optimization
+
+1. **Text-native PDF detection** - Skip OCR when possible
+2. **S3 Vectors** - Cheaper than OpenSearch Serverless
+3. **S3 lifecycle policies** - Auto-delete old files
+4. **DynamoDB on-demand** - Pay per request
+5. **CloudFront** - Reduce origin requests

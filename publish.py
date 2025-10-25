@@ -9,9 +9,9 @@ RAGStack-Lambda Deployment Script
 One-click deployment automation for RAGStack-Lambda stack.
 
 Usage:
-    python publish.py
-    python publish.py --admin-email admin@example.com --project-name MyRAGStack
-    python publish.py --region us-west-2
+    python publish.py --env dev
+    python publish.py --env prod --admin-email admin@example.com
+    python publish.py --env dev --skip-ui --skip-layers
 """
 
 import argparse
@@ -21,7 +21,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import quote
 
 import boto3
 from botocore.exceptions import ClientError
@@ -73,12 +72,6 @@ def validate_email(email):
     return re.match(pattern, email) is not None
 
 
-def validate_project_name(name):
-    """Validate project name (alphanumeric, hyphens, underscores)."""
-    pattern = r'^[a-zA-Z0-9-_]+$'
-    return re.match(pattern, name) is not None and len(name) > 0 and len(name) <= 64
-
-
 def prompt_for_email(default=None):
     """Prompt user for admin email with validation."""
     while True:
@@ -102,48 +95,90 @@ def prompt_for_email(default=None):
             log_error("Invalid email format. Please enter a valid email address (e.g., admin@example.com)")
 
 
-def prompt_for_project_name(default="RAGStack"):
-    """Prompt user for project name with validation."""
-    while True:
-        prompt_msg = f"Enter project name [{default}]: "
-        name = input(prompt_msg).strip()
+def get_samconfig_value(env, key):
+    """Read value from samconfig.toml for given environment."""
+    try:
+        import tomli
+    except ImportError:
+        # Fallback to manual parsing if tomli not available
+        return None
 
-        if not name:
-            name = default
+    samconfig_path = Path("samconfig.toml")
+    if not samconfig_path.exists():
+        return None
 
-        if validate_project_name(name):
-            return name
-        else:
-            log_error("Invalid project name. Use only letters, numbers, hyphens, and underscores (max 64 chars)")
+    with open(samconfig_path, "rb") as f:
+        config = tomli.load(f)
+
+    section = config.get(env, {})
+    deploy_params = section.get("deploy", {}).get("parameters", {})
+
+    # Parse parameter_overrides array
+    param_overrides = deploy_params.get("parameter_overrides", [])
+    for param in param_overrides:
+        if param.startswith(f"{key}="):
+            return param.split("=", 1)[1]
+
+    return None
 
 
-def sam_build():
+def build_lambda_layers():
+    """Build Lambda layers for shared dependencies."""
+    log_info("Building Lambda layers...")
+
+    layer_dir = Path("layers/python")
+    layer_dir.mkdir(parents=True, exist_ok=True)
+
+    # Install shared dependencies to layer
+    requirements_file = Path("lib/ragstack_common/requirements.txt")
+
+    if requirements_file.exists():
+        log_info("Installing shared dependencies to layer...")
+        run_command([
+            "pip", "install",
+            "-r", str(requirements_file),
+            "-t", str(layer_dir),
+            "--upgrade"
+        ])
+        log_success("Lambda layer built successfully")
+    else:
+        log_warning(f"Requirements file not found: {requirements_file}")
+
+
+def sam_build(skip_layers=False):
     """Build SAM application."""
     log_info("Building SAM application...")
+
+    if not skip_layers:
+        build_lambda_layers()
+
     run_command(["sam", "build", "--parallel", "--cached"])
     log_success("SAM build complete")
 
 
-def sam_deploy(region, admin_email, project_name):
+def sam_deploy(env, admin_email, region="us-east-1"):
     """Deploy SAM application."""
-    log_info(f"Deploying to {region}...")
+    log_info(f"Deploying to {env} environment in {region}...")
 
-    # Stack name includes project name
-    stack_name = f"{project_name}-prod"
+    # Determine stack name and project name from environment
+    if env == "prod":
+        stack_name = "RAGStack-prod"
+        project_name = "RAGStack-prod"
+    else:
+        stack_name = "RAGStack-dev"
+        project_name = "RAGStack-dev"
 
     cmd = [
         "sam", "deploy",
+        "--config-env", env,
         "--region", region,
-        "--stack-name", stack_name,
-        "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
-        "--resolve-s3",
         "--parameter-overrides",
         f"AdminEmail={admin_email}",
         f"ProjectName={project_name}"
     ]
 
     run_command(cmd)
-    log_success(f"Deployment to {region} complete")
+    log_success(f"Deployment to {env} complete")
     return stack_name
 
 
@@ -236,24 +271,23 @@ def deploy_ui(ui_bucket, region="us-east-1"):
     log_success("UI deployed to S3")
 
 
-def invalidate_cloudfront(distribution_id, region="us-east-1"):
+def invalidate_cloudfront(distribution_id):
     """Invalidate CloudFront cache."""
     log_info(f"Invalidating CloudFront cache for distribution {distribution_id}...")
 
     run_command([
         "aws", "cloudfront", "create-invalidation",
         "--distribution-id", distribution_id,
-        "--paths", "/*",
-        "--region", region
+        "--paths", "/*"
     ])
 
     log_success("CloudFront cache invalidation initiated")
 
 
-def print_outputs(outputs, region):
+def print_outputs(outputs, env, region):
     """Print stack outputs in a nice format."""
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-    print(f"{Colors.HEADER}Deployment Complete!{Colors.ENDC}")
+    print(f"{Colors.HEADER}Deployment Complete! ({env} environment){Colors.ENDC}")
     print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}Stack Outputs:{Colors.ENDC}\n")
@@ -264,7 +298,9 @@ def print_outputs(outputs, region):
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     # Print UI URL if available
-    if 'CloudFrontDomain' in outputs:
+    if 'UIUrl' in outputs:
+        print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {outputs['UIUrl']}")
+    elif 'CloudFrontDomain' in outputs:
         ui_url = f"https://{outputs['CloudFrontDomain']}"
         print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {ui_url}")
     elif 'UIBucketName' in outputs:
@@ -275,7 +311,7 @@ def print_outputs(outputs, region):
     if 'GraphQLApiUrl' in outputs:
         print(f"{Colors.OKGREEN}GraphQL API:{Colors.ENDC} {outputs['GraphQLApiUrl']}")
 
-    if 'AdminEmail' in outputs or outputs.get('UserPoolId'):
+    if outputs.get('UserPoolId'):
         print(f"\n{Colors.OKGREEN}Next Steps:{Colors.ENDC}")
         print(f"1. Check your email for temporary password")
         print(f"2. Sign in to the UI and change your password")
@@ -290,21 +326,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python publish.py
-  python publish.py --admin-email admin@example.com --project-name MyRAGStack
-  python publish.py --region us-west-2 --skip-ui
+  python publish.py --env dev
+  python publish.py --env prod --admin-email admin@example.com
+  python publish.py --env dev --skip-ui
         """
     )
 
     parser.add_argument(
-        "--admin-email",
-        help="Admin user email address"
+        "--env",
+        required=True,
+        choices=["dev", "prod"],
+        help="Deployment environment"
     )
 
     parser.add_argument(
-        "--project-name",
-        default="RAGStack",
-        help="Project name prefix for resources (default: RAGStack)"
+        "--admin-email",
+        help="Admin user email address (will prompt if not provided)"
     )
 
     parser.add_argument(
@@ -325,11 +362,17 @@ Examples:
         help="Skip SAM build (use existing build)"
     )
 
+    parser.add_argument(
+        "--skip-layers",
+        action="store_true",
+        help="Skip Lambda layer build"
+    )
+
     args = parser.parse_args()
 
     try:
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-        print(f"{Colors.HEADER}RAGStack-Lambda Deployment{Colors.ENDC}")
+        print(f"{Colors.HEADER}RAGStack-Lambda Deployment ({args.env}){Colors.ENDC}")
         print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
         # Get admin email (prompt if not provided)
@@ -339,27 +382,20 @@ Examples:
                 log_error("Invalid email format provided")
                 sys.exit(1)
         else:
-            admin_email = prompt_for_email()
+            # Try to get from samconfig.toml
+            default_email = get_samconfig_value(args.env, "AdminEmail")
+            admin_email = prompt_for_email(default=default_email)
 
-        # Get project name (prompt if not provided or use default)
-        if not args.project_name:
-            project_name = prompt_for_project_name()
-        else:
-            project_name = args.project_name
-            if not validate_project_name(project_name):
-                log_error("Invalid project name provided")
-                sys.exit(1)
-
+        log_info(f"Environment: {args.env}")
         log_info(f"Admin Email: {admin_email}")
-        log_info(f"Project Name: {project_name}")
         log_info(f"Region: {args.region}")
 
         # SAM build
         if not args.skip_build:
-            sam_build()
+            sam_build(skip_layers=args.skip_layers)
 
         # SAM deploy
-        stack_name = sam_deploy(args.region, admin_email, project_name)
+        stack_name = sam_deploy(args.env, admin_email, args.region)
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
@@ -374,10 +410,10 @@ Examples:
 
                 # Invalidate CloudFront if available
                 if 'CloudFrontDistributionId' in outputs:
-                    invalidate_cloudfront(outputs['CloudFrontDistributionId'], args.region)
+                    invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
-        print_outputs(outputs, args.region)
+        print_outputs(outputs, args.env, args.region)
 
         log_success("Deployment complete!")
 

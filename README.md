@@ -51,20 +51,25 @@ Go to AWS Console > Bedrock > Model access and enable:
 git clone https://github.com/your-org/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
-# Deploy to AWS
-./publish.sh
+# Deploy to dev environment
+./publish.sh --env dev
 
-# When prompted, enter:
+# Or deploy to production
+./publish.sh --env prod
+
+# If not specified via --admin-email flag, you'll be prompted to enter:
 # - Admin email address (for initial login)
-# - Project name (default: RAGStack)
+
+# Example with admin email
+./publish.sh --env prod --admin-email admin@example.com
 
 # Access UI
 # Check terminal output for CloudFront URL
 ```
 
 The deployment script will:
-1. Validate prerequisites
-2. Build Lambda functions
+1. Validate prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI)
+2. Build Lambda functions and layers
 3. Deploy infrastructure via CloudFormation
 4. Build and deploy React UI
 5. Configure CloudFront for HTTPS
@@ -84,15 +89,24 @@ The deployment script will:
 You can customize the deployment by passing additional parameters:
 
 ```bash
-# Custom project name
-./publish.sh --project-name MyDocProcessor
+# Deploy to different environment
+./publish.sh --env dev   # Development environment (RAGStack-dev)
+./publish.sh --env prod  # Production environment (RAGStack-prod)
 
 # Different region
-./publish.sh --region us-west-2
+./publish.sh --env prod --region us-west-2
 
-# Use Bedrock OCR instead of Textract
-# (requires updating template.yaml OcrBackend parameter)
+# Skip UI build (backend only)
+./publish.sh --env dev --skip-ui
+
+# Skip Lambda layer build (faster rebuilds during development)
+./publish.sh --env dev --skip-layers
 ```
+
+Edit `samconfig.toml` to customize environment-specific settings:
+- Stack names
+- Parameter overrides (AdminEmail, OcrBackend, model IDs)
+- AWS region
 
 Edit `template.yaml` parameters for advanced configuration:
 - `OcrBackend`: Choose between `textract` or `bedrock`
@@ -233,7 +247,7 @@ MIT
 
 ## Contributing
 
-Pull requests welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Pull requests welcome! Please open an issue first to discuss proposed changes.
 
 ## Support
 
