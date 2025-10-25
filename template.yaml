@@ -722,11 +722,17 @@ Resources:
         Variables:
           TRACKING_TABLE: !Ref TrackingTable
           INPUT_BUCKET: !Ref InputBucket
+          STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - S3CrudPolicy:
             BucketName: !Ref InputBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !GetAtt ProcessingStateMachine.Arn
 
   # Data source for resolvers
   AppSyncLambdaDataSource:
@@ -757,7 +763,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt AppSyncResolverFunction.Arn
+                Resource:
+                  - !GetAtt AppSyncResolverFunction.Arn
+                  - !GetAtt QueryKBFunction.Arn
 
   # Data source for KB queries
   KBQueryDataSource:
@@ -796,6 +804,15 @@ Resources:
       ApiId: !GetAtt GraphQLApi.ApiId
       TypeName: Mutation
       FieldName: createUploadUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ProcessDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: processDocument
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
   QueryKBResolver:
