@@ -21,15 +21,6 @@ export const Navigation = () => {
       type: 'link',
       text: 'Search',
       href: '/search'
-    },
-    {
-      type: 'divider'
-    },
-    {
-      type: 'link',
-      text: 'Documentation',
-      href: 'https://github.com/your-org/RAGStack-Lambda',
-      external: true
     }
   ];
 
