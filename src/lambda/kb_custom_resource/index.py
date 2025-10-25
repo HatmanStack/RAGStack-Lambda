@@ -63,7 +63,8 @@ def lambda_handler(event, context):
 
         elif request_type == 'Delete':
             kb_id = event.get('PhysicalResourceId', 'KnowledgeBase')
-            delete_knowledge_base(kb_id)
+            project_name = properties.get('ProjectName', 'RAGStack')
+            delete_knowledge_base(kb_id, project_name)
             send_response(event, context, 'SUCCESS', physical_resource_id=kb_id)
 
     except Exception as e:
@@ -72,84 +73,96 @@ def lambda_handler(event, context):
 
 
 def create_knowledge_base(properties):
-    """Create Bedrock Knowledge Base with S3 vectors."""
+    """Create Bedrock Knowledge Base with S3 Vectors storage."""
+    import time
 
     kb_name = properties['KnowledgeBaseName']
     role_arn = properties['RoleArn']
     vector_bucket = properties['VectorBucket']
     embed_model_arn = properties['EmbedModelArn']
     index_name = properties.get('IndexName', 'bedrock-kb-default-index')
+    region = properties.get('Region', boto3.session.Session().region_name)
 
-    # Create Knowledge Base with S3 vector store
-    logger.info(f'Creating Knowledge Base: {kb_name}')
+    logger.info(f'Creating Knowledge Base: {kb_name} with S3 Vectors')
 
-    kb_response = bedrock_agent.create_knowledge_base(
-        name=kb_name,
-        description='RAGStack-Lambda Knowledge Base for document search',
-        roleArn=role_arn,
-        knowledgeBaseConfiguration={
-            'type': 'VECTOR',
-            'vectorKnowledgeBaseConfiguration': {
-                'embeddingModelArn': embed_model_arn
-            }
-        },
-        storageConfiguration={
-            'type': 'RDS',
-            'rdsConfiguration': {
-                'resourceArn': f'arn:aws:s3:::{vector_bucket}',
-                'credentialsSecretArn': role_arn,
-                'databaseName': index_name,
-                'tableName': 'bedrock_integration',
-                'fieldMapping': {
-                    'primaryKeyField': 'id',
-                    'vectorField': 'embedding',
-                    'textField': 'text',
-                    'metadataField': 'metadata'
+    # Step 1: Create S3 Vectors index
+    s3vectors_client = boto3.client('s3vectors', region_name=region)
+
+    try:
+        logger.info(f'Creating S3 vector index: {index_name} in bucket: {vector_bucket}')
+        index_response = s3vectors_client.create_index(
+            bucketName=vector_bucket,
+            indexName=index_name,
+            indexConfiguration={
+                'dimension': 1024,  # Titan Embed models output 1024 dimensions
+                'distanceMetric': 'cosine',
+                'metadataConfiguration': {
+                    'nonFilterableMetadataKeys': ['AMAZON_BEDROCK_METADATA', 'AMAZON_BEDROCK_TEXT_CHUNK']
                 }
             }
-        }
-    )
+        )
+        index_arn = index_response['indexArn']
+        logger.info(f'Created S3 vector index: {index_arn}')
+    except Exception as e:
+        logger.error(f'Failed to create S3 vector index: {e}')
+        raise
 
-    kb_id = kb_response['knowledgeBase']['knowledgeBaseId']
-    kb_arn = kb_response['knowledgeBase']['knowledgeBaseArn']
-    logger.info(f'Created Knowledge Base: {kb_id}')
-
-    # Create S3 data source
-    ds_response = bedrock_agent.create_data_source(
-        knowledgeBaseId=kb_id,
-        name=f'{kb_name}-S3DataSource',
-        description='S3 bucket containing document vectors',
-        dataSourceConfiguration={
-            'type': 'S3',
-            's3Configuration': {
-                'bucketArn': f'arn:aws:s3:::{vector_bucket}',
-                'inclusionPrefixes': ['vectors/']
-            }
-        },
-        vectorIngestionConfiguration={
-            'chunkingConfiguration': {
-                'chunkingStrategy': 'FIXED_SIZE',
-                'fixedSizeChunkingConfiguration': {
-                    'maxTokens': 300,
-                    'overlapPercentage': 15
+    # Step 2: Create Knowledge Base with S3 Vectors
+    try:
+        kb_response = bedrock_agent.create_knowledge_base(
+            clientToken=f"cfn-{int(time.time())}-{'a' * 20}",  # 33+ chars required
+            name=kb_name,
+            description='RAGStack-Lambda Knowledge Base for document search',
+            roleArn=role_arn,
+            knowledgeBaseConfiguration={
+                'type': 'VECTOR',
+                'vectorKnowledgeBaseConfiguration': {
+                    'embeddingModelConfiguration': {
+                        'bedrockEmbeddingModelConfiguration': {
+                            'dimensions': 1024,
+                            'embeddingDataType': 'FLOAT32'
+                        }
+                    },
+                    'embeddingModelArn': embed_model_arn
+                }
+            },
+            storageConfiguration={
+                'type': 'S3_VECTORS',
+                's3VectorsConfiguration': {
+                    'indexArn': index_arn
                 }
             }
-        }
-    )
+        )
 
-    data_source_id = ds_response['dataSource']['dataSourceId']
-    logger.info(f'Created Data Source: {data_source_id}')
+        kb_id = kb_response['knowledgeBase']['knowledgeBaseId']
+        kb_arn = kb_response['knowledgeBase']['knowledgeBaseArn']
+        logger.info(f'Created Knowledge Base: {kb_id}')
+    except Exception as e:
+        logger.error(f'Failed to create Knowledge Base: {e}')
+        # Clean up index on failure
+        try:
+            s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
+        except:
+            pass
+        raise
+
+    # Note: S3 Vectors doesn't require a separate data source
+    # Vectors are written directly to S3 and indexed automatically
+    data_source_id = None
 
     # Store KB ID in Parameter Store for easy reference
+    project_name = properties.get('ProjectName', 'RAGStack')
+    ssm_param_name = f'/{project_name}/KnowledgeBaseId'
+
     try:
         ssm.put_parameter(
-            Name='/RAGStack/KnowledgeBaseId',
-            Description='Bedrock Knowledge Base ID for RAGStack-Lambda',
+            Name=ssm_param_name,
+            Description=f'Bedrock Knowledge Base ID for {project_name}',
             Value=kb_id,
             Type='String',
             Overwrite=True
         )
-        logger.info('Stored KB ID in Parameter Store')
+        logger.info(f'Stored KB ID in Parameter Store: {ssm_param_name}')
     except Exception as e:
         logger.warning(f'Failed to store KB ID in Parameter Store: {e}')
 
@@ -159,33 +172,75 @@ def create_knowledge_base(properties):
     return {
         'KnowledgeBaseId': kb_id,
         'KnowledgeBaseArn': kb_arn,
-        'DataSourceId': data_source_id
+        'DataSourceId': data_source_id,
+        'IndexArn': index_arn
     }
 
 
-def delete_knowledge_base(kb_id):
-    """Delete Knowledge Base and its data sources."""
+def delete_knowledge_base(kb_id, project_name='RAGStack'):
+    """Delete Knowledge Base and S3 Vectors index."""
     if kb_id == 'KnowledgeBase':
         logger.info('Physical ID is placeholder, skipping deletion')
         return
 
+    vector_bucket = None
+    index_name = None
+
     try:
-        # List and delete data sources
-        data_sources = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
-        for ds in data_sources.get('dataSourceSummaries', []):
-            bedrock_agent.delete_data_source(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds['dataSourceId']
-            )
-            logger.info(f"Deleted data source: {ds['dataSourceId']}")
+        # Get KB details to find S3 Vectors index
+        try:
+            kb_response = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
+            kb_config = kb_response['knowledgeBase']
+            storage_config = kb_config.get('storageConfiguration', {})
+
+            # Extract index ARN if using S3 Vectors
+            if storage_config.get('type') == 'S3_VECTORS':
+                index_arn = storage_config.get('s3VectorsConfiguration', {}).get('indexArn')
+                if index_arn:
+                    # Parse bucket and index name from ARN
+                    # Format: arn:aws:s3vectors:region:account:index/bucket-name/index-name
+                    arn_parts = index_arn.split(':')
+                    if len(arn_parts) >= 6:
+                        resource = arn_parts[-1]  # index/bucket-name/index-name
+                        parts = resource.split('/')
+                        if len(parts) >= 3:
+                            vector_bucket = parts[1]
+                            index_name = parts[2]
+                            logger.info(f'Found S3 vector index: {index_name} in bucket: {vector_bucket}')
+        except Exception as e:
+            logger.warning(f'Could not retrieve KB details: {e}')
+
+        # List and delete data sources (usually none for S3 Vectors)
+        try:
+            data_sources = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+            for ds in data_sources.get('dataSourceSummaries', []):
+                bedrock_agent.delete_data_source(
+                    knowledgeBaseId=kb_id,
+                    dataSourceId=ds['dataSourceId']
+                )
+                logger.info(f"Deleted data source: {ds['dataSourceId']}")
+        except Exception as e:
+            logger.warning(f'Error deleting data sources: {e}')
 
         # Delete Knowledge Base
         bedrock_agent.delete_knowledge_base(knowledgeBaseId=kb_id)
         logger.info(f'Deleted Knowledge Base: {kb_id}')
 
+        # Delete S3 Vectors index
+        if vector_bucket and index_name:
+            try:
+                region = boto3.session.Session().region_name
+                s3vectors_client = boto3.client('s3vectors', region_name=region)
+                s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
+                logger.info(f'Deleted S3 vector index: {index_name}')
+            except Exception as e:
+                logger.warning(f'Failed to delete S3 vector index: {e}')
+
         # Clean up Parameter Store
+        ssm_param_name = f'/{project_name}/KnowledgeBaseId'
         try:
-            ssm.delete_parameter(Name='/RAGStack/KnowledgeBaseId')
+            ssm.delete_parameter(Name=ssm_param_name)
+            logger.info(f'Deleted SSM parameter: {ssm_param_name}')
         except Exception as e:
             logger.warning(f'Failed to delete Parameter Store entry: {e}')
 

@@ -436,17 +436,22 @@ Resources:
               ArnLike:
                 'aws:SourceArn': !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
       Policies:
-        - PolicyName: S3Access
+        - PolicyName: S3VectorsAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:PutObject
                   - s3:ListBucket
+                  - s3vectors:DescribeIndex
+                  - s3vectors:ReadVectors
+                  - s3vectors:WriteVectors
                 Resource:
                   - !Sub '${VectorBucket.Arn}'
                   - !Sub '${VectorBucket.Arn}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
         - PolicyName: BedrockModelAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -462,7 +467,7 @@ Resources:
       FunctionName: !Sub '${ProjectName}-KBCustomResource'
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
-      Description: Custom resource for Knowledge Base creation
+      Description: Custom resource for Knowledge Base creation with S3 Vectors
       Runtime: python3.13
       Timeout: 300
       MemorySize: 512
@@ -484,6 +489,13 @@ Resources:
               Resource: '*'
             - Effect: Allow
               Action:
+                - s3vectors:CreateIndex
+                - s3vectors:DeleteIndex
+                - s3vectors:DescribeIndex
+                - s3vectors:ListIndices
+              Resource: !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
+            - Effect: Allow
+              Action:
                 - iam:PassRole
               Resource: !GetAtt KnowledgeBaseRole.Arn
             - Effect: Allow
@@ -491,7 +503,7 @@ Resources:
                 - ssm:PutParameter
                 - ssm:DeleteParameter
                 - ssm:GetParameter
-              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/RAGStack/KnowledgeBaseId'
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/KnowledgeBaseId'
 
   KnowledgeBase:
     Type: Custom::KnowledgeBase
@@ -502,6 +514,8 @@ Resources:
       VectorBucket: !Ref VectorBucket
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
       IndexName: !Sub '${ProjectName}-vector-index'
+      Region: !Ref AWS::Region
+      ProjectName: !Ref ProjectName
 
 Outputs:
   # S3 Buckets
