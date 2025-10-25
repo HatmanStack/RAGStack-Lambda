@@ -69,14 +69,20 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: DeleteOldUploads
+          - Id: CleanupIncompleteUploads
             Status: Enabled
-            ExpirationInDays: 90
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   OutputBucket:
     Type: AWS::S3::Bucket
@@ -110,6 +116,13 @@ Resources:
             AllowedOrigins:
               - '*'  # TODO Phase 6: Restrict to CloudFront distribution
             MaxAge: 3000
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   WorkingBucket:
     Type: AWS::S3::Bucket
@@ -132,6 +145,13 @@ Resources:
             ExpirationInDays: 7
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 1
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   VectorBucket:
     Type: AWS::S3::Bucket
@@ -158,6 +178,13 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   UIBucket:
     Type: AWS::S3::Bucket
@@ -176,6 +203,13 @@ Resources:
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: index.html
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   # =========================================================================
   # CloudFront Distribution for UI
@@ -282,6 +316,13 @@ Resources:
             ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   MeteringTable:
     Type: AWS::DynamoDB::Table
@@ -306,6 +347,13 @@ Resources:
       TimeToLiveSpecification:
         Enabled: true
         AttributeName: ttl
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
 
   # =========================================================================
   # Lambda Functions
@@ -330,6 +378,10 @@ Resources:
           WORKING_BUCKET: !Ref WorkingBucket
           OCR_BACKEND: !Ref OcrBackend
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref InputBucket
@@ -371,6 +423,10 @@ Resources:
           VECTOR_BUCKET: !Ref VectorBucket
           TEXT_EMBED_MODEL: !Ref TextEmbedModelId
           IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref OutputBucket
@@ -401,6 +457,10 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -595,6 +655,10 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: INFO
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -795,6 +859,10 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           INPUT_BUCKET: !Ref InputBucket
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
@@ -895,6 +963,358 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
+
+  # =========================================================================
+  # Dead Letter Queue for Error Handling
+  # =========================================================================
+
+  ProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-Processing-DLQ'
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeout: 300
+
+  # =========================================================================
+  # CloudWatch Dashboard
+  # =========================================================================
+
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-Monitor'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "ProcessDocument", "color": "#1f77b4"}],
+                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Sum", "label": "QueryKB", "color": "#2ca02c"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Invocations",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "ProcessDocument Errors", "color": "#d62728"}],
+                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings Errors", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Sum", "label": "QueryKB Errors", "color": "#e377c2"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Errors",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/States", "ExecutionsFailed", {"stat": "Sum", "color": "#d62728"}],
+                  [".", "ExecutionsSucceeded", {"stat": "Sum", "color": "#2ca02c"}],
+                  [".", "ExecutionsTimedOut", {"stat": "Sum", "color": "#ff7f0e"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Step Functions Executions"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"label": "DLQ Messages", "color": "#d62728"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Dead Letter Queue",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum", "color": "#1f77b4"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum", "color": "#ff7f0e"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "ProcessDocument", "color": "#1f77b4"}],
+                  ["...", {"stat": "Average", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Average", "label": "QueryKB", "color": "#2ca02c"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (ms)",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  # =========================================================================
+  # CloudWatch Alarms
+  # =========================================================================
+
+  ProcessDocumentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
+      AlarmDescription: Alert when ProcessDocument Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDocumentFunction
+      TreatMissingData: notBreaching
+
+  GenerateEmbeddingsErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
+      AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GenerateEmbeddingsFunction
+      TreatMissingData: notBreaching
+
+  DLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ProcessingDLQ.QueueName
+      TreatMissingData: notBreaching
+
+  StepFunctionsFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
+      AlarmDescription: Alert when Step Functions executions fail
+      MetricName: ExecutionsFailed
+      Namespace: AWS/States
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Ref ProcessingStateMachine
+      TreatMissingData: notBreaching
+
+  ProcessDocumentThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
+      AlarmDescription: Alert when ProcessDocument Lambda is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDocumentFunction
+      TreatMissingData: notBreaching
+
+  # =========================================================================
+  # CloudTrail for Audit Logging
+  # =========================================================================
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-Trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      IsMultiRegionTrail: false
+      IncludeGlobalServiceEvents: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${InputBucket.Arn}/*'
+                - !Sub '${OutputBucket.Arn}/*'
+                - !Sub '${VectorBucket.Arn}/*'
+            - Type: AWS::Lambda::Function
+              Values:
+                - !GetAtt ProcessDocumentFunction.Arn
+                - !GetAtt GenerateEmbeddingsFunction.Arn
+
+  # =========================================================================
+  # Cost Management - Monthly Budget
+  # =========================================================================
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
+        BudgetLimit:
+          Amount: 100
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+        CostFilters:
+          TagKeyValue:
+            - !Sub 'user:Project$${ProjectName}'
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: your-email@example.com
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: your-email@example.com
 
 Outputs:
   # S3 Buckets
