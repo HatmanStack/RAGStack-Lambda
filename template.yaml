@@ -31,6 +31,12 @@ Parameters:
     Default: amazon.titan-embed-image-v1
     Description: Bedrock model ID for image embeddings
 
+  AdminEmail:
+    Type: String
+    Description: Admin user email for Cognito (used in Phase 4)
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+    ConstraintDescription: Must be a valid email address
+
 Globals:
   Function:
     Runtime: python3.13
@@ -258,7 +264,7 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
   GenerateEmbeddingsFunction:
@@ -292,7 +298,7 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
   QueryKBFunction:
@@ -308,7 +314,7 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: INFO
-          KNOWLEDGE_BASE_ID: '{{resolve:ssm:/RAGStack/KnowledgeBaseId}}'
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
       Policies:
         - Statement:
             - Effect: Allow
@@ -319,16 +325,50 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
-            - Effect: Allow
-              Action:
-                - ssm:GetParameter
-              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/RAGStack/KnowledgeBaseId'
 
   # =========================================================================
   # Step Functions State Machine
   # =========================================================================
+
+  StateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ProcessDocumentFunction.Arn
+                  - !GetAtt GenerateEmbeddingsFunction.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
 
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
@@ -338,18 +378,13 @@ Resources:
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         GenerateEmbeddingsFunctionArn: !GetAtt GenerateEmbeddingsFunction.Arn
+      Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
         IncludeExecutionData: true
         Destinations:
           - CloudWatchLogsLogGroup:
               LogGroupArn: !GetAtt StateMachineLogGroup.Arn
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref ProcessDocumentFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref GenerateEmbeddingsFunction
-        - CloudWatchLogsFullAccess
 
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
