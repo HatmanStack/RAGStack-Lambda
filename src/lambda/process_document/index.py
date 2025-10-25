@@ -29,7 +29,7 @@ import os
 from datetime import datetime
 
 # Import from Lambda layer
-from ragstack_common.ocr import OcrService, OcrConfig
+from ragstack_common.ocr import OcrService
 from ragstack_common.models import Document, Status, OcrBackend
 from ragstack_common.storage import put_item, update_item, get_item
 
@@ -51,8 +51,9 @@ def lambda_handler(event, context):
         document_id = event['document_id']
         input_s3_uri = event['input_s3_uri']
         output_s3_prefix = event['output_s3_prefix']
-        ocr_backend = OcrBackend(event.get('ocr_backend', 'textract'))
+        ocr_backend = event.get('ocr_backend', 'textract')
         bedrock_model_id = event.get('bedrock_model_id', 'anthropic.claude-3-5-haiku-20241022-v1:0')
+        filename = event.get('filename', 'document.pdf')
 
         # Update status to processing
         update_item(
@@ -64,23 +65,28 @@ def lambda_handler(event, context):
             }
         )
 
-        # Create OCR config
-        config = OcrConfig(
-            backend=ocr_backend,
-            bedrock_model_id=bedrock_model_id,
-            extract_text_native=True
-        )
-
-        # Process document
-        ocr_service = OcrService(config)
-        pages, is_text_native = ocr_service.process_document(
+        # Create Document object (Phase 1 API)
+        document = Document(
+            document_id=document_id,
+            filename=filename,
             input_s3_uri=input_s3_uri,
-            output_s3_prefix=output_s3_prefix,
-            document_id=document_id
+            output_s3_uri=output_s3_prefix,  # Will be updated by OcrService
+            status=Status.PROCESSING
         )
 
-        # Prepare output
-        output_s3_uri = f"{output_s3_prefix.rstrip('/')}/full_text.txt"
+        # Create OCR service and process document (Phase 1 API)
+        ocr_service = OcrService(
+            region=os.environ.get('AWS_REGION'),
+            backend=ocr_backend,
+            bedrock_model_id=bedrock_model_id
+        )
+
+        # Process document - returns updated Document object
+        processed_document = ocr_service.process_document(document)
+
+        # Check for processing errors
+        if processed_document.status == Status.FAILED:
+            raise Exception(processed_document.error_message or "OCR processing failed")
 
         # Update DynamoDB with results
         update_item(
@@ -88,9 +94,9 @@ def lambda_handler(event, context):
             {'document_id': document_id},
             {
                 'status': Status.OCR_COMPLETE.value,
-                'total_pages': len(pages),
-                'is_text_native': is_text_native,
-                'output_s3_uri': output_s3_uri,
+                'total_pages': processed_document.total_pages,
+                'is_text_native': processed_document.is_text_native or False,
+                'output_s3_uri': processed_document.output_s3_uri,
                 'updated_at': datetime.now().isoformat()
             }
         )
@@ -99,17 +105,17 @@ def lambda_handler(event, context):
         return {
             'document_id': document_id,
             'status': Status.OCR_COMPLETE.value,
-            'total_pages': len(pages),
-            'is_text_native': is_text_native,
-            'output_s3_uri': output_s3_uri,
+            'total_pages': processed_document.total_pages,
+            'is_text_native': processed_document.is_text_native or False,
+            'output_s3_uri': processed_document.output_s3_uri,
             'pages': [
                 {
                     'page_number': p.page_number,
-                    'text': p.text[:500],  # Truncate for Step Functions
-                    'image_s3_uri': p.image_s3_uri,
+                    'text': p.text[:500] if p.text else '',  # Truncate for Step Functions
+                    'image_s3_uri': getattr(p, 'image_s3_uri', None),
                     'ocr_backend': p.ocr_backend
                 }
-                for p in pages
+                for p in processed_document.pages
             ]
         }
 
