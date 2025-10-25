@@ -657,7 +657,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - appsync:GraphQL
-                Resource: '*'  # Will be restricted after GraphQLApi is created
+                Resource:
+                  - !Sub '${GraphQLApi.Arn}/*'
 
   AdminUser:
     Type: AWS::Cognito::UserPoolUser
@@ -671,6 +672,140 @@ Resources:
           Value: 'true'
       DesiredDeliveryMediums:
         - EMAIL
+
+  # =========================================================================
+  # AppSync GraphQL API
+  # =========================================================================
+
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub '${ProjectName}-API'
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      UserPoolConfig:
+        UserPoolId: !Ref UserPool
+        AwsRegion: !Ref AWS::Region
+        DefaultAction: ALLOW
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
+        FieldLogLevel: ERROR
+
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      DefinitionS3Location: ./src/api/schema.graphql
+
+  AppSyncLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+
+  # AppSync resolver Lambda
+  AppSyncResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-AppSyncResolvers'
+      CodeUri: src/lambda/appsync_resolvers/
+      Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Ref TrackingTable
+          INPUT_BUCKET: !Ref InputBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - S3CrudPolicy:
+            BucketName: !Ref InputBucket
+
+  # Data source for resolvers
+  AppSyncLambdaDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: LambdaDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt AppSyncResolverFunction.Arn
+
+  AppSyncLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt AppSyncResolverFunction.Arn
+
+  # Data source for KB queries
+  KBQueryDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: KBQueryDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt QueryKBFunction.Arn
+
+  # Resolvers
+  GetDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getDocument
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ListDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: listDocuments
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  CreateUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createUploadUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  QueryKBResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: queryKnowledgeBase
+      DataSourceName: !GetAtt KBQueryDataSource.Name
 
 Outputs:
   # S3 Buckets
@@ -761,6 +896,37 @@ Outputs:
     Value: !GetAtt KnowledgeBase.DataSourceId
     Export:
       Name: !Sub '${AWS::StackName}-DataSourceId'
+
+  # API & Authentication
+  GraphQLApiUrl:
+    Description: GraphQL API URL
+    Value: !GetAtt GraphQLApi.GraphQLUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-GraphQLApiUrl'
+
+  GraphQLApiId:
+    Description: GraphQL API ID
+    Value: !GetAtt GraphQLApi.ApiId
+    Export:
+      Name: !Sub '${AWS::StackName}-GraphQLApiId'
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub '${AWS::StackName}-IdentityPoolId'
 
   # Configuration
   Region:
