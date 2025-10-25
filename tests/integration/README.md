@@ -15,7 +15,7 @@ Tests for the RAGStack-Lambda processing pipeline.
 
 ```bash
 # Install dependencies
-pip install pytest boto3
+pip install -r tests/integration/requirements.txt
 
 # Set environment
 export STACK_NAME=RAGStack-dev
