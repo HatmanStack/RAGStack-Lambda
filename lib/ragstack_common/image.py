@@ -93,7 +93,7 @@ def prepare_image(
     # Get the image data
     if isinstance(image_source, str) and image_source.startswith('s3://'):
         # Import here to avoid circular dependency
-        from ragstack_common.storage import read_s3_binary
+        from .storage import read_s3_binary
         image_data = read_s3_binary(image_source)
     elif isinstance(image_source, bytes):
         image_data = image_source
