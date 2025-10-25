@@ -1,0 +1,7 @@
+{
+  "document_id": "test-doc-123",
+  "input_s3_uri": "s3://test-input-bucket/sample.pdf",
+  "output_s3_prefix": "s3://test-output-bucket/processed/test-doc-123/",
+  "ocr_backend": "textract",
+  "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0"
+}
