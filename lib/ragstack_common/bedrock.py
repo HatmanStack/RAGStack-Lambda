@@ -279,6 +279,40 @@ class BedrockClient:
             retry_count=0
         )
 
+    def generate_image_embedding(
+        self,
+        image_bytes: bytes,
+        model_id: str = "amazon.titan-embed-image-v1"
+    ) -> List[float]:
+        """
+        Generate an embedding vector for an image.
+
+        Args:
+            image_bytes: The image file bytes
+            model_id: The embedding model ID (default: Titan Embed Image V1)
+
+        Returns:
+            List of floats representing the embedding vector
+        """
+        if not image_bytes:
+            return []
+
+        # Encode image as base64
+        import base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Prepare request body for Titan image embedding model
+        request_body = json.dumps({
+            "inputImage": image_base64
+        })
+
+        # Call with retry
+        return self._generate_embedding_with_retry(
+            model_id=model_id,
+            request_body=request_body,
+            retry_count=0
+        )
+
     def _generate_embedding_with_retry(
         self,
         model_id: str,
