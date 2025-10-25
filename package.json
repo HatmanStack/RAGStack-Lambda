@@ -1,0 +1,8 @@
+{
+  "name": "ragstack-lambda",
+  "version": "1.0.0",
+  "description": "Serverless OCR-to-Knowledge Base pipeline",
+  "scripts": {
+    "deploy": "./publish.sh"
+  }
+}

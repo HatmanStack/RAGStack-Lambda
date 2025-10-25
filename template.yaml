@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: RAGStack
+    Description: Project name prefix for resources
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 300
+    MemorySize: 1024
+
+Resources:
+  # Resources will be added in Phase 3
+
+Outputs:
+  # Outputs will be added later
