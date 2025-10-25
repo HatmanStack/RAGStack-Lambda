@@ -504,4 +504,100 @@ Resources:
       IndexName: !Sub '${ProjectName}-vector-index'
 
 Outputs:
-  # Outputs will be added later
+  # S3 Buckets
+  InputBucketName:
+    Description: S3 bucket for document uploads
+    Value: !Ref InputBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-InputBucket'
+
+  OutputBucketName:
+    Description: S3 bucket for processed documents
+    Value: !Ref OutputBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-OutputBucket'
+
+  WorkingBucketName:
+    Description: S3 bucket for temporary working files
+    Value: !Ref WorkingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WorkingBucket'
+
+  VectorBucketName:
+    Description: S3 bucket for embeddings and vectors
+    Value: !Ref VectorBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-VectorBucket'
+
+  UIBucketName:
+    Description: S3 bucket for WebUI hosting
+    Value: !Ref UIBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UIBucket'
+
+  # DynamoDB Tables
+  TrackingTableName:
+    Description: DynamoDB table for document tracking
+    Value: !Ref TrackingTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TrackingTable'
+
+  MeteringTableName:
+    Description: DynamoDB table for usage metering
+    Value: !Ref MeteringTable
+    Export:
+      Name: !Sub '${AWS::StackName}-MeteringTable'
+
+  # Lambda Functions
+  ProcessDocumentFunctionArn:
+    Description: Process document Lambda ARN
+    Value: !GetAtt ProcessDocumentFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessDocumentFunction'
+
+  GenerateEmbeddingsFunctionArn:
+    Description: Generate embeddings Lambda ARN
+    Value: !GetAtt GenerateEmbeddingsFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GenerateEmbeddingsFunction'
+
+  QueryKBFunctionArn:
+    Description: Query Knowledge Base Lambda ARN
+    Value: !GetAtt QueryKBFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-QueryKBFunction'
+
+  # Step Functions
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !GetAtt ProcessingStateMachine.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachine'
+
+  # Knowledge Base
+  KnowledgeBaseId:
+    Description: Bedrock Knowledge Base ID
+    Value: !GetAtt KnowledgeBase.KnowledgeBaseId
+    Export:
+      Name: !Sub '${AWS::StackName}-KnowledgeBaseId'
+
+  KnowledgeBaseArn:
+    Description: Bedrock Knowledge Base ARN
+    Value: !GetAtt KnowledgeBase.KnowledgeBaseArn
+    Export:
+      Name: !Sub '${AWS::StackName}-KnowledgeBaseArn'
+
+  DataSourceId:
+    Description: Bedrock Knowledge Base Data Source ID
+    Value: !GetAtt KnowledgeBase.DataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-DataSourceId'
+
+  # Configuration
+  Region:
+    Description: AWS Region
+    Value: !Ref AWS::Region
+
+  StackName:
+    Description: CloudFormation Stack Name
+    Value: !Ref AWS::StackName
