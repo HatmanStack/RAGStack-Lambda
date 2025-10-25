@@ -215,5 +215,116 @@ Resources:
         Enabled: true
         AttributeName: ttl
 
+  # =========================================================================
+  # Lambda Functions
+  # =========================================================================
+
+  ProcessDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-ProcessDocument'
+      CodeUri: src/lambda/process_document/
+      Handler: index.lambda_handler
+      Description: Process document - OCR and text extraction
+      Runtime: python3.13
+      Timeout: 900  # 15 minutes for large documents
+      MemorySize: 3008  # Max memory for OCR processing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          METERING_TABLE: !Ref MeteringTable
+          OUTPUT_BUCKET: !Ref OutputBucket
+          WORKING_BUCKET: !Ref WorkingBucket
+          OCR_BACKEND: !Ref OcrBackend
+          BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref InputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref OutputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref WorkingBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MeteringTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  GenerateEmbeddingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-GenerateEmbeddings'
+      CodeUri: src/lambda/generate_embeddings/
+      Handler: index.lambda_handler
+      Description: Generate text and image embeddings
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 2048
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          METERING_TABLE: !Ref MeteringTable
+          VECTOR_BUCKET: !Ref VectorBucket
+          TEXT_EMBED_MODEL: !Ref TextEmbedModelId
+          IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref OutputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref VectorBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MeteringTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  QueryKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-QueryKB'
+      CodeUri: src/lambda/query_kb/
+      Handler: index.lambda_handler
+      Description: Query Bedrock Knowledge Base
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: '{{resolve:ssm:/RAGStack/KnowledgeBaseId}}'
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:Retrieve
+                - bedrock:RetrieveAndGenerate
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/RAGStack/KnowledgeBaseId'
+
 Outputs:
   # Outputs will be added later
