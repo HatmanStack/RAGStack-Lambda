@@ -4,13 +4,11 @@ Unit tests for process_document Lambda function.
 
 import json
 import pytest
+import sys
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
 # Mock the ragstack_common imports before importing index
-import sys
-from unittest.mock import MagicMock
-
 # Create mock modules
 mock_ocr = MagicMock()
 mock_models = MagicMock()

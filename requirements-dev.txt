@@ -2,10 +2,13 @@
 # Install with: pip install -r requirements-dev.txt
 
 # Testing
-pytest>=7.4.0
+pytest>=7.4.0,<9
 pytest-cov>=4.1.0
 pytest-xdist>=3.3.1  # For parallel test execution
 pytest-asyncio>=0.21.0
+
+# Local Lambda testing
+awslambdaric>=2.0.0
 
 # Mocking AWS services
 moto[s3,dynamodb,lambda,stepfunctions]>=5.0.0

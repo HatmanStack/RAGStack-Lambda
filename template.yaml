@@ -392,6 +392,10 @@ Resources:
       Runtime: python3.13
       Timeout: 900  # 15 minutes for large documents
       MemorySize: 3008  # Max memory for OCR processing
+      Tracing: Active
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ProcessingDLQ.Arn
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -438,6 +442,10 @@ Resources:
       Runtime: python3.13
       Timeout: 900
       MemorySize: 2048
+      Tracing: Active
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ProcessingDLQ.Arn
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -476,6 +484,7 @@ Resources:
       Runtime: python3.13
       Timeout: 60
       MemorySize: 512
+      Tracing: Active
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -875,8 +884,7 @@ Resources:
       FunctionName: !Sub '${ProjectName}-AppSyncResolvers'
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
-      Layers:
-        - !Ref SharedLayer
+      Tracing: Active
       Environment:
         Variables:
           TRACKING_TABLE: !Ref TrackingTable
@@ -1007,6 +1015,7 @@ Resources:
     Properties:
       TopicName: !Sub '${ProjectName}-Alarms'
       DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
+      KmsMasterKeyId: alias/aws/sns
       Subscription:
         - Endpoint: !Ref AlertEmail
           Protocol: email

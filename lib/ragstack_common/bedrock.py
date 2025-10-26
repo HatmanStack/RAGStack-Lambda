@@ -100,11 +100,8 @@ class BedrockClient:
 
         # Initialize inference config
         inference_config = {"temperature": temperature}
-
-        # Handle model-specific parameters
-        additional_model_fields = {}
-        if "anthropic" in model_id.lower() and max_tokens:
-            additional_model_fields["max_tokens"] = max_tokens
+        if max_tokens:
+            inference_config["maxTokens"] = max_tokens
 
         # Build converse parameters
         converse_params = {
@@ -113,9 +110,6 @@ class BedrockClient:
             "system": formatted_system_prompt,
             "inferenceConfig": inference_config
         }
-
-        if additional_model_fields:
-            converse_params["additionalModelRequestFields"] = additional_model_fields
 
         # Start timing
         request_start_time = time.time()
@@ -144,7 +138,7 @@ class BedrockClient:
         Recursive helper method to handle retries for Bedrock invocation.
         """
         try:
-            logger.info(f"Bedrock request attempt {retry_count + 1}/{self.max_retries}: {model_id}")
+            logger.info(f"Bedrock request attempt {retry_count + 1}/{self.max_retries + 1}: {model_id}")
 
             # Make the API call
             response = self.client.converse(**converse_params)
@@ -199,7 +193,7 @@ class BedrockClient:
 
                 # Calculate backoff time
                 backoff = self._calculate_backoff(retry_count)
-                logger.warning(f"Bedrock throttling (attempt {retry_count + 1}/{self.max_retries}). "
+                logger.warning(f"Bedrock throttling (attempt {retry_count + 1}/{self.max_retries + 1}). "
                              f"Error: {error_message}. Backing off for {backoff:.2f}s")
 
                 # Sleep and retry
@@ -227,7 +221,7 @@ class BedrockClient:
 
             # Calculate backoff time
             backoff = self._calculate_backoff(retry_count)
-            logger.warning(f"Bedrock timeout (attempt {retry_count + 1}/{self.max_retries}). "
+            logger.warning(f"Bedrock timeout (attempt {retry_count + 1}/{self.max_retries + 1}). "
                          f"Backing off for {backoff:.2f}s")
 
             # Sleep and retry
@@ -324,7 +318,7 @@ class BedrockClient:
         Recursive helper for embedding generation with retry.
         """
         try:
-            logger.info(f"Bedrock embedding request attempt {retry_count + 1}/{self.max_retries}: {model_id}")
+            logger.info(f"Bedrock embedding request attempt {retry_count + 1}/{self.max_retries + 1}: {model_id}")
 
             attempt_start_time = time.time()
             response = self.client.invoke_model(
@@ -375,8 +369,24 @@ class BedrockClient:
                 logger.error(f"Non-retryable embedding error: {error_code} - {error_message}")
                 raise
 
+        except (ReadTimeoutError, ConnectTimeoutError) as e:
+            if retry_count >= self.max_retries:
+                logger.exception(f"Max retries ({self.max_retries}) exceeded for embedding timeout")
+                raise
+
+            backoff = self._calculate_backoff(retry_count)
+            logger.warning(f"Bedrock embedding timeout (attempt {retry_count + 1}/{self.max_retries + 1}). Backing off for {backoff:.2f}s")
+            time.sleep(backoff)
+
+            return self._generate_embedding_with_retry(
+                model_id=model_id,
+                request_body=request_body,
+                retry_count=retry_count + 1,
+                last_exception=e
+            )
+
         except Exception as e:
-            logger.error(f"Unexpected error generating embedding: {str(e)}", exc_info=True)
+            logger.exception("Unexpected error generating embedding")
             raise
 
     def extract_text_from_response(self, response: Dict[str, Any]) -> str:

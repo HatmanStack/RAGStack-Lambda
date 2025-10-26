@@ -82,20 +82,30 @@ class Document:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for DynamoDB storage."""
-        return {
+        data = {
             'document_id': self.document_id,
             'filename': self.filename,
             'input_s3_uri': self.input_s3_uri,
-            'output_s3_uri': self.output_s3_uri,
             'status': self.status.value,
-            'file_type': self.file_type,
             'is_text_native': self.is_text_native,
             'total_pages': self.total_pages,
-            'error_message': self.error_message,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'metadata': self.metadata
         }
+
+        # Add optional fields only if they have values
+        if self.output_s3_uri:
+            data['output_s3_uri'] = self.output_s3_uri
+        if self.file_type:
+            data['file_type'] = self.file_type
+        if self.error_message:
+            data['error_message'] = self.error_message
+        if self.created_at:
+            data['created_at'] = self.created_at.isoformat()
+        if self.updated_at:
+            data['updated_at'] = self.updated_at.isoformat()
+        if self.metadata:
+            data['metadata'] = self.metadata
+
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Document':
@@ -140,13 +150,19 @@ class MeteringRecord:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for DynamoDB storage."""
-        return {
+        data = {
             'document_id': self.document_id,
             'service': self.service,
             'operation': self.operation,
             'tokens_in': self.tokens_in,
             'tokens_out': self.tokens_out,
             'pages_processed': self.pages_processed,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'model_id': self.model_id
         }
+
+        # Add optional fields only if they have values
+        if self.timestamp:
+            data['timestamp'] = self.timestamp.isoformat()
+        if self.model_id:
+            data['model_id'] = self.model_id
+
+        return data

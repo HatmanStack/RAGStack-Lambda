@@ -4,12 +4,10 @@ Unit tests for generate_embeddings Lambda function.
 
 import json
 import pytest
+import sys
 from unittest.mock import Mock, patch, MagicMock
 
 # Mock the ragstack_common imports before importing index
-import sys
-from unittest.mock import MagicMock
-
 mock_bedrock = MagicMock()
 mock_storage = MagicMock()
 mock_models = MagicMock()

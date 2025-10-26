@@ -232,31 +232,42 @@ class OcrService:
                 Document={'Bytes': document_bytes}
             )
 
-            # Extract text and confidence
+            # Extract text and confidence, grouped by page
             blocks = response.get('Blocks', [])
             lines = [b for b in blocks if b['BlockType'] == 'LINE']
 
-            # For single-page image, create one page
-            text_parts = []
-            total_confidence = 0
-
+            # Group lines by page number
+            pages_dict = {}
             for line in lines:
-                text_parts.append(line.get('Text', ''))
-                total_confidence += line.get('Confidence', 0)
+                page_num = line.get('Page', 1)
+                if page_num not in pages_dict:
+                    pages_dict[page_num] = {'lines': [], 'confidence_sum': 0}
 
-            text = '\n'.join(text_parts)
-            avg_confidence = total_confidence / len(lines) if lines else 0
+                pages_dict[page_num]['lines'].append(line.get('Text', ''))
+                pages_dict[page_num]['confidence_sum'] += line.get('Confidence', 0)
 
-            # Create Page object
-            page = Page(
-                page_number=1,
-                text=text,
-                ocr_backend=OcrBackend.TEXTRACT.value,
-                confidence=avg_confidence
-            )
+            # Create Page objects for each page
+            document.pages = []
+            all_text_parts = []
 
-            document.pages = [page]
-            document.total_pages = 1
+            for page_num in sorted(pages_dict.keys()):
+                page_data = pages_dict[page_num]
+                text = '\n'.join(page_data['lines'])
+                avg_confidence = page_data['confidence_sum'] / len(page_data['lines']) if page_data['lines'] else 0
+
+                page = Page(
+                    page_number=page_num,
+                    text=text,
+                    ocr_backend=OcrBackend.TEXTRACT.value,
+                    confidence=avg_confidence
+                )
+                document.pages.append(page)
+                all_text_parts.append(text)
+
+            document.total_pages = len(document.pages)
+
+            # Combine all pages for S3 output
+            full_text = '\n\n'.join(all_text_parts)
 
             # Save extracted text to S3
             if document.output_s3_uri:
@@ -269,16 +280,16 @@ class OcrService:
                 output_key = f"output/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
-            write_s3_text(output_uri, text)
+            write_s3_text(output_uri, full_text)
 
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
-            logger.info(f"Textract OCR complete: {len(text)} chars, {avg_confidence:.1f}% confidence")
+            logger.info(f"Textract OCR complete: {document.total_pages} pages, {len(full_text)} chars")
             return document
 
         except Exception as e:
-            logger.error(f"Error processing with Textract: {str(e)}")
+            logger.exception("Error processing with Textract")
             document.status = Status.FAILED
             document.error_message = str(e)
             return document

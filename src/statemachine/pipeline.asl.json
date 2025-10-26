@@ -6,6 +6,7 @@
       "Type": "Task",
       "Resource": "${ProcessDocumentFunctionArn}",
       "Comment": "Perform OCR and extract text/images",
+      "TimeoutSeconds": 960,
       "ResultPath": "$.processResult",
       "Retry": [
         {
@@ -34,6 +35,7 @@
       "Type": "Task",
       "Resource": "${GenerateEmbeddingsFunctionArn}",
       "Comment": "Generate text and image embeddings",
+      "TimeoutSeconds": 960,
       "Parameters": {
         "document_id.$": "$.document_id",
         "output_s3_uri.$": "$.processResult.output_s3_uri",

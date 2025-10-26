@@ -127,6 +127,8 @@ def test_lambda_handler_no_query_field(mock_boto3_client, lambda_context):
 
     event = {'max_results': 5}  # No query field
 
+    mock_bedrock_agent = mock_boto3_client.return_value
+
     # Execute
     result = index.lambda_handler(event, lambda_context)
 
@@ -147,6 +149,7 @@ def test_lambda_handler_custom_max_results(mock_boto3_client, lambda_context,
         'max_results': 10
     }
 
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = mock_bedrock_response
 
     # Execute
@@ -165,6 +168,7 @@ def test_lambda_handler_default_max_results(mock_boto3_client, lambda_context,
 
     event = {'query': 'test query'}  # No max_results
 
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = mock_bedrock_response
 
     # Execute
@@ -181,6 +185,7 @@ def test_lambda_handler_no_results(mock_boto3_client, valid_event, lambda_contex
     """Test handling when Knowledge Base returns no results."""
 
     # Mock empty response
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = {'retrievalResults': []}
 
     # Execute
@@ -201,13 +206,15 @@ def test_lambda_handler_bedrock_error(mock_boto3_client, valid_event, lambda_con
         {'Error': {'Code': 'ThrottlingException', 'Message': 'Rate exceeded'}},
         'retrieve'
     )
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.side_effect = error
 
-    # Execute and expect exception
-    with pytest.raises(Exception) as exc_info:
-        index.lambda_handler(valid_event, lambda_context)
+    # Execute - handler catches exceptions and returns error dict
+    result = index.lambda_handler(valid_event, lambda_context)
 
-    assert 'Error querying Knowledge Base' in str(exc_info.value)
+    # Verify error is in response
+    assert result['results'] == []
+    assert 'error' in result
 
 
 @patch.dict('os.environ', {'KNOWLEDGE_BASE_ID': 'test-kb-123'})
@@ -227,6 +234,7 @@ def test_lambda_handler_missing_content_fields(mock_boto3_client, valid_event,
         ]
     }
 
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = incomplete_response
 
     # Execute
@@ -246,6 +254,7 @@ def test_lambda_handler_result_count_logged(mock_boto3_client, valid_event,
                                               caplog):
     """Test that result count is logged."""
 
+    mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = mock_bedrock_response
 
     # Execute
