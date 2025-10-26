@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Node
+node_modules/
+npm-debug.log
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Implementation plans (not part of project)
+docs/plans/

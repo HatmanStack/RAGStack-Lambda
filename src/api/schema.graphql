@@ -1,0 +1,79 @@
+# RAGStack-Lambda GraphQL Schema
+
+type Query {
+  # Get document by ID
+  getDocument(documentId: ID!): Document
+
+  # List all documents (paginated)
+  listDocuments(limit: Int, nextToken: String): DocumentConnection
+
+  # Query Knowledge Base
+  queryKnowledgeBase(query: String!, maxResults: Int): KBQueryResult
+}
+
+type Mutation {
+  # Create presigned URL for upload
+  createUploadUrl(filename: String!): UploadUrl
+
+  # Manually trigger processing (if needed)
+  processDocument(documentId: ID!): Document
+}
+
+# Document type
+type Document {
+  documentId: ID!
+  filename: String!
+  inputS3Uri: String!
+  outputS3Uri: String
+  status: DocumentStatus!
+  fileType: String
+  isTextNative: Boolean
+  totalPages: Int
+  errorMessage: String
+  createdAt: String
+  updatedAt: String
+  metadata: AWSJSON
+}
+
+# Document status enum
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  OCR_COMPLETE
+  EMBEDDING_COMPLETE
+  INDEXED
+  FAILED
+}
+
+# Paginated document list
+type DocumentConnection {
+  items: [Document!]!
+  nextToken: String
+}
+
+# Upload URL response
+type UploadUrl {
+  uploadUrl: String!
+  documentId: ID!
+  fields: AWSJSON
+}
+
+# Knowledge Base query result
+type KBQueryResult {
+  query: String!
+  results: [KBResult!]!
+  total: Int
+  error: String
+}
+
+# Individual KB search result
+type KBResult {
+  content: String!
+  source: String
+  score: Float
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}

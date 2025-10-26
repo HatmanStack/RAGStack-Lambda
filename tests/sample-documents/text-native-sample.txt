@@ -1,0 +1,41 @@
+Sample Text Document
+
+This is a plain text test document for RAGStack-Lambda.
+
+Date: 2025-01-15
+Status: Test Document
+Type: Plain Text
+
+Content:
+This document contains regular text that will be processed
+by RAGStack-Lambda. Use this as a simple test case.
+
+Features tested:
+- Text file processing
+- Fast processing time
+- No OCR required
+
+Expected processing time: < 2 seconds
+Expected cost: < $0.001
+
+Test Scenario:
+Upload this file via the UI and verify it processes correctly.
+
+Additional Notes:
+For comprehensive testing, also create:
+- text-native.pdf (PDF with embedded text)
+- scanned.pdf (scanned document requiring OCR)
+- invoice.jpg (image file)
+- document.docx (Word file)
+- spreadsheet.xlsx (Excel file)
+
+To generate a PDF with embedded text, install PyMuPDF and run:
+
+```python
+import fitz
+doc = fitz.open()
+page = doc.new_page()
+page.insert_text((50, 50), "Your content here")
+doc.save("text-native.pdf")
+doc.close()
+```
