@@ -165,8 +165,18 @@ pytest tests/integration/
 
 ## Documentation
 
-- [Architecture Overview](docs/ARCHITECTURE.md) - Detailed system architecture and design decisions
+### Core Documentation
+
+- [Architecture Overview](docs/ARCHITECTURE.md) - System architecture, components, and design decisions
+- [Deployment Guide](docs/DEPLOYMENT.md) - Prerequisites, deployment steps, and post-deployment setup
+- [Configuration Guide](docs/CONFIGURATION.md) - Configuring the system and customizing parameters
+- [User Guide](docs/USER_GUIDE.md) - Using the WebUI to upload, monitor, and search documents
 - [Testing Guide](docs/TESTING.md) - End-to-end testing procedures
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+
+### Advanced Topics
+
+- [Optimization Guide](docs/OPTIMIZATION.md) - Performance tuning and cost optimization strategies
 
 ## Project Structure
 

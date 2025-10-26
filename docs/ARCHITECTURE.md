@@ -2,7 +2,38 @@
 
 ## Overview
 
-RAGStack-Lambda is a serverless document processing pipeline that extracts text from documents using OCR, generates embeddings, and indexes them in a Bedrock Knowledge Base for semantic search.
+RAGStack-Lambda is a serverless document processing pipeline that transforms unstructured documents into searchable knowledge using AWS managed services. The system extracts text via OCR, generates semantic embeddings, and indexes them in an Amazon Bedrock Knowledge Base for natural language search.
+
+### Key Capabilities
+
+- **Multi-format Support**: PDF, images, Office documents, text files, eBooks
+- **Dual OCR Backends**: AWS Textract (cost-effective) or Bedrock (multimodal)
+- **Intelligent Routing**: Automatic text-native PDF detection to skip unnecessary OCR
+- **Multimodal Embeddings**: Both text and image embeddings for comprehensive search
+- **Managed Vector Storage**: S3-based vectors with Bedrock Knowledge Base
+- **Web Interface**: React UI for document management and search
+- **One-Click Deployment**: Automated deployment via AWS SAM
+
+### Design Principles
+
+1. **Serverless-First**: No infrastructure to manage, auto-scaling, pay-per-use
+2. **Cost-Optimized**: S3 vectors instead of OpenSearch, text-native PDF detection
+3. **Secure by Default**: Encryption at rest/transit, least-privilege IAM, Cognito auth
+4. **Developer-Friendly**: SAM for deployment, local testing, clear separation of concerns
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs)
+- [Architecture Diagram](#architecture-diagram)
+- [Components](#components)
+- [Data Flow](#data-flow)
+- [Security](#security)
+- [Scalability](#scalability)
+- [Monitoring](#monitoring)
+- [Cost Optimization](#cost-optimization)
+
+---
 
 ## Architecture Decision Records (ADRs)
 
@@ -349,12 +380,44 @@ Orchestrates document processing:
 
 **Lambda Functions:**
 
-| Function | Purpose | Timeout | Memory |
-|----------|---------|---------|--------|
-| ProcessDocument | OCR, format conversion, text extraction | 15 min | 3008 MB |
-| GenerateEmbeddings | Generate text/image embeddings | 15 min | 2048 MB |
-| QueryKB | Query Knowledge Base | 60 sec | 512 MB |
-| AppSyncResolvers | Handle GraphQL queries | 30 sec | 512 MB |
+| Function | Purpose | Timeout | Memory | Triggers |
+|----------|---------|---------|--------|----------|
+| ProcessDocument | OCR, format conversion, text extraction | 15 min | 3008 MB | Step Functions |
+| GenerateEmbeddings | Generate text/image embeddings | 15 min | 2048 MB | Step Functions |
+| QueryKB | Query Knowledge Base | 60 sec | 512 MB | AppSync GraphQL |
+| AppSyncResolvers | Handle GraphQL queries/mutations | 30 sec | 512 MB | AppSync GraphQL |
+| KBCustomResource | One-time KB setup (CloudFormation) | 15 min | 512 MB | CloudFormation |
+
+**ProcessDocument Details:**
+- Detects document format (PDF, image, Office, text)
+- Converts Office docs to PDF using LibreOffice
+- Checks if PDF is text-native (extractable text)
+- Routes to direct text extraction or OCR based on content
+- Extracts embedded images from PDFs
+- Saves processed results to S3 Output bucket
+- Updates DynamoDB tracking with progress
+
+**GenerateEmbeddings Details:**
+- Reads extracted text from S3
+- Batches text into chunks (300 tokens, 15% overlap)
+- Generates text embeddings via Titan Embed Text V2
+- Generates image embeddings via Titan Embed Image
+- Implements batch processing for >20 pages
+- Rate limiting (2s delay between batches)
+- Saves embeddings to S3 Vectors bucket
+
+**QueryKB Details:**
+- Receives natural language query from UI
+- Invokes Bedrock Knowledge Base retrieve API
+- Returns top-k results with source references
+- Includes relevance scores and document metadata
+
+**AppSyncResolvers Details:**
+- `getDocument`: Fetch document details from DynamoDB
+- `listDocuments`: List all documents with pagination
+- `createUploadUrl`: Generate S3 presigned URL for uploads
+- `queryKnowledgeBase`: Proxy to QueryKB function
+- All resolvers enforce Cognito authentication
 
 ### Storage
 
@@ -469,7 +532,102 @@ Refer to Phase 7 for comprehensive monitoring setup with CloudWatch dashboards a
 ## Cost Optimization
 
 1. **Text-native PDF detection** - Skip OCR when possible
-2. **S3 Vectors** - Cheaper than OpenSearch Serverless
-3. **S3 lifecycle policies** - Auto-delete old files
-4. **DynamoDB on-demand** - Pay per request
-5. **CloudFront** - Reduce origin requests
+2. **S3 Vectors** - Cheaper than OpenSearch Serverless ($0.023/GB vs $0.24/GB)
+3. **S3 lifecycle policies** - Auto-delete old files after 7 days
+4. **DynamoDB on-demand** - Pay per request, no idle costs
+5. **CloudFront** - Reduce origin requests, lower data transfer costs
+6. **Textract vs Bedrock** - Use Textract for most documents ($1.50 vs $25-75 per 1000 pages)
+7. **Lambda memory optimization** - Right-size memory for cost/performance balance
+
+See [Configuration Guide](CONFIGURATION.md) for cost optimization settings.
+
+---
+
+## Technology Stack
+
+### AWS Services Used
+
+| Service | Purpose | Why Chosen |
+|---------|---------|------------|
+| **AWS SAM** | Infrastructure as Code | Simpler than raw CloudFormation, local testing |
+| **Lambda** | Serverless compute | Auto-scaling, pay-per-use, no servers to manage |
+| **Step Functions** | Workflow orchestration | Visual workflows, error handling, retries |
+| **S3** | Object storage | Unlimited scale, low cost, durable |
+| **DynamoDB** | NoSQL database | Serverless, on-demand pricing, fast |
+| **Textract** | OCR service | Purpose-built for documents, cost-effective |
+| **Bedrock** | LLM and embeddings | Latest models, no infrastructure, pay-per-use |
+| **AppSync** | GraphQL API | Real-time updates, Cognito integration |
+| **Cognito** | Authentication | Managed user pools, MFA, password policies |
+| **CloudFront** | CDN | HTTPS, global distribution, low latency |
+| **EventBridge** | Event routing | Serverless pub/sub, loose coupling |
+| **CloudWatch** | Monitoring & logs | Centralized logging, metrics, alarms |
+
+### Third-Party Libraries
+
+| Library | Purpose | Used In |
+|---------|---------|---------|
+| **PyMuPDF** | PDF text extraction | ProcessDocument Lambda |
+| **Pillow** | Image processing | ProcessDocument Lambda |
+| **boto3** | AWS SDK for Python | All Lambda functions |
+| **React** | UI framework | Web interface |
+| **CloudScape** | UI components | Web interface |
+| **Amplify** | AWS integration | Web interface |
+
+---
+
+## Performance Characteristics
+
+### Throughput
+
+- **Upload rate**: Limited by Cognito (10k requests/second)
+- **Processing rate**: Limited by Lambda concurrency (default: 1000)
+- **Textract concurrency**: Default 20, can request increase
+- **Bedrock rate limits**: Varies by model (check quotas)
+- **DynamoDB**: Unlimited (on-demand mode)
+- **S3**: Unlimited
+
+### Latency
+
+Typical processing times for a 10-page PDF document:
+
+| Stage | Duration | Bottleneck |
+|-------|----------|------------|
+| Upload to S3 | <5 seconds | Network bandwidth |
+| ProcessDocument | 20-40 seconds | OCR processing |
+| GenerateEmbeddings | 10-20 seconds | Bedrock API calls |
+| KB Sync | 2-10 minutes | Knowledge Base indexing |
+| **Total** | **3-12 minutes** | First-time KB sync |
+
+**Optimization tips:**
+- Text-native PDFs: 50% faster (skip OCR)
+- Smaller documents: Linear scaling
+- Subsequent syncs: Faster (incremental indexing)
+
+### Scalability Limits
+
+| Resource | Limit | Mitigation |
+|----------|-------|------------|
+| Lambda concurrency | 1000 (default) | Request quota increase |
+| Textract concurrency | 20 (default) | Request quota increase |
+| S3 bucket count | 100 (soft limit) | Use lifecycle policies |
+| DynamoDB tables | 256 per region | Adequate for this solution |
+| Cognito users | 40M per pool | Adequate for most use cases |
+
+---
+
+## Related Documentation
+
+For more information about specific aspects of the system:
+
+- **[Deployment Guide](DEPLOYMENT.md)** - How to deploy and configure the system
+- **[Configuration Guide](CONFIGURATION.md)** - Available configuration options and optimization
+- **[User Guide](USER_GUIDE.md)** - How to use the web interface
+- **[Testing Guide](TESTING.md)** - How to test the system end-to-end
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+
+For implementation details:
+
+- **`template.yaml`** - CloudFormation infrastructure definition
+- **`lib/ragstack_common/`** - Shared libraries (OCR, storage, embeddings)
+- **`src/lambda/`** - Lambda function implementations
+- **`src/ui/`** - React web interface source code

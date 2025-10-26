@@ -39,15 +39,19 @@ from ragstack_common.models import Status
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-TRACKING_TABLE = os.environ['TRACKING_TABLE']
-TEXT_EMBED_MODEL = os.environ.get('TEXT_EMBED_MODEL', 'amazon.titan-embed-text-v2:0')
-IMAGE_EMBED_MODEL = os.environ.get('IMAGE_EMBED_MODEL', 'amazon.titan-embed-image-v1')
-
 
 def lambda_handler(event, context):
     """
     Generate embeddings for text and images.
     """
+    # Get environment variables (moved here for testability)
+    tracking_table = os.environ.get('TRACKING_TABLE')
+    if not tracking_table:
+        raise ValueError("TRACKING_TABLE environment variable is required")
+
+    text_embed_model = os.environ.get('TEXT_EMBED_MODEL', 'amazon.titan-embed-text-v2:0')
+    image_embed_model = os.environ.get('IMAGE_EMBED_MODEL', 'amazon.titan-embed-image-v1')
+
     logger.info(f"Generating embeddings: {json.dumps(event)}")
 
     try:
@@ -74,7 +78,7 @@ def lambda_handler(event, context):
         logger.info("Generating text embedding...")
         text_embedding = bedrock_client.generate_embedding(
             text=full_text,
-            model_id=TEXT_EMBED_MODEL
+            model_id=text_embed_model
         )
 
         # Save text embedding
@@ -84,7 +88,7 @@ def lambda_handler(event, context):
             'content': full_text,
             'embedding': text_embedding,
             'type': 'text',
-            'model': TEXT_EMBED_MODEL,
+            'model': text_embed_model,
             'timestamp': datetime.now().isoformat()
         })
         logger.info(f"Saved text embedding to {text_embed_uri}")
@@ -109,7 +113,7 @@ def lambda_handler(event, context):
             # Generate embedding
             image_embedding = bedrock_client.generate_image_embedding(
                 image_bytes=image_bytes,
-                model_id=IMAGE_EMBED_MODEL
+                model_id=image_embed_model
             )
 
             # Save image embedding
@@ -120,7 +124,7 @@ def lambda_handler(event, context):
                 'image_s3_uri': image_s3_uri,
                 'embedding': image_embedding,
                 'type': 'image',
-                'model': IMAGE_EMBED_MODEL,
+                'model': image_embed_model,
                 'timestamp': datetime.now().isoformat()
             })
 
@@ -136,7 +140,7 @@ def lambda_handler(event, context):
         # ===================================================================
 
         update_item(
-            TRACKING_TABLE,
+            tracking_table,
             {'document_id': document_id},
             {
                 'status': Status.EMBEDDING_COMPLETE.value,
@@ -155,14 +159,19 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}", exc_info=True)
 
-        update_item(
-            TRACKING_TABLE,
-            {'document_id': event['document_id']},
-            {
-                'status': Status.FAILED.value,
-                'error_message': str(e),
-                'updated_at': datetime.now().isoformat()
-            }
-        )
+        try:
+            tracking_table = os.environ.get('TRACKING_TABLE')
+            if tracking_table:
+                update_item(
+                    tracking_table,
+                    {'document_id': event['document_id']},
+                    {
+                        'status': Status.FAILED.value,
+                        'error_message': str(e),
+                        'updated_at': datetime.now().isoformat()
+                    }
+                )
+        except Exception as update_error:
+            logger.error(f"Failed to update DynamoDB: {update_error}")
 
         raise

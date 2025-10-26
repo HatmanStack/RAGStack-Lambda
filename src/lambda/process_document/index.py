@@ -36,14 +36,16 @@ from ragstack_common.storage import put_item, update_item, get_item
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Environment variables
-TRACKING_TABLE = os.environ['TRACKING_TABLE']
-
 
 def lambda_handler(event, context):
     """
     Main Lambda handler.
     """
+    # Get environment variables (moved here for testability)
+    tracking_table = os.environ.get('TRACKING_TABLE')
+    if not tracking_table:
+        raise ValueError("TRACKING_TABLE environment variable is required")
+
     logger.info(f"Processing document: {json.dumps(event)}")
 
     try:
@@ -57,7 +59,7 @@ def lambda_handler(event, context):
 
         # Update status to processing
         update_item(
-            TRACKING_TABLE,
+            tracking_table,
             {'document_id': document_id},
             {
                 'status': Status.PROCESSING.value,
@@ -90,7 +92,7 @@ def lambda_handler(event, context):
 
         # Update DynamoDB with results
         update_item(
-            TRACKING_TABLE,
+            tracking_table,
             {'document_id': document_id},
             {
                 'status': Status.OCR_COMPLETE.value,
@@ -123,14 +125,19 @@ def lambda_handler(event, context):
         logger.error(f"Document processing failed: {e}", exc_info=True)
 
         # Update status to failed
-        update_item(
-            TRACKING_TABLE,
-            {'document_id': event['document_id']},
-            {
-                'status': Status.FAILED.value,
-                'error_message': str(e),
-                'updated_at': datetime.now().isoformat()
-            }
-        )
+        try:
+            tracking_table = os.environ.get('TRACKING_TABLE')
+            if tracking_table:
+                update_item(
+                    tracking_table,
+                    {'document_id': event['document_id']},
+                    {
+                        'status': Status.FAILED.value,
+                        'error_message': str(e),
+                        'updated_at': datetime.now().isoformat()
+                    }
+                )
+        except Exception as update_error:
+            logger.error(f"Failed to update DynamoDB: {update_error}")
 
         raise
