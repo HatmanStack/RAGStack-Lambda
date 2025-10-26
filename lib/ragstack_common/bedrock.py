@@ -100,7 +100,7 @@ class BedrockClient:
 
         # Initialize inference config
         inference_config = {"temperature": temperature}
-        if max_tokens:
+        if max_tokens is not None:
             inference_config["maxTokens"] = max_tokens
 
         # Build converse parameters
@@ -132,7 +132,7 @@ class BedrockClient:
         retry_count: int,
         request_start_time: float,
         context: str = "Unspecified",
-        last_exception: Exception = None
+        _last_exception: Exception = None
     ) -> Dict[str, Any]:
         """
         Recursive helper method to handle retries for Bedrock invocation.
@@ -205,7 +205,7 @@ class BedrockClient:
                     retry_count=retry_count + 1,
                     request_start_time=request_start_time,
                     context=context,
-                    last_exception=e
+                    _last_exception=e
                 )
             else:
                 logger.error(f"Non-retryable Bedrock error: {error_code} - {error_message}")
@@ -233,7 +233,7 @@ class BedrockClient:
                 retry_count=retry_count + 1,
                 request_start_time=request_start_time,
                 context=context,
-                last_exception=e
+                _last_exception=e
             )
 
         except Exception as e:
@@ -312,7 +312,7 @@ class BedrockClient:
         model_id: str,
         request_body: str,
         retry_count: int,
-        last_exception: Exception = None
+        _last_exception: Exception = None
     ) -> List[float]:
         """
         Recursive helper for embedding generation with retry.
@@ -363,7 +363,7 @@ class BedrockClient:
                     model_id=model_id,
                     request_body=request_body,
                     retry_count=retry_count + 1,
-                    last_exception=e
+                    _last_exception=e
                 )
             else:
                 logger.error(f"Non-retryable embedding error: {error_code} - {error_message}")
@@ -382,7 +382,7 @@ class BedrockClient:
                 model_id=model_id,
                 request_body=request_body,
                 retry_count=retry_count + 1,
-                last_exception=e
+                _last_exception=e
             )
 
         except Exception as e:
@@ -391,16 +391,22 @@ class BedrockClient:
 
     def extract_text_from_response(self, response: Dict[str, Any]) -> str:
         """
-        Extract text from a Bedrock response.
+        Extract text from a Bedrock response with safe navigation.
 
         Args:
             response: Bedrock response object
 
         Returns:
-            Extracted text content
+            Extracted text content, or empty string if structure is unexpected
         """
-        response_obj = response.get("response", response)
-        return response_obj['output']['message']['content'][0].get("text", "")
+        response_obj = response.get("response", {})
+        output = response_obj.get("output", {})
+        message = output.get("message", {})
+        content = message.get("content", [])
+
+        if isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict):
+            return content[0].get("text", "")
+        return ""
 
     def _calculate_backoff(self, retry_count: int) -> float:
         """

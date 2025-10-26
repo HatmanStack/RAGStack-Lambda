@@ -44,7 +44,6 @@ print_usage() {
   echo ""
   echo "Options:"
   echo "  --admin-email EMAIL    Admin user email address"
-  echo "  --project-name NAME    Project name prefix (default: RAGStack)"
   echo "  --region REGION        AWS region (default: us-east-1)"
   echo "  --skip-ui              Skip UI build and deployment"
   echo "  --skip-build           Skip SAM build step"
@@ -52,7 +51,7 @@ print_usage() {
   echo ""
   echo "Examples:"
   echo "  $0"
-  echo "  $0 --admin-email admin@example.com --project-name MyRAGStack"
+  echo "  $0 --admin-email admin@example.com"
   echo "  $0 --region us-west-2"
 }
 

@@ -25,6 +25,7 @@ class OcrBackend(str, Enum):
     """Supported OCR backends."""
     TEXTRACT = "textract"
     BEDROCK = "bedrock"
+    TEXT_EXTRACTION = "text_extraction"
 
 
 @dataclass

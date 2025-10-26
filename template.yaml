@@ -1005,6 +1005,7 @@ Resources:
       QueueName: !Sub '${ProjectName}-Processing-DLQ'
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
+      SqsManagedSseEnabled: true
 
   # =========================================================================
   # SNS Topic for Alarm Notifications

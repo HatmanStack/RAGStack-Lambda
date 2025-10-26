@@ -77,7 +77,7 @@ def read_s3_text(s3_uri: str, encoding: str = 'utf-8') -> str:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
         return response['Body'].read().decode(encoding)
     except ClientError as e:
-        logger.error(f"Failed to read S3 text from {s3_uri}: {e}")
+        logger.exception(f"Failed to read S3 text from {s3_uri}")
         raise
 
 
@@ -94,7 +94,7 @@ def read_s3_binary(s3_uri: str) -> bytes:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
         return response['Body'].read()
     except ClientError as e:
-        logger.error(f"Failed to read S3 binary from {s3_uri}: {e}")
+        logger.exception(f"Failed to read S3 binary from {s3_uri}")
         raise
 
 
@@ -121,7 +121,7 @@ def write_s3_text(s3_uri: str, content: str, encoding: str = 'utf-8') -> str:
         logger.info(f"Wrote text to {s3_uri}")
         return s3_uri
     except ClientError as e:
-        logger.error(f"Failed to write S3 text to {s3_uri}: {e}")
+        logger.exception(f"Failed to write S3 text to {s3_uri}")
         raise
 
 
@@ -148,7 +148,7 @@ def write_s3_json(s3_uri: str, data: dict) -> str:
         logger.info(f"Wrote JSON to {s3_uri}")
         return s3_uri
     except ClientError as e:
-        logger.error(f"Failed to write S3 JSON to {s3_uri}: {e}")
+        logger.exception(f"Failed to write S3 JSON to {s3_uri}")
         raise
 
 
@@ -175,7 +175,7 @@ def write_s3_binary(s3_uri: str, content: bytes, content_type: str = 'applicatio
         logger.info(f"Wrote binary to {s3_uri}")
         return s3_uri
     except ClientError as e:
-        logger.error(f"Failed to write S3 binary to {s3_uri}: {e}")
+        logger.exception(f"Failed to write S3 binary to {s3_uri}")
         raise
 
 
@@ -211,7 +211,7 @@ def put_item(table_name: str, item: Dict[str, Any]) -> None:
         table.put_item(Item=item)
         logger.info(f"Put item to {table_name}: {item.get('document_id', 'unknown')}")
     except ClientError as e:
-        logger.error(f"Failed to put item to {table_name}: {e}")
+        logger.exception(f"Failed to put item to {table_name}")
         raise
 
 
@@ -231,7 +231,7 @@ def get_item(table_name: str, key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         response = table.get_item(Key=key)
         return response.get('Item')
     except ClientError as e:
-        logger.error(f"Failed to get item from {table_name}: {e}")
+        logger.exception(f"Failed to get item from {table_name}")
         raise
 
 
@@ -263,36 +263,5 @@ def update_item(table_name: str, key: Dict[str, Any], updates: Dict[str, Any]) -
         )
         logger.info(f"Updated item in {table_name}: {key}")
     except ClientError as e:
-        logger.error(f"Failed to update item in {table_name}: {e}")
-        raise
-
-
-def query_items(table_name: str, key_condition: str, expr_attr_values: Dict[str, Any]) -> list:
-    """
-    Query items from DynamoDB table.
-
-    Args:
-        table_name: DynamoDB table name
-        key_condition: Key condition expression
-        expr_attr_values: Expression attribute values
-
-    Returns:
-        List of items
-
-    Example:
-        items = query_items(
-            'Metering',
-            'document_id = :id',
-            {':id': 'doc-123'}
-        )
-    """
-    table = get_table(table_name)
-    try:
-        response = table.query(
-            KeyConditionExpression=key_condition,
-            ExpressionAttributeValues=expr_attr_values
-        )
-        return response.get('Items', [])
-    except ClientError as e:
-        logger.error(f"Failed to query {table_name}: {e}")
+        logger.exception(f"Failed to update item in {table_name}")
         raise

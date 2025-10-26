@@ -132,7 +132,7 @@ class OcrService:
             return is_text_native
 
         except Exception as e:
-            logger.error(f"Error checking PDF text content: {str(e)}")
+            logger.exception("Error checking PDF text content")
             return False
 
     def _extract_text_native_pdf(self, document: Document, pdf_bytes: bytes) -> Document:
@@ -164,7 +164,7 @@ class OcrService:
                 page_obj = Page(
                     page_number=page_num + 1,
                     text=text,
-                    ocr_backend="text_extraction",
+                    ocr_backend=OcrBackend.TEXT_EXTRACTION.value,
                     confidence=100.0  # Direct text extraction is 100% accurate
                 )
                 pages.append(page_obj)
@@ -197,7 +197,7 @@ class OcrService:
             return document
 
         except Exception as e:
-            logger.error(f"Error extracting text from PDF: {str(e)}")
+            logger.exception("Error extracting text from PDF")
             document.status = Status.FAILED
             document.error_message = str(e)
             return document
@@ -357,7 +357,7 @@ class OcrService:
             return document
 
         except Exception as e:
-            logger.error(f"Error processing with Bedrock: {str(e)}")
+            logger.exception("Error processing with Bedrock")
             document.status = Status.FAILED
             document.error_message = str(e)
             return document

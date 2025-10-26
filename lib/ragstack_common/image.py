@@ -153,7 +153,7 @@ def apply_adaptive_binarization(image_data: bytes) -> bytes:
         return img_byte_array.getvalue()
 
     except Exception as e:
-        logger.error(f"Error applying adaptive binarization: {str(e)}")
+        logger.exception("Error applying adaptive binarization")
         logger.warning("Falling back to original image")
         return image_data
 

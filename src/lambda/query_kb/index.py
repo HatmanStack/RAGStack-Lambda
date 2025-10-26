@@ -44,14 +44,43 @@ def lambda_handler(event, context):
     logger.info(f"Querying Knowledge Base: {json.dumps(event)}")
 
     try:
-        # Extract query
+        # Extract and validate query
         query = event.get('query', '')
-        max_results = event.get('max_results', 5)
 
         if not query:
             return {
                 'results': [],
                 'message': 'No query provided'
+            }
+
+        if not isinstance(query, str):
+            return {
+                'results': [],
+                'error': 'Query must be a string'
+            }
+
+        if len(query) > 10000:
+            return {
+                'results': [],
+                'error': 'Query exceeds maximum length of 10000 characters'
+            }
+
+        # Extract and validate max_results
+        max_results = event.get('max_results', 5)
+
+        if not isinstance(max_results, int):
+            try:
+                max_results = int(max_results)
+            except (ValueError, TypeError):
+                return {
+                    'results': [],
+                    'error': 'max_results must be an integer'
+                }
+
+        if max_results < 1 or max_results > 100:
+            return {
+                'results': [],
+                'error': 'max_results must be between 1 and 100'
             }
 
         # Query Knowledge Base
