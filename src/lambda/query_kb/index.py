@@ -29,15 +29,18 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-bedrock_agent = boto3.client('bedrock-agent-runtime')
-
-KNOWLEDGE_BASE_ID = os.environ['KNOWLEDGE_BASE_ID']
-
 
 def lambda_handler(event, context):
     """
     Query Bedrock Knowledge Base.
     """
+    # Get environment variables (moved here for testability)
+    knowledge_base_id = os.environ.get('KNOWLEDGE_BASE_ID')
+    if not knowledge_base_id:
+        raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+
+    bedrock_agent = boto3.client('bedrock-agent-runtime')
+
     logger.info(f"Querying Knowledge Base: {json.dumps(event)}")
 
     try:
@@ -53,7 +56,7 @@ def lambda_handler(event, context):
 
         # Query Knowledge Base
         response = bedrock_agent.retrieve(
-            knowledgeBaseId=KNOWLEDGE_BASE_ID,
+            knowledgeBaseId=knowledge_base_id,
             retrievalQuery={
                 'text': query
             },

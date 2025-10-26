@@ -2,20 +2,64 @@
 
 ## Overview
 
-This guide covers testing RAGStack-Lambda from development to production.
+This guide covers testing RAGStack-Lambda from development to production, including unit tests, integration tests, end-to-end workflows, and performance benchmarks.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Test Levels](#test-levels)
+- [Prerequisites](#prerequisites)
+- [Sample Documents](#sample-documents)
+- [End-to-End Test Flow](#end-to-end-test-flow)
+- [Integration Testing with pytest](#integration-testing-with-pytest)
+- [Performance Testing](#performance-testing)
+- [Monitoring During Tests](#monitoring-during-tests)
+- [Troubleshooting](#troubleshooting)
+- [Test Cleanup](#test-cleanup)
+- [Automated Testing](#automated-testing-with-github-actions)
+- [Common Test Scenarios](#common-test-scenarios)
+
+---
+
+## Quick Start
+
+**Test your deployment in 5 minutes:**
+
+```bash
+# 1. Deploy the stack
+./publish.sh --env dev --admin-email your@email.com
+
+# 2. Sign in to the WebUI (check email for password)
+# URL in deployment outputs
+
+# 3. Upload a test document
+# Dashboard → Upload → Drag & drop a PDF
+
+# 4. Monitor processing
+# Dashboard → Watch status change to INDEXED
+
+# 5. Search for content
+# Search → Enter query → Verify results
+```
 
 ## Test Levels
 
-1. **Unit Tests** - Individual functions (Phase 1)
-2. **Integration Tests** - Lambda + AWS services (Phase 2)
-3. **End-to-End Tests** - Full pipeline (this guide)
-4. **UI Tests** - React components
+1. **Unit Tests** - Individual functions and utilities
+2. **Integration Tests** - Lambda functions + AWS services
+3. **End-to-End Tests** - Full pipeline from upload to search
+4. **UI Tests** - React components and user workflows
+5. **Performance Tests** - Load, concurrency, and throughput
 
 ## Prerequisites
 
-- Deployed stack (run `./publish.sh`)
-- Sample documents in `tests/sample-documents/`
-- AWS CLI configured
+Before testing, ensure you have:
+
+- ✅ Deployed stack (run `./publish.sh`)
+- ✅ Sample documents in `tests/sample-documents/`
+- ✅ AWS CLI configured with valid credentials
+- ✅ Access to CloudWatch logs
+- ✅ pytest installed (`pip install pytest boto3`)
 
 ## Sample Documents
 
@@ -418,4 +462,15 @@ For testing issues:
 - Check CloudWatch logs first
 - Review DynamoDB tracking table
 - Verify Step Functions execution history
+- Consult [Troubleshooting Guide](TROUBLESHOOTING.md)
 - Open GitHub issue with test details
+
+---
+
+## Related Documentation
+
+- **[Deployment Guide](DEPLOYMENT.md)** - How to deploy the system for testing
+- **[User Guide](USER_GUIDE.md)** - How to use the WebUI for manual testing
+- **[Architecture Guide](ARCHITECTURE.md)** - Understanding the system components
+- **[Configuration Guide](CONFIGURATION.md)** - Test environment configuration
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Debugging failed tests

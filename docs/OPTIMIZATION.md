@@ -1,8 +1,18 @@
 # RAGStack-Lambda Optimization Guide
 
+**Audience:** System administrators, DevOps engineers, and developers optimizing production deployments
+
 ## Overview
 
-This guide provides strategies to optimize performance and reduce costs for the RAGStack-Lambda document processing pipeline.
+This guide provides advanced strategies to optimize performance and reduce costs for the RAGStack-Lambda document processing pipeline.
+
+**Prerequisites:**
+- Deployed and running RAGStack-Lambda system
+- Access to CloudWatch metrics and logs
+- Understanding of AWS Lambda and Bedrock pricing
+- Familiarity with CloudFormation/SAM
+
+For basic configuration, see [Configuration Guide](CONFIGURATION.md).
 
 ---
 
