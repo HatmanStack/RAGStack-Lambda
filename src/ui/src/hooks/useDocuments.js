@@ -101,7 +101,7 @@ export const useDocuments = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDocuments, refreshDocuments]);
 
   return {
     documents,

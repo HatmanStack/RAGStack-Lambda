@@ -26,6 +26,11 @@ export const SearchInterface = () => {
     }
   };
 
+  const handleClear = () => {
+    setInputValue('');
+    clearResults();
+  };
+
   return (
     <SpaceBetween size="l">
       <Container
@@ -60,8 +65,8 @@ export const SearchInterface = () => {
               Search
             </Button>
             <Button
-              onClick={clearResults}
-              disabled={results.length === 0 && !error}
+              onClick={handleClear}
+              disabled={results.length === 0 && !error && !inputValue}
             >
               Clear
             </Button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   Box,
@@ -18,13 +18,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (visible && documentId) {
-      loadDocument();
-    }
-  }, [visible, documentId]);
-
-  const loadDocument = async () => {
+  const loadDocument = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -36,7 +30,13 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchDocument, documentId]);
+
+  useEffect(() => {
+    if (visible && documentId) {
+      loadDocument();
+    }
+  }, [visible, documentId, loadDocument]);
 
   if (!visible) return null;
 
@@ -137,7 +137,13 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
             <Container header={<Header variant="h2">Metadata</Header>}>
               <Box>
                 <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
-                  {JSON.stringify(JSON.parse(document.metadata), null, 2)}
+                  {(() => {
+                    try {
+                      return JSON.stringify(JSON.parse(document.metadata), null, 2);
+                    } catch (err) {
+                      return `Invalid JSON: ${document.metadata}`;
+                    }
+                  })()}
                 </pre>
               </Box>
             </Container>

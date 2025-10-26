@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 
 const AuthContext = createContext(null);
@@ -16,11 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    checkUser();
-  }, []);
-
-  const checkUser = async () => {
+  const checkUser = useCallback(async () => {
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
@@ -37,7 +33,11 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkUser();
+  }, [checkUser]);
 
   const logout = async () => {
     try {
