@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+"""
+RAGStack-Lambda Deployment Script
+
+One-click deployment automation for RAGStack-Lambda stack.
+
+Usage:
+    python publish.py --env dev
+    python publish.py --env prod --admin-email admin@example.com
+    python publish.py --env dev --skip-ui --skip-layers
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import boto3
+from botocore.exceptions import ClientError
+
+
+class Colors:
+    """ANSI color codes for terminal output."""
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+
+
+def log_info(msg):
+    print(f"{Colors.OKBLUE}ℹ {msg}{Colors.ENDC}")
+
+
+def log_success(msg):
+    print(f"{Colors.OKGREEN}✓ {msg}{Colors.ENDC}")
+
+
+def log_error(msg):
+    print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}")
+
+
+def log_warning(msg):
+    print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
+
+
+def run_command(cmd, check=True, capture_output=False, cwd=None):
+    """Run shell command and return result."""
+    log_info(f"Running: {' '.join(cmd)}")
+
+    if capture_output:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=check, cwd=cwd)
+        return result.stdout.strip()
+    else:
+        result = subprocess.run(cmd, check=check, cwd=cwd)
+        return result.returncode == 0
+
+
+def validate_email(email):
+    """Validate email format."""
+    pattern = r'^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+    return re.match(pattern, email) is not None
+
+
+def prompt_for_email(default=None):
+    """Prompt user for admin email with validation."""
+    while True:
+        if default:
+            prompt_msg = f"Enter admin email address [{default}]: "
+        else:
+            prompt_msg = "Enter admin email address: "
+
+        email = input(prompt_msg).strip()
+
+        if not email and default:
+            email = default
+
+        if not email:
+            log_error("Email address is required")
+            continue
+
+        if validate_email(email):
+            return email
+        else:
+            log_error("Invalid email format. Please enter a valid email address (e.g., admin@example.com)")
+
+
+def get_samconfig_value(env, key):
+    """Read value from samconfig.toml for given environment."""
+    try:
+        import tomli
+    except ImportError:
+        # Fallback to manual parsing if tomli not available
+        return None
+
+    samconfig_path = Path("samconfig.toml")
+    if not samconfig_path.exists():
+        return None
+
+    with open(samconfig_path, "rb") as f:
+        config = tomli.load(f)
+
+    section = config.get(env, {})
+    deploy_params = section.get("deploy", {}).get("parameters", {})
+
+    # Parse parameter_overrides array
+    param_overrides = deploy_params.get("parameter_overrides", [])
+    for param in param_overrides:
+        if param.startswith(f"{key}="):
+            return param.split("=", 1)[1]
+
+    return None
+
+
+def build_lambda_layers():
+    """Build Lambda layers for shared dependencies."""
+    log_info("Building Lambda layers...")
+
+    layer_dir = Path("layers/python")
+    layer_dir.mkdir(parents=True, exist_ok=True)
+
+    # Install shared dependencies to layer
+    requirements_file = Path("lib/ragstack_common/requirements.txt")
+
+    if requirements_file.exists():
+        log_info("Installing shared dependencies to layer...")
+        run_command([
+            "pip", "install",
+            "-r", str(requirements_file),
+            "-t", str(layer_dir),
+            "--upgrade"
+        ])
+        log_success("Lambda layer built successfully")
+    else:
+        log_warning(f"Requirements file not found: {requirements_file}")
+
+
+def sam_build(skip_layers=False):
+    """Build SAM application."""
+    log_info("Building SAM application...")
+
+    if not skip_layers:
+        build_lambda_layers()
+
+    run_command(["sam", "build", "--parallel", "--cached"])
+    log_success("SAM build complete")
+
+
+def sam_deploy(env, admin_email, region="us-east-1"):
+    """Deploy SAM application."""
+    log_info(f"Deploying to {env} environment in {region}...")
+
+    # Determine stack name and project name from environment
+    if env == "prod":
+        stack_name = "RAGStack-prod"
+        project_name = "RAGStack-prod"
+    else:
+        stack_name = "RAGStack-dev"
+        project_name = "RAGStack-dev"
+
+    cmd = [
+        "sam", "deploy",
+        "--config-env", env,
+        "--region", region,
+        "--parameter-overrides",
+        f"AdminEmail={admin_email}",
+        f"ProjectName={project_name}"
+    ]
+
+    run_command(cmd)
+    log_success(f"Deployment to {env} complete")
+    return stack_name
+
+
+def get_stack_outputs(stack_name, region="us-east-1"):
+    """Get CloudFormation stack outputs."""
+    log_info(f"Fetching stack outputs for {stack_name}...")
+
+    cf_client = boto3.client('cloudformation', region_name=region)
+
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        outputs = response['Stacks'][0].get('Outputs', [])
+
+        output_dict = {}
+        for item in outputs:
+            output_dict[item['OutputKey']] = item['OutputValue']
+
+        return output_dict
+    except Exception as e:
+        log_error(f"Failed to get stack outputs: {e}")
+        return {}
+
+
+def configure_ui(stack_name, region="us-east-1"):
+    """Configure UI with stack outputs."""
+    log_info("Configuring UI...")
+
+    outputs = get_stack_outputs(stack_name, region)
+
+    if not outputs:
+        log_warning("No stack outputs found, skipping UI configuration")
+        return outputs
+
+    env_content = f"""REACT_APP_AWS_REGION={region}
+REACT_APP_USER_POOL_ID={outputs.get('UserPoolId', '')}
+REACT_APP_USER_POOL_CLIENT_ID={outputs.get('UserPoolClientId', '')}
+REACT_APP_IDENTITY_POOL_ID={outputs.get('IdentityPoolId', '')}
+REACT_APP_GRAPHQL_URL={outputs.get('GraphQLApiUrl', '')}
+REACT_APP_INPUT_BUCKET={outputs.get('InputBucketName', '')}
+"""
+
+    env_file = Path("src/ui/.env.production")
+    env_file.write_text(env_content)
+
+    log_success(f"UI configuration written to {env_file}")
+
+    return outputs
+
+
+def build_ui():
+    """Build React UI."""
+    log_info("Building UI...")
+
+    ui_dir = Path("src/ui")
+
+    if not ui_dir.exists():
+        log_warning("UI directory not found, skipping UI build")
+        return
+
+    # Install dependencies
+    log_info("Installing UI dependencies...")
+    run_command(["npm", "install"], cwd=ui_dir)
+
+    # Build
+    log_info("Building production UI...")
+    run_command(["npm", "run", "build"], cwd=ui_dir)
+
+    log_success("UI build complete")
+
+
+def deploy_ui(ui_bucket, region="us-east-1"):
+    """Deploy UI to S3."""
+    log_info(f"Deploying UI to {ui_bucket}...")
+
+    ui_build_dir = Path("src/ui/build")
+
+    if not ui_build_dir.exists():
+        log_error("UI build directory not found. Run build first.")
+        return
+
+    # Sync build to S3
+    run_command([
+        "aws", "s3", "sync",
+        str(ui_build_dir),
+        f"s3://{ui_bucket}/",
+        "--delete",
+        "--region", region
+    ])
+
+    log_success("UI deployed to S3")
+
+
+def invalidate_cloudfront(distribution_id):
+    """Invalidate CloudFront cache."""
+    log_info(f"Invalidating CloudFront cache for distribution {distribution_id}...")
+
+    run_command([
+        "aws", "cloudfront", "create-invalidation",
+        "--distribution-id", distribution_id,
+        "--paths", "/*"
+    ])
+
+    log_success("CloudFront cache invalidation initiated")
+
+
+def print_outputs(outputs, env, region):
+    """Print stack outputs in a nice format."""
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
+    print(f"{Colors.HEADER}Deployment Complete! ({env} environment){Colors.ENDC}")
+    print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
+
+    print(f"{Colors.BOLD}Stack Outputs:{Colors.ENDC}\n")
+
+    for key, value in outputs.items():
+        print(f"{Colors.BOLD}{key}:{Colors.ENDC} {value}")
+
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
+
+    # Print UI URL if available
+    if 'UIUrl' in outputs:
+        print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {outputs['UIUrl']}")
+    elif 'CloudFrontDomain' in outputs:
+        ui_url = f"https://{outputs['CloudFrontDomain']}"
+        print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {ui_url}")
+    elif 'UIBucketName' in outputs:
+        # Fallback to S3 website URL if CloudFront not configured
+        ui_url = f"http://{outputs['UIBucketName']}.s3-website-{region}.amazonaws.com"
+        print(f"{Colors.WARNING}UI URL (S3 - no HTTPS):{Colors.ENDC} {ui_url}")
+
+    if 'GraphQLApiUrl' in outputs:
+        print(f"{Colors.OKGREEN}GraphQL API:{Colors.ENDC} {outputs['GraphQLApiUrl']}")
+
+    if outputs.get('UserPoolId'):
+        print(f"\n{Colors.OKGREEN}Next Steps:{Colors.ENDC}")
+        print(f"1. Check your email for temporary password")
+        print(f"2. Sign in to the UI and change your password")
+        print(f"3. Upload a document to test the pipeline")
+
+    print()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Deploy RAGStack-Lambda to AWS",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python publish.py --env dev
+  python publish.py --env prod --admin-email admin@example.com
+  python publish.py --env dev --skip-ui
+        """
+    )
+
+    parser.add_argument(
+        "--env",
+        required=True,
+        choices=["dev", "prod"],
+        help="Deployment environment"
+    )
+
+    parser.add_argument(
+        "--admin-email",
+        help="Admin user email address (will prompt if not provided)"
+    )
+
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region (default: us-east-1)"
+    )
+
+    parser.add_argument(
+        "--skip-ui",
+        action="store_true",
+        help="Skip UI build and deployment"
+    )
+
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="Skip SAM build (use existing build)"
+    )
+
+    parser.add_argument(
+        "--skip-layers",
+        action="store_true",
+        help="Skip Lambda layer build"
+    )
+
+    args = parser.parse_args()
+
+    try:
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
+        print(f"{Colors.HEADER}RAGStack-Lambda Deployment ({args.env}){Colors.ENDC}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
+
+        # Get admin email (prompt if not provided)
+        if args.admin_email:
+            admin_email = args.admin_email
+            if not validate_email(admin_email):
+                log_error("Invalid email format provided")
+                sys.exit(1)
+        else:
+            # Try to get from samconfig.toml
+            default_email = get_samconfig_value(args.env, "AdminEmail")
+            admin_email = prompt_for_email(default=default_email)
+
+        log_info(f"Environment: {args.env}")
+        log_info(f"Admin Email: {admin_email}")
+        log_info(f"Region: {args.region}")
+
+        # SAM build
+        if not args.skip_build:
+            sam_build(skip_layers=args.skip_layers)
+
+        # SAM deploy
+        stack_name = sam_deploy(args.env, admin_email, args.region)
+
+        # Get outputs
+        outputs = get_stack_outputs(stack_name, args.region)
+
+        # Configure and deploy UI
+        if not args.skip_ui:
+            configure_ui(stack_name, args.region)
+            build_ui()
+
+            if 'UIBucketName' in outputs:
+                deploy_ui(outputs['UIBucketName'], args.region)
+
+                # Invalidate CloudFront if available
+                if 'CloudFrontDistributionId' in outputs:
+                    invalidate_cloudfront(outputs['CloudFrontDistributionId'])
+
+        # Print outputs
+        print_outputs(outputs, args.env, args.region)
+
+        log_success("Deployment complete!")
+
+    except subprocess.CalledProcessError as e:
+        log_error(f"Command failed: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        log_warning("\nDeployment cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        log_error(f"Deployment failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

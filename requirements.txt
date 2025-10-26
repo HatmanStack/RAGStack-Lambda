@@ -1,0 +1,12 @@
+# Core AWS SDK
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Image processing (for ragstack_common.image)
+Pillow>=10.0.0
+
+# PDF processing (for ragstack_common.ocr)
+PyMuPDF>=1.23.0
+
+# Optional but recommended for Lambda deployment
+awslambdaric>=2.0.0

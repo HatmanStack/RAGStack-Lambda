@@ -1,0 +1,1516 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: RAGStack
+    Description: Project name prefix for resources
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]{1,32}$'
+    ConstraintDescription: Must start with a letter, contain only alphanumeric characters and hyphens, and be 2-33 characters long
+    MinLength: 2
+    MaxLength: 33
+
+  OcrBackend:
+    Type: String
+    Default: textract
+    AllowedValues:
+      - textract
+      - bedrock
+    Description: OCR backend to use (textract or bedrock)
+
+  BedrockOcrModelId:
+    Type: String
+    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Description: Bedrock model ID for OCR (if backend=bedrock)
+    AllowedValues:
+      - anthropic.claude-3-5-haiku-20241022-v1:0
+      - anthropic.claude-3-5-sonnet-20241022-v2:0
+      - anthropic.claude-3-haiku-20240307-v1:0
+      - anthropic.claude-3-sonnet-20240229-v1:0
+    ConstraintDescription: Must be a valid Bedrock Claude model ID
+
+  TextEmbedModelId:
+    Type: String
+    Default: amazon.titan-embed-text-v2:0
+    Description: Bedrock model ID for text embeddings
+    AllowedValues:
+      - amazon.titan-embed-text-v2:0
+      - amazon.titan-embed-text-v1
+    ConstraintDescription: Must be a valid Bedrock Titan text embedding model ID
+
+  ImageEmbedModelId:
+    Type: String
+    Default: amazon.titan-embed-image-v1
+    Description: Bedrock model ID for image embeddings
+    AllowedValues:
+      - amazon.titan-embed-image-v1
+    ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
+
+  AdminEmail:
+    Type: String
+    Description: Admin user email for Cognito (used in Phase 4)
+    AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+    ConstraintDescription: Must be a valid email address
+
+  AlertEmail:
+    Type: String
+    Description: Email address for budget and CloudWatch alarm notifications
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: Must be a valid email address
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 900  # 15 minutes
+    MemorySize: 2048
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+
+Resources:
+  # =========================================================================
+  # S3 Buckets
+  # =========================================================================
+
+  InputBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-input-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-output-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldOutputs
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - !Sub 'https://${CloudFrontDistribution.DomainName}'
+            MaxAge: 3000
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  WorkingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-working-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteWorkingFiles
+            Status: Enabled
+            ExpirationInDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  VectorBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-vectors-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldVectors
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  UIBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-ui-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false  # CloudFront needs access
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  # =========================================================================
+  # CloudFront Distribution for UI
+  # =========================================================================
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${ProjectName} UI'
+
+  UIBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UIBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+            Action: s3:GetObject
+            Resource: !Sub '${UIBucket.Arn}/*'
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} UI Distribution'
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100  # Use only North America and Europe
+
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt UIBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+        # Custom error pages for SPA routing
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+          # For custom domain, use ACM certificate:
+          # AcmCertificateArn: !Ref CertificateArn
+          # SslSupportMethod: sni-only
+          # MinimumProtocolVersion: TLSv1.2_2021
+
+  # =========================================================================
+  # DynamoDB Tables
+  # =========================================================================
+
+  TrackingTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      TableName: !Sub '${ProjectName}-Tracking'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: document_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: document_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CreatedAtIndex
+          KeySchema:
+            - AttributeName: created_at
+              KeyType: HASH
+            - AttributeName: document_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  MeteringTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      TableName: !Sub '${ProjectName}-Metering'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: document_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: document_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  # =========================================================================
+  # Lambda Functions
+  # =========================================================================
+
+  ProcessDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-ProcessDocument'
+      CodeUri: src/lambda/process_document/
+      Handler: index.lambda_handler
+      Description: Process document - OCR and text extraction
+      Runtime: python3.13
+      Timeout: 900  # 15 minutes for large documents
+      MemorySize: 3008  # Max memory for OCR processing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          METERING_TABLE: !Ref MeteringTable
+          OUTPUT_BUCKET: !Ref OutputBucket
+          WORKING_BUCKET: !Ref WorkingBucket
+          OCR_BACKEND: !Ref OcrBackend
+          BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref InputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref OutputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref WorkingBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MeteringTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  GenerateEmbeddingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-GenerateEmbeddings'
+      CodeUri: src/lambda/generate_embeddings/
+      Handler: index.lambda_handler
+      Description: Generate text and image embeddings
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 2048
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          METERING_TABLE: !Ref MeteringTable
+          VECTOR_BUCKET: !Ref VectorBucket
+          TEXT_EMBED_MODEL: !Ref TextEmbedModelId
+          IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref OutputBucket
+        - S3CrudPolicy:
+            BucketName: !Ref VectorBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MeteringTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  QueryKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-QueryKB'
+      CodeUri: src/lambda/query_kb/
+      Handler: index.lambda_handler
+      Description: Query Bedrock Knowledge Base
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:Retrieve
+                - bedrock:RetrieveAndGenerate
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  # =========================================================================
+  # Step Functions State Machine
+  # =========================================================================
+
+  StateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ProcessDocumentFunction.Arn
+                  - !GetAtt GenerateEmbeddingsFunction.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  ProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${ProjectName}-ProcessingPipeline'
+      DefinitionUri: src/statemachine/pipeline.asl.json
+      DefinitionSubstitutions:
+        ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
+        GenerateEmbeddingsFunctionArn: !GetAtt GenerateEmbeddingsFunction.Arn
+      Role: !GetAtt StateMachineExecutionRole.Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vendedlogs/states/${ProjectName}-Pipeline'
+      RetentionInDays: 30
+
+  # =========================================================================
+  # EventBridge Rule for S3 Upload Trigger
+  # =========================================================================
+
+  S3UploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-S3UploadTrigger'
+      Description: Trigger processing pipeline on S3 upload
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref InputBucket
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessingStateMachine.Arn
+          RoleArn: !GetAtt EventBridgeToStepFunctionsRole.Arn
+          Id: TriggerProcessing
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: !Sub |
+              {
+                "document_id": "<key>",
+                "input_s3_uri": "s3://<bucket>/<key>",
+                "output_s3_prefix": "s3://${OutputBucket}/<key>/",
+                "vector_bucket": "${VectorBucket}",
+                "ocr_backend": "${OcrBackend}",
+                "bedrock_model_id": "${BedrockOcrModelId}"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  EventBridgeToStepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt ProcessingStateMachine.Arn
+
+  # =========================================================================
+  # Bedrock Knowledge Base
+  # =========================================================================
+
+  KnowledgeBaseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
+              ArnLike:
+                'aws:SourceArn': !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+      Policies:
+        - PolicyName: S3VectorsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3vectors:DescribeIndex
+                  - s3vectors:ReadVectors
+                  - s3vectors:WriteVectors
+                Resource:
+                  - !Sub '${VectorBucket.Arn}'
+                  - !Sub '${VectorBucket.Arn}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
+        - PolicyName: BedrockModelAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+
+  KnowledgeBaseCustomResourceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-KBCustomResource'
+      CodeUri: src/lambda/kb_custom_resource/
+      Handler: index.lambda_handler
+      Description: Custom resource for Knowledge Base creation with S3 Vectors
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:CreateKnowledgeBase
+                - bedrock:DeleteKnowledgeBase
+                - bedrock:GetKnowledgeBase
+                - bedrock:UpdateKnowledgeBase
+                - bedrock:CreateDataSource
+                - bedrock:DeleteDataSource
+                - bedrock:GetDataSource
+                - bedrock:ListDataSources
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - s3vectors:CreateIndex
+                - s3vectors:DeleteIndex
+                - s3vectors:DescribeIndex
+                - s3vectors:ListIndices
+              Resource: !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
+            - Effect: Allow
+              Action:
+                - iam:PassRole
+              Resource: !GetAtt KnowledgeBaseRole.Arn
+            - Effect: Allow
+              Action:
+                - ssm:PutParameter
+                - ssm:DeleteParameter
+                - ssm:GetParameter
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/KnowledgeBaseId'
+
+  KnowledgeBase:
+    Type: Custom::KnowledgeBase
+    Properties:
+      ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
+      KnowledgeBaseName: !Sub '${ProjectName}-KB'
+      RoleArn: !GetAtt KnowledgeBaseRole.Arn
+      VectorBucket: !Ref VectorBucket
+      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+      IndexName: !Sub '${ProjectName}-vector-index'
+      Region: !Ref AWS::Region
+      ProjectName: !Ref ProjectName
+
+  # =========================================================================
+  # Cognito Authentication
+  # =========================================================================
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${ProjectName}-Users'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${ProjectName}-WebClient'
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30  # Days
+      AccessTokenValidity: 60   # Minutes
+      IdTokenValidity: 60       # Minutes
+
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub '${ProjectName}Identity'
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt AuthenticatedRole.Arn
+
+  AuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: authenticated
+      Policies:
+        - PolicyName: AuthenticatedAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${InputBucket.Arn}/*'
+                  - !Sub '${OutputBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - appsync:GraphQL
+                Resource:
+                  - !Sub '${GraphQLApi.Arn}/*'
+
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref UserPool
+      Username: !Ref AdminEmail
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: email_verified
+          Value: 'true'
+      DesiredDeliveryMediums:
+        - EMAIL
+
+  # =========================================================================
+  # AppSync GraphQL API
+  # =========================================================================
+
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub '${ProjectName}-API'
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      UserPoolConfig:
+        UserPoolId: !Ref UserPool
+        AwsRegion: !Ref AWS::Region
+        DefaultAction: ALLOW
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
+        FieldLogLevel: ERROR
+
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      DefinitionS3Location: ./src/api/schema.graphql
+
+  AppSyncLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+
+  # AppSync resolver Lambda
+  AppSyncResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-AppSyncResolvers'
+      CodeUri: src/lambda/appsync_resolvers/
+      Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
+      Environment:
+        Variables:
+          TRACKING_TABLE: !Ref TrackingTable
+          INPUT_BUCKET: !Ref InputBucket
+          STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+      Tags:
+        Project: !Ref ProjectName
+        Environment: Production
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - S3CrudPolicy:
+            BucketName: !Ref InputBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !GetAtt ProcessingStateMachine.Arn
+
+  # Data source for resolvers
+  AppSyncLambdaDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: LambdaDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt AppSyncResolverFunction.Arn
+
+  AppSyncLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt AppSyncResolverFunction.Arn
+                  - !GetAtt QueryKBFunction.Arn
+
+  # Data source for KB queries
+  KBQueryDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: KBQueryDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt QueryKBFunction.Arn
+
+  # Resolvers
+  GetDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getDocument
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ListDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: listDocuments
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  CreateUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createUploadUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ProcessDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: processDocument
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  QueryKBResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: queryKnowledgeBase
+      DataSourceName: !GetAtt KBQueryDataSource.Name
+
+  # =========================================================================
+  # Dead Letter Queue for Error Handling
+  # =========================================================================
+
+  ProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-Processing-DLQ'
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeout: 300
+
+  # =========================================================================
+  # SNS Topic for Alarm Notifications
+  # =========================================================================
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-Alarms'
+      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  # =========================================================================
+  # CloudWatch Dashboard
+  # =========================================================================
+
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-Monitor'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "ProcessDocument", "color": "#1f77b4"}],
+                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Sum", "label": "QueryKB", "color": "#2ca02c"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Invocations",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "ProcessDocument Errors", "color": "#d62728"}],
+                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings Errors", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Sum", "label": "QueryKB Errors", "color": "#e377c2"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Errors",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/States", "ExecutionsFailed", {"stat": "Sum", "color": "#d62728"}],
+                  [".", "ExecutionsSucceeded", {"stat": "Sum", "color": "#2ca02c"}],
+                  [".", "ExecutionsTimedOut", {"stat": "Sum", "color": "#ff7f0e"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Step Functions Executions"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"label": "DLQ Messages", "color": "#d62728"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Dead Letter Queue",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum", "color": "#1f77b4"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum", "color": "#ff7f0e"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "ProcessDocument", "color": "#1f77b4"}],
+                  ["...", {"stat": "Average", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
+                  ["...", {"stat": "Average", "label": "QueryKB", "color": "#2ca02c"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (ms)",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  # =========================================================================
+  # CloudWatch Alarms
+  # =========================================================================
+
+  ProcessDocumentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
+      AlarmDescription: Alert when ProcessDocument Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDocumentFunction
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  GenerateEmbeddingsErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
+      AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GenerateEmbeddingsFunction
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  DLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ProcessingDLQ.QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  StepFunctionsFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
+      AlarmDescription: Alert when Step Functions executions fail
+      MetricName: ExecutionsFailed
+      Namespace: AWS/States
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Ref ProcessingStateMachine
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  ProcessDocumentThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
+      AlarmDescription: Alert when ProcessDocument Lambda is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessDocumentFunction
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  # =========================================================================
+  # CloudTrail for Audit Logging
+  # =========================================================================
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: Production
+        - Key: CostCenter
+          Value: Engineering
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-Trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      IsMultiRegionTrail: false
+      IncludeGlobalServiceEvents: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${InputBucket.Arn}/*'
+                - !Sub '${OutputBucket.Arn}/*'
+                - !Sub '${VectorBucket.Arn}/*'
+            - Type: AWS::Lambda::Function
+              Values:
+                - !GetAtt ProcessDocumentFunction.Arn
+                - !GetAtt GenerateEmbeddingsFunction.Arn
+
+  # =========================================================================
+  # Cost Management - Monthly Budget
+  # =========================================================================
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
+        BudgetLimit:
+          Amount: 100
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+        CostFilters:
+          TagKeyValue:
+            - !Sub 'user:Project$${ProjectName}'
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  # S3 Buckets
+  InputBucketName:
+    Description: S3 bucket for document uploads
+    Value: !Ref InputBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-InputBucket'
+
+  OutputBucketName:
+    Description: S3 bucket for processed documents
+    Value: !Ref OutputBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-OutputBucket'
+
+  WorkingBucketName:
+    Description: S3 bucket for temporary working files
+    Value: !Ref WorkingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WorkingBucket'
+
+  VectorBucketName:
+    Description: S3 bucket for embeddings and vectors
+    Value: !Ref VectorBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-VectorBucket'
+
+  UIBucketName:
+    Description: S3 bucket for WebUI hosting
+    Value: !Ref UIBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UIBucket'
+
+  # DynamoDB Tables
+  TrackingTableName:
+    Description: DynamoDB table for document tracking
+    Value: !Ref TrackingTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TrackingTable'
+
+  MeteringTableName:
+    Description: DynamoDB table for usage metering
+    Value: !Ref MeteringTable
+    Export:
+      Name: !Sub '${AWS::StackName}-MeteringTable'
+
+  # Lambda Functions
+  ProcessDocumentFunctionArn:
+    Description: Process document Lambda ARN
+    Value: !GetAtt ProcessDocumentFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessDocumentFunction'
+
+  GenerateEmbeddingsFunctionArn:
+    Description: Generate embeddings Lambda ARN
+    Value: !GetAtt GenerateEmbeddingsFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GenerateEmbeddingsFunction'
+
+  QueryKBFunctionArn:
+    Description: Query Knowledge Base Lambda ARN
+    Value: !GetAtt QueryKBFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-QueryKBFunction'
+
+  # Step Functions
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !GetAtt ProcessingStateMachine.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachine'
+
+  # Knowledge Base
+  KnowledgeBaseId:
+    Description: Bedrock Knowledge Base ID
+    Value: !GetAtt KnowledgeBase.KnowledgeBaseId
+    Export:
+      Name: !Sub '${AWS::StackName}-KnowledgeBaseId'
+
+  KnowledgeBaseArn:
+    Description: Bedrock Knowledge Base ARN
+    Value: !GetAtt KnowledgeBase.KnowledgeBaseArn
+    Export:
+      Name: !Sub '${AWS::StackName}-KnowledgeBaseArn'
+
+  DataSourceId:
+    Description: Bedrock Knowledge Base Data Source ID
+    Value: !GetAtt KnowledgeBase.DataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-DataSourceId'
+
+  # API & Authentication
+  GraphQLApiUrl:
+    Description: GraphQL API URL
+    Value: !GetAtt GraphQLApi.GraphQLUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-GraphQLApiUrl'
+
+  GraphQLApiId:
+    Description: GraphQL API ID
+    Value: !GetAtt GraphQLApi.ApiId
+    Export:
+      Name: !Sub '${AWS::StackName}-GraphQLApiId'
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub '${AWS::StackName}-IdentityPoolId'
+
+  # Configuration
+  Region:
+    Description: AWS Region
+    Value: !Ref AWS::Region
+
+  StackName:
+    Description: CloudFormation Stack Name
+    Value: !Ref AWS::StackName
+
+  # CloudFront
+  CloudFrontDomain:
+    Description: CloudFront distribution domain
+    Value: !GetAtt CloudFrontDistribution.DomainName
+
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID
+    Value: !Ref CloudFrontDistribution
+
+  UIUrl:
+    Description: UI URL (HTTPS via CloudFront)
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'

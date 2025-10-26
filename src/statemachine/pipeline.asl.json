@@ -1,0 +1,83 @@
+{
+  "Comment": "RAGStack-Lambda document processing pipeline",
+  "StartAt": "ProcessDocument",
+  "States": {
+    "ProcessDocument": {
+      "Type": "Task",
+      "Resource": "${ProcessDocumentFunctionArn}",
+      "Comment": "Perform OCR and extract text/images",
+      "ResultPath": "$.processResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "GenerateEmbeddings"
+    },
+
+    "GenerateEmbeddings": {
+      "Type": "Task",
+      "Resource": "${GenerateEmbeddingsFunctionArn}",
+      "Comment": "Generate text and image embeddings",
+      "Parameters": {
+        "document_id.$": "$.document_id",
+        "output_s3_uri.$": "$.processResult.output_s3_uri",
+        "pages.$": "$.processResult.pages",
+        "vector_bucket.$": "$.vector_bucket"
+      },
+      "ResultPath": "$.embeddingResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "MarkAsIndexed"
+    },
+
+    "MarkAsIndexed": {
+      "Type": "Pass",
+      "Comment": "Document successfully processed and indexed",
+      "Parameters": {
+        "document_id.$": "$.document_id",
+        "status": "indexed",
+        "message": "Document successfully processed and indexed in Knowledge Base"
+      },
+      "End": true
+    },
+
+    "ProcessingFailed": {
+      "Type": "Fail",
+      "Error": "ProcessingError",
+      "Cause": "Document processing pipeline failed"
+    }
+  }
+}
