@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 
 const AuthContext = createContext(null);
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
     checkUser();
   }, [checkUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await signOut();
       setUser(null);
@@ -47,16 +47,16 @@ export const AuthProvider = ({ children }) => {
       console.error('Error signing out:', err);
       setError(err.message);
     }
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     error,
     isAuthenticated: !!user,
     checkUser,
     logout
-  };
+  }), [user, loading, error, checkUser, logout]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -54,7 +54,7 @@ def resize_image(
         new_height = int(current_height * scale_factor)
         logger.info(f"Resizing image from {current_width}x{current_height} to {new_width}x{new_height}")
 
-        image = image.resize((new_width, new_height), Image.LANCZOS)
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         # Save in original format if possible, otherwise JPEG
         img_byte_array = io.BytesIO()
