@@ -7,6 +7,10 @@ Parameters:
     Type: String
     Default: RAGStack
     Description: Project name prefix for resources
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]{1,32}$'
+    ConstraintDescription: Must start with a letter, contain only alphanumeric characters and hyphens, and be 2-33 characters long
+    MinLength: 2
+    MaxLength: 33
 
   OcrBackend:
     Type: String
@@ -20,21 +24,40 @@ Parameters:
     Type: String
     Default: anthropic.claude-3-5-haiku-20241022-v1:0
     Description: Bedrock model ID for OCR (if backend=bedrock)
+    AllowedValues:
+      - anthropic.claude-3-5-haiku-20241022-v1:0
+      - anthropic.claude-3-5-sonnet-20241022-v2:0
+      - anthropic.claude-3-haiku-20240307-v1:0
+      - anthropic.claude-3-sonnet-20240229-v1:0
+    ConstraintDescription: Must be a valid Bedrock Claude model ID
 
   TextEmbedModelId:
     Type: String
     Default: amazon.titan-embed-text-v2:0
     Description: Bedrock model ID for text embeddings
+    AllowedValues:
+      - amazon.titan-embed-text-v2:0
+      - amazon.titan-embed-text-v1
+    ConstraintDescription: Must be a valid Bedrock Titan text embedding model ID
 
   ImageEmbedModelId:
     Type: String
     Default: amazon.titan-embed-image-v1
     Description: Bedrock model ID for image embeddings
+    AllowedValues:
+      - amazon.titan-embed-image-v1
+    ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
 
   AdminEmail:
     Type: String
     Description: Admin user email for Cognito (used in Phase 4)
     AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+    ConstraintDescription: Must be a valid email address
+
+  AlertEmail:
+    Type: String
+    Description: Email address for budget and CloudWatch alarm notifications
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: Must be a valid email address
 
 Globals:
@@ -114,7 +137,7 @@ Resources:
               - GET
               - HEAD
             AllowedOrigins:
-              - '*'  # TODO Phase 6: Restrict to CloudFront distribution
+              - !Sub 'https://${CloudFrontDistribution.DomainName}'
             MaxAge: 3000
       Tags:
         - Key: Project
@@ -976,6 +999,19 @@ Resources:
       VisibilityTimeout: 300
 
   # =========================================================================
+  # SNS Topic for Alarm Notifications
+  # =========================================================================
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-Alarms'
+      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  # =========================================================================
   # CloudWatch Dashboard
   # =========================================================================
 
@@ -1134,6 +1170,10 @@ Resources:
         - Name: FunctionName
           Value: !Ref ProcessDocumentFunction
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
 
   GenerateEmbeddingsErrorAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1151,6 +1191,10 @@ Resources:
         - Name: FunctionName
           Value: !Ref GenerateEmbeddingsFunction
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
 
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1168,6 +1212,10 @@ Resources:
         - Name: QueueName
           Value: !GetAtt ProcessingDLQ.QueueName
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
 
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1185,6 +1233,10 @@ Resources:
         - Name: StateMachineArn
           Value: !Ref ProcessingStateMachine
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
 
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1202,6 +1254,10 @@ Resources:
         - Name: FunctionName
           Value: !Ref ProcessDocumentFunction
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
 
   # =========================================================================
   # CloudTrail for Audit Logging
@@ -1306,7 +1362,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: your-email@example.com
+              Address: !Ref AlertEmail
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
@@ -1314,7 +1370,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: your-email@example.com
+              Address: !Ref AlertEmail
 
 Outputs:
   # S3 Buckets
