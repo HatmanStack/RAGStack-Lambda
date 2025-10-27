@@ -544,7 +544,7 @@ Resources:
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub '${ProjectName}-ProcessingPipeline'
+      Name: !Sub 'RAGStack-${ProjectName}-ProcessingPipeline'
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
@@ -570,7 +570,7 @@ Resources:
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${ProjectName}-S3UploadTrigger'
+      Name: !Sub 'RAGStack-${ProjectName}-S3UploadTrigger'
       Description: Trigger processing pipeline on S3 upload
       EventPattern:
         source:
@@ -719,11 +719,11 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub '${ProjectName}-KB'
+      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub '${ProjectName}-vector-index'
+      IndexName: !Sub 'RAGStack-${ProjectName}-vector-index'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 
@@ -734,7 +734,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub '${ProjectName}-Users'
+      UserPoolName: !Sub 'RAGStack-${ProjectName}-Users'
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -761,7 +761,7 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub '${ProjectName}-WebClient'
+      ClientName: !Sub 'RAGStack-${ProjectName}-WebClient'
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -775,7 +775,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub '${ProjectName}Identity'
+      IdentityPoolName: !Sub 'RAGStack${ProjectName}Identity'
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -841,7 +841,7 @@ Resources:
   GraphQLApi:
     Type: AWS::AppSync::GraphQLApi
     Properties:
-      Name: !Sub '${ProjectName}-API'
+      Name: !Sub 'RAGStack-${ProjectName}-API'
       AuthenticationType: AMAZON_COGNITO_USER_POOLS
       UserPoolConfig:
         UserPoolId: !Ref UserPool
@@ -995,7 +995,7 @@ Resources:
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${ProjectName}-Processing-DLQ'
+      QueueName: !Sub 'RAGStack-${ProjectName}-Processing-DLQ'
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
@@ -1007,8 +1007,8 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${ProjectName}-Alarms'
-      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
+      TopicName: !Sub 'RAGStack-${ProjectName}-Alarms'
+      DisplayName: !Sub 'RAGStack-${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
         - Endpoint: !Ref AlertEmail
@@ -1021,7 +1021,7 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub '${ProjectName}-Monitor'
+      DashboardName: !Sub 'RAGStack-${ProjectName}-Monitor'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1160,7 +1160,7 @@ Resources:
   ProcessDocumentErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Errors'
       AlarmDescription: Alert when ProcessDocument Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1181,7 +1181,7 @@ Resources:
   GenerateEmbeddingsErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings-Errors'
       AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1202,7 +1202,7 @@ Resources:
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-DLQ-Messages'
       AlarmDescription: Alert when messages appear in DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -1223,7 +1223,7 @@ Resources:
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-StepFunctions-Failures'
       AlarmDescription: Alert when Step Functions executions fail
       MetricName: ExecutionsFailed
       Namespace: AWS/States
@@ -1244,7 +1244,7 @@ Resources:
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Throttles'
       AlarmDescription: Alert when ProcessDocument Lambda is throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -1321,7 +1321,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${ProjectName}-Trail'
+      TrailName: !Sub 'RAGStack-${ProjectName}-Trail'
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
       IsMultiRegionTrail: false
@@ -1348,7 +1348,7 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
+        BudgetName: !Sub 'RAGStack-${ProjectName}-Monthly-Budget'
         BudgetLimit:
           Amount: 100
           Unit: USD
