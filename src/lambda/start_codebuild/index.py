@@ -29,16 +29,26 @@ def create_or_update(event, context):
     """
     logger.info("Starting CodeBuild project...")
 
-    project_name = event['ResourceProperties']['BuildProjectName']
+    # Validate input
+    resource_properties = event.get('ResourceProperties', {})
+    project_name = resource_properties.get('BuildProjectName')
+
+    if not project_name:
+        raise ValueError("BuildProjectName is required in ResourceProperties")
 
     try:
         response = codebuild_client.start_build(projectName=project_name)
         build_id = response['build']['id']
 
-        logger.info(f"Started build: {build_id}")
+        # Get AWS region for console URL
+        region = os.environ.get('AWS_REGION', 'us-east-1')
+        console_url = f"https://{region}.console.aws.amazon.com/codesuite/codebuild/projects/{project_name}/build/{build_id.split(':')[-1]}"
 
-        # Store build_id in helper data for polling
-        helper.Data['build_id'] = build_id
+        logger.info(f"Started build: {build_id}")
+        logger.info(f"Console URL: {console_url}")
+
+        # Store build_id in helper data for polling (use update pattern)
+        helper.Data.update({'build_id': build_id})
 
     except Exception as e:
         logger.error(f"Failed to start build: {e}")
@@ -98,4 +108,4 @@ def delete(event, context):
 def lambda_handler(event, context):
     """Lambda handler entry point"""
     logger.info(f"Received event: {json.dumps(event)}")
-    helper(event, context)
+    return helper(event, context)
