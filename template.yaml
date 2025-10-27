@@ -1008,6 +1008,27 @@ Resources:
                 - states:StartExecution
               Resource: !GetAtt ProcessingStateMachine.Arn
 
+  StartUICodeBuild:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'RAGStack-${ProjectName}-StartUICodeBuild'
+      CodeUri: src/lambda/start_codebuild/
+      Handler: index.lambda_handler
+      Description: Custom resource to trigger UI CodeBuild project
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - codebuild:StartBuild
+                - codebuild:BatchGetBuilds
+              Resource: !GetAtt UICodeBuildProject.Arn
+
   # Data source for resolvers
   AppSyncLambdaDataSource:
     Type: AWS::AppSync::DataSource
