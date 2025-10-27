@@ -227,13 +227,19 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # S3 access for artifacts and UI deployment
+              # S3 read access for UI source artifacts
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3:::*/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${UISourceBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${UISourceBucket}'
+              # S3 write access for UI deployment bucket
               - Effect: Allow
                 Action:
                   - s3:ListBucket
