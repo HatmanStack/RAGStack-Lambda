@@ -213,6 +213,7 @@ Resources:
 
   UICodeBuildServiceRole:
     Type: AWS::IAM::Role
+    Condition: BuildUI
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -261,6 +262,7 @@ Resources:
 
   UICodeBuildProject:
     Type: AWS::CodeBuild::Project
+    Condition: BuildUI
     Properties:
       Name: !Sub '${AWS::StackName}-webui-build'
       Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
@@ -1013,6 +1015,7 @@ Resources:
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function
+    Condition: BuildUI
     Properties:
       FunctionName: !Sub 'RAGStack-${ProjectName}-StartUICodeBuild'
       CodeUri: src/lambda/start_codebuild/
@@ -1034,6 +1037,7 @@ Resources:
 
   CodeBuildRun:
     Type: Custom::CodeBuildRun
+    Condition: BuildUI
     Properties:
       ServiceToken: !GetAtt StartUICodeBuild.Arn
       BuildProjectName: !Ref UICodeBuildProject
