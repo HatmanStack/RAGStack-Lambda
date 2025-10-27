@@ -324,36 +324,9 @@ def check_sam_cli():
     return True
 
 
-def build_lambda_layers():
-    """Build Lambda layers for shared dependencies."""
-    log_info("Building Lambda layers...")
-
-    layer_dir = Path("layers/python")
-    layer_dir.mkdir(parents=True, exist_ok=True)
-
-    # Install shared dependencies to layer
-    requirements_file = Path("lib/ragstack_common/requirements.txt")
-
-    if requirements_file.exists():
-        log_info("Installing shared dependencies to layer...")
-        run_command([
-            "pip", "install",
-            "-r", str(requirements_file),
-            "-t", str(layer_dir),
-            "--upgrade"
-        ])
-        log_success("Lambda layer built successfully")
-    else:
-        log_warning(f"Requirements file not found: {requirements_file}")
-
-
-def sam_build(skip_layers=False):
+def sam_build():
     """Build SAM application."""
     log_info("Building SAM application...")
-
-    if not skip_layers:
-        build_lambda_layers()
-
     run_command(["sam", "build", "--parallel", "--cached"])
     log_success("SAM build complete")
 

@@ -13,6 +13,7 @@ build/
 
 # AWS
 .aws-sam/
+layers/
 
 # Node
 node_modules/

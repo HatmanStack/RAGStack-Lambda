@@ -49,6 +49,16 @@ from ragstack_common.ocr import extract_text_from_pdf
 - **process_document** - Uses ocr, storage, bedrock, image modules for document processing
 - **generate_embeddings** - Uses bedrock, storage modules for embedding generation
 
+### Lambda Functions NOT Using This Library
+
+The following Lambda functions do not import from ragstack_common and therefore do not include it:
+
+- **query_kb** - Uses boto3 directly for Bedrock KB queries, no shared utilities needed
+- **kb_custom_resource** - Uses boto3 directly for CloudFormation custom resource, standalone
+- **appsync_resolvers** - Uses boto3 directly for AppSync resolvers, standalone DynamoDB/S3/SFN operations
+
+**Note**: If future requirements dictate that these functions need shared utilities, add `./lib` to their `requirements.txt` files.
+
 ## Development
 
 ### Making Changes
