@@ -322,50 +322,37 @@ def print_outputs(outputs, env, region):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Deploy RAGStack-Lambda to AWS",
+        description="Deploy RAGStack-Lambda with project-based naming",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python publish.py --env dev
-  python publish.py --env prod --admin-email admin@example.com
-  python publish.py --env dev --skip-ui
+  python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
+  python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
         """
     )
 
     parser.add_argument(
-        "--env",
+        "--project-name",
         required=True,
-        choices=["dev", "prod"],
-        help="Deployment environment"
+        help="Project name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)"
     )
 
     parser.add_argument(
         "--admin-email",
-        help="Admin user email address (will prompt if not provided)"
+        required=True,
+        help="Admin email for Cognito user and CloudWatch alerts"
     )
 
     parser.add_argument(
         "--region",
-        default="us-east-1",
-        help="AWS region (default: us-east-1)"
+        required=True,
+        help="AWS region (e.g., us-east-1, us-west-2)"
     )
 
     parser.add_argument(
         "--skip-ui",
         action="store_true",
         help="Skip UI build and deployment"
-    )
-
-    parser.add_argument(
-        "--skip-build",
-        action="store_true",
-        help="Skip SAM build (use existing build)"
-    )
-
-    parser.add_argument(
-        "--skip-layers",
-        action="store_true",
-        help="Skip Lambda layer build"
     )
 
     args = parser.parse_args()
