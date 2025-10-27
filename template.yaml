@@ -1029,6 +1029,14 @@ Resources:
                 - codebuild:BatchGetBuilds
               Resource: !GetAtt UICodeBuildProject.Arn
 
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt StartUICodeBuild.Arn
+      BuildProjectName: !Ref UICodeBuildProject
+      # Force rebuild when source changes
+      UISourceLocation: !Sub 's3://${UISourceBucket}/${UISourceKey}'
+
   # Data source for resolvers
   AppSyncLambdaDataSource:
     Type: AWS::AppSync::DataSource
