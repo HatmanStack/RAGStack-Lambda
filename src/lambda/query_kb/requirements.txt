@@ -1,2 +1,1 @@
-../../../lib/ragstack_common
 boto3>=1.34.0
