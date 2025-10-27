@@ -680,11 +680,28 @@ Examples:
         log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
+        # Package UI source (unless --skip-ui)
+        ui_source_bucket = None
+        ui_source_key = None
+        if not args.skip_ui:
+            try:
+                ui_source_bucket, ui_source_key = package_ui_source()
+            except (FileNotFoundError, IOError) as e:
+                log_error(f"Failed to package UI: {e}")
+                sys.exit(1)
+
         # SAM build
         sam_build()
 
         # SAM deploy
-        stack_name = sam_deploy(args.project_name, args.admin_email, args.region)
+        stack_name = sam_deploy(
+            args.project_name,
+            args.admin_email,
+            args.region,
+            ui_source_bucket=ui_source_bucket,
+            ui_source_key=ui_source_key,
+            skip_ui=args.skip_ui
+        )
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
