@@ -331,7 +331,7 @@ def sam_build():
     log_success("SAM build complete")
 
 
-def sam_deploy(project_name, admin_email, region):
+def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -339,6 +339,9 @@ def sam_deploy(project_name, admin_email, region):
         project_name: Project name for resource naming
         admin_email: Admin email for Cognito and alerts
         region: AWS region
+        ui_source_bucket: S3 bucket containing UI source zip (if not skip_ui)
+        ui_source_key: S3 key for UI source zip (if not skip_ui)
+        skip_ui: Whether to skip UI deployment
 
     Returns:
         str: CloudFormation stack name
@@ -348,6 +351,18 @@ def sam_deploy(project_name, admin_email, region):
     # Stack name follows pattern: RAGStack-{project-name}
     stack_name = f"RAGStack-{project_name}"
 
+    # Base parameter overrides
+    param_overrides = [
+        f"ProjectName={project_name}",
+        f"AdminEmail={admin_email}",
+    ]
+
+    # Add UI parameters if building UI
+    if not skip_ui and ui_source_bucket and ui_source_key:
+        log_info("UI will be deployed via CodeBuild during stack creation")
+        param_overrides.append(f"UISourceBucket={ui_source_bucket}")
+        param_overrides.append(f"UISourceKey={ui_source_key}")
+
     cmd = [
         "sam", "deploy",
         "--stack-name", stack_name,
@@ -356,9 +371,7 @@ def sam_deploy(project_name, admin_email, region):
         "--resolve-s3",
         "--no-confirm-changeset",
         "--parameter-overrides",
-        f"ProjectName={project_name}",
-        f"AdminEmail={admin_email}",
-    ]
+    ] + param_overrides
 
     run_command(cmd)
     log_success(f"Deployment of project '{project_name}' complete")
