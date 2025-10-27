@@ -246,6 +246,69 @@ Resources:
                   - logs:PutLogEvents
                 Resource: '*'
 
+  UICodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-webui-build'
+      Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
+      ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo "Installing dependencies..."
+                - cd src/ui
+                - npm install
+            build:
+              commands:
+                - echo "Building React application..."
+                - |
+                  # Generate aws-exports.js from CloudFormation outputs
+                  cat > src/aws-exports.js << EOF
+                  const awsConfig = {
+                    region: '${AWS_REGION}',
+                    userPoolId: '${USER_POOL_ID}',
+                    userPoolWebClientId: '${USER_POOL_CLIENT_ID}',
+                    identityPoolId: '${IDENTITY_POOL_ID}',
+                    apiEndpoint: '${GRAPHQL_API_URL}',
+                  };
+                  export default awsConfig;
+                  EOF
+                - npm run build
+            post_build:
+              commands:
+                - echo "Deploying to S3..."
+                - aws s3 sync build/ s3://${UI_BUCKET}/ --delete
+                - echo "Invalidating CloudFront cache..."
+                - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths "/*"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: USER_POOL_ID
+            Value: !Ref UserPool
+          - Name: USER_POOL_CLIENT_ID
+            Value: !Ref UserPoolClient
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: GRAPHQL_API_URL
+            Value: !GetAtt GraphQLApi.GraphQLUrl
+          - Name: UI_BUCKET
+            Value: !Ref UIBucket
+          - Name: CLOUDFRONT_DIST_ID
+            Value: !Ref CloudFrontDistribution
+      TimeoutInMinutes: 30
+
   # =========================================================================
   # UI S3 Bucket
   # =========================================================================
