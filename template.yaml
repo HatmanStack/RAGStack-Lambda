@@ -1011,7 +1011,7 @@ Resources:
       DisplayName: !Sub 'RAGStack-${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
-        - Endpoint: !Ref AlertEmail
+        - Endpoint: !Ref AdminEmail
           Protocol: email
 
   # =========================================================================
@@ -1365,7 +1365,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: !Ref AlertEmail
+              Address: !Ref AdminEmail
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
@@ -1373,7 +1373,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: !Ref AlertEmail
+              Address: !Ref AdminEmail
 
 Outputs:
   # S3 Buckets
