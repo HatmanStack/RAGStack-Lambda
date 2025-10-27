@@ -71,7 +71,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-input-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-input-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -104,7 +104,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-output-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-output-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -144,7 +144,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-working-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-working-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -173,7 +173,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-vectors-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -206,7 +206,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-ui-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-ui-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1270,7 +1270,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
