@@ -409,29 +409,26 @@ def sam_build(skip_layers=False):
     log_success("SAM build complete")
 
 
-def sam_deploy(env, admin_email, region="us-east-1"):
+def sam_deploy(project_name, admin_email, region):
     """Deploy SAM application."""
-    log_info(f"Deploying to {env} environment in {region}...")
+    log_info(f"Deploying project '{project_name}' to {region}...")
 
-    # Determine stack name and project name from environment
-    if env == "prod":
-        stack_name = "RAGStack-prod"
-        project_name = "RAGStack-prod"
-    else:
-        stack_name = "RAGStack-dev"
-        project_name = "RAGStack-dev"
+    # Stack name follows pattern: RAGStack-{project-name}
+    stack_name = f"RAGStack-{project_name}"
 
     cmd = [
         "sam", "deploy",
-        "--config-env", env,
+        "--stack-name", stack_name,
         "--region", region,
+        "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
+        "--resolve-s3",
         "--parameter-overrides",
         f"AdminEmail={admin_email}",
         f"ProjectName={project_name}"
     ]
 
     run_command(cmd)
-    log_success(f"Deployment to {env} complete")
+    log_success(f"Deployment of project '{project_name}' complete")
     return stack_name
 
 
@@ -537,10 +534,10 @@ def invalidate_cloudfront(distribution_id):
     log_success("CloudFront cache invalidation initiated")
 
 
-def print_outputs(outputs, env, region):
+def print_outputs(outputs, project_name, region):
     """Print stack outputs in a nice format."""
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-    print(f"{Colors.HEADER}Deployment Complete! ({env} environment){Colors.ENDC}")
+    print(f"{Colors.HEADER}Deployment Complete! (Project: {project_name}){Colors.ENDC}")
     print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}Stack Outputs:{Colors.ENDC}\n")
@@ -612,30 +609,40 @@ Examples:
 
     try:
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-        print(f"{Colors.HEADER}RAGStack-Lambda Deployment ({args.env}){Colors.ENDC}")
+        print(f"{Colors.HEADER}RAGStack-Lambda Deployment{Colors.ENDC}")
         print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
-        # Get admin email (prompt if not provided)
-        if args.admin_email:
-            admin_email = args.admin_email
-            if not validate_email(admin_email):
-                log_error("Invalid email format provided")
+        # Validate inputs
+        log_info("Validating inputs...")
+        try:
+            validate_project_name(args.project_name)
+            validate_region(args.region)
+            if not validate_email(args.admin_email):
+                log_error(f"Invalid email format: {args.admin_email}")
                 sys.exit(1)
-        else:
-            # Try to get from samconfig.toml
-            default_email = get_samconfig_value(args.env, "AdminEmail")
-            admin_email = prompt_for_email(default=default_email)
+        except ValueError as e:
+            log_error(str(e))
+            sys.exit(1)
 
-        log_info(f"Environment: {args.env}")
-        log_info(f"Admin Email: {admin_email}")
+        log_success("All inputs validated")
+
+        # Check prerequisites
+        log_info("Checking prerequisites...")
+        check_python_version()
+        check_nodejs_version(skip_ui=args.skip_ui)
+        check_aws_cli()
+        check_sam_cli()
+        log_success("All prerequisites met")
+
+        log_info(f"Project Name: {args.project_name}")
+        log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
         # SAM build
-        if not args.skip_build:
-            sam_build(skip_layers=args.skip_layers)
+        sam_build()
 
         # SAM deploy
-        stack_name = sam_deploy(args.env, admin_email, args.region)
+        stack_name = sam_deploy(args.project_name, args.admin_email, args.region)
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
@@ -653,7 +660,7 @@ Examples:
                     invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
-        print_outputs(outputs, args.env, args.region)
+        print_outputs(outputs, args.project_name, args.region)
 
         log_success("Deployment complete!")
 
