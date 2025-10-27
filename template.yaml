@@ -72,6 +72,9 @@ Globals:
       Variables:
         LOG_LEVEL: INFO
 
+Conditions:
+  BuildUI: !Not [!Equals [!Ref UISourceBucket, '']]
+
 Resources:
   # =========================================================================
   # S3 Buckets
