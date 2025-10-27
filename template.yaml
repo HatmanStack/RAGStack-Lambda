@@ -378,7 +378,7 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-ProcessDocument'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-ProcessDocument'
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
@@ -428,7 +428,7 @@ Resources:
   GenerateEmbeddingsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-GenerateEmbeddings'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings'
       CodeUri: src/lambda/generate_embeddings/
       Handler: index.lambda_handler
       Description: Generate text and image embeddings
@@ -470,7 +470,7 @@ Resources:
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-QueryKB'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-QueryKB'
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
@@ -670,7 +670,7 @@ Resources:
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-KBCustomResource'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-KBCustomResource'
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
@@ -874,7 +874,7 @@ Resources:
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-AppSyncResolvers'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-AppSyncResolvers'
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
       Tracing: Active
