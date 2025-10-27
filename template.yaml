@@ -5,12 +5,11 @@ Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
 Parameters:
   ProjectName:
     Type: String
-    Default: RAGStack
-    Description: Project name prefix for resources
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]{1,32}$'
-    ConstraintDescription: Must start with a letter, contain only alphanumeric characters and hyphens, and be 2-33 characters long
+    Description: Project name for resource identification (lowercase alphanumeric + hyphens, 2-32 chars)
+    AllowedPattern: '^[a-z][a-z0-9-]{1,31}$'
+    ConstraintDescription: Must start with lowercase letter, contain only lowercase alphanumeric and hyphens, 2-32 chars
     MinLength: 2
-    MaxLength: 33
+    MaxLength: 32
 
   OcrBackend:
     Type: String
@@ -50,14 +49,8 @@ Parameters:
 
   AdminEmail:
     Type: String
-    Description: Admin user email for Cognito (used in Phase 4)
+    Description: Admin email for Cognito user and CloudWatch/budget alerts
     AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
-    ConstraintDescription: Must be a valid email address
-
-  AlertEmail:
-    Type: String
-    Description: Email address for budget and CloudWatch alarm notifications
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: Must be a valid email address
 
 Globals:
