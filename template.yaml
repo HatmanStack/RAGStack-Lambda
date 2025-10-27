@@ -386,7 +386,6 @@ Resources:
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
@@ -435,7 +434,6 @@ Resources:
           IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
@@ -470,7 +468,6 @@ Resources:
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - Statement:
@@ -668,7 +665,6 @@ Resources:
           LOG_LEVEL: INFO
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - Statement:
@@ -871,7 +867,6 @@ Resources:
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
