@@ -168,6 +168,163 @@ def validate_region(region):
     return True
 
 
+def check_python_version():
+    """
+    Check if Python 3.12+ is available.
+
+    Returns:
+        bool: True if Python version is 3.12 or higher
+
+    Raises:
+        SystemExit: If Python version is insufficient
+    """
+    version_info = sys.version_info
+
+    if version_info.major < 3:
+        log_error("Python 3.12+ is required")
+        log_info("Current version: Python {}.{}.{}".format(
+            version_info.major, version_info.minor, version_info.micro
+        ))
+        sys.exit(1)
+
+    if version_info.major == 3 and version_info.minor < 12:
+        log_error("Python 3.12+ is required")
+        log_info("Current version: Python {}.{}.{}".format(
+            version_info.major, version_info.minor, version_info.micro
+        ))
+        log_info("Please upgrade Python and try again")
+        sys.exit(1)
+
+    log_success("Found Python {}.{}.{}".format(
+        version_info.major, version_info.minor, version_info.micro
+    ))
+    return True
+
+
+def check_nodejs_version(skip_ui=False):
+    """
+    Check if Node.js 18+ and npm are available.
+
+    Args:
+        skip_ui: If True, skip Node.js check
+
+    Returns:
+        bool: True if Node.js and npm are available and version is sufficient
+
+    Raises:
+        SystemExit: If Node.js or npm not found or version insufficient
+    """
+    if skip_ui:
+        log_info("Skipping Node.js check (--skip-ui flag detected)")
+        return True
+
+    log_info("Checking Node.js dependencies for UI build...")
+
+    # Check Node.js exists
+    node_result = subprocess.run(['node', '--version'],
+                                capture_output=True,
+                                text=True)
+
+    if node_result.returncode != 0:
+        log_error("Node.js not found but is required for UI build")
+        log_info("Install Node.js 18+ from: https://nodejs.org/")
+        log_info("Or use --skip-ui flag to skip UI build")
+        sys.exit(1)
+
+    # Check npm exists
+    npm_result = subprocess.run(['npm', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if npm_result.returncode != 0:
+        log_error("npm not found but is required for UI build")
+        log_info("npm is typically installed with Node.js")
+        sys.exit(1)
+
+    # Parse Node.js version
+    node_version = node_result.stdout.strip().lstrip('v')
+    npm_version = npm_result.stdout.strip()
+
+    try:
+        node_major = int(node_version.split('.')[0])
+
+        if node_major < 18:
+            log_error(f"Node.js {node_version} found, but 18+ is required for UI build")
+            log_info("Please upgrade Node.js to version 18 or later")
+            log_info("Or use --skip-ui flag to skip UI build")
+            sys.exit(1)
+
+        log_success(f"Found Node.js {node_version} and npm {npm_version}")
+        return True
+
+    except (ValueError, IndexError):
+        log_error(f"Could not parse Node.js version: {node_version}")
+        sys.exit(1)
+
+
+def check_aws_cli():
+    """
+    Check if AWS CLI is installed and configured.
+
+    Returns:
+        bool: True if AWS CLI is configured with valid credentials
+
+    Raises:
+        SystemExit: If AWS CLI not found or not configured
+    """
+    log_info("Checking AWS CLI configuration...")
+
+    # Check AWS CLI exists
+    aws_result = subprocess.run(['aws', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if aws_result.returncode != 0:
+        log_error("AWS CLI not found")
+        log_info("Install AWS CLI: https://aws.amazon.com/cli/")
+        sys.exit(1)
+
+    # Check credentials are configured
+    creds_result = subprocess.run(['aws', 'sts', 'get-caller-identity'],
+                                 capture_output=True,
+                                 text=True)
+
+    if creds_result.returncode != 0:
+        log_error("AWS credentials not configured")
+        log_info("Run: aws configure")
+        sys.exit(1)
+
+    log_success("AWS CLI configured")
+    return True
+
+
+def check_sam_cli():
+    """
+    Check if AWS SAM CLI is installed.
+
+    Returns:
+        bool: True if SAM CLI is installed
+
+    Raises:
+        SystemExit: If SAM CLI not found
+    """
+    log_info("Checking SAM CLI...")
+
+    sam_result = subprocess.run(['sam', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if sam_result.returncode != 0:
+        log_error("SAM CLI not found")
+        log_info("Install SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html")
+        sys.exit(1)
+
+    # Parse version from output (format: "SAM CLI, version X.Y.Z")
+    version_output = sam_result.stdout.strip()
+    log_success(f"Found {version_output}")
+    return True
+
+
 def prompt_for_email(default=None):
     """Prompt user for admin email with validation."""
     while True:
