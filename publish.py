@@ -6,12 +6,11 @@
 """
 RAGStack-Lambda Deployment Script
 
-One-click deployment automation for RAGStack-Lambda stack.
+Project-based deployment automation for RAGStack-Lambda stack.
 
 Usage:
-    python publish.py --env dev
-    python publish.py --env prod --admin-email admin@example.com
-    python publish.py --env dev --skip-ui --skip-layers
+    python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
+    python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
 """
 
 import argparse
@@ -323,56 +322,6 @@ def check_sam_cli():
     version_output = sam_result.stdout.strip()
     log_success(f"Found {version_output}")
     return True
-
-
-def prompt_for_email(default=None):
-    """Prompt user for admin email with validation."""
-    while True:
-        if default:
-            prompt_msg = f"Enter admin email address [{default}]: "
-        else:
-            prompt_msg = "Enter admin email address: "
-
-        email = input(prompt_msg).strip()
-
-        if not email and default:
-            email = default
-
-        if not email:
-            log_error("Email address is required")
-            continue
-
-        if validate_email(email):
-            return email
-        else:
-            log_error("Invalid email format. Please enter a valid email address (e.g., admin@example.com)")
-
-
-def get_samconfig_value(env, key):
-    """Read value from samconfig.toml for given environment."""
-    try:
-        import tomli
-    except ImportError:
-        # Fallback to manual parsing if tomli not available
-        return None
-
-    samconfig_path = Path("samconfig.toml")
-    if not samconfig_path.exists():
-        return None
-
-    with open(samconfig_path, "rb") as f:
-        config = tomli.load(f)
-
-    section = config.get(env, {})
-    deploy_params = section.get("deploy", {}).get("parameters", {})
-
-    # Parse parameter_overrides array
-    param_overrides = deploy_params.get("parameter_overrides", [])
-    for param in param_overrides:
-        if param.startswith(f"{key}="):
-            return param.split("=", 1)[1]
-
-    return None
 
 
 def build_lambda_layers():
