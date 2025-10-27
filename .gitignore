@@ -13,7 +13,6 @@ build/
 
 # AWS
 .aws-sam/
-samconfig.toml
 
 # Node
 node_modules/
