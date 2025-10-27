@@ -72,6 +72,102 @@ def validate_email(email):
     return re.match(pattern, email) is not None
 
 
+def validate_project_name(project_name):
+    """
+    Validate project name follows naming rules.
+
+    Rules:
+    - Lowercase alphanumeric and hyphens only
+    - Must be 2-32 characters long
+    - Must start with a letter
+
+    Args:
+        project_name: String to validate
+
+    Returns:
+        bool: True if valid
+
+    Raises:
+        ValueError: If project name is invalid with descriptive message
+    """
+    if not project_name:
+        raise ValueError("Project name cannot be empty")
+
+    if len(project_name) < 2:
+        raise ValueError("Project name must be at least 2 characters long")
+
+    if len(project_name) > 32:
+        raise ValueError("Project name must be at most 32 characters long")
+
+    if not project_name[0].isalpha():
+        raise ValueError("Project name must start with a letter")
+
+    if not project_name[0].islower():
+        raise ValueError("Project name must start with a lowercase letter")
+
+    # Check all characters are lowercase alphanumeric or hyphen
+    for char in project_name:
+        if not (char.islower() or char.isdigit() or char == '-'):
+            raise ValueError(
+                f"Project name contains invalid character '{char}'. "
+                "Only lowercase letters, numbers, and hyphens are allowed"
+            )
+
+    return True
+
+
+def validate_region(region):
+    """
+    Validate AWS region using regex pattern for future-proofing.
+
+    AWS region format: 2-letter country code, direction, number
+    Examples: us-east-1, eu-west-2, ap-southeast-3
+
+    Args:
+        region: AWS region string (e.g., 'us-east-1')
+
+    Returns:
+        bool: True if valid
+
+    Raises:
+        ValueError: If region format is invalid
+    """
+    if not region:
+        raise ValueError("Region cannot be empty")
+
+    # AWS region pattern: 2-letter country code, direction, number
+    pattern = r'^[a-z]{2}-[a-z]+-\d+$'
+
+    if not re.match(pattern, region):
+        raise ValueError(
+            f"Invalid AWS region format: {region}. "
+            "Expected format like 'us-east-1', 'eu-west-2'"
+        )
+
+    # Optional: Check against known regions (as of 2025)
+    # Log warning if region is not in known list (may be a new region)
+    known_regions = [
+        'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+        'af-south-1',
+        'ap-east-1', 'ap-south-1', 'ap-south-2',
+        'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
+        'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4',
+        'ca-central-1', 'ca-west-1',
+        'eu-central-1', 'eu-central-2',
+        'eu-west-1', 'eu-west-2', 'eu-west-3',
+        'eu-south-1', 'eu-south-2',
+        'eu-north-1',
+        'il-central-1',
+        'me-south-1', 'me-central-1',
+        'sa-east-1',
+    ]
+
+    if region not in known_regions:
+        log_warning(f"Region '{region}' not in known list (may be new region)")
+
+    return True
+
+
 def prompt_for_email(default=None):
     """Prompt user for admin email with validation."""
     while True:
