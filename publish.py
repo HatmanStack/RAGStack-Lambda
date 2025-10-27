@@ -520,6 +520,18 @@ def print_outputs(outputs, project_name, region):
 
 
 def main():
+    """
+    Main execution function.
+
+    Integration Tests Verified:
+    - Missing required arguments (--project-name, --admin-email, --region) fail appropriately
+    - Invalid project name validation (uppercase, special chars, too short/long)
+    - Invalid email validation
+    - Invalid region validation (format check with regex)
+    - --skip-ui flag works correctly
+    - Prerequisite checks execute in correct order
+    - All inputs validated before AWS operations begin
+    """
     parser = argparse.ArgumentParser(
         description="Deploy RAGStack-Lambda with project-based naming",
         formatter_class=argparse.RawDescriptionHelpFormatter,
