@@ -365,6 +365,103 @@ def sam_deploy(project_name, admin_email, region):
     return stack_name
 
 
+def package_ui_source():
+    """
+    Package UI source code as zip and upload to S3.
+
+    Creates a zip file of the UI source (excluding node_modules and build directories),
+    uploads it to the SAM managed bucket, and returns the bucket/key for CloudFormation.
+
+    Returns:
+        tuple: (bucket_name, key) of uploaded UI source zip
+
+    Raises:
+        FileNotFoundError: If UI source directory doesn't exist
+        IOError: If packaging or upload fails
+    """
+    import zipfile
+    import tempfile
+    import time
+    from pathlib import Path
+    from botocore.exceptions import ClientError
+
+    log_info("Packaging UI source code...")
+
+    ui_dir = Path('src/ui')
+    if not ui_dir.exists():
+        raise FileNotFoundError(f"UI directory not found: {ui_dir}")
+
+    # Create temporary zip file
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+        zip_path = tmp_file.name
+
+    try:
+        # Create zip file, excluding node_modules and build
+        log_info("Creating UI source zip file...")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in ui_dir.rglob('*'):
+                if file_path.is_file():
+                    # Skip node_modules and build directories
+                    if 'node_modules' in file_path.parts or 'build' in file_path.parts:
+                        continue
+
+                    # Store relative to src/ (include 'ui' folder in zip)
+                    arcname = file_path.relative_to(ui_dir.parent)
+                    zipf.write(file_path, arcname)
+
+        log_success(f"UI source packaged: {zip_path}")
+
+        # Upload to S3 - use SAM managed bucket
+        s3_client = boto3.client('s3')
+        sts_client = boto3.client('sts')
+
+        # Get account ID for SAM managed bucket name
+        account_id = sts_client.get_caller_identity()['Account']
+        region = boto3.session.Session().region_name
+
+        # SAM managed bucket naming pattern
+        bucket_name = f'aws-sam-cli-managed-default-samclisourcebucket-{account_id[:12]}'
+
+        # Create bucket if it doesn't exist
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+            log_info(f"Using existing SAM managed bucket: {bucket_name}")
+        except ClientError:
+            log_info(f"Creating SAM managed bucket: {bucket_name}")
+            if region == 'us-east-1':
+                s3_client.create_bucket(Bucket=bucket_name)
+            else:
+                s3_client.create_bucket(
+                    Bucket=bucket_name,
+                    CreateBucketConfiguration={'LocationConstraint': region}
+                )
+
+            # Enable versioning (SAM best practice)
+            s3_client.put_bucket_versioning(
+                Bucket=bucket_name,
+                VersioningConfiguration={'Status': 'Enabled'}
+            )
+
+        # Upload with timestamp-based key
+        timestamp = int(time.time())
+        key = f'ui-source-{timestamp}.zip'
+
+        log_info(f"Uploading to s3://{bucket_name}/{key}...")
+        s3_client.upload_file(zip_path, bucket_name, key)
+        log_success(f"UI source uploaded to S3")
+
+        # Clean up temporary file
+        os.remove(zip_path)
+
+        return (bucket_name, key)
+
+    except Exception as e:
+        # Clean up temporary file on error
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise IOError(f"Failed to package UI source: {e}")
+
+
 def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
