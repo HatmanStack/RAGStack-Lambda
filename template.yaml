@@ -47,6 +47,16 @@ Parameters:
       - amazon.titan-embed-image-v1
     ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
 
+  UISourceBucket:
+    Type: String
+    Description: S3 bucket containing UI source code zip
+    Default: ''
+
+  UISourceKey:
+    Type: String
+    Description: S3 key for UI source code zip
+    Default: ''
+
   AdminEmail:
     Type: String
     Description: Admin email for Cognito user and CloudWatch/budget alerts
