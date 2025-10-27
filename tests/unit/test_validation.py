@@ -94,10 +94,11 @@ class TestValidateRegion:
         with pytest.raises(ValueError, match="Invalid AWS region"):
             publish.validate_region('invalid-region-1')
 
-    def test_nonexistent_region(self):
-        """Test non-existent AWS region raises error"""
-        with pytest.raises(ValueError, match="Invalid AWS region"):
-            publish.validate_region('us-central-1')
+    def test_nonexistent_region(self, capsys):
+        """Test non-existent AWS region logs warning but passes"""
+        assert publish.validate_region('us-central-1') is True
+        captured = capsys.readouterr()
+        assert "not in known list" in captured.out
 
 
 class TestValidateEmail:

@@ -179,23 +179,23 @@ def check_python_version():
     """
     version_info = sys.version_info
 
-    if version_info.major < 3:
+    if version_info[0] < 3:
         log_error("Python 3.12+ is required")
         log_info("Current version: Python {}.{}.{}".format(
-            version_info.major, version_info.minor, version_info.micro
+            version_info[0], version_info[1], version_info[2]
         ))
         sys.exit(1)
 
-    if version_info.major == 3 and version_info.minor < 12:
+    if version_info[0] == 3 and version_info[1] < 12:
         log_error("Python 3.12+ is required")
         log_info("Current version: Python {}.{}.{}".format(
-            version_info.major, version_info.minor, version_info.micro
+            version_info[0], version_info[1], version_info[2]
         ))
         log_info("Please upgrade Python and try again")
         sys.exit(1)
 
     log_success("Found Python {}.{}.{}".format(
-        version_info.major, version_info.minor, version_info.micro
+        version_info[0], version_info[1], version_info[2]
     ))
     return True
 
