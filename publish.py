@@ -332,7 +332,17 @@ def sam_build():
 
 
 def sam_deploy(project_name, admin_email, region):
-    """Deploy SAM application."""
+    """
+    Deploy SAM application with project-based naming.
+
+    Args:
+        project_name: Project name for resource naming
+        admin_email: Admin email for Cognito and alerts
+        region: AWS region
+
+    Returns:
+        str: CloudFormation stack name
+    """
     log_info(f"Deploying project '{project_name}' to {region}...")
 
     # Stack name follows pattern: RAGStack-{project-name}
@@ -344,9 +354,10 @@ def sam_deploy(project_name, admin_email, region):
         "--region", region,
         "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
         "--resolve-s3",
+        "--no-confirm-changeset",
         "--parameter-overrides",
+        f"ProjectName={project_name}",
         f"AdminEmail={admin_email}",
-        f"ProjectName={project_name}"
     ]
 
     run_command(cmd)
