@@ -21,6 +21,14 @@ export const Navigation = () => {
       type: 'link',
       text: 'Search',
       href: '/search'
+    },
+    {
+      type: 'divider'
+    },
+    {
+      type: 'link',
+      text: 'Settings',
+      href: '/settings'
     }
   ];
 
