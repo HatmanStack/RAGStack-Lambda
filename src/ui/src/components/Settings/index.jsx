@@ -17,10 +17,9 @@ import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import { getDocumentCount } from '../../graphql/queries/getDocumentCount';
 
-const client = generateClient();
-
 export function Settings() {
   const navigate = useNavigate();
+  const client = generateClient();
 
   // State for loading and errors
   const [loading, setLoading] = useState(true);
