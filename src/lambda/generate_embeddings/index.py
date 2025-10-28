@@ -28,16 +28,85 @@ Output:
 import json
 import logging
 import os
+import boto3
 from datetime import datetime
+from botocore.exceptions import ClientError
 
 from ragstack_common.bedrock import BedrockClient
 from ragstack_common.storage import (
     read_s3_text, read_s3_binary, write_s3_json, update_item
 )
 from ragstack_common.models import Status
+from ragstack_common.config import ConfigurationManager
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Module-level initialization (reused across Lambda invocations in same container)
+config_manager = ConfigurationManager()
+
+# Text length limits (Titan Embed Text V2: max 8192 tokens ≈ 32k chars)
+TEXT_CHAR_LIMIT = 30000
+
+
+def update_re_embed_job_progress(job_id):
+    """
+    Increment processed count for re-embedding job.
+
+    Args:
+        job_id: Re-embedding job ID
+    """
+    if not job_id:
+        return
+
+    try:
+        configuration_table_name = os.environ.get('CONFIGURATION_TABLE_NAME')
+        if not configuration_table_name:
+            logger.warning("CONFIGURATION_TABLE_NAME not set, skipping job progress update")
+            return
+
+        dynamodb = boto3.resource('dynamodb')
+        configuration_table = dynamodb.Table(configuration_table_name)
+
+        # Use composite key to update the correct job
+        job_key = f'ReEmbedJob#{job_id}'
+
+        # Increment processedDocuments (conditional to prevent phantom job creation)
+        response = configuration_table.update_item(
+            Key={'Configuration': job_key},
+            UpdateExpression='ADD processedDocuments :inc',
+            ExpressionAttributeValues={':inc': 1},
+            ConditionExpression='attribute_exists(#pk)',  # Require job item to exist
+            ExpressionAttributeNames={'#pk': 'Configuration'},
+            ReturnValues='ALL_NEW'
+        )
+
+        item = response.get('Attributes', {})
+        processed = item.get('processedDocuments', 0)
+        total = item.get('totalDocuments', 0)
+
+        logger.info(f"Re-embed job {job_id} progress: {processed}/{total}")
+
+        # Check if job is complete (guard against total=0)
+        if processed >= total and total > 0:
+            completion_time = datetime.utcnow().isoformat() + 'Z'
+            # Idempotent completion: only set status if not already COMPLETED
+            configuration_table.update_item(
+                Key={'Configuration': job_key},
+                UpdateExpression='SET #status = :status, completionTime = :time',
+                ConditionExpression='attribute_not_exists(#status) OR #status <> :status',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'COMPLETED',
+                    ':time': completion_time
+                }
+            )
+            logger.info(f"Re-embedding job {job_id} completed")
+
+    except ClientError as e:
+        logger.warning(f"Error updating re-embed job progress: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Unexpected error updating re-embed job progress")
 
 
 def lambda_handler(event, context):
@@ -49,10 +118,26 @@ def lambda_handler(event, context):
     if not tracking_table:
         raise ValueError("TRACKING_TABLE environment variable is required")
 
-    text_embed_model = os.environ.get('TEXT_EMBED_MODEL', 'amazon.titan-embed-text-v2:0')
-    image_embed_model = os.environ.get('IMAGE_EMBED_MODEL', 'amazon.titan-embed-image-v1')
+    # Read embedding models from ConfigurationManager (runtime configuration)
+    text_embed_model = config_manager.get_parameter(
+        'text_embed_model_id',
+        default='amazon.titan-embed-text-v2:0'
+    )
+    image_embed_model = config_manager.get_parameter(
+        'image_embed_model_id',
+        default='amazon.titan-embed-image-v1'
+    )
 
-    logger.info(f"Generating embeddings: {json.dumps(event)}")
+    # Log safe summary (not full event payload to avoid PII leakage)
+    safe_summary = {
+        'document_id': event.get('document_id'),
+        'has_pages': 'pages' in event and len(event.get('pages', [])) > 0,
+        'page_count': len(event.get('pages', [])),
+        'vector_bucket': event.get('vector_bucket')
+    }
+    logger.info(f"Generating embeddings: {json.dumps(safe_summary)}")
+    logger.info(f"Using text embedding model: {text_embed_model}")
+    logger.info(f"Using image embedding model: {image_embed_model}")
 
     try:
         document_id = event['document_id']
@@ -71,9 +156,9 @@ def lambda_handler(event, context):
 
         # Truncate if too long (Titan has input limits)
         # Titan Embed Text V2: max 8192 tokens (~32k chars)
-        if len(full_text) > 30000:
-            logger.warning(f"Text too long ({len(full_text)} chars), truncating to 30000")
-            full_text = full_text[:30000]
+        if len(full_text) > TEXT_CHAR_LIMIT:
+            logger.warning(f"Text too long ({len(full_text)} chars), truncating to {TEXT_CHAR_LIMIT}")
+            full_text = full_text[:TEXT_CHAR_LIMIT]
 
         logger.info("Generating text embedding...")
         text_embedding = bedrock_client.generate_embedding(
@@ -147,6 +232,15 @@ def lambda_handler(event, context):
                 'updated_at': datetime.now().isoformat()
             }
         )
+
+        # ===================================================================
+        # Update re-embedding job progress (if applicable)
+        # ===================================================================
+
+        re_embed_job_id = event.get('reEmbedJobId')
+        if re_embed_job_id:
+            logger.info(f"Updating re-embedding job progress for job {re_embed_job_id}")
+            update_re_embed_job_progress(re_embed_job_id)
 
         return {
             'document_id': document_id,

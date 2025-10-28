@@ -7,6 +7,7 @@ import { AppLayout } from './components/Layout/AppLayout';
 import { Dashboard } from './components/Dashboard';
 import { Upload } from './components/Upload';
 import { Search } from './components/Search';
+import { Settings } from './components/Settings';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/upload" element={<Upload />} />
                     <Route path="/search" element={<Search />} />
+                    <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </AppLayout>
               </RequireAuth>

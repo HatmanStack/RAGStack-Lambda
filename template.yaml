@@ -448,6 +448,8 @@ Resources:
           AttributeType: S
         - AttributeName: created_at
           AttributeType: S
+        - AttributeName: status
+          AttributeType: S
       KeySchema:
         - AttributeName: document_id
           KeyType: HASH
@@ -458,6 +460,12 @@ Resources:
               KeyType: HASH
             - AttributeName: document_id
               KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
           Projection:
             ProjectionType: ALL
       StreamSpecification:
@@ -497,6 +505,33 @@ Resources:
         - Key: CostCenter
           Value: Engineering
 
+  ##########################################################################
+  # Configuration Table - Runtime configurable parameters
+  ##########################################################################
+
+  ConfigurationTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'RAGStack-${ProjectName}-Configuration'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: Configuration
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Configuration
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: Runtime Configuration Storage
+
   # =========================================================================
   # Lambda Functions
   # =========================================================================
@@ -524,6 +559,7 @@ Resources:
           WORKING_BUCKET: !Ref WorkingBucket
           OCR_BACKEND: !Ref OcrBackend
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -538,6 +574,8 @@ Resources:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MeteringTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
@@ -572,6 +610,7 @@ Resources:
           VECTOR_BUCKET: !Ref VectorBucket
           TEXT_EMBED_MODEL: !Ref TextEmbedModelId
           IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -584,6 +623,8 @@ Resources:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MeteringTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action: bedrock:InvokeModel
@@ -606,10 +647,13 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
@@ -621,6 +665,52 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  ##########################################################################
+  # Configuration Resolver Lambda
+  ##########################################################################
+
+  ConfigurationResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'RAGStack-${ProjectName}-ConfigurationResolver'
+      CodeUri: src/lambda/configuration_resolver/
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Description: GraphQL resolver for configuration management
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          TRACKING_TABLE: !Ref TrackingTable
+          STATE_MACHINE_ARN: !Ref ProcessingStateMachine
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+              Resource: !GetAtt ConfigurationTable.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource:
+                - !GetAtt TrackingTable.Arn
+                - !Sub '${TrackingTable.Arn}/index/StatusIndex'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref ProcessingStateMachine
 
   # =========================================================================
   # Step Functions State Machine
@@ -718,9 +808,7 @@ Resources:
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
                 "output_s3_prefix": "s3://${OutputBucket}/<key>/",
-                "vector_bucket": "${VectorBucket}",
-                "ocr_backend": "${OcrBackend}",
-                "bedrock_model_id": "${BedrockOcrModelId}"
+                "vector_bucket": "${VectorBucket}"
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
@@ -1082,6 +1170,7 @@ Resources:
                 Resource:
                   - !GetAtt AppSyncResolverFunction.Arn
                   - !GetAtt QueryKBFunction.Arn
+                  - !GetAtt ConfigurationResolverFunction.Arn
 
   # Data source for KB queries
   KBQueryDataSource:
@@ -1093,6 +1182,17 @@ Resources:
       ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
       LambdaConfig:
         LambdaFunctionArn: !GetAtt QueryKBFunction.Arn
+
+  # Data source for Configuration Resolver
+  ConfigurationResolverDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: ConfigurationResolverDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt ConfigurationResolverFunction.Arn
 
   # Resolvers
   GetDocumentResolver:
@@ -1139,6 +1239,52 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
+
+  # Configuration Resolvers
+  GetConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getConfiguration
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  UpdateConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: updateConfiguration
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  GetDocumentCountResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getDocumentCount
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  GetReEmbedJobStatusResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getReEmbedJobStatus
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  ReEmbedAllDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: reEmbedAllDocuments
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
   # =========================================================================
   # Dead Letter Queue for Error Handling
@@ -1569,6 +1715,18 @@ Outputs:
     Value: !Ref MeteringTable
     Export:
       Name: !Sub '${AWS::StackName}-MeteringTable'
+
+  ConfigurationTableName:
+    Description: Configuration DynamoDB Table Name
+    Value: !Ref ConfigurationTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigurationTable'
+
+  ConfigurationTableArn:
+    Description: Configuration DynamoDB Table ARN
+    Value: !GetAtt ConfigurationTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigurationTableArn'
 
   # Lambda Functions
   ProcessDocumentFunctionArn:

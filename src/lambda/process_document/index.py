@@ -2,14 +2,13 @@
 Document Processor Lambda
 
 Handles document validation, OCR, text extraction, and image extraction.
+OCR backend and model are read from DynamoDB configuration (ConfigurationManager).
 
 Input event:
 {
     "document_id": "abc123",
     "input_s3_uri": "s3://input-bucket/uploads/doc.pdf",
-    "output_s3_prefix": "s3://output-bucket/processed/abc123/",
-    "ocr_backend": "textract",  # or "bedrock"
-    "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0"
+    "output_s3_prefix": "s3://output-bucket/processed/abc123/"
 }
 
 Output:
@@ -32,9 +31,21 @@ from datetime import datetime
 from ragstack_common.ocr import OcrService
 from ragstack_common.models import Document, Status, OcrBackend
 from ragstack_common.storage import put_item, update_item, get_item
+from ragstack_common.config import ConfigurationManager
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Module-level initialization (lazy-initialized to avoid import-time failures)
+_config_manager = None
+
+
+def _get_config_manager():
+    """Get or initialize ConfigurationManager (lazy initialization)."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = ConfigurationManager()
+    return _config_manager
 
 
 def lambda_handler(event, context):
@@ -53,9 +64,19 @@ def lambda_handler(event, context):
         document_id = event['document_id']
         input_s3_uri = event['input_s3_uri']
         output_s3_prefix = event['output_s3_prefix']
-        ocr_backend = event.get('ocr_backend', 'textract')
-        bedrock_model_id = event.get('bedrock_model_id', 'anthropic.claude-3-5-haiku-20241022-v1:0')
         filename = event.get('filename', 'document.pdf')
+
+        # Read configuration from ConfigurationManager (runtime configuration)
+        config_mgr = _get_config_manager()
+        ocr_backend = config_mgr.get_parameter('ocr_backend', default='textract')
+        bedrock_model_id = config_mgr.get_parameter(
+            'bedrock_ocr_model_id',
+            default='anthropic.claude-3-5-haiku-20241022-v1:0'
+        )
+
+        logger.info(f"Using OCR backend: {ocr_backend}")
+        if ocr_backend == 'bedrock':
+            logger.info(f"Using Bedrock OCR model: {bedrock_model_id}")
 
         # Update status to processing
         update_item(

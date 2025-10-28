@@ -5,6 +5,7 @@ This guide covers how to configure and customize RAGStack-Lambda for your use ca
 ## Table of Contents
 
 - [Configuration Overview](#configuration-overview)
+- [Runtime Configuration Management](#runtime-configuration-management)
 - [SAM Configuration](#sam-configuration)
 - [CloudFormation Parameters](#cloudformation-parameters)
 - [Environment-Specific Configuration](#environment-specific-configuration)
@@ -24,6 +25,322 @@ RAGStack-Lambda uses multiple configuration layers:
 2. **CloudFormation Parameters** (`template.yaml`) - Infrastructure parameters
 3. **Lambda Environment Variables** - Runtime configuration
 4. **UI Configuration** (generated during deployment) - Frontend settings
+5. **Runtime Configuration** (DynamoDB) - User-modifiable settings via Settings UI
+
+---
+
+## Runtime Configuration Management
+
+Starting with the runtime configuration feature, you can modify operational parameters through the Settings UI without redeploying the stack. This includes OCR backends, embedding models, and response models.
+
+### Overview
+
+Runtime configuration is stored in a DynamoDB table (`RAGStack-<project>-Configuration`) with three types of items:
+
+| Type | Purpose | Editable | Modified By |
+|------|---------|----------|-------------|
+| **Schema** | Defines available parameters and validation rules | No | CloudFormation deployment |
+| **Default** | System default values | No | `publish.py` script during deployment |
+| **Custom** | User overrides | Yes | Settings UI in WebUI |
+
+**Effective Configuration**: Lambda functions merge Custom → Default to get the effective configuration. Custom values override Default values.
+
+### Accessing Runtime Configuration
+
+#### Via Settings UI (Recommended)
+
+1. Open WebUI and navigate to **Settings** page
+2. Modify any configuration parameters
+3. Click **Save changes**
+4. Changes take effect **immediately** on next Lambda invocation (no cache)
+
+See [USER_GUIDE.md - Managing Settings](USER_GUIDE.md#managing-settings) for detailed instructions.
+
+#### Via AWS CLI
+
+**View Current Configuration**:
+
+```bash
+# Get Default configuration
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Default"}}'
+
+# Get Custom overrides
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Custom"}}'
+
+# Get Schema (available parameters)
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Schema"}}'
+```
+
+**Modify Configuration Programmatically**:
+
+```python
+import boto3
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('RAGStack-<project>-Configuration')
+
+# Update custom configuration
+table.put_item(
+    Item={
+        'Configuration': 'Custom',
+        'ocr_backend': 'bedrock',
+        'bedrock_ocr_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        'text_embed_model_id': 'cohere.embed-english-v3'
+    }
+)
+```
+
+**Reset to Defaults**:
+
+```bash
+# Remove all custom overrides (revert to defaults)
+aws dynamodb put-item \
+  --table-name RAGStack-<project>-Configuration \
+  --item '{"Configuration": {"S": "Custom"}}'
+```
+
+### Seeding Configuration
+
+Configuration is automatically seeded during deployment by `publish.py`. To manually re-seed:
+
+```bash
+# Re-run publish.py (includes configuration seeding)
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
+```
+
+**Manual Seeding Script** (if needed):
+
+```python
+import boto3
+import json
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('RAGStack-<project>-Configuration')
+
+# Seed Schema
+schema = {
+    "properties": {
+        "ocr_backend": {
+            "type": "string",
+            "enum": ["textract", "bedrock"],
+            "description": "OCR Backend",
+            "order": 1
+        },
+        "bedrock_ocr_model_id": {
+            "type": "string",
+            "enum": [
+                "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                "anthropic.claude-3-opus-20240229-v1:0"
+            ],
+            "description": "Bedrock OCR Model",
+            "order": 2,
+            "dependsOn": {
+                "field": "ocr_backend",
+                "value": "bedrock"
+            }
+        },
+        "text_embed_model_id": {
+            "type": "string",
+            "enum": [
+                "amazon.titan-embed-text-v1",
+                "amazon.titan-embed-text-v2:0",
+                "cohere.embed-english-v3",
+                "cohere.embed-multilingual-v3"
+            ],
+            "description": "Text Embedding Model",
+            "order": 3
+        },
+        "image_embed_model_id": {
+            "type": "string",
+            "enum": ["amazon.titan-embed-image-v1"],
+            "description": "Image Embedding Model",
+            "order": 4
+        },
+        "response_model_id": {
+            "type": "string",
+            "enum": [
+                "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "anthropic.claude-3-5-sonnet-20241022-v2:0",
+                "anthropic.claude-3-opus-20240229-v1:0"
+            ],
+            "description": "Response Model",
+            "order": 5
+        }
+    },
+    "required": ["ocr_backend", "text_embed_model_id", "image_embed_model_id", "response_model_id"]
+}
+
+table.put_item(
+    Item={
+        'Configuration': 'Schema',
+        'Schema': schema
+    }
+)
+
+# Seed Default configuration
+default_config = {
+    'Configuration': 'Default',
+    'ocr_backend': 'textract',
+    'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
+    'text_embed_model_id': 'amazon.titan-embed-text-v2:0',
+    'image_embed_model_id': 'amazon.titan-embed-image-v1',
+    'response_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+}
+
+table.put_item(Item=default_config)
+
+print("Configuration seeded successfully")
+```
+
+### Configurable Parameters
+
+#### ocr_backend
+- **Type**: String
+- **Options**: `textract`, `bedrock`
+- **Default**: `textract`
+- **Purpose**: Choose OCR engine for document text extraction
+- **When to change**: Use Bedrock for complex layouts, multilingual documents
+
+#### bedrock_ocr_model_id
+- **Type**: String
+- **Options**: `claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-opus`
+- **Default**: `claude-3-5-haiku`
+- **Visibility**: Only when `ocr_backend = bedrock`
+- **Purpose**: Select Claude model for Bedrock OCR
+- **When to change**: Use Sonnet/Opus for higher accuracy on complex documents
+
+#### text_embed_model_id
+- **Type**: String
+- **Options**: `amazon.titan-embed-text-v1`, `amazon.titan-embed-text-v2:0`, `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`
+- **Default**: `amazon.titan-embed-text-v2:0`
+- **Purpose**: Model for generating text embeddings
+- **When to change**:
+  - Use Cohere Multilingual for non-English documents
+  - Stay within same model family when changing (see KB compatibility notes)
+
+#### image_embed_model_id
+- **Type**: String
+- **Options**: `amazon.titan-embed-image-v1`
+- **Default**: `amazon.titan-embed-image-v1`
+- **Purpose**: Model for generating image embeddings
+
+#### response_model_id
+- **Type**: String
+- **Options**: `claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-opus`
+- **Default**: `claude-3-5-haiku`
+- **Purpose**: Model for Knowledge Base query responses
+- **When to change**: Use Sonnet/Opus for more detailed, nuanced answers
+
+### Adding New Models to Schema
+
+To add new models (e.g., a new Bedrock embedding model):
+
+1. **Update Schema in `template.yaml`**:
+
+   Locate the Schema definition in template.yaml and add the new model to the appropriate enum:
+
+   ```yaml
+   # Example: Adding a new text embedding model
+   text_embed_model_id:
+     type: string
+     enum:
+       - amazon.titan-embed-text-v1
+       - amazon.titan-embed-text-v2:0
+       - cohere.embed-english-v3
+       - cohere.embed-multilingual-v3
+       - amazon.titan-embed-text-v3  # NEW MODEL
+     description: Text Embedding Model
+     order: 3
+   ```
+
+2. **Redeploy the stack**:
+
+   ```bash
+   python publish.py \
+     --project-name <project-name> \
+     --admin-email <email> \
+     --region <region>
+   ```
+
+3. **Verify in Settings UI**:
+   - Open Settings page
+   - New model should appear in dropdown
+   - Test by selecting and saving
+
+### Configuration Best Practices
+
+#### For Development/Testing
+- Use **Textract** for OCR (faster, cheaper)
+- Use **Haiku** models for responses (faster)
+- Change configurations frequently via Settings UI to experiment
+
+#### For Production
+- Use **Textract** for standard documents
+- Use **Bedrock Sonnet OCR** for complex/multilingual documents
+- Use **Titan Text v2** or **Cohere English v3** for embeddings
+- Use **Sonnet** for response model (good balance of speed and quality)
+- Always **re-embed** when changing embedding models
+
+#### Cost Optimization
+- **OCR**: Textract ($1.50/1000 pages) vs. Bedrock ($25-75/1000 pages)
+- **Embeddings**: Minimal cost difference between models
+- **Responses**: Haiku is 10x cheaper than Opus
+
+#### Knowledge Base Compatibility
+- **Stay within model families** when changing embedding models
+- **Safe**: titan-v1 → titan-v2, cohere-english → cohere-multilingual
+- **Unsafe**: titan → cohere (requires KB recreation)
+- See [USER_GUIDE.md - Knowledge Base Compatibility](USER_GUIDE.md#knowledge-base-compatibility)
+
+### Troubleshooting Configuration
+
+#### Configuration Not Loading
+
+**Problem**: Lambda logs show "Configuration table name not provided"
+
+**Solution**: Ensure `CONFIGURATION_TABLE_NAME` environment variable is set on Lambda:
+
+```bash
+aws lambda update-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --environment Variables={CONFIGURATION_TABLE_NAME=RAGStack-<project>-Configuration}
+```
+
+#### Changes Not Taking Effect
+
+**Problem**: Changed configuration in UI but Lambdas still use old values
+
+**Solution**:
+1. Verify Custom configuration was saved:
+   ```bash
+   aws dynamodb get-item \
+     --table-name RAGStack-<project>-Configuration \
+     --key '{"Configuration": {"S": "Custom"}}'
+   ```
+2. Check Lambda logs for "Effective configuration" log line
+3. Configuration is NOT cached - changes should be immediate
+
+#### Default Configuration Missing
+
+**Problem**: Settings UI shows empty or errors on load
+
+**Solution**: Re-seed configuration:
+```bash
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
+```
 
 ---
 

@@ -10,6 +10,7 @@ This guide explains how to use the RAGStack-Lambda web interface to upload, moni
 - [Uploading Documents](#uploading-documents)
 - [Monitoring Document Processing](#monitoring-document-processing)
 - [Searching Documents](#searching-documents)
+- [Managing Settings](#managing-settings)
 - [Understanding Document Status](#understanding-document-status)
 - [Tips and Best Practices](#tips-and-best-practices)
 
@@ -321,6 +322,266 @@ If your documents have images, the system can:
 - Find visually similar images
 - Search based on image content
 - Match text to related images
+
+---
+
+## Managing Settings
+
+The Settings page allows you to modify runtime configuration without redeploying the stack. This includes changing OCR backends, embedding models, and response models.
+
+### Accessing Settings
+
+1. Click **Settings** in the navigation menu
+2. The Settings page displays all configurable parameters with their current values
+
+### Configuration Parameters
+
+The Settings page shows the following configurable parameters:
+
+#### OCR Backend
+Choose how document text extraction is performed:
+- **textract** (default): Uses AWS Textract for OCR - faster and cost-effective ($1.50/1000 pages)
+- **bedrock**: Uses Bedrock Claude models for OCR - better for complex layouts ($25-75/1000 pages depending on model)
+
+#### Bedrock OCR Model
+*Only visible when OCR Backend = "bedrock"*
+
+Select which Claude model to use for OCR:
+- **claude-3-5-haiku**: Fastest and most cost-effective
+- **claude-3-5-sonnet**: Balanced speed and accuracy
+- **claude-3-opus**: Most accurate, best for complex documents
+
+#### Text Embedding Model
+Select the model for generating text embeddings:
+- **amazon.titan-embed-text-v1**: Titan Text v1 (768 dimensions)
+- **amazon.titan-embed-text-v2:0**: Titan Text v2 (1024 dimensions, better quality)
+- **cohere.embed-english-v3**: Cohere English v3 (1024 dimensions)
+- **cohere.embed-multilingual-v3**: Cohere Multilingual v3 (1024 dimensions, supports multiple languages)
+
+#### Image Embedding Model
+Select the model for generating image embeddings:
+- **amazon.titan-embed-image-v1**: Titan Image v1 (1024 dimensions)
+
+#### Response Model
+Select the Bedrock model for Knowledge Base query responses:
+- **anthropic.claude-3-5-haiku**: Fastest responses, cost-effective
+- **anthropic.claude-3-5-sonnet-v2**: Balanced speed and quality
+- **anthropic.claude-3-opus**: Most detailed responses
+
+### Saving Configuration
+
+1. Modify any parameters using the dropdown menus
+2. Click **Save changes** button
+3. A success message appears when saved: "Configuration saved successfully"
+4. Changes take effect **immediately** on the next document processing or query
+
+**Note**: The Settings page shows which fields have been customized from their default values with a "Customized from default" indicator.
+
+### Resetting Configuration
+
+To revert unsaved changes:
+1. Click the **Reset** button
+2. Form fields revert to the last saved state
+3. No confirmation required
+
+### Changing Embedding Models
+
+Changing the text or image embedding model when you have existing documents requires special attention:
+
+#### Embedding Change Detection
+
+When you change an embedding model and click "Save changes", the system:
+1. Checks if you have any completed documents (status = COMPLETED)
+2. If documents exist, shows a modal with three options
+
+#### Option 1: Continue with Mixed Embeddings
+- **What happens**: Saves the configuration change immediately
+- **Effect**: New documents use the new embedding model; existing documents keep their old embeddings
+- **Pros**: Fast, no processing required
+- **Cons**: Search quality may be inconsistent when comparing old and new documents
+- **When to use**: Testing new models, or when documents are independent
+
+#### Option 2: Re-embed All Documents
+- **What happens**: Saves configuration and triggers a background job to regenerate all embeddings
+- **Effect**: All documents are reprocessed with the new embedding model
+- **Pros**: Ensures consistent search quality across all documents
+- **Cons**: Takes time (approximately 1 minute per 10 documents)
+- **When to use**: Production environments where consistency matters
+
+#### Option 3: Cancel
+- **What happens**: Closes the modal without saving
+- **Effect**: Embedding model change is discarded; returns to previous value
+- **When to use**: Changed your mind about the model switch
+
+### Re-embedding Job Progress
+
+When you choose "Re-embed all documents":
+
+1. **Progress Banner Appears**
+   - Shows at the top of the Settings page
+   - Displays: "Re-embedding documents: X / Y completed (Z%)"
+   - Updates automatically every 5 seconds
+
+2. **Job Details**
+   - Total documents being processed
+   - Number of documents completed so far
+   - Percentage progress
+
+3. **What's Happening**
+   - The system triggers the processing pipeline for each document
+   - OCR results are reused (not regenerated)
+   - Only embeddings are regenerated with the new model
+   - Documents are processed in parallel
+
+4. **Job Completion**
+   - Banner changes to: "Re-embedding completed! All N documents have been processed."
+   - Green success alert appears
+   - You can dismiss the alert by clicking the X
+
+5. **During Processing**
+   - You can navigate away from the Settings page
+   - The job continues in the background
+   - When you return, progress is updated
+   - You can continue using other parts of the application
+
+**Estimated Time**: Approximately 1 minute per 10 documents (varies by document size and complexity)
+
+### Knowledge Base Compatibility
+
+**⚠️ IMPORTANT**: Changing embedding models has implications for your Bedrock Knowledge Base.
+
+#### Understanding Knowledge Base Configuration
+
+Your Knowledge Base is configured at creation time with a specific embedding model. The KB expects all documents to use embeddings from that model.
+
+#### Safe Changes (Same Model Family)
+
+Changing within the same model family is **safe**:
+- ✅ `amazon.titan-embed-text-v1` → `amazon.titan-embed-text-v2:0`
+- ✅ `cohere.embed-english-v3` → `cohere.embed-multilingual-v3`
+
+These changes work because the embedding dimensions and format are compatible.
+
+#### Breaking Changes (Different Model Families)
+
+Changing between different model families will **break search**:
+- ❌ `amazon.titan-embed-text-v2:0` → `cohere.embed-english-v3`
+- ❌ `cohere.embed-english-v3` → `amazon.titan-embed-text-v1`
+
+**Why it breaks**: Different model families produce embeddings in different formats and dimensions. The Knowledge Base cannot compare them.
+
+#### What Happens When Search Breaks
+
+If you switch to an incompatible embedding model:
+- New documents generate embeddings in the new format
+- Knowledge Base expects embeddings in the old format
+- Search queries return no results or incorrect results
+- No error messages (it fails silently)
+
+#### How to Safely Change Model Families
+
+If you need to switch to a different model family:
+
+1. **Check your current Knowledge Base model**:
+   ```bash
+   aws bedrock-agent get-knowledge-base --knowledge-base-id <your-kb-id>
+   ```
+   Look for the `embeddingModelArn` field in the output
+
+2. **Create a new Knowledge Base** with the new embedding model:
+   - Go to AWS Console → Bedrock → Knowledge bases
+   - Create new KB with desired embedding model
+   - Point data source to your Vector S3 bucket
+   - Note the new KB ID
+
+3. **Update your configuration**:
+   ```bash
+   aws lambda update-function-configuration \
+     --function-name RAGStack-<project>-QueryKB \
+     --environment Variables={KNOWLEDGE_BASE_ID=<new-kb-id>}
+   ```
+
+4. **Change embedding model in Settings**:
+   - Go to Settings page
+   - Change embedding model
+   - Choose "Re-embed all documents"
+
+5. **Wait for re-embedding to complete**
+
+6. **Sync the new Knowledge Base**:
+   - Go to AWS Console → Bedrock → Knowledge bases → Data sources
+   - Click "Sync" to index the new embeddings
+
+**Alternative**: If recreating the Knowledge Base is not feasible, stay within the same model family.
+
+#### Verifying Knowledge Base Compatibility
+
+To verify your setup before changing embedding models:
+
+```bash
+# Get Knowledge Base embedding model
+aws bedrock-agent get-knowledge-base \
+  --knowledge-base-id <kb-id> \
+  --query 'knowledgeBase.embeddingModelConfiguration.bedrockEmbeddingModelConfiguration.embeddingModelArn'
+
+# Get current text embedding model from configuration
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Default"}}' \
+  --query 'Item.text_embed_model_id.S'
+
+# Compare the models - they should be from the same family
+```
+
+### Configuration Best Practices
+
+#### For Cost Optimization
+- **OCR Backend**: Use Textract for most documents
+- **Bedrock OCR**: Only use for complex layouts or multilingual documents
+- **Response Model**: Use Haiku for general queries, Sonnet/Opus for complex questions
+
+#### For Production Workloads
+- **Text Embeddings**: Use Titan Text v2 or Cohere English v3 for best quality
+- **Re-embedding**: Always re-embed when changing models in production
+- **KB Compatibility**: Verify Knowledge Base model before making changes
+
+#### For Multilingual Content
+- **Text Embeddings**: Use Cohere Multilingual v3
+- **Bedrock OCR**: Use Sonnet or Opus models for non-English text
+- **Response Model**: Sonnet handles multiple languages well
+
+#### For Complex Documents
+- **OCR Backend**: Switch to Bedrock with Sonnet or Opus
+- **Response Model**: Use Sonnet or Opus for detailed answers
+
+### Troubleshooting Settings
+
+#### Settings Page Won't Load
+- Check browser console for errors (F12 → Console tab)
+- Verify you're signed in (session may have expired)
+- Try refreshing the page
+
+#### Configuration Not Saving
+- Check for error messages in red alert boxes
+- Verify you have network connectivity
+- Check CloudWatch logs for ConfigurationResolver Lambda errors
+
+#### Changes Not Taking Effect
+- Configuration changes are immediate (no cache)
+- Verify the Custom configuration was saved in DynamoDB:
+  ```bash
+  aws dynamodb get-item \
+    --table-name RAGStack-<project>-Configuration \
+    --key '{"Configuration": {"S": "Custom"}}'
+  ```
+- Check Lambda logs to confirm new configuration is being read
+
+#### Re-embedding Job Stuck
+- Check Step Functions console for execution status
+- Review GenerateEmbeddings Lambda logs
+- Job progress is tracked in ConfigurationTable with key `ReEmbedJob_Latest`
+
+For more troubleshooting help, see [Troubleshooting Guide](TROUBLESHOOTING.md).
 
 ---
 
