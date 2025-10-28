@@ -162,11 +162,14 @@ class ConfigurationManager:
             ClientError: If DynamoDB write fails
         """
         try:
-            # Put item to DynamoDB
+            # Remove 'Configuration' key if present to prevent partition key override
+            safe_config = {k: v for k, v in custom_config.items() if k != 'Configuration'}
+
+            # Put item to DynamoDB with protected partition key
             self.table.put_item(
                 Item={
                     'Configuration': 'Custom',
-                    **custom_config
+                    **safe_config
                 }
             )
 

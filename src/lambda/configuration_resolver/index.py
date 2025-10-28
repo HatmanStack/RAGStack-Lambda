@@ -12,6 +12,8 @@ import json
 import boto3
 import logging
 import uuid
+import re
+from decimal import Decimal
 from datetime import datetime
 from botocore.exceptions import ClientError
 
@@ -29,9 +31,18 @@ def _initialize_tables():
     """Initialize DynamoDB tables (called on first use)."""
     global dynamodb, configuration_table, tracking_table
     if dynamodb is None:
+        # Defensive env var checks with clear error messages
+        config_table_name = os.environ.get('CONFIGURATION_TABLE_NAME')
+        if not config_table_name:
+            raise ValueError("Missing required environment variable: CONFIGURATION_TABLE_NAME")
+
+        tracking_table_name = os.environ.get('TRACKING_TABLE')
+        if not tracking_table_name:
+            raise ValueError("Missing required environment variable: TRACKING_TABLE")
+
         dynamodb = boto3.resource('dynamodb')
-        configuration_table = dynamodb.Table(os.environ['CONFIGURATION_TABLE_NAME'])
-        tracking_table = dynamodb.Table(os.environ['TRACKING_TABLE'])
+        configuration_table = dynamodb.Table(config_table_name)
+        tracking_table = dynamodb.Table(tracking_table_name)
 
 
 def lambda_handler(event, context):
@@ -58,7 +69,12 @@ def lambda_handler(event, context):
     # Initialize tables on first invocation
     _initialize_tables()
 
-    logger.info(f"Event received: {json.dumps(event)}")
+    # Log event structure (not values) to avoid PII leakage
+    event_summary = {
+        "fields": list(event.keys()),
+        "argumentKeys": list(event.get("arguments", {}).keys()) if event.get("arguments") else []
+    }
+    logger.info(f"Event received with structure: {json.dumps(event_summary)}")
 
     # Extract GraphQL operation
     operation = event['info']['fieldName']
@@ -113,10 +129,16 @@ def handle_get_configuration():
         custom_item = get_configuration_item('Custom')
         custom_config = remove_partition_key(custom_item) if custom_item else {}
 
+        # Decimal-safe JSON serialization for DynamoDB items
+        def decimal_default(obj):
+            if isinstance(obj, Decimal):
+                return int(obj) if obj % 1 == 0 else float(obj)
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
         result = {
-            'Schema': json.dumps(schema_config),  # AppSync expects JSON string
-            'Default': json.dumps(default_config),
-            'Custom': json.dumps(custom_config)
+            'Schema': json.dumps(schema_config, default=decimal_default),  # AppSync expects JSON string
+            'Default': json.dumps(default_config, default=decimal_default),
+            'Custom': json.dumps(custom_config, default=decimal_default)
         }
 
         logger.info("Returning configuration to client")
@@ -144,17 +166,20 @@ def handle_update_configuration(custom_config):
         else:
             custom_config_obj = custom_config
 
+        # Validate that config is a dictionary BEFORE logging
+        if not isinstance(custom_config_obj, dict) or custom_config_obj is None:
+            raise ValueError("customConfig must be a JSON object (dict), got: " + type(custom_config_obj).__name__)
+
         logger.info(f"Updating Custom configuration with keys: {list(custom_config_obj.keys())}")
 
-        # Validate that config is a dictionary
-        if not isinstance(custom_config_obj, dict):
-            raise ValueError("customConfig must be a JSON object")
+        # Remove 'Configuration' key to prevent partition key override
+        safe_config = {k: v for k, v in custom_config_obj.items() if k != 'Configuration'}
 
-        # Write to DynamoDB
+        # Write to DynamoDB with protected partition key
         configuration_table.put_item(
             Item={
                 'Configuration': 'Custom',
-                **custom_config_obj
+                **safe_config
             }
         )
 
@@ -184,17 +209,30 @@ def handle_get_document_count():
         Integer count of COMPLETED documents
     """
     try:
-        # Scan tracking table for COMPLETED status
+        # Scan tracking table for COMPLETED status with pagination
         # Note: In production with large datasets, consider using a GSI or cached count
-        response = tracking_table.scan(
-            FilterExpression='#status = :status',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={':status': 'COMPLETED'},
-            Select='COUNT'
-        )
+        count = 0
+        scan_kwargs = {
+            'FilterExpression': '#status = :status',
+            'ExpressionAttributeNames': {'#status': 'status'},
+            'ExpressionAttributeValues': {':status': 'COMPLETED'},
+            'Select': 'COUNT'
+        }
 
-        count = response.get('Count', 0)
-        logger.info(f"Found {count} COMPLETED documents")
+        # Paginate through all results
+        while True:
+            response = tracking_table.scan(**scan_kwargs)
+            count += response.get('Count', 0)
+
+            # Check if there are more pages
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+
+            # Set up for next page
+            scan_kwargs['ExclusiveStartKey'] = last_key
+
+        logger.info(f"Found {count} COMPLETED documents (paginated scan)")
 
         return count
 
@@ -317,7 +355,9 @@ def handle_re_embed_all_documents():
             total_documents = MAX_DOCUMENTS_PER_JOB
 
         for doc in documents:
-            execution_name = f"reembed-{doc['document_id']}-{job_id[:8]}"
+            # Sanitize execution name: only alphanumeric, hyphen, underscore; max 80 chars
+            raw_name = f"reembed-{doc['document_id']}-{job_id[:8]}"
+            execution_name = re.sub(r'[^a-zA-Z0-9_-]', '-', raw_name)[:80]
 
             sfn_client.start_execution(
                 stateMachineArn=state_machine_arn,

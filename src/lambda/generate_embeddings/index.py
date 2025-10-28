@@ -44,6 +44,9 @@ logger.setLevel(logging.INFO)
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
 
+# Text length limits (Titan Embed Text V2: max 8192 tokens ≈ 32k chars)
+TEXT_CHAR_LIMIT = 30000
+
 
 def update_re_embed_job_progress(job_id):
     """
@@ -67,11 +70,13 @@ def update_re_embed_job_progress(job_id):
         # Use composite key to update the correct job
         job_key = f'ReEmbedJob#{job_id}'
 
-        # Increment processedDocuments
+        # Increment processedDocuments (conditional to prevent phantom job creation)
         response = configuration_table.update_item(
-            Key={'Configuration': job_key},  # Fixed: Use composite key
+            Key={'Configuration': job_key},
             UpdateExpression='ADD processedDocuments :inc',
             ExpressionAttributeValues={':inc': 1},
+            ConditionExpression='attribute_exists(#pk)',  # Require job item to exist
+            ExpressionAttributeNames={'#pk': 'Configuration'},
             ReturnValues='ALL_NEW'
         )
 
@@ -81,12 +86,14 @@ def update_re_embed_job_progress(job_id):
 
         logger.info(f"Re-embed job {job_id} progress: {processed}/{total}")
 
-        # Check if job is complete
-        if processed >= total:
+        # Check if job is complete (guard against total=0)
+        if processed >= total and total > 0:
             completion_time = datetime.utcnow().isoformat() + 'Z'
+            # Idempotent completion: only set status if not already COMPLETED
             configuration_table.update_item(
-                Key={'Configuration': job_key},  # Fixed: Use composite key
+                Key={'Configuration': job_key},
                 UpdateExpression='SET #status = :status, completionTime = :time',
+                ConditionExpression='attribute_not_exists(#status) OR #status <> :status',
                 ExpressionAttributeNames={'#status': 'status'},
                 ExpressionAttributeValues={
                     ':status': 'COMPLETED',
@@ -139,9 +146,9 @@ def lambda_handler(event, context):
 
         # Truncate if too long (Titan has input limits)
         # Titan Embed Text V2: max 8192 tokens (~32k chars)
-        if len(full_text) > 30000:
-            logger.warning(f"Text too long ({len(full_text)} chars), truncating to 30000")
-            full_text = full_text[:30000]
+        if len(full_text) > TEXT_CHAR_LIMIT:
+            logger.warning(f"Text too long ({len(full_text)} chars), truncating to {TEXT_CHAR_LIMIT}")
+            full_text = full_text[:TEXT_CHAR_LIMIT]
 
         logger.info("Generating text embedding...")
         text_embedding = bedrock_client.generate_embedding(

@@ -300,7 +300,9 @@ export function Settings() {
       {reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS' && (
         <Alert type="info" dismissible={false}>
           Re-embedding documents: {reEmbedJobStatus.processedDocuments} / {reEmbedJobStatus.totalDocuments} completed
-          {' '}({Math.round((reEmbedJobStatus.processedDocuments / reEmbedJobStatus.totalDocuments) * 100)}%)
+          {' '}({reEmbedJobStatus.totalDocuments > 0
+            ? Math.round((reEmbedJobStatus.processedDocuments / reEmbedJobStatus.totalDocuments) * 100)
+            : 0}%)
         </Alert>
       )}
 

@@ -808,9 +808,7 @@ Resources:
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
                 "output_s3_prefix": "s3://${OutputBucket}/<key>/",
-                "vector_bucket": "${VectorBucket}",
-                "ocr_backend": "${OcrBackend}",
-                "bedrock_model_id": "${BedrockOcrModelId}"
+                "vector_bucket": "${VectorBucket}"
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
