@@ -378,15 +378,16 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
     return stack_name
 
 
-def package_ui_source(region):
+def package_ui_source(region, project_name):
     """
     Package UI source code as zip and upload to S3.
 
     Creates a zip file of the UI source (excluding node_modules and build directories),
-    uploads it to the SAM managed bucket, and returns the bucket/key for CloudFormation.
+    uploads it to a project-specific S3 bucket, and returns the bucket/key for CloudFormation.
 
     Args:
         region: AWS region for bucket operations
+        project_name: Project name for bucket naming
 
     Returns:
         tuple: (bucket_name, key) of uploaded UI source zip
@@ -399,7 +400,6 @@ def package_ui_source(region):
     import tempfile
     import time
     from pathlib import Path
-    from botocore.exceptions import ClientError
 
     log_info("Packaging UI source code...")
 
@@ -427,28 +427,30 @@ def package_ui_source(region):
 
         log_success(f"UI source packaged: {zip_path}")
 
-        # Upload to S3 - use SAM managed bucket
+        # Upload to S3 - use project-specific bucket for UI source
+        # SAM will handle its own deployment artifacts via --resolve-s3
         s3_client = boto3.client('s3', region_name=region)
         sts_client = boto3.client('sts', region_name=region)
 
-        # Get account ID for SAM managed bucket name
+        # Get account ID for bucket naming
         try:
             account_id = sts_client.get_caller_identity()['Account']
         except ClientError as e:
-            raise IOError(f"Failed to get AWS account ID: {e}")
+            raise IOError(f"Failed to get AWS account ID: {e}") from e
 
-        # SAM managed bucket naming pattern (use full account ID for uniqueness)
-        bucket_name = f'aws-sam-cli-managed-default-samclisourcebucket-{account_id}'
+        # Use project-specific bucket (not SAM managed bucket)
+        # This bucket is specifically for UI source code that CodeBuild will access
+        bucket_name = f'ragstack-{project_name}-ui-source-{account_id}'
 
         # Create bucket if it doesn't exist
         try:
             s3_client.head_bucket(Bucket=bucket_name)
-            log_info(f"Using existing SAM managed bucket: {bucket_name}")
+            log_info(f"Using existing UI source bucket: {bucket_name}")
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', '')
 
             if error_code == '404' or error_code == 'NoSuchBucket':
-                log_info(f"Creating SAM managed bucket: {bucket_name}")
+                log_info(f"Creating UI source bucket: {bucket_name}")
                 try:
                     if region == 'us-east-1':
                         s3_client.create_bucket(Bucket=bucket_name)
@@ -458,15 +460,15 @@ def package_ui_source(region):
                             CreateBucketConfiguration={'LocationConstraint': region}
                         )
 
-                    # Enable versioning (SAM best practice)
+                    # Enable versioning for source tracking
                     s3_client.put_bucket_versioning(
                         Bucket=bucket_name,
                         VersioningConfiguration={'Status': 'Enabled'}
                     )
                 except ClientError as create_error:
-                    raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}")
+                    raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
             else:
-                raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}")
+                raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
 
         # Upload with timestamp-based key
         timestamp = int(time.time())
@@ -477,7 +479,7 @@ def package_ui_source(region):
             s3_client.upload_file(zip_path, bucket_name, key)
             log_success(f"UI source uploaded to S3")
         except ClientError as e:
-            raise IOError(f"Failed to upload UI source to S3: {e}")
+            raise IOError(f"Failed to upload UI source to S3: {e}") from e
 
         # Clean up temporary file
         os.remove(zip_path)
@@ -493,7 +495,7 @@ def package_ui_source(region):
         # Clean up temporary file on unexpected error
         if os.path.exists(zip_path):
             os.remove(zip_path)
-        raise IOError(f"Unexpected error packaging UI source: {e}")
+        raise IOError(f"Unexpected error packaging UI source: {e}") from e
 
 
 def get_stack_outputs(stack_name, region="us-east-1"):
@@ -719,7 +721,7 @@ Examples:
         ui_source_key = None
         if not args.skip_ui:
             try:
-                ui_source_bucket, ui_source_key = package_ui_source(args.region)
+                ui_source_bucket, ui_source_key = package_ui_source(args.region, args.project_name)
             except (FileNotFoundError, IOError) as e:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)

@@ -51,7 +51,7 @@ def create_or_update(event, context):
         helper.Data.update({'build_id': build_id})
 
     except Exception as e:
-        logger.error(f"Failed to start build: {e}")
+        logger.exception("Failed to start build")
         raise
 
 
@@ -91,7 +91,7 @@ def poll_create_or_update(event, context):
         raise RuntimeError(f"Build did not complete successfully. Status: {build_status}")
 
     except Exception as e:
-        logger.error(f"Build polling error: {e}")
+        logger.exception("Build polling error")
         raise
 
 

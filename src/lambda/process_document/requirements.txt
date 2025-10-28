@@ -1,4 +1,4 @@
-./lib
+../../../lib
 boto3>=1.34.0
 PyMuPDF>=1.23.0
 Pillow>=10.0.0
