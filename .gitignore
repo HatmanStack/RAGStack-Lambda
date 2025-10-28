@@ -15,6 +15,9 @@ build/
 .aws-sam/
 layers/
 
+# Build artifacts - copied shared library
+src/lambda/*/ragstack_common/
+
 # Node
 node_modules/
 npm-debug.log

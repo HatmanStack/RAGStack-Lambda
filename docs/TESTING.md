@@ -360,9 +360,9 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit/
       - name: Deploy to test environment
-        run: ./publish.sh --admin-email test@example.com --project-name RAGStack-test
+        run: python publish.py --project-name test-project --admin-email test@example.com --region us-east-1
       - name: Run integration tests
-        run: pytest tests/integration/
+        run: pytest tests/integration/ --stack-name RAGStack-test-project
 ```
 
 ## Test Coverage Goals

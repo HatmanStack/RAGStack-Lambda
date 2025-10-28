@@ -222,7 +222,6 @@ Edit `template.yaml` Parameters section:
 - `TextEmbedModelId` - Text embedding model (default: titan-embed-text-v2)
 - `ImageEmbedModelId` - Image embedding model (default: titan-embed-image-v1)
 - `AdminEmail` - Admin user email for Cognito
-- `AlertEmail` - Email for CloudWatch alarms and budget alerts
 
 ### SAM Configuration (samconfig.toml)
 
