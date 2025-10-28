@@ -559,6 +559,7 @@ Resources:
           WORKING_BUCKET: !Ref WorkingBucket
           OCR_BACKEND: !Ref OcrBackend
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -573,6 +574,8 @@ Resources:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MeteringTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
