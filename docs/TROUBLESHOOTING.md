@@ -8,6 +8,7 @@ This guide covers common issues and their solutions for RAGStack-Lambda.
 - [Document Processing Issues](#document-processing-issues)
 - [Knowledge Base Issues](#knowledge-base-issues)
 - [UI Issues](#ui-issues)
+- [Runtime Configuration Issues](#runtime-configuration-issues)
 - [Performance Issues](#performance-issues)
 - [Authentication Issues](#authentication-issues)
 - [Log Analysis](#log-analysis)
@@ -629,6 +630,478 @@ aws s3api get-bucket-cors --bucket ragstack-<project-name>-input-<account-id>
 # Should allow CloudFront origin
 # Redeploy if CORS missing
 ```
+
+---
+
+## Runtime Configuration Issues
+
+### Settings Page Won't Load
+
+**Symptoms:**
+- Settings page shows "Loading configuration..." indefinitely
+- Blank page or error in browser console
+- GraphQL errors in Network tab
+
+**Common Causes & Solutions:**
+
+#### 1. ConfigurationTable Not Seeded
+
+**Diagnosis:**
+```bash
+# Check if ConfigurationTable has Schema and Default items
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Schema"}}'
+
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Default"}}'
+```
+
+**Solution:**
+```bash
+# Re-run publish.py to seed configuration
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
+
+# Verify seeding succeeded
+aws dynamodb scan \
+  --table-name RAGStack-<project>-Configuration \
+  --select COUNT
+# Should return Count >= 2 (Schema + Default)
+```
+
+#### 2. ConfigurationTable Doesn't Exist
+
+**Diagnosis:**
+```bash
+# Verify table exists
+aws dynamodb describe-table \
+  --table-name RAGStack-<project>-Configuration
+```
+
+**Solution:**
+- Redeploy stack (table may have been deleted)
+- Check CloudFormation stack for table resource
+
+#### 3. GraphQL API Errors
+
+**Diagnosis:**
+- Open browser DevTools (F12) → Console tab
+- Look for errors like "Network error" or "Unauthorized"
+
+**Solution:**
+```bash
+# Verify user is authenticated
+# Check Cognito session in Application → Storage → Cookies
+
+# Test GraphQL API directly
+aws appsync list-graphql-apis --region <region>
+
+# Verify ConfigurationResolver Lambda exists
+aws lambda get-function \
+  --function-name RAGStack-<project>-ConfigurationResolver
+```
+
+---
+
+### Configuration Changes Not Taking Effect
+
+**Symptoms:**
+- Changed configuration in Settings UI
+- Clicked "Save changes" and saw success message
+- Lambda functions still use old configuration values
+
+**Common Causes & Solutions:**
+
+#### 1. Configuration Not Saved to DynamoDB
+
+**Diagnosis:**
+```bash
+# Check if Custom configuration was saved
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Custom"}}'
+
+# Should show your custom values
+```
+
+**Solution:**
+- Try saving configuration again in UI
+- Check browser Network tab for GraphQL errors
+- Verify ConfigurationResolver Lambda has write permissions:
+  ```bash
+  aws lambda get-function-configuration \
+    --function-name RAGStack-<project>-ConfigurationResolver \
+    --query 'Role'
+
+  # Verify role has dynamodb:PutItem permission
+  ```
+
+#### 2. Lambda Reading Wrong Table
+
+**Diagnosis:**
+```bash
+# Check Lambda environment variable
+aws lambda get-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --query 'Environment.Variables.CONFIGURATION_TABLE_NAME'
+
+# Should match your ConfigurationTable name
+```
+
+**Solution:**
+```bash
+# Update environment variable if incorrect
+aws lambda update-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --environment Variables={CONFIGURATION_TABLE_NAME=RAGStack-<project>-Configuration}
+```
+
+#### 3. Lambda Not Reading Configuration
+
+**Diagnosis:**
+```bash
+# Check Lambda logs for configuration read
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/RAGStack-<project>-ProcessDocument \
+  --filter-pattern "Effective configuration" \
+  --max-items 5
+
+# Should show configuration being read
+```
+
+**Solution:**
+- Verify Lambda uses ConfigurationManager library
+- Check for import errors in Lambda logs
+- Force Lambda cold start by updating function (deploy null change)
+
+---
+
+### Re-embedding Job Stuck
+
+**Symptoms:**
+- Re-embedding job shows "IN_PROGRESS" indefinitely
+- Progress banner doesn't update
+- Documents don't complete re-processing
+
+**Common Causes & Solutions:**
+
+#### 1. Step Functions Executions Failed
+
+**Diagnosis:**
+```bash
+# Check Step Functions executions
+aws stepfunctions list-executions \
+  --state-machine-arn <state-machine-arn> \
+  --status-filter FAILED \
+  --max-results 10
+
+# Check execution details
+aws stepfunctions describe-execution \
+  --execution-arn <execution-arn>
+```
+
+**Solution:**
+- Review failed execution details for errors
+- Common failures:
+  - Lambda timeout (increase timeout in template.yaml)
+  - Bedrock throttling (reduce concurrency or add retry logic)
+  - S3 access errors (check IAM permissions)
+- Fix underlying issue and trigger re-embedding again
+
+#### 2. Job Progress Not Updating
+
+**Diagnosis:**
+```bash
+# Check ReEmbedJob status in ConfigurationTable
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "ReEmbedJob_Latest"}}'
+
+# Get actual job item
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "ReEmbedJob#<job-id>"}}'
+
+# Check processedDocuments field
+```
+
+**Solution:**
+```bash
+# Check GenerateEmbeddings Lambda logs for job updates
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/RAGStack-<project>-GenerateEmbeddings \
+  --filter-pattern "Re-embed job progress" \
+  --max-items 20
+
+# If job completed but status not updated, manually complete:
+aws dynamodb update-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "ReEmbedJob#<job-id>"}}' \
+  --update-expression "SET #status = :status, completionTime = :time" \
+  --expression-attribute-names '{"#status": "status"}' \
+  --expression-attribute-values '{
+    ":status": {"S": "COMPLETED"},
+    ":time": {"S": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}
+  }'
+```
+
+#### 3. Too Many Documents (>500)
+
+**Diagnosis:**
+```bash
+# Check document count
+aws dynamodb scan \
+  --table-name RAGStack-<project>-Tracking \
+  --filter-expression "#status = :status" \
+  --expression-attribute-names '{"#status": "status"}' \
+  --expression-attribute-values '{":status": {"S": "COMPLETED"}}' \
+  --select COUNT
+```
+
+**Solution:**
+- Re-embedding job has 500 document limit (to prevent Lambda timeout)
+- For >500 documents, job only processes first 500
+- Check ConfigurationResolver logs for warning:
+  ```
+  Document count (XXX) exceeds limit (500)
+  ```
+- Solution: Run re-embedding in batches or increase Lambda timeout
+
+---
+
+### Lambda Fails with Configuration Error
+
+**Symptoms:**
+- Lambda function fails immediately
+- Error in logs: "Configuration table name not provided"
+- All document processing fails
+
+**Common Causes & Solutions:**
+
+#### 1. CONFIGURATION_TABLE_NAME Not Set
+
+**Diagnosis:**
+```bash
+# Check environment variables
+aws lambda get-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --query 'Environment.Variables'
+
+# CONFIGURATION_TABLE_NAME should be present
+```
+
+**Solution:**
+```bash
+# Set environment variable (if missing)
+aws lambda update-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --environment Variables={
+    CONFIGURATION_TABLE_NAME=RAGStack-<project>-Configuration,
+    # ... other environment variables
+  }
+
+# Redeploy if environment variable missing from template
+```
+
+#### 2. IAM Permissions Missing
+
+**Diagnosis:**
+```bash
+# Check Lambda role permissions
+aws lambda get-function-configuration \
+  --function-name RAGStack-<project>-ProcessDocument \
+  --query 'Role' --output text | \
+  xargs -I {} aws iam list-attached-role-policies --role-name $(basename {})
+
+# Should have DynamoDB read permissions
+```
+
+**Solution:**
+```bash
+# Verify role has policy with dynamodb:GetItem permission
+# If missing, add inline policy:
+aws iam put-role-policy \
+  --role-name RAGStack-<project>-ProcessDocumentRole \
+  --policy-name DynamoDBConfigRead \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:<region>:<account-id>:table/RAGStack-<project>-Configuration"
+    }]
+  }'
+```
+
+#### 3. ConfigurationTable Deleted
+
+**Diagnosis:**
+```bash
+# Verify table exists
+aws dynamodb describe-table \
+  --table-name RAGStack-<project>-Configuration
+```
+
+**Solution:**
+- Table may have been manually deleted
+- Redeploy CloudFormation stack to recreate:
+  ```bash
+  python publish.py \
+    --project-name <project-name> \
+    --admin-email <email> \
+    --region <region>
+  ```
+
+---
+
+### Embedding Model Change Breaks Search
+
+**Symptoms:**
+- Changed embedding model in Settings
+- Re-embedded all documents
+- Search queries return no results or incorrect results
+
+**Common Causes & Solutions:**
+
+#### 1. Incompatible Model Families
+
+**Diagnosis:**
+```bash
+# Check current embedding model
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Custom"}}' \
+  --query 'Item.text_embed_model_id.S'
+
+# Check Knowledge Base embedding model
+aws bedrock-agent get-knowledge-base \
+  --knowledge-base-id <kb-id> \
+  --query 'knowledgeBase.embeddingModelConfiguration'
+```
+
+**Problem:**
+- Switched from Titan to Cohere (or vice versa)
+- Different model families produce incompatible embedding formats
+- Knowledge Base expects embeddings in original format
+
+**Solution:**
+1. **Option A: Switch back to original model family**
+   ```bash
+   # Change embedding model back in Settings UI
+   # Or via CLI:
+   aws dynamodb put-item \
+     --table-name RAGStack-<project>-Configuration \
+     --item '{"Configuration": {"S": "Custom"}, "text_embed_model_id": {"S": "amazon.titan-embed-text-v2:0"}}'
+
+   # Re-embed all documents
+   ```
+
+2. **Option B: Create new Knowledge Base**
+   - Go to AWS Console → Bedrock → Knowledge bases → Create
+   - Select new embedding model matching your Settings
+   - Point to same S3 Vector bucket
+   - Update QueryKB Lambda environment variable:
+     ```bash
+     aws lambda update-function-configuration \
+       --function-name RAGStack-<project>-QueryKB \
+       --environment Variables={KNOWLEDGE_BASE_ID=<new-kb-id>}
+     ```
+   - Sync new Knowledge Base
+
+**Prevention:**
+- **Stay within model families**: titan-v1 ↔ titan-v2 is safe
+- **Avoid cross-family changes**: titan ↔ cohere breaks search
+- See [USER_GUIDE.md - Knowledge Base Compatibility](USER_GUIDE.md#knowledge-base-compatibility)
+
+#### 2. Knowledge Base Not Synced
+
+**Diagnosis:**
+```bash
+# Check KB sync status
+aws bedrock-agent get-data-source \
+  --knowledge-base-id <kb-id> \
+  --data-source-id <data-source-id>
+
+# Check last sync time
+```
+
+**Solution:**
+```bash
+# Manually trigger KB sync
+aws bedrock-agent start-ingestion-job \
+  --knowledge-base-id <kb-id> \
+  --data-source-id <data-source-id>
+
+# Wait 2-10 minutes for sync to complete
+# Check sync status in AWS Console
+```
+
+---
+
+### Settings UI Shows Incorrect Values
+
+**Symptoms:**
+- Settings page shows wrong default values
+- Dropdowns missing options
+- Fields not appearing/hiding correctly
+
+**Common Causes & Solutions:**
+
+#### 1. Schema Not Updated
+
+**Diagnosis:**
+```bash
+# Check Schema in ConfigurationTable
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-Configuration \
+  --key '{"Configuration": {"S": "Schema"}}' \
+  --query 'Item.Schema'
+
+# Verify enum values match expected models
+```
+
+**Solution:**
+```bash
+# Redeploy to update Schema
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
+
+# Schema is defined in template.yaml and seeded by publish.py
+```
+
+#### 2. Browser Cache Issue
+
+**Diagnosis:**
+- Hard refresh page (Ctrl+Shift+R or Cmd+Shift+R)
+- Check if values update after refresh
+
+**Solution:**
+```bash
+# Clear browser cache
+# Or use incognito/private window
+
+# Invalidate CloudFront cache
+aws cloudfront create-invalidation \
+  --distribution-id <distribution-id> \
+  --paths "/*"
+```
+
+#### 3. GraphQL Schema Out of Sync
+
+**Diagnosis:**
+- Check browser Network tab for GraphQL errors
+- Response may have different format than expected
+
+**Solution:**
+- Redeploy AppSync API
+- Verify schema.graphql matches implementation
+- Check ConfigurationResolver Lambda returns correct format
 
 ---
 
