@@ -93,7 +93,7 @@ aws configure
 
 ## Deployment Steps
 
-RAGStack-Lambda uses a deployment script (`publish.sh`) that automates the entire deployment process.
+RAGStack-Lambda uses a deployment script (`publish.py`) that automates the entire deployment process.
 
 ### Step 1: Clone the Repository
 
@@ -104,48 +104,51 @@ cd RAGStack-Lambda
 
 ### Step 2: Deploy the Stack
 
-Use the `publish.sh` script to deploy:
+Use the `publish.py` script to deploy (all parameters required):
 
 ```bash
-# Deploy to development environment
-./publish.sh --env dev --admin-email admin@example.com
+# Deploy with all required parameters
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
 
-# Deploy to production environment
-./publish.sh --env prod --admin-email admin@example.com
-```
-
-**Deployment options:**
-
-```bash
-# Basic deployment
-./publish.sh --env dev --admin-email your.email@example.com
-
-# Specify AWS region (default: us-east-1)
-./publish.sh --env prod --admin-email your.email@example.com --region us-west-2
-
-# Skip UI build (backend only)
-./publish.sh --env dev --admin-email your.email@example.com --skip-ui
-
-# Skip Lambda layer build (faster rebuilds during development)
-./publish.sh --env dev --admin-email your.email@example.com --skip-layers
-
-# Specify alert email for CloudWatch alarms
-./publish.sh --env prod \
+# Example: Deploy a customer docs project
+python publish.py \
+  --project-name customer-docs \
   --admin-email admin@example.com \
-  --alert-email alerts@example.com
+  --region us-east-1
+
+# Example: Deploy to different region
+python publish.py \
+  --project-name legal-archive \
+  --admin-email admin@example.com \
+  --region us-west-2
+
+# Skip UI build (backend only - faster for backend changes)
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region> \
+  --skip-ui
 ```
+
+**All parameters are required:**
+- `--project-name`: Identifies this deployment (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)
+- `--admin-email`: Email for Cognito admin user and CloudWatch/budget alerts
+- `--region`: AWS region to deploy to
+- `--skip-ui`: (Optional) Skip UI build for backend-only changes
 
 ### What Happens During Deployment
 
-The `publish.sh` script performs these steps:
+The `publish.py` script performs these steps:
 
-1. **Validates prerequisites** - Checks for Python 3.12+, Node.js 18+, AWS CLI, SAM CLI
-2. **Builds Lambda layers** - Compiles dependencies for Lambda runtime (unless `--skip-layers`)
+1. **Validates inputs and prerequisites** - Checks project name format, Python 3.12+, Node.js 18+, AWS CLI, SAM CLI
+2. **Copies shared libraries** - Distributes lib/ragstack_common to Lambda functions
 3. **Runs SAM build** - Packages Lambda functions
 4. **Deploys infrastructure** - Creates CloudFormation stack with ~60 resources
-5. **Builds React UI** - Creates production build (unless `--skip-ui`)
-6. **Deploys UI to S3** - Uploads UI to CloudFront-backed S3 bucket
-7. **Outputs URLs** - Displays CloudFront URL and next steps
+5. **Builds and deploys UI** - CodeBuild compiles React UI and deploys to S3 (unless `--skip-ui`)
+6. **Outputs URLs** - Displays CloudFront URL and next steps
 
 **Deployment time**: Approximately 10-15 minutes for first deployment, 5-10 minutes for updates.
 
@@ -156,12 +159,12 @@ The script will show progress as it deploys. You can also monitor in the AWS Con
 ```bash
 # Watch CloudFormation stack events
 aws cloudformation describe-stack-events \
-  --stack-name RAGStack-dev \
-  --region us-east-1 \
+  --stack-name RAGStack-<project-name> \
+  --region <region> \
   --max-items 20
 
 # Or use SAM CLI
-sam logs --stack-name RAGStack-dev --tail
+sam logs --stack-name RAGStack-<project-name> --tail
 ```
 
 ### Step 4: Save Deployment Outputs
@@ -173,10 +176,10 @@ Once deployment completes, the script will output important information:
 
 Stack Outputs:
   WebUIUrl: https://d1234567890abc.cloudfront.net
-  InputBucketName: ragstack-input-123456789012
-  OutputBucketName: ragstack-output-123456789012
-  VectorBucketName: ragstack-vectors-123456789012
-  TrackingTableName: RAGStack-dev-Tracking
+  InputBucketName: ragstack-<project-name>-input-123456789012
+  OutputBucketName: ragstack-<project-name>-output-123456789012
+  VectorBucketName: ragstack-<project-name>-vectors-123456789012
+  TrackingTableName: RAGStack-<project-name>-Tracking
   ApiUrl: https://abcdef123456.appsync-api.us-east-1.amazonaws.com/graphql
   UserPoolId: us-east-1_ABC123DEF
 
@@ -238,8 +241,9 @@ Store the IDs so Lambda functions can use them:
 # Replace with your values
 KB_ID="ABC123DEF"
 DATA_SOURCE_ID="XYZ789GHI"
-REGION="us-east-1"
-STACK_NAME="RAGStack-dev"
+REGION="<region>"
+PROJECT_NAME="<project-name>"
+STACK_NAME="RAGStack-${PROJECT_NAME}"
 
 # Store Knowledge Base ID
 aws ssm put-parameter \
@@ -328,24 +332,28 @@ To update an existing deployment with code changes or configuration updates:
 
 ```bash
 # Make your code changes, then redeploy
-./publish.sh --env dev --admin-email admin@example.com
-
-# Skip layers if they haven't changed (faster)
-./publish.sh --env dev --admin-email admin@example.com --skip-layers
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region> \
+  --skip-ui
 ```
 
-### Update UI Only
+### Update UI
 
 ```bash
-# Make UI changes in src/ui/
-./publish.sh --env dev --admin-email admin@example.com
+# Make UI changes in src/ui/, then redeploy
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
 
 # Or deploy UI manually
 cd src/ui
 npm run build
-aws s3 sync build/ s3://ragstack-ui-123456789012/ --delete
+aws s3 sync build/ s3://ragstack-<project-name>-ui-<account-id>/ --delete
 aws cloudfront create-invalidation \
-  --distribution-id ABCDEFGH123 \
+  --distribution-id <distribution-id> \
   --paths "/*"
 ```
 
@@ -354,12 +362,14 @@ aws cloudfront create-invalidation \
 To change parameters like OCR backend or model IDs:
 
 ```bash
-# Edit samconfig.toml
-nano samconfig.toml
+# Edit template.yaml parameters
+nano template.yaml
 
-# Update parameter_overrides section
 # Then redeploy
-./publish.sh --env dev --admin-email admin@example.com
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
 ```
 
 See [Configuration Guide](CONFIGURATION.md) for details on available parameters.
@@ -369,12 +379,12 @@ See [Configuration Guide](CONFIGURATION.md) for details on available parameters.
 ```bash
 # Watch stack update progress
 aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].StackStatus'
 
 # View events
 aws cloudformation describe-stack-events \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --max-items 10
 ```
 
@@ -386,15 +396,22 @@ To completely remove RAGStack-Lambda from your AWS account:
 
 ### Step 1: Empty S3 Buckets
 
-CloudFormation cannot delete non-empty buckets:
+CloudFormation cannot delete non-empty buckets. Replace `<project-name>` and `<account-id>` with your values:
 
 ```bash
-# Replace with your bucket names
-aws s3 rm s3://ragstack-input-123456789012/ --recursive
-aws s3 rm s3://ragstack-output-123456789012/ --recursive
-aws s3 rm s3://ragstack-vectors-123456789012/ --recursive
-aws s3 rm s3://ragstack-working-123456789012/ --recursive
-aws s3 rm s3://ragstack-ui-123456789012/ --recursive
+# Get your account ID
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Set your project name
+PROJECT_NAME="<project-name>"
+
+# Empty all buckets
+aws s3 rm s3://ragstack-${PROJECT_NAME}-input-${ACCOUNT_ID}/ --recursive
+aws s3 rm s3://ragstack-${PROJECT_NAME}-output-${ACCOUNT_ID}/ --recursive
+aws s3 rm s3://ragstack-${PROJECT_NAME}-vectors-${ACCOUNT_ID}/ --recursive
+aws s3 rm s3://ragstack-${PROJECT_NAME}-working-${ACCOUNT_ID}/ --recursive
+aws s3 rm s3://ragstack-${PROJECT_NAME}-ui-${ACCOUNT_ID}/ --recursive
+aws s3 rm s3://ragstack-${PROJECT_NAME}-cloudtrail-${ACCOUNT_ID}/ --recursive
 ```
 
 ### Step 2: Delete Knowledge Base
@@ -404,39 +421,39 @@ The manually created KB must be deleted manually:
 ```bash
 # Delete data source first
 aws bedrock-agent delete-data-source \
-  --knowledge-base-id ABC123DEF \
-  --data-source-id XYZ789GHI
+  --knowledge-base-id <kb-id> \
+  --data-source-id <data-source-id>
 
 # Delete knowledge base
 aws bedrock-agent delete-knowledge-base \
-  --knowledge-base-id ABC123DEF
+  --knowledge-base-id <kb-id>
 ```
 
 ### Step 3: Delete CloudFormation Stack
 
 ```bash
-aws cloudformation delete-stack --stack-name RAGStack-dev
+aws cloudformation delete-stack --stack-name RAGStack-${PROJECT_NAME}
 
 # Monitor deletion
-aws cloudformation wait stack-delete-complete --stack-name RAGStack-dev
+aws cloudformation wait stack-delete-complete --stack-name RAGStack-${PROJECT_NAME}
 ```
 
 ### Step 4: Delete Parameter Store Values
 
 ```bash
-aws ssm delete-parameter --name "/ragstack/RAGStack-dev/knowledge-base-id"
-aws ssm delete-parameter --name "/ragstack/RAGStack-dev/data-source-id"
+aws ssm delete-parameter --name "/ragstack/RAGStack-${PROJECT_NAME}/knowledge-base-id"
+aws ssm delete-parameter --name "/ragstack/RAGStack-${PROJECT_NAME}/data-source-id"
 ```
 
 ### Step 5: Verify Cleanup
 
 ```bash
 # Check stack is gone
-aws cloudformation describe-stacks --stack-name RAGStack-dev
-# Should return: "Stack with id RAGStack-dev does not exist"
+aws cloudformation describe-stacks --stack-name RAGStack-${PROJECT_NAME}
+# Should return: "Stack with id RAGStack-<project-name> does not exist"
 
 # Check S3 buckets are gone
-aws s3 ls | grep ragstack
+aws s3 ls | grep ragstack-${PROJECT_NAME}
 # Should return nothing
 ```
 

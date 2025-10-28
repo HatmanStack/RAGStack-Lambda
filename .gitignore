@@ -13,7 +13,10 @@ build/
 
 # AWS
 .aws-sam/
-samconfig.toml
+layers/
+
+# Build artifacts - copied shared library
+src/lambda/*/ragstack_common/
 
 # Node
 node_modules/

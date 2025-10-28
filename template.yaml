@@ -5,12 +5,11 @@ Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
 Parameters:
   ProjectName:
     Type: String
-    Default: RAGStack
-    Description: Project name prefix for resources
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]{1,32}$'
-    ConstraintDescription: Must start with a letter, contain only alphanumeric characters and hyphens, and be 2-33 characters long
+    Description: Project name for resource identification (lowercase alphanumeric + hyphens, 2-32 chars)
+    AllowedPattern: '^[a-z][a-z0-9-]{1,31}$'
+    ConstraintDescription: Must start with lowercase letter, contain only lowercase alphanumeric and hyphens, 2-32 chars
     MinLength: 2
-    MaxLength: 33
+    MaxLength: 32
 
   OcrBackend:
     Type: String
@@ -48,16 +47,20 @@ Parameters:
       - amazon.titan-embed-image-v1
     ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
 
+  UISourceBucket:
+    Type: String
+    Description: S3 bucket containing UI source code zip
+    Default: ''
+
+  UISourceKey:
+    Type: String
+    Description: S3 key for UI source code zip
+    Default: ''
+
   AdminEmail:
     Type: String
-    Description: Admin user email for Cognito (used in Phase 4)
+    Description: Admin email for Cognito user and CloudWatch/budget alerts
     AllowedPattern: '^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
-    ConstraintDescription: Must be a valid email address
-
-  AlertEmail:
-    Type: String
-    Description: Email address for budget and CloudWatch alarm notifications
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: Must be a valid email address
 
 Globals:
@@ -69,6 +72,9 @@ Globals:
       Variables:
         LOG_LEVEL: INFO
 
+Conditions:
+  BuildUI: !Not [!Equals [!Ref UISourceBucket, '']]
+
 Resources:
   # =========================================================================
   # S3 Buckets
@@ -78,7 +84,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-input-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-input-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -102,8 +108,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -111,7 +115,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-output-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-output-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -142,8 +146,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -151,7 +153,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-working-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-working-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -171,8 +173,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -180,7 +180,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-vectors-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -204,16 +204,141 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
+
+  # =========================================================================
+  # CodeBuild Resources for UI Deployment
+  # =========================================================================
+
+  UICodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Condition: BuildUI
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub 'codebuild.${AWS::URLSuffix}'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildUIPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 read access for UI source artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${UISourceBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${UISourceBucket}'
+              # S3 write access for UI deployment bucket
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub '${UIBucket.Arn}'
+                  - !Sub '${UIBucket.Arn}/*'
+              # CloudFront invalidation
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+              # CloudFormation read access for outputs
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource: !Ref AWS::StackId
+              # Logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  UICodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Condition: BuildUI
+    Properties:
+      Name: !Sub '${AWS::StackName}-webui-build'
+      Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
+      ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo "Installing dependencies..."
+                - cd src/ui
+                - npm install
+            build:
+              commands:
+                - echo "Building React application..."
+                - |
+                  # Generate aws-exports.js from CloudFormation outputs
+                  cat > src/aws-exports.js << EOF
+                  const awsConfig = {
+                    region: '${AWS_REGION}',
+                    userPoolId: '${USER_POOL_ID}',
+                    userPoolWebClientId: '${USER_POOL_CLIENT_ID}',
+                    identityPoolId: '${IDENTITY_POOL_ID}',
+                    apiEndpoint: '${GRAPHQL_API_URL}',
+                  };
+                  export default awsConfig;
+                  EOF
+                - npm run build
+            post_build:
+              commands:
+                - echo "Deploying to S3..."
+                - aws s3 sync build/ s3://${UI_BUCKET}/ --delete
+                - echo "Invalidating CloudFront cache..."
+                - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths "/*"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: USER_POOL_ID
+            Value: !Ref UserPool
+          - Name: USER_POOL_CLIENT_ID
+            Value: !Ref UserPoolClient
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: GRAPHQL_API_URL
+            Value: !GetAtt GraphQLApi.GraphQLUrl
+          - Name: UI_BUCKET
+            Value: !Ref UIBucket
+          - Name: CLOUDFRONT_DIST_ID
+            Value: !Ref CloudFrontDistribution
+      TimeoutInMinutes: 30
+
+  # =========================================================================
+  # UI S3 Bucket
+  # =========================================================================
 
   UIBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-ui-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-ui-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -229,8 +354,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -314,7 +437,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      TableName: !Sub '${ProjectName}-Tracking'
+      TableName: !Sub 'RAGStack-${ProjectName}-Tracking'
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -342,8 +465,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -351,7 +472,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      TableName: !Sub '${ProjectName}-Metering'
+      TableName: !Sub 'RAGStack-${ProjectName}-Metering'
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -373,8 +494,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -385,7 +504,7 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-ProcessDocument'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-ProcessDocument'
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
@@ -407,7 +526,6 @@ Resources:
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
@@ -435,7 +553,7 @@ Resources:
   GenerateEmbeddingsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-GenerateEmbeddings'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings'
       CodeUri: src/lambda/generate_embeddings/
       Handler: index.lambda_handler
       Description: Generate text and image embeddings
@@ -456,7 +574,6 @@ Resources:
           IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
@@ -477,7 +594,7 @@ Resources:
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-QueryKB'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-QueryKB'
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
@@ -491,7 +608,6 @@ Resources:
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - Statement:
@@ -551,7 +667,7 @@ Resources:
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub '${ProjectName}-ProcessingPipeline'
+      Name: !Sub 'RAGStack-${ProjectName}-ProcessingPipeline'
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
@@ -577,7 +693,7 @@ Resources:
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${ProjectName}-S3UploadTrigger'
+      Name: !Sub 'RAGStack-${ProjectName}-S3UploadTrigger'
       Description: Trigger processing pipeline on S3 upload
       EventPattern:
         source:
@@ -677,7 +793,7 @@ Resources:
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-KBCustomResource'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-KBCustomResource'
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
@@ -689,7 +805,6 @@ Resources:
           LOG_LEVEL: INFO
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - Statement:
@@ -726,11 +841,11 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub '${ProjectName}-KB'
+      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub '${ProjectName}-vector-index'
+      IndexName: !Sub 'RAGStack-${ProjectName}-vector-index'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 
@@ -741,7 +856,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub '${ProjectName}-Users'
+      UserPoolName: !Sub 'RAGStack-${ProjectName}-Users'
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -768,7 +883,7 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub '${ProjectName}-WebClient'
+      ClientName: !Sub 'RAGStack-${ProjectName}-WebClient'
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -782,7 +897,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub '${ProjectName}Identity'
+      IdentityPoolName: !Sub 'RAGStack${ProjectName}Identity'
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -848,7 +963,7 @@ Resources:
   GraphQLApi:
     Type: AWS::AppSync::GraphQLApi
     Properties:
-      Name: !Sub '${ProjectName}-API'
+      Name: !Sub 'RAGStack-${ProjectName}-API'
       AuthenticationType: AMAZON_COGNITO_USER_POOLS
       UserPoolConfig:
         UserPoolId: !Ref UserPool
@@ -881,7 +996,7 @@ Resources:
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-AppSyncResolvers'
+      FunctionName: !Sub 'RAGStack-${ProjectName}-AppSyncResolvers'
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
       Tracing: Active
@@ -892,7 +1007,6 @@ Resources:
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
       Tags:
         Project: !Ref ProjectName
-        Environment: Production
         CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
@@ -904,6 +1018,37 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !GetAtt ProcessingStateMachine.Arn
+
+  StartUICodeBuild:
+    Type: AWS::Serverless::Function
+    Condition: BuildUI
+    Properties:
+      FunctionName: !Sub 'RAGStack-${ProjectName}-StartUICodeBuild'
+      CodeUri: src/lambda/start_codebuild/
+      Handler: index.lambda_handler
+      Description: Custom resource to trigger UI CodeBuild project
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - codebuild:StartBuild
+                - codebuild:BatchGetBuilds
+              Resource: !GetAtt UICodeBuildProject.Arn
+
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Condition: BuildUI
+    Properties:
+      ServiceToken: !GetAtt StartUICodeBuild.Arn
+      BuildProjectName: !Ref UICodeBuildProject
+      # Force rebuild when source changes
+      UISourceLocation: !Sub 's3://${UISourceBucket}/${UISourceKey}'
 
   # Data source for resolvers
   AppSyncLambdaDataSource:
@@ -1002,7 +1147,7 @@ Resources:
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${ProjectName}-Processing-DLQ'
+      QueueName: !Sub 'RAGStack-${ProjectName}-Processing-DLQ'
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
@@ -1014,11 +1159,11 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${ProjectName}-Alarms'
-      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
+      TopicName: !Sub 'RAGStack-${ProjectName}-Alarms'
+      DisplayName: !Sub 'RAGStack-${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
-        - Endpoint: !Ref AlertEmail
+        - Endpoint: !Ref AdminEmail
           Protocol: email
 
   # =========================================================================
@@ -1028,7 +1173,7 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub '${ProjectName}-Monitor'
+      DashboardName: !Sub 'RAGStack-${ProjectName}-Monitor'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1167,7 +1312,7 @@ Resources:
   ProcessDocumentErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Errors'
       AlarmDescription: Alert when ProcessDocument Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1188,7 +1333,7 @@ Resources:
   GenerateEmbeddingsErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings-Errors'
       AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1209,7 +1354,7 @@ Resources:
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-DLQ-Messages'
       AlarmDescription: Alert when messages appear in DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -1230,7 +1375,7 @@ Resources:
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-StepFunctions-Failures'
       AlarmDescription: Alert when Step Functions executions fail
       MetricName: ExecutionsFailed
       Namespace: AWS/States
@@ -1251,7 +1396,7 @@ Resources:
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
+      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Throttles'
       AlarmDescription: Alert when ProcessDocument Lambda is throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -1277,7 +1422,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub 'ragstack-${ProjectName}-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1297,8 +1442,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-        - Key: Environment
-          Value: Production
         - Key: CostCenter
           Value: Engineering
 
@@ -1328,7 +1471,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${ProjectName}-Trail'
+      TrailName: !Sub 'RAGStack-${ProjectName}-Trail'
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
       IsMultiRegionTrail: false
@@ -1355,7 +1498,7 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
+        BudgetName: !Sub 'RAGStack-${ProjectName}-Monthly-Budget'
         BudgetLimit:
           Amount: 100
           Unit: USD
@@ -1372,7 +1515,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: !Ref AlertEmail
+              Address: !Ref AdminEmail
         - Notification:
             NotificationType: FORECASTED
             ComparisonOperator: GREATER_THAN
@@ -1380,7 +1523,7 @@ Resources:
             ThresholdType: PERCENTAGE
           Subscribers:
             - SubscriptionType: EMAIL
-              Address: !Ref AlertEmail
+              Address: !Ref AdminEmail
 
 Outputs:
   # S3 Buckets

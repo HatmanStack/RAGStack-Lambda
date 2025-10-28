@@ -28,7 +28,7 @@ import logging
 import os
 from datetime import datetime
 
-# Import from Lambda layer
+# Import from shared package (installed via pip)
 from ragstack_common.ocr import OcrService
 from ragstack_common.models import Document, Status, OcrBackend
 from ragstack_common.storage import put_item, update_item, get_item

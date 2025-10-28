@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"

@@ -6,12 +6,11 @@
 """
 RAGStack-Lambda Deployment Script
 
-One-click deployment automation for RAGStack-Lambda stack.
+Project-based deployment automation for RAGStack-Lambda stack.
 
 Usage:
-    python publish.py --env dev
-    python publish.py --env prod --admin-email admin@example.com
-    python publish.py --env dev --skip-ui --skip-layers
+    python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
+    python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
 """
 
 import argparse
@@ -72,114 +71,431 @@ def validate_email(email):
     return re.match(pattern, email) is not None
 
 
-def prompt_for_email(default=None):
-    """Prompt user for admin email with validation."""
-    while True:
-        if default:
-            prompt_msg = f"Enter admin email address [{default}]: "
-        else:
-            prompt_msg = "Enter admin email address: "
+def validate_project_name(project_name):
+    """
+    Validate project name follows naming rules.
 
-        email = input(prompt_msg).strip()
+    Rules:
+    - Lowercase alphanumeric and hyphens only
+    - Must be 2-32 characters long
+    - Must start with a letter
 
-        if not email and default:
-            email = default
+    Args:
+        project_name: String to validate
 
-        if not email:
-            log_error("Email address is required")
-            continue
+    Returns:
+        bool: True if valid
 
-        if validate_email(email):
-            return email
-        else:
-            log_error("Invalid email format. Please enter a valid email address (e.g., admin@example.com)")
+    Raises:
+        ValueError: If project name is invalid with descriptive message
+    """
+    if not project_name:
+        raise ValueError("Project name cannot be empty")
+
+    if len(project_name) < 2:
+        raise ValueError("Project name must be at least 2 characters long")
+
+    if len(project_name) > 32:
+        raise ValueError("Project name must be at most 32 characters long")
+
+    if not project_name[0].isalpha():
+        raise ValueError("Project name must start with a letter")
+
+    if not project_name[0].islower():
+        raise ValueError("Project name must start with a lowercase letter")
+
+    # Check all characters are lowercase alphanumeric or hyphen
+    for char in project_name:
+        if not (char.islower() or char.isdigit() or char == '-'):
+            raise ValueError(
+                f"Project name contains invalid character '{char}'. "
+                "Only lowercase letters, numbers, and hyphens are allowed"
+            )
+
+    return True
 
 
-def get_samconfig_value(env, key):
-    """Read value from samconfig.toml for given environment."""
+def validate_region(region):
+    """
+    Validate AWS region using regex pattern for future-proofing.
+
+    AWS region format: 2-letter country code, direction, number
+    Examples: us-east-1, eu-west-2, ap-southeast-3
+
+    Args:
+        region: AWS region string (e.g., 'us-east-1')
+
+    Returns:
+        bool: True if valid
+
+    Raises:
+        ValueError: If region format is invalid
+    """
+    if not region:
+        raise ValueError("Region cannot be empty")
+
+    # AWS region pattern: 2-letter country code, direction, number
+    pattern = r'^[a-z]{2}-[a-z]+-\d+$'
+
+    if not re.match(pattern, region):
+        raise ValueError(
+            f"Invalid AWS region format: {region}. "
+            "Expected format like 'us-east-1', 'eu-west-2'"
+        )
+
+    # Optional: Check against known regions (as of 2025)
+    # Log warning if region is not in known list (may be a new region)
+    known_regions = [
+        'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+        'af-south-1',
+        'ap-east-1', 'ap-south-1', 'ap-south-2',
+        'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
+        'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4',
+        'ca-central-1', 'ca-west-1',
+        'eu-central-1', 'eu-central-2',
+        'eu-west-1', 'eu-west-2', 'eu-west-3',
+        'eu-south-1', 'eu-south-2',
+        'eu-north-1',
+        'il-central-1',
+        'me-south-1', 'me-central-1',
+        'sa-east-1',
+    ]
+
+    if region not in known_regions:
+        log_warning(f"Region '{region}' not in known list (may be new region)")
+
+    return True
+
+
+def check_python_version():
+    """
+    Check if Python 3.12+ is available.
+
+    Returns:
+        bool: True if Python version is 3.12 or higher
+
+    Raises:
+        SystemExit: If Python version is insufficient
+    """
+    version_info = sys.version_info
+
+    if version_info[0] < 3:
+        log_error("Python 3.12+ is required")
+        log_info("Current version: Python {}.{}.{}".format(
+            version_info[0], version_info[1], version_info[2]
+        ))
+        sys.exit(1)
+
+    if version_info[0] == 3 and version_info[1] < 12:
+        log_error("Python 3.12+ is required")
+        log_info("Current version: Python {}.{}.{}".format(
+            version_info[0], version_info[1], version_info[2]
+        ))
+        log_info("Please upgrade Python and try again")
+        sys.exit(1)
+
+    log_success("Found Python {}.{}.{}".format(
+        version_info[0], version_info[1], version_info[2]
+    ))
+    return True
+
+
+def check_nodejs_version(skip_ui=False):
+    """
+    Check if Node.js 18+ and npm are available.
+
+    Args:
+        skip_ui: If True, skip Node.js check
+
+    Returns:
+        bool: True if Node.js and npm are available and version is sufficient
+
+    Raises:
+        SystemExit: If Node.js or npm not found or version insufficient
+    """
+    if skip_ui:
+        log_info("Skipping Node.js check (--skip-ui flag detected)")
+        return True
+
+    log_info("Checking Node.js dependencies for UI build...")
+
+    # Check Node.js exists
+    node_result = subprocess.run(['node', '--version'],
+                                capture_output=True,
+                                text=True)
+
+    if node_result.returncode != 0:
+        log_error("Node.js not found but is required for UI build")
+        log_info("Install Node.js 18+ from: https://nodejs.org/")
+        log_info("Or use --skip-ui flag to skip UI build")
+        sys.exit(1)
+
+    # Check npm exists
+    npm_result = subprocess.run(['npm', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if npm_result.returncode != 0:
+        log_error("npm not found but is required for UI build")
+        log_info("npm is typically installed with Node.js")
+        sys.exit(1)
+
+    # Parse Node.js version
+    node_version = node_result.stdout.strip().lstrip('v')
+    npm_version = npm_result.stdout.strip()
+
     try:
-        import tomli
-    except ImportError:
-        # Fallback to manual parsing if tomli not available
-        return None
+        node_major = int(node_version.split('.')[0])
 
-    samconfig_path = Path("samconfig.toml")
-    if not samconfig_path.exists():
-        return None
+        if node_major < 18:
+            log_error(f"Node.js {node_version} found, but 18+ is required for UI build")
+            log_info("Please upgrade Node.js to version 18 or later")
+            log_info("Or use --skip-ui flag to skip UI build")
+            sys.exit(1)
 
-    with open(samconfig_path, "rb") as f:
-        config = tomli.load(f)
+        log_success(f"Found Node.js {node_version} and npm {npm_version}")
+        return True
 
-    section = config.get(env, {})
-    deploy_params = section.get("deploy", {}).get("parameters", {})
-
-    # Parse parameter_overrides array
-    param_overrides = deploy_params.get("parameter_overrides", [])
-    for param in param_overrides:
-        if param.startswith(f"{key}="):
-            return param.split("=", 1)[1]
-
-    return None
+    except (ValueError, IndexError):
+        log_error(f"Could not parse Node.js version: {node_version}")
+        sys.exit(1)
 
 
-def build_lambda_layers():
-    """Build Lambda layers for shared dependencies."""
-    log_info("Building Lambda layers...")
+def check_aws_cli():
+    """
+    Check if AWS CLI is installed and configured.
 
-    layer_dir = Path("layers/python")
-    layer_dir.mkdir(parents=True, exist_ok=True)
+    Returns:
+        bool: True if AWS CLI is configured with valid credentials
 
-    # Install shared dependencies to layer
-    requirements_file = Path("lib/ragstack_common/requirements.txt")
+    Raises:
+        SystemExit: If AWS CLI not found or not configured
+    """
+    log_info("Checking AWS CLI configuration...")
 
-    if requirements_file.exists():
-        log_info("Installing shared dependencies to layer...")
-        run_command([
-            "pip", "install",
-            "-r", str(requirements_file),
-            "-t", str(layer_dir),
-            "--upgrade"
-        ])
-        log_success("Lambda layer built successfully")
-    else:
-        log_warning(f"Requirements file not found: {requirements_file}")
+    # Check AWS CLI exists
+    aws_result = subprocess.run(['aws', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if aws_result.returncode != 0:
+        log_error("AWS CLI not found")
+        log_info("Install AWS CLI: https://aws.amazon.com/cli/")
+        sys.exit(1)
+
+    # Check credentials are configured
+    creds_result = subprocess.run(['aws', 'sts', 'get-caller-identity'],
+                                 capture_output=True,
+                                 text=True)
+
+    if creds_result.returncode != 0:
+        log_error("AWS credentials not configured")
+        log_info("Run: aws configure")
+        sys.exit(1)
+
+    log_success("AWS CLI configured")
+    return True
 
 
-def sam_build(skip_layers=False):
+def check_sam_cli():
+    """
+    Check if AWS SAM CLI is installed.
+
+    Returns:
+        bool: True if SAM CLI is installed
+
+    Raises:
+        SystemExit: If SAM CLI not found
+    """
+    log_info("Checking SAM CLI...")
+
+    sam_result = subprocess.run(['sam', '--version'],
+                               capture_output=True,
+                               text=True)
+
+    if sam_result.returncode != 0:
+        log_error("SAM CLI not found")
+        log_info("Install SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html")
+        sys.exit(1)
+
+    # Parse version from output (format: "SAM CLI, version X.Y.Z")
+    version_output = sam_result.stdout.strip()
+    log_success(f"Found {version_output}")
+    return True
+
+
+def sam_build():
     """Build SAM application."""
     log_info("Building SAM application...")
-
-    if not skip_layers:
-        build_lambda_layers()
-
     run_command(["sam", "build", "--parallel", "--cached"])
     log_success("SAM build complete")
 
 
-def sam_deploy(env, admin_email, region="us-east-1"):
-    """Deploy SAM application."""
-    log_info(f"Deploying to {env} environment in {region}...")
+def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_source_key=None, skip_ui=False):
+    """
+    Deploy SAM application with project-based naming.
 
-    # Determine stack name and project name from environment
-    if env == "prod":
-        stack_name = "RAGStack-prod"
-        project_name = "RAGStack-prod"
-    else:
-        stack_name = "RAGStack-dev"
-        project_name = "RAGStack-dev"
+    Args:
+        project_name: Project name for resource naming
+        admin_email: Admin email for Cognito and alerts
+        region: AWS region
+        ui_source_bucket: S3 bucket containing UI source zip (if not skip_ui)
+        ui_source_key: S3 key for UI source zip (if not skip_ui)
+        skip_ui: Whether to skip UI deployment
+
+    Returns:
+        str: CloudFormation stack name
+    """
+    log_info(f"Deploying project '{project_name}' to {region}...")
+
+    # Stack name follows pattern: RAGStack-{project-name}
+    stack_name = f"RAGStack-{project_name}"
+
+    # Base parameter overrides
+    param_overrides = [
+        f"ProjectName={project_name}",
+        f"AdminEmail={admin_email}",
+    ]
+
+    # Add UI parameters if building UI
+    if not skip_ui and ui_source_bucket and ui_source_key:
+        log_info("UI will be deployed via CodeBuild during stack creation")
+        param_overrides.append(f"UISourceBucket={ui_source_bucket}")
+        param_overrides.append(f"UISourceKey={ui_source_key}")
 
     cmd = [
         "sam", "deploy",
-        "--config-env", env,
+        "--stack-name", stack_name,
         "--region", region,
+        "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
+        "--resolve-s3",
+        "--no-confirm-changeset",
         "--parameter-overrides",
-        f"AdminEmail={admin_email}",
-        f"ProjectName={project_name}"
-    ]
+    ] + param_overrides
 
     run_command(cmd)
-    log_success(f"Deployment to {env} complete")
+    log_success(f"Deployment of project '{project_name}' complete")
     return stack_name
+
+
+def package_ui_source(region, project_name):
+    """
+    Package UI source code as zip and upload to S3.
+
+    Creates a zip file of the UI source (excluding node_modules and build directories),
+    uploads it to a project-specific S3 bucket, and returns the bucket/key for CloudFormation.
+
+    Args:
+        region: AWS region for bucket operations
+        project_name: Project name for bucket naming
+
+    Returns:
+        tuple: (bucket_name, key) of uploaded UI source zip
+
+    Raises:
+        FileNotFoundError: If UI source directory doesn't exist
+        IOError: If packaging or upload fails
+    """
+    import zipfile
+    import tempfile
+    import time
+    from pathlib import Path
+
+    log_info("Packaging UI source code...")
+
+    ui_dir = Path('src/ui')
+    if not ui_dir.exists():
+        raise FileNotFoundError(f"UI directory not found: {ui_dir}")
+
+    # Create temporary zip file
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+        zip_path = tmp_file.name
+
+    try:
+        # Create zip file, excluding node_modules and build
+        log_info("Creating UI source zip file...")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in ui_dir.rglob('*'):
+                if file_path.is_file():
+                    # Skip node_modules and build directories
+                    if 'node_modules' in file_path.parts or 'build' in file_path.parts:
+                        continue
+
+                    # Store relative to src/ (include 'ui' folder in zip)
+                    arcname = file_path.relative_to(ui_dir.parent)
+                    zipf.write(file_path, arcname)
+
+        log_success(f"UI source packaged: {zip_path}")
+
+        # Upload to S3 - use project-specific bucket for UI source
+        # SAM will handle its own deployment artifacts via --resolve-s3
+        s3_client = boto3.client('s3', region_name=region)
+        sts_client = boto3.client('sts', region_name=region)
+
+        # Get account ID for bucket naming
+        try:
+            account_id = sts_client.get_caller_identity()['Account']
+        except ClientError as e:
+            raise IOError(f"Failed to get AWS account ID: {e}") from e
+
+        # Use project-specific bucket (not SAM managed bucket)
+        # This bucket is specifically for UI source code that CodeBuild will access
+        bucket_name = f'ragstack-{project_name}-ui-source-{account_id}'
+
+        # Create bucket if it doesn't exist
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+            log_info(f"Using existing UI source bucket: {bucket_name}")
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                log_info(f"Creating UI source bucket: {bucket_name}")
+                try:
+                    if region == 'us-east-1':
+                        s3_client.create_bucket(Bucket=bucket_name)
+                    else:
+                        s3_client.create_bucket(
+                            Bucket=bucket_name,
+                            CreateBucketConfiguration={'LocationConstraint': region}
+                        )
+
+                    # Enable versioning for source tracking
+                    s3_client.put_bucket_versioning(
+                        Bucket=bucket_name,
+                        VersioningConfiguration={'Status': 'Enabled'}
+                    )
+                except ClientError as create_error:
+                    raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
+            else:
+                raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
+
+        # Upload with timestamp-based key
+        timestamp = int(time.time())
+        key = f'ui-source-{timestamp}.zip'
+
+        log_info(f"Uploading to s3://{bucket_name}/{key}...")
+        try:
+            s3_client.upload_file(zip_path, bucket_name, key)
+            log_success("UI source uploaded to S3")
+        except ClientError as e:
+            raise IOError(f"Failed to upload UI source to S3: {e}") from e
+
+        # Clean up temporary file
+        os.remove(zip_path)
+
+        return (bucket_name, key)
+
+    except (FileNotFoundError, IOError):
+        # Re-raise expected exceptions
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise
+    except Exception as e:
+        # Clean up temporary file on unexpected error
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise IOError(f"Unexpected error packaging UI source: {e}") from e
 
 
 def get_stack_outputs(stack_name, region="us-east-1"):
@@ -284,10 +600,10 @@ def invalidate_cloudfront(distribution_id):
     log_success("CloudFront cache invalidation initiated")
 
 
-def print_outputs(outputs, env, region):
+def print_outputs(outputs, project_name, region):
     """Print stack outputs in a nice format."""
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-    print(f"{Colors.HEADER}Deployment Complete! ({env} environment){Colors.ENDC}")
+    print(f"{Colors.HEADER}Deployment Complete! (Project: {project_name}){Colors.ENDC}")
     print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}Stack Outputs:{Colors.ENDC}\n")
@@ -321,33 +637,44 @@ def print_outputs(outputs, env, region):
 
 
 def main():
+    """
+    Main execution function.
+
+    Integration Tests Verified:
+    - Missing required arguments (--project-name, --admin-email, --region) fail appropriately
+    - Invalid project name validation (uppercase, special chars, too short/long)
+    - Invalid email validation
+    - Invalid region validation (format check with regex)
+    - --skip-ui flag works correctly
+    - Prerequisite checks execute in correct order
+    - All inputs validated before AWS operations begin
+    """
     parser = argparse.ArgumentParser(
-        description="Deploy RAGStack-Lambda to AWS",
+        description="Deploy RAGStack-Lambda with project-based naming",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python publish.py --env dev
-  python publish.py --env prod --admin-email admin@example.com
-  python publish.py --env dev --skip-ui
+  python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
+  python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
         """
     )
 
     parser.add_argument(
-        "--env",
+        "--project-name",
         required=True,
-        choices=["dev", "prod"],
-        help="Deployment environment"
+        help="Project name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)"
     )
 
     parser.add_argument(
         "--admin-email",
-        help="Admin user email address (will prompt if not provided)"
+        required=True,
+        help="Admin email for Cognito user and CloudWatch alerts"
     )
 
     parser.add_argument(
         "--region",
-        default="us-east-1",
-        help="AWS region (default: us-east-1)"
+        required=True,
+        help="AWS region (e.g., us-east-1, us-west-2)"
     )
 
     parser.add_argument(
@@ -356,46 +683,61 @@ Examples:
         help="Skip UI build and deployment"
     )
 
-    parser.add_argument(
-        "--skip-build",
-        action="store_true",
-        help="Skip SAM build (use existing build)"
-    )
-
-    parser.add_argument(
-        "--skip-layers",
-        action="store_true",
-        help="Skip Lambda layer build"
-    )
-
     args = parser.parse_args()
 
     try:
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-        print(f"{Colors.HEADER}RAGStack-Lambda Deployment ({args.env}){Colors.ENDC}")
+        print(f"{Colors.HEADER}RAGStack-Lambda Deployment{Colors.ENDC}")
         print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
-        # Get admin email (prompt if not provided)
-        if args.admin_email:
-            admin_email = args.admin_email
-            if not validate_email(admin_email):
-                log_error("Invalid email format provided")
+        # Validate inputs
+        log_info("Validating inputs...")
+        try:
+            validate_project_name(args.project_name)
+            validate_region(args.region)
+            if not validate_email(args.admin_email):
+                log_error(f"Invalid email format: {args.admin_email}")
                 sys.exit(1)
-        else:
-            # Try to get from samconfig.toml
-            default_email = get_samconfig_value(args.env, "AdminEmail")
-            admin_email = prompt_for_email(default=default_email)
+        except ValueError as e:
+            log_error(str(e))
+            sys.exit(1)
 
-        log_info(f"Environment: {args.env}")
-        log_info(f"Admin Email: {admin_email}")
+        log_success("All inputs validated")
+
+        # Check prerequisites
+        log_info("Checking prerequisites...")
+        check_python_version()
+        check_nodejs_version(skip_ui=args.skip_ui)
+        check_aws_cli()
+        check_sam_cli()
+        log_success("All prerequisites met")
+
+        log_info(f"Project Name: {args.project_name}")
+        log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
+        # Package UI source (unless --skip-ui)
+        ui_source_bucket = None
+        ui_source_key = None
+        if not args.skip_ui:
+            try:
+                ui_source_bucket, ui_source_key = package_ui_source(args.region, args.project_name)
+            except (FileNotFoundError, IOError) as e:
+                log_error(f"Failed to package UI: {e}")
+                sys.exit(1)
+
         # SAM build
-        if not args.skip_build:
-            sam_build(skip_layers=args.skip_layers)
+        sam_build()
 
         # SAM deploy
-        stack_name = sam_deploy(args.env, admin_email, args.region)
+        stack_name = sam_deploy(
+            args.project_name,
+            args.admin_email,
+            args.region,
+            ui_source_bucket=ui_source_bucket,
+            ui_source_key=ui_source_key,
+            skip_ui=args.skip_ui
+        )
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
@@ -413,7 +755,7 @@ Examples:
                     invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
-        print_outputs(outputs, args.env, args.region)
+        print_outputs(outputs, args.project_name, args.region)
 
         log_success("Deployment complete!")
 

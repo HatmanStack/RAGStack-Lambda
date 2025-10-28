@@ -28,7 +28,7 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 
 ```bash
 # 1. Deploy the stack
-./publish.sh --env dev --admin-email your@email.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email your@email.com
 
 # 2. Sign in to the WebUI (check email for password)
 # URL in deployment outputs
@@ -55,7 +55,7 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 
 Before testing, ensure you have:
 
-- ✅ Deployed stack (run `./publish.sh`)
+- ✅ Deployed stack (run `python publish.py`)
 - ✅ Sample documents in `tests/sample-documents/`
 - ✅ AWS CLI configured with valid credentials
 - ✅ Access to CloudWatch logs
@@ -92,7 +92,7 @@ We provide test documents in `tests/sample-documents/`:
 
 # 3. Check output
 DOCUMENT_ID="<your-document-id>"
-STACK_NAME="RAGStack-prod"
+STACK_NAME="RAGStack-<project-name>"
 
 OUTPUT_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name $STACK_NAME \
@@ -212,7 +212,7 @@ cd tests/integration
 pip install pytest boto3
 
 # Set environment variables
-export STACK_NAME=RAGStack-prod
+export STACK_NAME=RAGStack-<project-name>
 export INPUT_BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`InputBucketName`].OutputValue' --output text)
 export TRACKING_TABLE=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`TrackingTableName`].OutputValue' --output text)
 
@@ -259,7 +259,7 @@ done
 
 ```bash
 # View ProcessDocument logs
-aws logs tail /aws/lambda/RAGStack-prod-ProcessDocument --follow
+aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow
 
 # View Step Functions executions
 aws stepfunctions list-executions \
@@ -272,7 +272,7 @@ aws stepfunctions list-executions \
 ```bash
 # Query metering data
 METERING_TABLE=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-prod \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`MeteringTableName`].OutputValue' \
   --output text)
 
@@ -293,7 +293,7 @@ aws stepfunctions list-executions \
 
 # Check Lambda errors
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-prod-ProcessDocument \
+  --log-group-name /aws/lambda/RAGStack-<project-name>-ProcessDocument \
   --filter-pattern "ERROR"
 ```
 
@@ -302,7 +302,7 @@ aws logs filter-log-events \
 ```bash
 # Check if embeddings were generated
 VECTOR_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-prod \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`VectorBucketName`].OutputValue' \
   --output text)
 
@@ -320,11 +320,11 @@ aws cloudfront get-distribution \
   --id <DISTRIBUTION_ID>
 
 # Invalidate cache
-./scripts/invalidate_cloudfront.sh RAGStack-prod
+./scripts/invalidate_cloudfront.sh RAGStack-<project-name>
 
 # Check S3 UI bucket
 UI_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-prod \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`UIBucketName`].OutputValue' \
   --output text)
 
@@ -360,9 +360,9 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit/
       - name: Deploy to test environment
-        run: ./publish.sh --admin-email test@example.com --project-name RAGStack-test
+        run: python publish.py --project-name test-project --admin-email test@example.com --region us-east-1
       - name: Run integration tests
-        run: pytest tests/integration/
+        run: pytest tests/integration/ --stack-name RAGStack-test-project
 ```
 
 ## Test Coverage Goals
