@@ -657,6 +657,52 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
+  ##########################################################################
+  # Configuration Resolver Lambda
+  ##########################################################################
+
+  ConfigurationResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'RAGStack-${ProjectName}-ConfigurationResolver'
+      CodeUri: src/lambda/configuration_resolver/
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Description: GraphQL resolver for configuration management
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          TRACKING_TABLE: !Ref TrackingTable
+          STATE_MACHINE_ARN: !Ref ProcessingStateMachine
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+              Resource: !GetAtt ConfigurationTable.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource:
+                - !GetAtt TrackingTable.Arn
+                - !Sub '${TrackingTable.Arn}/index/StatusIndex'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref ProcessingStateMachine
+
   # =========================================================================
   # Step Functions State Machine
   # =========================================================================
@@ -1117,6 +1163,7 @@ Resources:
                 Resource:
                   - !GetAtt AppSyncResolverFunction.Arn
                   - !GetAtt QueryKBFunction.Arn
+                  - !GetAtt ConfigurationResolverFunction.Arn
 
   # Data source for KB queries
   KBQueryDataSource:
@@ -1128,6 +1175,17 @@ Resources:
       ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
       LambdaConfig:
         LambdaFunctionArn: !GetAtt QueryKBFunction.Arn
+
+  # Data source for Configuration Resolver
+  ConfigurationResolverDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: ConfigurationResolverDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt ConfigurationResolverFunction.Arn
 
   # Resolvers
   GetDocumentResolver:
@@ -1174,6 +1232,34 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
+
+  # Configuration Resolvers
+  GetConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getConfiguration
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  UpdateConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: updateConfiguration
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  GetDocumentCountResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getDocumentCount
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
   # =========================================================================
   # Dead Letter Queue for Error Handling
