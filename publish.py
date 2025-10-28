@@ -477,7 +477,7 @@ def package_ui_source(region, project_name):
         log_info(f"Uploading to s3://{bucket_name}/{key}...")
         try:
             s3_client.upload_file(zip_path, bucket_name, key)
-            log_success(f"UI source uploaded to S3")
+            log_success("UI source uploaded to S3")
         except ClientError as e:
             raise IOError(f"Failed to upload UI source to S3: {e}") from e
 
