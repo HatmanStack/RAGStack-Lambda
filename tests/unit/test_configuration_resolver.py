@@ -6,20 +6,10 @@ import os
 from unittest.mock import MagicMock, patch
 from botocore.exceptions import ClientError
 
-# Import the handler
+# Import the handler module
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
-from index import (
-    lambda_handler,
-    handle_get_configuration,
-    handle_update_configuration,
-    handle_get_document_count,
-    handle_re_embed_all_documents,
-    handle_get_re_embed_job_status,
-    query_completed_documents,
-    get_configuration_item,
-    remove_partition_key
-)
+import index
 
 
 # Fixtures
@@ -130,7 +120,7 @@ def test_lambda_handler_get_configuration(mock_dynamodb, sample_schema, sample_d
         'arguments': {}
     }
 
-    result = lambda_handler(event, {})
+    result = index.lambda_handler(event, {})
 
     assert 'Schema' in result
     assert 'Default' in result
@@ -148,7 +138,7 @@ def test_lambda_handler_update_configuration(mock_dynamodb):
         }
     }
 
-    result = lambda_handler(event, {})
+    result = index.lambda_handler(event, {})
 
     assert result is True
     mock_table.put_item.assert_called_once()
@@ -162,7 +152,7 @@ def test_lambda_handler_unsupported_operation(mock_dynamodb):
     }
 
     with pytest.raises(ValueError, match="Unsupported operation"):
-        lambda_handler(event, {})
+        index.lambda_handler(event, {})
 
 
 # Test: handle_get_configuration
@@ -180,7 +170,7 @@ def test_handle_get_configuration_success(mock_get_item, sample_schema, sample_d
 
     mock_get_item.side_effect = get_item_side_effect
 
-    result = handle_get_configuration()
+    result = index.handle_get_configuration()
 
     assert 'Schema' in result
     assert 'Default' in result
@@ -209,7 +199,7 @@ def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sam
 
     mock_get_item.side_effect = get_item_side_effect
 
-    result = handle_get_configuration()
+    result = index.handle_get_configuration()
 
     custom_config = json.loads(result['Custom'])
     assert custom_config == {}
@@ -222,7 +212,7 @@ def test_handle_update_configuration_with_json_string(mock_table):
     """Test updating configuration with JSON string."""
     custom_config = json.dumps({'ocr_backend': 'bedrock', 'text_embed_model_id': 'cohere.embed-english-v3'})
 
-    result = handle_update_configuration(custom_config)
+    result = index.handle_update_configuration(custom_config)
 
     assert result is True
     mock_table.put_item.assert_called_once()
@@ -236,7 +226,7 @@ def test_handle_update_configuration_with_dict(mock_table):
     """Test updating configuration with dictionary."""
     custom_config = {'ocr_backend': 'bedrock'}
 
-    result = handle_update_configuration(custom_config)
+    result = index.handle_update_configuration(custom_config)
 
     assert result is True
     mock_table.put_item.assert_called_once()
@@ -245,7 +235,7 @@ def test_handle_update_configuration_with_dict(mock_table):
 def test_handle_update_configuration_invalid_json():
     """Test updating configuration with invalid JSON."""
     with pytest.raises(ValueError, match="Invalid configuration format"):
-        handle_update_configuration("invalid json {")
+        index.handle_update_configuration("invalid json {")
 
 
 # Test: handle_get_document_count
@@ -255,7 +245,7 @@ def test_handle_get_document_count_success(mock_table):
     """Test getting document count."""
     mock_table.scan.return_value = {'Count': 42}
 
-    result = handle_get_document_count()
+    result = index.handle_get_document_count()
 
     assert result == 42
     mock_table.scan.assert_called_once()
@@ -266,7 +256,7 @@ def test_handle_get_document_count_zero(mock_table):
     """Test getting document count when no documents exist."""
     mock_table.scan.return_value = {'Count': 0}
 
-    result = handle_get_document_count()
+    result = index.handle_get_document_count()
 
     assert result == 0
 
@@ -279,7 +269,7 @@ def test_handle_get_document_count_dynamodb_error(mock_table):
         'Scan'
     )
 
-    result = handle_get_document_count()
+    result = index.handle_get_document_count()
 
     # Should return 0 instead of raising
     assert result == 0
@@ -291,7 +281,7 @@ def test_remove_partition_key():
     """Test partition key removal."""
     item = {'Configuration': 'Default', 'key1': 'value1', 'key2': 'value2'}
 
-    result = remove_partition_key(item)
+    result = index.remove_partition_key(item)
 
     assert 'Configuration' not in result
     assert result['key1'] == 'value1'
@@ -300,7 +290,7 @@ def test_remove_partition_key():
 
 def test_remove_partition_key_none():
     """Test partition key removal with None."""
-    result = remove_partition_key(None)
+    result = index.remove_partition_key(None)
     assert result == {}
 
 
@@ -316,7 +306,7 @@ def test_query_completed_documents_using_gsi(mock_table):
         ]
     }
 
-    result = query_completed_documents()
+    result = index.query_completed_documents()
 
     assert len(result) == 2
     assert result[0]['document_id'] == 'doc1'
@@ -338,7 +328,7 @@ def test_query_completed_documents_with_pagination(mock_table):
         }
     ]
 
-    result = query_completed_documents()
+    result = index.query_completed_documents()
 
     assert len(result) == 2
     assert mock_table.query.call_count == 2
@@ -358,7 +348,7 @@ def test_query_completed_documents_fallback_to_scan(mock_table):
         ]
     }
 
-    result = query_completed_documents()
+    result = index.query_completed_documents()
 
     assert len(result) == 1
     assert result[0]['document_id'] == 'doc1'
@@ -380,7 +370,7 @@ def test_handle_re_embed_all_documents_success(mock_config_table, mock_query_doc
     mock_sfn_client = MagicMock()
     mock_boto_client.return_value = mock_sfn_client
 
-    result = handle_re_embed_all_documents()
+    result = index.handle_re_embed_all_documents()
 
     assert result['status'] == 'IN_PROGRESS'
     assert result['totalDocuments'] == 2
@@ -401,7 +391,7 @@ def test_handle_re_embed_all_documents_no_documents(mock_config_table, mock_quer
     """Test re-embedding when no documents exist."""
     mock_query_docs.return_value = []
 
-    result = handle_re_embed_all_documents()
+    result = index.handle_re_embed_all_documents()
 
     assert result['status'] == 'COMPLETED'
     assert result['totalDocuments'] == 0
@@ -427,7 +417,7 @@ def test_handle_re_embed_all_documents_enforces_limit(mock_config_table, mock_qu
     mock_sfn_client = MagicMock()
     mock_boto_client.return_value = mock_sfn_client
 
-    result = handle_re_embed_all_documents()
+    result = index.handle_re_embed_all_documents()
 
     # Should limit to 500
     assert result['totalDocuments'] == 500
@@ -456,7 +446,7 @@ def test_handle_get_re_embed_job_status_success(mock_table):
         }}
     ]
 
-    result = handle_get_re_embed_job_status()
+    result = index.handle_get_re_embed_job_status()
 
     assert result['jobId'] == job_id
     assert result['status'] == 'IN_PROGRESS'
@@ -471,7 +461,7 @@ def test_handle_get_re_embed_job_status_no_job(mock_table):
     """Test getting re-embed job status when no job exists."""
     mock_table.get_item.return_value = {}
 
-    result = handle_get_re_embed_job_status()
+    result = index.handle_get_re_embed_job_status()
 
     assert result is None
 
@@ -495,7 +485,7 @@ def test_handle_get_re_embed_job_status_completed(mock_table):
         }}
     ]
 
-    result = handle_get_re_embed_job_status()
+    result = index.handle_get_re_embed_job_status()
 
     assert result['status'] == 'COMPLETED'
     assert result['totalDocuments'] == result['processedDocuments']

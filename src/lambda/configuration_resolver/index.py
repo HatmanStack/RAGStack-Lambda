@@ -100,8 +100,8 @@ def lambda_handler(event, context):
         else:
             raise ValueError(f"Unsupported operation: {operation}")
 
-    except Exception as e:
-        logger.error(f"Error processing {operation}: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception(f"Error processing {operation}")
         raise
 
 
@@ -144,8 +144,8 @@ def handle_get_configuration():
         logger.info("Returning configuration to client")
         return result
 
-    except Exception as e:
-        logger.error(f"Error in getConfiguration: {str(e)}")
+    except Exception:
+        logger.exception("Error in getConfiguration")
         raise
 
 
@@ -187,15 +187,15 @@ def handle_update_configuration(custom_config):
         return True
 
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in customConfig: {str(e)}")
-        raise ValueError(f"Invalid configuration format: {str(e)}")
+        logger.exception("Invalid JSON in customConfig")
+        raise ValueError(f"Invalid configuration format: {str(e)}") from e
 
-    except ClientError as e:
-        logger.error(f"DynamoDB error: {str(e)}")
+    except ClientError:
+        logger.exception("DynamoDB error")
         raise
 
-    except Exception as e:
-        logger.error(f"Error in updateConfiguration: {str(e)}")
+    except Exception:
+        logger.exception("Error in updateConfiguration")
         raise
 
 
@@ -238,7 +238,7 @@ def handle_get_document_count():
 
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-        logger.error(f"DynamoDB error counting documents ({error_code}): {str(e)}")
+        logger.exception(f"DynamoDB error counting documents ({error_code})")
 
         # Only return 0 for non-critical errors (ResourceNotFoundException, etc.)
         # Raise for critical errors (AccessDeniedException, etc.)
@@ -265,7 +265,7 @@ def get_configuration_item(config_type):
         return response.get('Item')
 
     except ClientError as e:
-        logger.error(f"Error retrieving {config_type}: {str(e)}")
+        logger.exception(f"Error retrieving {config_type}")
         raise
 
 
@@ -347,8 +347,8 @@ def handle_re_embed_all_documents():
         sfn_client = boto3.client('stepfunctions')
         state_machine_arn = os.environ['STATE_MACHINE_ARN']
 
-        # Limit to 500 documents per job to prevent Lambda timeout
-        MAX_DOCUMENTS_PER_JOB = 500
+        # Limit to N documents per job to prevent Lambda timeout (configurable via env var)
+        MAX_DOCUMENTS_PER_JOB = int(os.environ.get('REEMBED_MAX_DOCS', '500'))
         if total_documents > MAX_DOCUMENTS_PER_JOB:
             logger.warning(f"Document count ({total_documents}) exceeds limit ({MAX_DOCUMENTS_PER_JOB}). Processing first {MAX_DOCUMENTS_PER_JOB} only.")
             documents = documents[:MAX_DOCUMENTS_PER_JOB]
@@ -359,16 +359,25 @@ def handle_re_embed_all_documents():
             raw_name = f"reembed-{doc['document_id']}-{job_id[:8]}"
             execution_name = re.sub(r'[^a-zA-Z0-9_-]', '-', raw_name)[:80]
 
-            sfn_client.start_execution(
-                stateMachineArn=state_machine_arn,
-                name=execution_name,
-                input=json.dumps({
-                    'documentId': doc['document_id'],
-                    'bucket': doc['input_bucket'],
-                    'key': doc['input_key'],
-                    'reEmbedJobId': job_id  # Pass job ID for tracking
-                })
-            )
+            try:
+                sfn_client.start_execution(
+                    stateMachineArn=state_machine_arn,
+                    name=execution_name,
+                    input=json.dumps({
+                        'documentId': doc['document_id'],
+                        'bucket': doc['input_bucket'],
+                        'key': doc['input_key'],
+                        'reEmbedJobId': job_id  # Pass job ID for tracking
+                    })
+                )
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                if error_code == 'ExecutionAlreadyExists':
+                    logger.warning(f"Execution already exists: {execution_name}")
+                    continue
+                logger.exception(f"Failed to start execution for {doc.get('document_id')}")
+                # Continue with remaining documents rather than failing entire job
+                continue
 
         logger.info(f"Started re-embedding job {job_id} for {total_documents} documents")
 
@@ -381,8 +390,8 @@ def handle_re_embed_all_documents():
             'completionTime': None
         }
 
-    except Exception as e:
-        logger.error(f"Error in reEmbedAllDocuments: {str(e)}")
+    except Exception:
+        logger.exception("Error in reEmbedAllDocuments")
         raise
 
 
@@ -481,5 +490,5 @@ def handle_get_re_embed_job_status():
         }
 
     except ClientError as e:
-        logger.error(f"Error getting re-embed job status: {str(e)}")
+        logger.exception("Error getting re-embed job status")
         return None

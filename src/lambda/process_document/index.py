@@ -2,14 +2,13 @@
 Document Processor Lambda
 
 Handles document validation, OCR, text extraction, and image extraction.
+OCR backend and model are read from DynamoDB configuration (ConfigurationManager).
 
 Input event:
 {
     "document_id": "abc123",
     "input_s3_uri": "s3://input-bucket/uploads/doc.pdf",
-    "output_s3_prefix": "s3://output-bucket/processed/abc123/",
-    "ocr_backend": "textract",  # or "bedrock"
-    "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0"
+    "output_s3_prefix": "s3://output-bucket/processed/abc123/"
 }
 
 Output:

@@ -127,7 +127,7 @@ def lambda_handler(event, context):
                 results.append({
                     'content': reference.get('content', {}).get('text', ''),
                     'source': reference.get('location', {}).get('s3Location', {}).get('uri', ''),
-                    'score': reference.get('metadata', {}).get('score', 0.0)
+                    'score': reference.get('score', 0.0)
                 })
 
         logger.info(f"Generated response with {len(results)} source documents")

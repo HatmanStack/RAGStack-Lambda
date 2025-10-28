@@ -87,7 +87,7 @@ class ConfigurationManager:
             return item
 
         except ClientError as e:
-            logger.error(f"Error retrieving {config_type} configuration: {e}")
+            logger.exception(f"Error retrieving {config_type} configuration")
             raise
 
     def get_effective_config(self) -> Dict[str, Any]:
@@ -176,7 +176,7 @@ class ConfigurationManager:
             logger.info("Updated Custom configuration in DynamoDB")
 
         except ClientError as e:
-            logger.error(f"Error updating Custom configuration: {e}")
+            logger.exception("Error updating Custom configuration")
             raise
 
     def get_schema(self) -> Dict[str, Any]:

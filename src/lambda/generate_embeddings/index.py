@@ -102,8 +102,10 @@ def update_re_embed_job_progress(job_id):
             )
             logger.info(f"Re-embedding job {job_id} completed")
 
-    except Exception as e:
-        logger.error(f"Error updating re-embed job progress: {str(e)}")
+    except ClientError as e:
+        logger.warning(f"Error updating re-embed job progress: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Unexpected error updating re-embed job progress")
 
 
 def lambda_handler(event, context):
