@@ -647,10 +647,13 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
