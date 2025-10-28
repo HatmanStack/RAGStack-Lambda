@@ -292,13 +292,13 @@ sam local invoke ProcessDocumentFunction -e tests/events/process_document.json
 sam local start-api
 
 # 4. Deploy to dev environment
-./publish.sh --env dev
+python publish.py --project-name <project-name> --admin-email <email> --region <region>
 
 # 5. Run integration tests
 pytest tests/integration/ --env dev
 
 # 6. Deploy to production
-./publish.sh --env prod
+python publish.py --project-name <project-name> --admin-email <email> --region <region>
 ```
 
 **Environment Configuration:**

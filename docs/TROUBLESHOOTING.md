@@ -54,7 +54,7 @@ Parameter validation failed: Invalid email address
 **Solution:**
 ```bash
 # Use a valid email format
-./publish.sh --env dev --admin-email valid@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email valid@example.com
 ```
 
 #### 3. IAM Permissions Insufficient
@@ -82,7 +82,7 @@ Bucket name already exists
 **Solution:**
 ```bash
 # Change the ProjectName parameter to make bucket names unique
-./publish.sh --env dev --admin-email admin@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
 
 # Bucket names include AWS account ID, so this error is rare
 # If it occurs, modify ProjectName in samconfig.toml
@@ -155,7 +155,7 @@ docker run --rm \
   pip install PyMuPDF==1.23.0 -t python/
 
 # Retry deployment
-./publish.sh --env dev --admin-email admin@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
 ```
 
 ---
@@ -187,12 +187,12 @@ aws stepfunctions list-executions \
 ```bash
 # Verify EventBridge is enabled on input bucket
 aws s3api get-bucket-notification-configuration \
-  --bucket ragstack-input-<account-id>
+  --bucket ragstack-<project-name>-input-<account-id>
 
 # Should show EventBridgeConfiguration: EventBridgeEnabled: true
 
 # If not, redeploy the stack
-./publish.sh --env dev --admin-email admin@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
 ```
 
 #### 2. Manual Trigger
@@ -203,7 +203,7 @@ aws s3api get-bucket-notification-configuration \
 aws stepfunctions start-execution \
   --state-machine-arn <ARN> \
   --input '{
-    "bucket": "ragstack-input-<account-id>",
+    "bucket": "ragstack-<project-name>-input-<account-id>",
     "key": "path/to/document.pdf",
     "document_id": "<document-id>"
   }'
@@ -218,7 +218,7 @@ aws stepfunctions start-execution \
 **Diagnosis:**
 ```bash
 # Find the Step Functions execution
-STACK_NAME="RAGStack-dev"
+STACK_NAME="RAGStack-<project-name>"
 STATE_MACHINE_ARN=$(aws cloudformation describe-stacks \
   --stack-name $STACK_NAME \
   --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
@@ -305,7 +305,7 @@ Globals:
     MemorySize: 4096  # Increase from 2048
 
 # Redeploy
-./publish.sh --env dev --admin-email admin@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
 ```
 
 ### Documents Fail with Error Status
@@ -318,7 +318,7 @@ Globals:
 ```bash
 # Check DynamoDB for error message
 TRACKING_TABLE=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`TrackingTableName`].OutputValue' \
   --output text)
 
@@ -392,7 +392,7 @@ aws bedrock-agent list-ingestion-jobs \
 
 # Check vector bucket for embeddings
 VECTOR_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`VectorBucketName`].OutputValue' \
   --output text)
 
@@ -429,7 +429,7 @@ aws bedrock-agent list-ingestion-jobs \
 ```bash
 # Check if GenerateEmbeddings Lambda ran
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-dev-GenerateEmbeddings \
+  --log-group-name /aws/lambda/RAGStack-<project-name>-GenerateEmbeddings \
   --filter-pattern "ERROR"
 
 # Check vector bucket
@@ -488,7 +488,7 @@ aws bedrock-agent get-knowledge-base --knowledge-base-id <KB_ID>
 ```bash
 # Get CloudFront distribution ID
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
   --output text)
 
@@ -497,7 +497,7 @@ aws cloudfront get-distribution --id $DISTRIBUTION_ID
 
 # Check UI bucket
 UI_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`UIBucketName`].OutputValue' \
   --output text)
 
@@ -542,7 +542,7 @@ aws cloudfront create-invalidation \
 ```bash
 # Get correct URL
 aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`WebUIUrl`].OutputValue' \
   --output text
 
@@ -562,7 +562,7 @@ aws cloudformation describe-stacks \
 **Solution:**
 ```bash
 # Reset password via AWS Console
-1. Go to Cognito → User Pools → RAGStack-dev-UserPool
+1. Go to Cognito → User Pools → RAGStack-<project-name>-UserPool
 2. Find your user
 3. Click "Reset password"
 4. Check email for new temporary password
@@ -574,7 +574,7 @@ aws cloudformation describe-stacks \
 ```bash
 # List Cognito users
 USER_POOL_ID=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
   --output text)
 
@@ -606,7 +606,7 @@ aws cognito-idp admin-create-user \
 **Diagnosis:**
 ```bash
 # Check AppSync logs
-aws logs tail /aws/lambda/RAGStack-dev-AppSyncResolvers --follow
+aws logs tail /aws/lambda/RAGStack-<project-name>-AppSyncResolvers --follow
 ```
 
 **Solution:**
@@ -624,7 +624,7 @@ Access to XMLHttpRequest has been blocked by CORS policy
 **Solution:**
 ```bash
 # Verify S3 CORS configuration
-aws s3api get-bucket-cors --bucket ragstack-input-<account-id>
+aws s3api get-bucket-cors --bucket ragstack-<project-name>-input-<account-id>
 
 # Should allow CloudFront origin
 # Redeploy if CORS missing
@@ -646,7 +646,7 @@ aws s3api get-bucket-cors --bucket ragstack-input-<account-id>
 aws cloudwatch get-metric-statistics \
   --namespace AWS/Lambda \
   --metric-name Duration \
-  --dimensions Name=FunctionName,Value=RAGStack-dev-ProcessDocument \
+  --dimensions Name=FunctionName,Value=RAGStack-<project-name>-ProcessDocument \
   --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
   --period 300 \
@@ -699,7 +699,7 @@ parameter_overrides = ["OcrBackend=bedrock"]
 ```bash
 # Check metering data
 METERING_TABLE=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`MeteringTableName`].OutputValue' \
   --output text)
 
@@ -790,17 +790,17 @@ aws cognito-idp admin-reset-user-password \
 aws logs describe-log-groups --log-group-name-prefix /aws/lambda/RAGStack
 
 # Tail logs in real-time
-aws logs tail /aws/lambda/RAGStack-dev-ProcessDocument --follow
+aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow
 
 # Filter for errors
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-dev-ProcessDocument \
+  --log-group-name /aws/lambda/RAGStack-<project-name>-ProcessDocument \
   --filter-pattern "ERROR" \
   --start-time $(date -u -d '1 hour ago' +%s)000
 
 # Get specific execution logs
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-dev-ProcessDocument \
+  --log-group-name /aws/lambda/RAGStack-<project-name>-ProcessDocument \
   --filter-pattern "<request-id>"
 ```
 
@@ -867,19 +867,19 @@ When opening a GitHub issue, include:
 
 ```bash
 # Get stack outputs
-aws cloudformation describe-stacks --stack-name RAGStack-dev
+aws cloudformation describe-stacks --stack-name RAGStack-<project-name>
 
 # Get stack events (deployment issues)
-aws cloudformation describe-stack-events --stack-name RAGStack-dev --max-items 20
+aws cloudformation describe-stack-events --stack-name RAGStack-<project-name> --max-items 20
 
 # Get Lambda function details
-aws lambda get-function --function-name RAGStack-dev-ProcessDocument
+aws lambda get-function --function-name RAGStack-<project-name>-ProcessDocument
 
 # Get DynamoDB table details
-aws dynamodb describe-table --table-name RAGStack-dev-Tracking
+aws dynamodb describe-table --table-name RAGStack-<project-name>-Tracking
 
 # Get S3 bucket contents
-aws s3 ls s3://ragstack-input-<account-id>/ --recursive
+aws s3 ls s3://ragstack-<project-name>-input-<account-id>/ --recursive
 
 # Get CloudWatch metric data
 aws cloudwatch get-metric-data --cli-input-json file://metrics.json

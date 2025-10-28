@@ -26,7 +26,7 @@ The URL is provided in CloudFormation stack outputs:
 ```bash
 # Get URL from AWS CLI
 aws cloudformation describe-stacks \
-  --stack-name RAGStack-dev \
+  --stack-name RAGStack-<project-name> \
   --query 'Stacks[0].Outputs[?OutputKey==`WebUIUrl`].OutputValue' \
   --output text
 
@@ -36,7 +36,7 @@ aws cloudformation describe-stacks \
 
 Or find it in AWS Console:
 1. Go to **CloudFormation** → **Stacks**
-2. Select your stack (e.g., `RAGStack-dev`)
+2. Select your stack (e.g., `RAGStack-<project-name>`)
 3. Go to **Outputs** tab
 4. Copy the `WebUIUrl` value
 

@@ -20,16 +20,36 @@ This guide covers how to configure and customize RAGStack-Lambda for your use ca
 
 RAGStack-Lambda uses multiple configuration layers:
 
-1. **SAM Configuration** (`samconfig.toml`) - Deployment settings and parameters
+1. **CLI Parameters** - Deployment-time configuration via `publish.py` arguments
 2. **CloudFormation Parameters** (`template.yaml`) - Infrastructure parameters
 3. **Lambda Environment Variables** - Runtime configuration
-4. **UI Configuration** (`src/ui/src/config.js`) - Frontend settings
+4. **UI Configuration** (generated during deployment) - Frontend settings
+
+---
+
+## Deployment Configuration
+
+All deployment configuration is provided via CLI parameters to `publish.py`:
+
+```bash
+python publish.py \
+  --project-name <project-name> \    # Required: Identifies this deployment
+  --admin-email <email> \             # Required: Admin user email
+  --region <region>                   # Required: AWS region
+```
+
+**Project Name Rules:**
+- Lowercase letters, numbers, and hyphens only
+- Must start with a lowercase letter
+- Length: 2-32 characters
+- Valid examples: `customer-docs`, `legal-archive`, `hr-system`
+- Invalid examples: `Customer-Docs`, `_private`, `test docs`, `a`
 
 ---
 
 ## SAM Configuration
 
-The `samconfig.toml` file defines deployment environments and parameters.
+The `samconfig.toml` file contains minimal build settings only. All deployment parameters are provided via CLI:
 
 ### File Structure
 
@@ -38,61 +58,14 @@ version = 0.1
 
 [default]
 [default.global.parameters]
-stack_name = "RAGStack-dev"
+# Build settings only - no deployment configuration
 
-[default.deploy.parameters]
-capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
-confirm_changeset = true
-resolve_s3 = true
-region = "us-east-1"
-parameter_overrides = [
-  "ProjectName=RAGStack-dev",
-  "AdminEmail=admin@example.com",
-  "OcrBackend=textract",
-  "BedrockOcrModelId=anthropic.claude-3-5-haiku-20241022-v1:0"
-]
-
-[prod]
-[prod.deploy.parameters]
-stack_name = "RAGStack-prod"
-region = "us-east-1"
-parameter_overrides = [
-  "ProjectName=RAGStack-prod",
-  "AdminEmail=admin@example.com",
-  "OcrBackend=textract"
-]
+[default.build.parameters]
+cached = true
+parallel = true
 ```
 
-### Key Settings
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `stack_name` | CloudFormation stack name | `RAGStack-dev` |
-| `region` | AWS region | `us-east-1` |
-| `capabilities` | IAM permissions needed | `CAPABILITY_IAM` |
-| `confirm_changeset` | Prompt before deploy | `true` |
-| `resolve_s3` | Auto-create deployment bucket | `true` |
-
-### Adding a New Environment
-
-To add a staging environment:
-
-```toml
-[staging]
-[staging.deploy.parameters]
-stack_name = "RAGStack-staging"
-region = "us-west-2"
-parameter_overrides = [
-  "ProjectName=RAGStack-staging",
-  "AdminEmail=staging-admin@example.com"
-]
-```
-
-Deploy with:
-
-```bash
-./publish.sh --env staging --admin-email staging-admin@example.com
-```
+**Note:** Unlike previous versions, `samconfig.toml` no longer contains environment-specific configurations. All deployment parameters must be provided on the command line
 
 ---
 
@@ -113,8 +86,8 @@ These parameters are defined in `template.yaml` and can be overridden during dep
 **Example**:
 
 ```bash
-./publish.sh --env dev --admin-email admin@example.com
-# Creates resources like: RAGStack-dev-InputBucket, RAGStack-dev-ProcessDocument, etc.
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
+# Creates resources like: RAGStack-<project-name>-InputBucket, RAGStack-<project-name>-ProcessDocument, etc.
 ```
 
 ### OcrBackend
@@ -223,7 +196,7 @@ This email receives:
 **Configure**:
 
 ```bash
-./publish.sh --env prod --admin-email admin@example.com
+python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
 ```
 
 ### AlertEmail
@@ -241,55 +214,71 @@ Receives notifications for:
 **Configure**:
 
 ```bash
-./publish.sh --env prod \
+python publish.py --project-name <project-name> --admin-email <email> --region <region> \
   --admin-email admin@example.com \
   --alert-email alerts@example.com
 ```
 
 ---
 
-## Environment-Specific Configuration
+## Project-Based Configuration
 
-Use different configurations for dev, staging, and production.
+Deploy multiple independent projects with different configurations:
 
-### Development Environment
+### Development Project Example
 
 Optimized for rapid iteration:
 
-```toml
-[dev]
-[dev.deploy.parameters]
-stack_name = "RAGStack-dev"
-region = "us-east-1"
-parameter_overrides = [
-  "ProjectName=RAGStack-dev",
-  "OcrBackend=textract",  # Faster, cheaper
-  "AdminEmail=dev@example.com"
-]
+```bash
+python publish.py \
+  --project-name myapp-dev \
+  --admin-email dev@example.com \
+  --region us-east-1
 ```
 
-### Production Environment
+Resources created:
+- Stack: `RAGStack-myapp-dev`
+- Buckets: `ragstack-myapp-dev-input-<account-id>`, etc.
+- Functions: `RAGStack-myapp-dev-ProcessDocument`, etc.
+
+### Production Project Example
 
 Optimized for reliability:
 
-```toml
-[prod]
-[prod.deploy.parameters]
-stack_name = "RAGStack-prod"
-region = "us-east-1"
-parameter_overrides = [
-  "ProjectName=RAGStack-prod",
-  "OcrBackend=textract",
-  "AdminEmail=admin@example.com",
-  "AlertEmail=alerts@example.com"
-]
+```bash
+python publish.py \
+  --project-name myapp-prod \
+  --admin-email admin@example.com \
+  --region us-east-1
 ```
 
-**Production best practices**:
-- Use `AlertEmail` for monitoring
-- Enable CloudWatch alarms
-- Use `confirm_changeset = true` to review changes
-- Consider cross-region backup
+Resources created:
+- Stack: `RAGStack-myapp-prod`
+- Buckets: `ragstack-myapp-prod-input-<account-id>`, etc.
+- Functions: `RAGStack-myapp-prod-ProcessDocument`, etc.
+
+### Multi-Project Deployments
+
+You can deploy as many independent projects as needed:
+
+```bash
+# Customer service documents
+python publish.py --project-name customer-docs --admin-email cs@example.com --region us-east-1
+
+# Legal archive
+python publish.py --project-name legal-archive --admin-email legal@example.com --region us-east-1
+
+# HR records
+python publish.py --project-name hr-records --admin-email hr@example.com --region us-west-2
+```
+
+Each project is completely isolated with its own resources.
+
+**Best practices**:
+- Use descriptive project names (e.g., `myapp-prod`, not just `prod`)
+- Keep project names consistent across team members
+- Document which project serves which purpose
+- Consider regional deployment for compliance/latency requirements
 
 ---
 
@@ -355,7 +344,7 @@ Available levels (set via `LOG_LEVEL` environment variable):
 
 ```bash
 aws lambda update-function-configuration \
-  --function-name RAGStack-dev-ProcessDocument \
+  --function-name RAGStack-<project-name>-ProcessDocument \
   --environment "Variables={LOG_LEVEL=DEBUG}"
 ```
 
