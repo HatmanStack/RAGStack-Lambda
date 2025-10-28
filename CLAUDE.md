@@ -13,23 +13,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Deployment
 
 ```bash
-# Deploy to development environment
-./publish.sh --env dev --admin-email admin@example.com
+# Deploy to any environment
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
 
-# Deploy to production
-./publish.sh --env prod --admin-email admin@example.com
+# Example: Deploy a customer docs project
+python publish.py \
+  --project-name customer-docs \
+  --admin-email admin@example.com \
+  --region us-east-1
 
-# Deploy with custom region
-./publish.sh --env prod --admin-email admin@example.com --region us-west-2
+# Example: Deploy to a different region
+python publish.py \
+  --project-name legal-archive \
+  --admin-email admin@example.com \
+  --region us-west-2
 
 # Skip UI build (backend only - faster for backend changes)
-./publish.sh --env dev --admin-email admin@example.com --skip-ui
-
-# Skip Lambda layer build (faster rebuilds during development)
-./publish.sh --env dev --admin-email admin@example.com --skip-layers
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region> \
+  --skip-ui
 ```
 
-**Note**: The `publish.sh` wrapper script validates prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI) then calls `publish.py` which handles the actual deployment orchestration.
+**Note**: All parameters are required. Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter. The `publish.py` script validates prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI) before deployment.
 
 ### Building and Testing
 
@@ -50,7 +60,7 @@ sam local start-api
 pytest tests/unit/
 
 # Run integration tests (requires deployed stack)
-pytest tests/integration/ --stack-name RAGStack-dev
+pytest tests/integration/ --stack-name RAGStack-<project-name>
 ```
 
 ### UI Development
@@ -74,45 +84,42 @@ npm run lint
 
 # Deploy UI only (after backend is deployed)
 npm run build
-aws s3 sync build/ s3://ragstack-ui-<account-id>/ --delete
-./scripts/invalidate_cloudfront.sh RAGStack-dev
+aws s3 sync build/ s3://ragstack-<project-name>-ui-<account-id>/ --delete
+aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"
 ```
 
 ### Monitoring and Debugging
 
 ```bash
 # View Lambda logs (real-time)
-aws logs tail /aws/lambda/RAGStack-dev-ProcessDocument --follow
+aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow
 
 # View Step Functions execution history
 aws stepfunctions list-executions --state-machine-arn <arn>
 
 # Check DynamoDB tracking table
-aws dynamodb scan --table-name RAGStack-dev-Tracking --max-items 10
+aws dynamodb scan --table-name RAGStack-<project-name>-Tracking --max-items 10
 
 # View CloudFormation stack events
-aws cloudformation describe-stack-events --stack-name RAGStack-dev --max-items 20
-
-# Check cost estimates
-./scripts/check_costs.sh RAGStack-dev
+aws cloudformation describe-stack-events --stack-name RAGStack-<project-name> --max-items 20
 
 # Invalidate CloudFront cache (after UI updates)
-./scripts/invalidate_cloudfront.sh RAGStack-dev
+aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"
 ```
 
 ### Stack Management
 
 ```bash
 # Get stack outputs
-aws cloudformation describe-stacks --stack-name RAGStack-dev --query 'Stacks[0].Outputs'
+aws cloudformation describe-stacks --stack-name RAGStack-<project-name> --query 'Stacks[0].Outputs'
 
 # Delete stack (must empty S3 buckets first)
-aws s3 rm s3://ragstack-input-<account-id>/ --recursive
-aws s3 rm s3://ragstack-output-<account-id>/ --recursive
-aws s3 rm s3://ragstack-vectors-<account-id>/ --recursive
-aws s3 rm s3://ragstack-working-<account-id>/ --recursive
-aws s3 rm s3://ragstack-ui-<account-id>/ --recursive
-aws cloudformation delete-stack --stack-name RAGStack-dev
+aws s3 rm s3://ragstack-<project-name>-input-<account-id>/ --recursive
+aws s3 rm s3://ragstack-<project-name>-output-<account-id>/ --recursive
+aws s3 rm s3://ragstack-<project-name>-vectors-<account-id>/ --recursive
+aws s3 rm s3://ragstack-<project-name>-working-<account-id>/ --recursive
+aws s3 rm s3://ragstack-<project-name>-ui-<account-id>/ --recursive
+aws cloudformation delete-stack --stack-name RAGStack-<project-name>
 ```
 
 ## Architecture Overview
@@ -169,6 +176,29 @@ User → CloudFront → React UI (S3)
 4. **Knowledge Base**: Auto-syncs vectors → Indexes for search
 5. **Query**: User searches → QueryKB Lambda → Bedrock KB retrieve API → Results
 
+### Resource Naming Convention
+
+All AWS resources follow consistent project-based naming:
+
+**CloudFormation Stack:**
+- Format: `RAGStack-<project-name>`
+- Example: `--project-name customer-docs` → Stack: `RAGStack-customer-docs`
+
+**S3 Buckets:**
+- Input: `ragstack-<project-name>-input-<account-id>`
+- Output: `ragstack-<project-name>-output-<account-id>`
+- Vectors: `ragstack-<project-name>-vectors-<account-id>`
+- Working: `ragstack-<project-name>-working-<account-id>`
+- UI: `ragstack-<project-name>-ui-<account-id>`
+
+**Lambda Functions:**
+- Format: `RAGStack-<project-name>-<FunctionName>`
+- Examples: `RAGStack-customer-docs-ProcessDocument`, `RAGStack-customer-docs-QueryKB`
+
+**DynamoDB Tables:**
+- Format: `RAGStack-<project-name>-<TableName>`
+- Examples: `RAGStack-customer-docs-Tracking`, `RAGStack-customer-docs-Metering`
+
 ### Critical Design Decisions
 
 **Text-Native PDF Detection**: ProcessDocument checks if PDFs have extractable text. If yes, skips OCR (saves cost and time). Uses PyMuPDF for direct text extraction.
@@ -196,10 +226,7 @@ Edit `template.yaml` Parameters section:
 
 ### SAM Configuration (samconfig.toml)
 
-The project uses `samconfig.toml.example` as a template. Copy to `samconfig.toml` and customize:
-- Stack names for dev/prod environments
-- AWS regions
-- Parameter overrides for each environment
+The project uses a minimal `samconfig.toml` with only build settings. All deployment parameters are provided via CLI arguments to `publish.py`.
 
 ### UI Configuration
 
@@ -216,23 +243,23 @@ UI configuration is generated during deployment by `scripts/configure_ui.sh`. Cr
 1. Edit code in `src/lambda/*/` or `lib/ragstack_common/`
 2. Run `sam build` to package
 3. Test locally: `sam local invoke <FunctionName> -e tests/events/sample.json`
-4. Deploy: `./publish.sh --env dev --admin-email <email> --skip-ui`
-5. Monitor: `aws logs tail /aws/lambda/RAGStack-dev-<FunctionName> --follow`
+4. Deploy: `python publish.py --project-name <project-name> --admin-email <email> --region <region> --skip-ui`
+5. Monitor: `aws logs tail /aws/lambda/RAGStack-<project-name>-<FunctionName> --follow`
 
 ### Making Changes to UI
 
 1. Edit code in `src/ui/src/`
 2. Test locally: `cd src/ui && npm start` (requires deployed backend for API calls)
 3. Build: `npm run build`
-4. Deploy: `./publish.sh --env dev --admin-email <email>` (includes UI build)
-5. Or deploy UI only: `aws s3 sync build/ s3://ragstack-ui-<account-id>/ --delete && ./scripts/invalidate_cloudfront.sh RAGStack-dev`
+4. Deploy: `python publish.py --project-name <project-name> --admin-email <email> --region <region>` (includes UI build via CodeBuild)
+5. Or deploy UI only: `aws s3 sync build/ s3://ragstack-<project-name>-ui-<account-id>/ --delete && aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"`
 
 ### Making Changes to Infrastructure
 
 1. Edit `template.yaml` or `src/statemachine/pipeline.asl.json`
 2. Run `sam build`
-3. Deploy: `./publish.sh --env dev --admin-email <email>`
-4. Monitor stack update: `aws cloudformation describe-stack-events --stack-name RAGStack-dev --max-items 20`
+3. Deploy: `python publish.py --project-name <project-name> --admin-email <email> --region <region>`
+4. Monitor stack update: `aws cloudformation describe-stack-events --stack-name RAGStack-<project-name> --max-items 20`
 
 ## Testing Strategy
 
@@ -249,12 +276,12 @@ pytest lib/ragstack_common/test_bedrock.py -v
 Located in `tests/integration/`:
 ```bash
 # Requires deployed stack
-pytest tests/integration/ --stack-name RAGStack-dev -v
+pytest tests/integration/ --stack-name RAGStack-<project-name> -v
 ```
 
 ### Manual End-to-End Testing
 
-1. Deploy stack: `./publish.sh --env dev --admin-email <email>`
+1. Deploy stack: `python publish.py --project-name <project-name> --admin-email <email> --region <region>`
 2. Access UI (CloudFront URL from outputs)
 3. Upload test document from `tests/sample-documents/`
 4. Monitor Dashboard for status changes
@@ -328,19 +355,19 @@ For production deployments, the custom resource at `src/lambda/kb_custom_resourc
 - Check SAM CLI version: `sam --version` (requires 1.100.0+)
 - Verify Python 3.12+ and Node.js 18+
 - Check AWS credentials: `aws sts get-caller-identity`
-- Review CloudFormation events: `aws cloudformation describe-stack-events --stack-name RAGStack-dev`
+- Review CloudFormation events: `aws cloudformation describe-stack-events --stack-name RAGStack-<project-name>`
 
 ### Documents Stuck in PROCESSING
 
 - Check Step Functions execution: `aws stepfunctions list-executions --state-machine-arn <arn>`
-- View Lambda logs: `aws logs tail /aws/lambda/RAGStack-dev-ProcessDocument --follow`
+- View Lambda logs: `aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow`
 - Common causes: Bedrock throttling, Lambda timeout, unsupported format
 
 ### UI Not Loading
 
 - Check CloudFront distribution status
-- Invalidate cache: `./scripts/invalidate_cloudfront.sh RAGStack-dev`
-- Verify S3 bucket has files: `aws s3 ls s3://ragstack-ui-<account-id>/`
+- Invalidate cache: `aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"`
+- Verify S3 bucket has files: `aws s3 ls s3://ragstack-<project-name>-ui-<account-id>/`
 - Check browser console for errors (often authentication issues)
 
 ### Search Returns No Results
