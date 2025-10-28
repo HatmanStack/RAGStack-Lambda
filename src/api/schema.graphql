@@ -89,14 +89,14 @@ type KBResult {
 }
 
 # Configuration response containing Schema, Default, and Custom configs
-type ConfigurationResponse {
+type ConfigurationResponse @aws_cognito_user_pools {
   Schema: AWSJSON
   Default: AWSJSON
   Custom: AWSJSON
 }
 
 # Re-embedding job status
-type ReEmbedJobStatus {
+type ReEmbedJobStatus @aws_cognito_user_pools {
   jobId: ID
   status: String
   totalDocuments: Int
