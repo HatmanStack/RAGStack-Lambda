@@ -497,6 +497,33 @@ Resources:
         - Key: CostCenter
           Value: Engineering
 
+  ##########################################################################
+  # Configuration Table - Runtime configurable parameters
+  ##########################################################################
+
+  ConfigurationTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'RAGStack-${ProjectName}-Configuration'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: Configuration
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Configuration
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: Runtime Configuration Storage
+
   # =========================================================================
   # Lambda Functions
   # =========================================================================
@@ -1569,6 +1596,18 @@ Outputs:
     Value: !Ref MeteringTable
     Export:
       Name: !Sub '${AWS::StackName}-MeteringTable'
+
+  ConfigurationTableName:
+    Description: Configuration DynamoDB Table Name
+    Value: !Ref ConfigurationTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigurationTable'
+
+  ConfigurationTableArn:
+    Description: Configuration DynamoDB Table ARN
+    Value: !GetAtt ConfigurationTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigurationTableArn'
 
   # Lambda Functions
   ProcessDocumentFunctionArn:
