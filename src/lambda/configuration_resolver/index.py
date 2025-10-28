@@ -264,7 +264,7 @@ def get_configuration_item(config_type):
         response = configuration_table.get_item(Key={'Configuration': config_type})
         return response.get('Item')
 
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Error retrieving {config_type}")
         raise
 
@@ -345,7 +345,9 @@ def handle_re_embed_all_documents():
         # SCALABILITY NOTE: For large document sets (>1000), this synchronous loop
         # may timeout. Consider using SQS + Lambda consumer pattern for production.
         sfn_client = boto3.client('stepfunctions')
-        state_machine_arn = os.environ['STATE_MACHINE_ARN']
+        state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
+        if not state_machine_arn:
+            raise ValueError("Missing required environment variable: STATE_MACHINE_ARN")
 
         # Limit to N documents per job to prevent Lambda timeout (configurable via env var)
         MAX_DOCUMENTS_PER_JOB = int(os.environ.get('REEMBED_MAX_DOCS', '500'))
@@ -489,6 +491,6 @@ def handle_get_re_embed_job_status():
             'completionTime': item.get('completionTime')
         }
 
-    except ClientError as e:
+    except ClientError:
         logger.exception("Error getting re-embed job status")
         return None

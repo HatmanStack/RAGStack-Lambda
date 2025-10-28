@@ -36,8 +36,16 @@ from ragstack_common.config import ConfigurationManager
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Module-level initialization (reused across Lambda invocations in same container)
-config_manager = ConfigurationManager()
+# Module-level initialization (lazy-initialized to avoid import-time failures)
+_config_manager = None
+
+
+def _get_config_manager():
+    """Get or initialize ConfigurationManager (lazy initialization)."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = ConfigurationManager()
+    return _config_manager
 
 
 def lambda_handler(event, context):
@@ -59,8 +67,9 @@ def lambda_handler(event, context):
         filename = event.get('filename', 'document.pdf')
 
         # Read configuration from ConfigurationManager (runtime configuration)
-        ocr_backend = config_manager.get_parameter('ocr_backend', default='textract')
-        bedrock_model_id = config_manager.get_parameter(
+        config_mgr = _get_config_manager()
+        ocr_backend = config_mgr.get_parameter('ocr_backend', default='textract')
+        bedrock_model_id = config_mgr.get_parameter(
             'bedrock_ocr_model_id',
             default='anthropic.claude-3-5-haiku-20241022-v1:0'
         )

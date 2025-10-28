@@ -86,7 +86,7 @@ class ConfigurationManager:
 
             return item
 
-        except ClientError as e:
+        except ClientError:
             logger.exception(f"Error retrieving {config_type} configuration")
             raise
 
@@ -111,12 +111,23 @@ class ConfigurationManager:
         custom_item = self.get_configuration_item('Custom')
         custom_config = self._remove_partition_key(custom_item) if custom_item else {}
 
-        # Merge: Custom overrides Default
+        # Merge: Custom overrides Default (deep-merge for nested dicts)
         effective_config = deepcopy(default_config)
-        effective_config.update(custom_config)
+        for k, v in custom_config.items():
+            if isinstance(v, dict) and isinstance(effective_config.get(k), dict):
+                # Deep-merge nested dicts (one level)
+                effective_config[k].update(v)
+            else:
+                effective_config[k] = v
 
         logger.info(f"Effective configuration: {list(effective_config.keys())}")
-        logger.debug(f"Effective config values: {effective_config}")
+
+        # Mask sensitive-looking keys in debug logs to prevent secret leakage
+        masked = {
+            k: ('***' if any(s in k.lower() for s in ('secret', 'token', 'key', 'password')) else v)
+            for k, v in effective_config.items()
+        }
+        logger.debug(f"Effective config values: {masked}")
 
         return effective_config
 
@@ -175,7 +186,7 @@ class ConfigurationManager:
 
             logger.info("Updated Custom configuration in DynamoDB")
 
-        except ClientError as e:
+        except ClientError:
             logger.exception("Error updating Custom configuration")
             raise
 

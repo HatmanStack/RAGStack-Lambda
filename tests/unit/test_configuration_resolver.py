@@ -144,7 +144,7 @@ def test_lambda_handler_update_configuration(mock_dynamodb):
     mock_table.put_item.assert_called_once()
 
 
-def test_lambda_handler_unsupported_operation(mock_dynamodb):
+def test_lambda_handler_unsupported_operation(_mock_dynamodb):
     """Test lambda_handler raises error for unsupported operation."""
     event = {
         'info': {'fieldName': 'unknownOperation'},
@@ -405,7 +405,7 @@ def test_handle_re_embed_all_documents_no_documents(mock_config_table, mock_quer
 @patch('boto3.client')
 @patch('index.query_completed_documents')
 @patch('index.configuration_table')
-def test_handle_re_embed_all_documents_enforces_limit(mock_config_table, mock_query_docs, mock_boto_client):
+def test_handle_re_embed_all_documents_enforces_limit(_mock_config_table, mock_query_docs, mock_boto_client):
     """Test re-embedding enforces 500 document limit."""
     # Create 600 mock documents
     mock_documents = [

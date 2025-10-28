@@ -52,7 +52,14 @@ def lambda_handler(event, context):
     bedrock_agent = boto3.client('bedrock-agent-runtime')
     region = os.environ.get('AWS_REGION', 'us-east-1')
 
-    logger.info(f"Querying Knowledge Base: {json.dumps(event)}")
+    # Log safe summary (not full event payload to avoid PII/user data leakage)
+    query = event.get('query', '')
+    safe_summary = {
+        'query_length': len(query) if isinstance(query, str) else 0,
+        'has_max_results': 'max_results' in event,
+        'knowledge_base_id': knowledge_base_id[:8] + '...' if len(knowledge_base_id) > 8 else knowledge_base_id
+    }
+    logger.info(f"Querying Knowledge Base: {json.dumps(safe_summary)}")
     logger.info(f"Using response model: {response_model_id}")
 
     try:

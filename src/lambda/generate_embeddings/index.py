@@ -30,6 +30,7 @@ import logging
 import os
 import boto3
 from datetime import datetime
+from botocore.exceptions import ClientError
 
 from ragstack_common.bedrock import BedrockClient
 from ragstack_common.storage import (
@@ -127,7 +128,14 @@ def lambda_handler(event, context):
         default='amazon.titan-embed-image-v1'
     )
 
-    logger.info(f"Generating embeddings: {json.dumps(event)}")
+    # Log safe summary (not full event payload to avoid PII leakage)
+    safe_summary = {
+        'document_id': event.get('document_id'),
+        'has_pages': 'pages' in event and len(event.get('pages', [])) > 0,
+        'page_count': len(event.get('pages', [])),
+        'vector_bucket': event.get('vector_bucket')
+    }
+    logger.info(f"Generating embeddings: {json.dumps(safe_summary)}")
     logger.info(f"Using text embedding model: {text_embed_model}")
     logger.info(f"Using image embedding model: {image_embed_model}")
 
