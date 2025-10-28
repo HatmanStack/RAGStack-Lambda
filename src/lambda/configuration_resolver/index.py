@@ -11,6 +11,8 @@ import os
 import json
 import boto3
 import logging
+import uuid
+from datetime import datetime
 from botocore.exceptions import ClientError
 
 # Configure logging
@@ -72,6 +74,12 @@ def lambda_handler(event, context):
 
         elif operation == 'getDocumentCount':
             return handle_get_document_count()
+
+        elif operation == 'reEmbedAllDocuments':
+            return handle_re_embed_all_documents()
+
+        elif operation == 'getReEmbedJobStatus':
+            return handle_get_re_embed_job_status()
 
         else:
             raise ValueError(f"Unsupported operation: {operation}")
@@ -239,3 +247,199 @@ def remove_partition_key(item):
     item_copy = dict(item)
     item_copy.pop('Configuration', None)
     return item_copy
+
+
+def handle_re_embed_all_documents():
+    """
+    Handle reEmbedAllDocuments mutation.
+
+    Creates a re-embedding job and triggers Step Functions for all COMPLETED documents.
+
+    Returns:
+        ReEmbedJobStatus object
+    """
+    try:
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        start_time = datetime.utcnow().isoformat() + 'Z'
+
+        # Query all COMPLETED documents
+        logger.info("Querying COMPLETED documents for re-embedding")
+        documents = query_completed_documents()
+        total_documents = len(documents)
+
+        logger.info(f"Found {total_documents} documents to re-embed")
+
+        if total_documents == 0:
+            return {
+                'jobId': job_id,
+                'status': 'COMPLETED',
+                'totalDocuments': 0,
+                'processedDocuments': 0,
+                'startTime': start_time,
+                'completionTime': start_time
+            }
+
+        # Create job tracking item with unique partition key
+        job_key = f'ReEmbedJob#{job_id}'
+        configuration_table.put_item(
+            Item={
+                'Configuration': job_key,  # Unique key per job
+                'jobId': job_id,
+                'status': 'IN_PROGRESS',
+                'totalDocuments': total_documents,
+                'processedDocuments': 0,
+                'startTime': start_time,
+                'completionTime': None
+            }
+        )
+
+        # Also update a "latest job pointer" for easy UI access
+        configuration_table.put_item(
+            Item={
+                'Configuration': 'ReEmbedJob_Latest',
+                'jobId': job_id,
+                'jobKey': job_key
+            }
+        )
+
+        # Trigger Step Functions for each document
+        # SCALABILITY NOTE: For large document sets (>1000), this synchronous loop
+        # may timeout. Consider using SQS + Lambda consumer pattern for production.
+        sfn_client = boto3.client('stepfunctions')
+        state_machine_arn = os.environ['STATE_MACHINE_ARN']
+
+        # Limit to 500 documents per job to prevent Lambda timeout
+        MAX_DOCUMENTS_PER_JOB = 500
+        if total_documents > MAX_DOCUMENTS_PER_JOB:
+            logger.warning(f"Document count ({total_documents}) exceeds limit ({MAX_DOCUMENTS_PER_JOB}). Processing first {MAX_DOCUMENTS_PER_JOB} only.")
+            documents = documents[:MAX_DOCUMENTS_PER_JOB]
+            total_documents = MAX_DOCUMENTS_PER_JOB
+
+        for doc in documents:
+            execution_name = f"reembed-{doc['document_id']}-{job_id[:8]}"
+
+            sfn_client.start_execution(
+                stateMachineArn=state_machine_arn,
+                name=execution_name,
+                input=json.dumps({
+                    'documentId': doc['document_id'],
+                    'bucket': doc['input_bucket'],
+                    'key': doc['input_key'],
+                    'reEmbedJobId': job_id  # Pass job ID for tracking
+                })
+            )
+
+        logger.info(f"Started re-embedding job {job_id} for {total_documents} documents")
+
+        return {
+            'jobId': job_id,
+            'status': 'IN_PROGRESS',
+            'totalDocuments': total_documents,
+            'processedDocuments': 0,
+            'startTime': start_time,
+            'completionTime': None
+        }
+
+    except Exception as e:
+        logger.error(f"Error in reEmbedAllDocuments: {str(e)}")
+        raise
+
+
+def query_completed_documents():
+    """
+    Query all documents with status='COMPLETED' using GSI.
+
+    IMPORTANT: This requires a GSI on TrackingTable called 'StatusIndex'
+    with status as the partition key. See Phase 1 for GSI setup.
+
+    Returns:
+        List of document items
+    """
+    documents = []
+
+    try:
+        # Query using GSI (much faster than scan for large tables)
+        response = tracking_table.query(
+            IndexName='StatusIndex',
+            KeyConditionExpression='#status = :status',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={':status': 'COMPLETED'}
+        )
+
+        documents.extend(response.get('Items', []))
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = tracking_table.query(
+                IndexName='StatusIndex',
+                KeyConditionExpression='#status = :status',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={':status': 'COMPLETED'},
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            documents.extend(response.get('Items', []))
+
+        return documents
+
+    except ClientError as e:
+        # If GSI doesn't exist, fall back to scan (less efficient)
+        logger.warning(f"GSI query failed, falling back to scan: {e}")
+
+        response = tracking_table.scan(
+            FilterExpression='#status = :status',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={':status': 'COMPLETED'}
+        )
+
+        documents.extend(response.get('Items', []))
+
+        while 'LastEvaluatedKey' in response:
+            response = tracking_table.scan(
+                FilterExpression='#status = :status',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={':status': 'COMPLETED'},
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            documents.extend(response.get('Items', []))
+
+        return documents
+
+
+def handle_get_re_embed_job_status():
+    """
+    Handle getReEmbedJobStatus query.
+
+    Returns latest re-embedding job status.
+    """
+    try:
+        # Get latest job pointer
+        response = configuration_table.get_item(Key={'Configuration': 'ReEmbedJob_Latest'})
+        pointer = response.get('Item')
+
+        if not pointer:
+            return None
+
+        # Get actual job item using the job key
+        job_key = pointer.get('jobKey')
+        if not job_key:
+            return None
+
+        response = configuration_table.get_item(Key={'Configuration': job_key})
+        item = response.get('Item')
+
+        if not item:
+            return None
+
+        return {
+            'jobId': item.get('jobId'),
+            'status': item.get('status'),
+            'totalDocuments': item.get('totalDocuments'),
+            'processedDocuments': item.get('processedDocuments'),
+            'startTime': item.get('startTime'),
+            'completionTime': item.get('completionTime')
+        }
+
+    except ClientError as e:
+        logger.error(f"Error getting re-embed job status: {str(e)}")
+        return None

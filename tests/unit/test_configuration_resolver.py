@@ -14,6 +14,9 @@ from index import (
     handle_get_configuration,
     handle_update_configuration,
     handle_get_document_count,
+    handle_re_embed_all_documents,
+    handle_get_re_embed_job_status,
+    query_completed_documents,
     get_configuration_item,
     remove_partition_key
 )
@@ -26,6 +29,7 @@ def mock_env_vars():
     """Set required environment variables."""
     os.environ['CONFIGURATION_TABLE_NAME'] = 'test-config-table'
     os.environ['TRACKING_TABLE'] = 'test-tracking-table'
+    os.environ['STATE_MACHINE_ARN'] = 'arn:aws:states:us-east-1:123456789012:stateMachine:test-state-machine'
     os.environ['LOG_LEVEL'] = 'INFO'
 
 
@@ -298,3 +302,201 @@ def test_remove_partition_key_none():
     """Test partition key removal with None."""
     result = remove_partition_key(None)
     assert result == {}
+
+
+# Test: query_completed_documents
+
+@patch('index.tracking_table')
+def test_query_completed_documents_using_gsi(mock_table):
+    """Test querying COMPLETED documents using StatusIndex GSI."""
+    mock_table.query.return_value = {
+        'Items': [
+            {'document_id': 'doc1', 'input_bucket': 'bucket1', 'input_key': 'key1', 'status': 'COMPLETED'},
+            {'document_id': 'doc2', 'input_bucket': 'bucket2', 'input_key': 'key2', 'status': 'COMPLETED'}
+        ]
+    }
+
+    result = query_completed_documents()
+
+    assert len(result) == 2
+    assert result[0]['document_id'] == 'doc1'
+    assert result[1]['document_id'] == 'doc2'
+    mock_table.query.assert_called_once()
+
+
+@patch('index.tracking_table')
+def test_query_completed_documents_with_pagination(mock_table):
+    """Test querying COMPLETED documents with pagination."""
+    # First call returns data with pagination token
+    mock_table.query.side_effect = [
+        {
+            'Items': [{'document_id': 'doc1', 'input_bucket': 'b1', 'input_key': 'k1', 'status': 'COMPLETED'}],
+            'LastEvaluatedKey': {'document_id': 'doc1'}
+        },
+        {
+            'Items': [{'document_id': 'doc2', 'input_bucket': 'b2', 'input_key': 'k2', 'status': 'COMPLETED'}]
+        }
+    ]
+
+    result = query_completed_documents()
+
+    assert len(result) == 2
+    assert mock_table.query.call_count == 2
+
+
+@patch('index.tracking_table')
+def test_query_completed_documents_fallback_to_scan(mock_table):
+    """Test fallback to scan when GSI is not available."""
+    # First call (query) fails, fallback to scan
+    mock_table.query.side_effect = ClientError(
+        {'Error': {'Code': 'ResourceNotFoundException', 'Message': 'GSI not found'}},
+        'Query'
+    )
+    mock_table.scan.return_value = {
+        'Items': [
+            {'document_id': 'doc1', 'input_bucket': 'bucket1', 'input_key': 'key1', 'status': 'COMPLETED'}
+        ]
+    }
+
+    result = query_completed_documents()
+
+    assert len(result) == 1
+    assert result[0]['document_id'] == 'doc1'
+    mock_table.scan.assert_called_once()
+
+
+# Test: handle_re_embed_all_documents
+
+@patch('boto3.client')
+@patch('index.query_completed_documents')
+@patch('index.configuration_table')
+def test_handle_re_embed_all_documents_success(mock_config_table, mock_query_docs, mock_boto_client):
+    """Test re-embedding job creation with documents."""
+    mock_query_docs.return_value = [
+        {'document_id': 'doc1', 'input_bucket': 'bucket1', 'input_key': 'key1'},
+        {'document_id': 'doc2', 'input_bucket': 'bucket2', 'input_key': 'key2'}
+    ]
+
+    mock_sfn_client = MagicMock()
+    mock_boto_client.return_value = mock_sfn_client
+
+    result = handle_re_embed_all_documents()
+
+    assert result['status'] == 'IN_PROGRESS'
+    assert result['totalDocuments'] == 2
+    assert result['processedDocuments'] == 0
+    assert 'jobId' in result
+    assert 'startTime' in result
+
+    # Verify DynamoDB writes (job item + latest pointer)
+    assert mock_config_table.put_item.call_count == 2
+
+    # Verify Step Functions executions started
+    assert mock_sfn_client.start_execution.call_count == 2
+
+
+@patch('index.query_completed_documents')
+@patch('index.configuration_table')
+def test_handle_re_embed_all_documents_no_documents(mock_config_table, mock_query_docs):
+    """Test re-embedding when no documents exist."""
+    mock_query_docs.return_value = []
+
+    result = handle_re_embed_all_documents()
+
+    assert result['status'] == 'COMPLETED'
+    assert result['totalDocuments'] == 0
+    assert result['processedDocuments'] == 0
+    assert result['startTime'] == result['completionTime']
+
+    # Should not create tracking items or start Step Functions
+    mock_config_table.put_item.assert_not_called()
+
+
+@patch('boto3.client')
+@patch('index.query_completed_documents')
+@patch('index.configuration_table')
+def test_handle_re_embed_all_documents_enforces_limit(mock_config_table, mock_query_docs, mock_boto_client):
+    """Test re-embedding enforces 500 document limit."""
+    # Create 600 mock documents
+    mock_documents = [
+        {'document_id': f'doc{i}', 'input_bucket': f'bucket{i}', 'input_key': f'key{i}'}
+        for i in range(600)
+    ]
+    mock_query_docs.return_value = mock_documents
+
+    mock_sfn_client = MagicMock()
+    mock_boto_client.return_value = mock_sfn_client
+
+    result = handle_re_embed_all_documents()
+
+    # Should limit to 500
+    assert result['totalDocuments'] == 500
+    assert mock_sfn_client.start_execution.call_count == 500
+
+
+# Test: handle_get_re_embed_job_status
+
+@patch('index.configuration_table')
+def test_handle_get_re_embed_job_status_success(mock_table):
+    """Test getting re-embed job status."""
+    job_id = 'test-job-123'
+    job_key = f'ReEmbedJob#{job_id}'
+
+    # Mock latest pointer
+    mock_table.get_item.side_effect = [
+        {'Item': {'Configuration': 'ReEmbedJob_Latest', 'jobId': job_id, 'jobKey': job_key}},
+        {'Item': {
+            'Configuration': job_key,
+            'jobId': job_id,
+            'status': 'IN_PROGRESS',
+            'totalDocuments': 100,
+            'processedDocuments': 50,
+            'startTime': '2025-10-28T10:00:00Z',
+            'completionTime': None
+        }}
+    ]
+
+    result = handle_get_re_embed_job_status()
+
+    assert result['jobId'] == job_id
+    assert result['status'] == 'IN_PROGRESS'
+    assert result['totalDocuments'] == 100
+    assert result['processedDocuments'] == 50
+    assert result['startTime'] == '2025-10-28T10:00:00Z'
+    assert result['completionTime'] is None
+
+
+@patch('index.configuration_table')
+def test_handle_get_re_embed_job_status_no_job(mock_table):
+    """Test getting re-embed job status when no job exists."""
+    mock_table.get_item.return_value = {}
+
+    result = handle_get_re_embed_job_status()
+
+    assert result is None
+
+
+@patch('index.configuration_table')
+def test_handle_get_re_embed_job_status_completed(mock_table):
+    """Test getting completed re-embed job status."""
+    job_id = 'test-job-456'
+    job_key = f'ReEmbedJob#{job_id}'
+
+    mock_table.get_item.side_effect = [
+        {'Item': {'Configuration': 'ReEmbedJob_Latest', 'jobId': job_id, 'jobKey': job_key}},
+        {'Item': {
+            'Configuration': job_key,
+            'jobId': job_id,
+            'status': 'COMPLETED',
+            'totalDocuments': 50,
+            'processedDocuments': 50,
+            'startTime': '2025-10-28T10:00:00Z',
+            'completionTime': '2025-10-28T11:00:00Z'
+        }}
+    ]
+
+    result = handle_get_re_embed_job_status()
+
+    assert result['status'] == 'COMPLETED'
+    assert result['totalDocuments'] == result['processedDocuments']
+    assert result['completionTime'] == '2025-10-28T11:00:00Z'
