@@ -28,6 +28,7 @@ Output:
 import json
 import logging
 import os
+import boto3
 from datetime import datetime
 
 from ragstack_common.bedrock import BedrockClient
@@ -42,6 +43,60 @@ logger.setLevel(logging.INFO)
 
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
+
+
+def update_re_embed_job_progress(job_id):
+    """
+    Increment processed count for re-embedding job.
+
+    Args:
+        job_id: Re-embedding job ID
+    """
+    if not job_id:
+        return
+
+    try:
+        configuration_table_name = os.environ.get('CONFIGURATION_TABLE_NAME')
+        if not configuration_table_name:
+            logger.warning("CONFIGURATION_TABLE_NAME not set, skipping job progress update")
+            return
+
+        dynamodb = boto3.resource('dynamodb')
+        configuration_table = dynamodb.Table(configuration_table_name)
+
+        # Use composite key to update the correct job
+        job_key = f'ReEmbedJob#{job_id}'
+
+        # Increment processedDocuments
+        response = configuration_table.update_item(
+            Key={'Configuration': job_key},  # Fixed: Use composite key
+            UpdateExpression='ADD processedDocuments :inc',
+            ExpressionAttributeValues={':inc': 1},
+            ReturnValues='ALL_NEW'
+        )
+
+        item = response.get('Attributes', {})
+        processed = item.get('processedDocuments', 0)
+        total = item.get('totalDocuments', 0)
+
+        logger.info(f"Re-embed job {job_id} progress: {processed}/{total}")
+
+        # Check if job is complete
+        if processed >= total:
+            completion_time = datetime.utcnow().isoformat() + 'Z'
+            configuration_table.update_item(
+                Key={'Configuration': job_key},  # Fixed: Use composite key
+                UpdateExpression='SET #status = :status, completionTime = :time',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'COMPLETED',
+                    ':time': completion_time
+                }
+            )
+            logger.info(f"Re-embedding job {job_id} completed")
+
+    except Exception as e:
+        logger.error(f"Error updating re-embed job progress: {str(e)}")
 
 
 def lambda_handler(event, context):
@@ -160,6 +215,15 @@ def lambda_handler(event, context):
                 'updated_at': datetime.now().isoformat()
             }
         )
+
+        # ===================================================================
+        # Update re-embedding job progress (if applicable)
+        # ===================================================================
+
+        re_embed_job_id = event.get('reEmbedJobId')
+        if re_embed_job_id:
+            logger.info(f"Updating re-embedding job progress for job {re_embed_job_id}")
+            update_re_embed_job_progress(re_embed_job_id)
 
         return {
             'document_id': document_id,
