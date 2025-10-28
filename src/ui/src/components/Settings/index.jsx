@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Header,
@@ -20,7 +19,6 @@ import { getReEmbedJobStatus } from '../../graphql/queries/getReEmbedJobStatus';
 import { reEmbedAllDocuments } from '../../graphql/mutations/reEmbedAllDocuments';
 
 export function Settings() {
-  const navigate = useNavigate();
   const client = generateClient();
 
   // State for loading and errors
@@ -44,29 +42,7 @@ export function Settings() {
   const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
 
-  // Load configuration on mount
-  useEffect(() => {
-    loadConfiguration();
-    checkReEmbedJobStatus(); // Check for existing job on mount
-  }, []);
-
-  // Poll job status when a job is in progress
-  useEffect(() => {
-    if (reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS') {
-      const interval = setInterval(() => {
-        checkReEmbedJobStatus();
-      }, 5000); // Poll every 5 seconds
-
-      setPollingInterval(interval);
-
-      return () => clearInterval(interval);
-    } else if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
-    }
-  }, [reEmbedJobStatus]);
-
-  const loadConfiguration = async () => {
+  const loadConfiguration = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -93,7 +69,7 @@ export function Settings() {
       setError('Failed to load configuration. Please try again.');
       setLoading(false);
     }
-  };
+  }, [client]);
 
   const checkDocumentCount = async () => {
     try {
@@ -107,7 +83,7 @@ export function Settings() {
     }
   };
 
-  const checkReEmbedJobStatus = async () => {
+  const checkReEmbedJobStatus = useCallback(async () => {
     try {
       const response = await client.graphql({ query: getReEmbedJobStatus });
       const status = response.data.getReEmbedJobStatus;
@@ -123,7 +99,29 @@ export function Settings() {
     } catch (err) {
       console.error('Error checking re-embed job status:', err);
     }
-  };
+  }, [client, pollingInterval]);
+
+  // Load configuration on mount
+  useEffect(() => {
+    loadConfiguration();
+    checkReEmbedJobStatus(); // Check for existing job on mount
+  }, [loadConfiguration, checkReEmbedJobStatus]);
+
+  // Poll job status when a job is in progress
+  useEffect(() => {
+    if (reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS') {
+      const interval = setInterval(() => {
+        checkReEmbedJobStatus();
+      }, 5000); // Poll every 5 seconds
+
+      setPollingInterval(interval);
+
+      return () => clearInterval(interval);
+    } else if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  }, [reEmbedJobStatus, pollingInterval, checkReEmbedJobStatus]);
 
   const handleSave = async () => {
     try {
@@ -237,7 +235,7 @@ export function Settings() {
     if (!property) return null;
 
     const value = formValues[key] || '';
-    const isCustomized = customConfig.hasOwnProperty(key);
+    const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, key);
 
     // Handle conditional visibility (dependsOn)
     if (property.dependsOn) {
