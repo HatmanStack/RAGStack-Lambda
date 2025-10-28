@@ -13,11 +13,13 @@ from datetime import datetime
 mock_ocr = MagicMock()
 mock_models = MagicMock()
 mock_storage = MagicMock()
+mock_config = MagicMock()
 
 sys.modules['ragstack_common'] = MagicMock()
 sys.modules['ragstack_common.ocr'] = mock_ocr
 sys.modules['ragstack_common.models'] = mock_models
 sys.modules['ragstack_common.storage'] = mock_storage
+sys.modules['ragstack_common.config'] = mock_config
 
 # Set up enum values
 mock_models.Status = MagicMock()
@@ -238,6 +240,117 @@ def test_lambda_handler_page_text_truncation(mock_document_class, mock_ocr_servi
 
     # Verify text was truncated to 500 chars
     assert len(result['pages'][0]['text']) == 500
+
+
+@patch.dict('os.environ', {
+    'TRACKING_TABLE': 'test-tracking-table',
+    'AWS_REGION': 'us-east-1',
+    'CONFIGURATION_TABLE_NAME': 'test-config-table'
+})
+@patch('index.config_manager')
+@patch('index.update_item')
+@patch('index.OcrService')
+@patch('index.Document')
+def test_lambda_handler_uses_runtime_config(mock_document_class, mock_ocr_service_class,
+                                             mock_update_item, mock_config_manager,
+                                             lambda_context, mock_document):
+    """Test that handler reads OCR configuration from ConfigurationManager."""
+
+    # Setup config manager mock
+    def config_side_effect(key, default=None):
+        config_map = {
+            'ocr_backend': 'bedrock',
+            'bedrock_ocr_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect
+
+    # Setup other mocks
+    mock_document_class.return_value = Mock()
+    mock_ocr_instance = Mock()
+    mock_ocr_service_class.return_value = mock_ocr_instance
+    mock_ocr_instance.process_document.return_value = mock_document
+
+    event = {
+        'document_id': 'test-doc-123',
+        'input_s3_uri': 's3://input-bucket/test.pdf',
+        'output_s3_prefix': 's3://output-bucket/processed/',
+        'filename': 'test.pdf'
+    }
+
+    # Execute
+    result = index.lambda_handler(event, lambda_context)
+
+    # Verify config_manager was called for both parameters
+    assert mock_config_manager.get_parameter.call_count == 2
+    mock_config_manager.get_parameter.assert_any_call('ocr_backend', default='textract')
+    mock_config_manager.get_parameter.assert_any_call(
+        'bedrock_ocr_model_id',
+        default='anthropic.claude-3-5-haiku-20241022-v1:0'
+    )
+
+    # Verify OCR service was initialized with config from ConfigurationManager
+    mock_ocr_service_class.assert_called_once_with(
+        region='us-east-1',
+        backend='bedrock',
+        bedrock_model_id='anthropic.claude-3-5-sonnet-20241022-v2:0'
+    )
+
+    # Verify successful result
+    assert result['document_id'] == 'test-doc-123'
+    assert result['status'] == 'ocr_complete'
+
+
+@patch.dict('os.environ', {
+    'TRACKING_TABLE': 'test-tracking-table',
+    'AWS_REGION': 'us-east-1',
+    'CONFIGURATION_TABLE_NAME': 'test-config-table'
+})
+@patch('index.config_manager')
+@patch('index.update_item')
+@patch('index.OcrService')
+@patch('index.Document')
+def test_lambda_handler_uses_textract_from_config(mock_document_class, mock_ocr_service_class,
+                                                    mock_update_item, mock_config_manager,
+                                                    lambda_context, mock_document):
+    """Test that handler correctly uses textract backend from ConfigurationManager."""
+
+    # Setup config manager mock - return textract
+    def config_side_effect(key, default=None):
+        config_map = {
+            'ocr_backend': 'textract',
+            'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect
+
+    # Setup other mocks
+    mock_document_class.return_value = Mock()
+    mock_ocr_instance = Mock()
+    mock_ocr_service_class.return_value = mock_ocr_instance
+    mock_ocr_instance.process_document.return_value = mock_document
+
+    event = {
+        'document_id': 'test-doc-123',
+        'input_s3_uri': 's3://input-bucket/test.pdf',
+        'output_s3_prefix': 's3://output-bucket/processed/',
+        'filename': 'test.pdf'
+    }
+
+    # Execute
+    result = index.lambda_handler(event, lambda_context)
+
+    # Verify OCR service was initialized with textract backend
+    mock_ocr_service_class.assert_called_once_with(
+        region='us-east-1',
+        backend='textract',
+        bedrock_model_id='anthropic.claude-3-5-haiku-20241022-v1:0'
+    )
+
+    # Verify successful result
+    assert result['document_id'] == 'test-doc-123'
 
 
 if __name__ == "__main__":
