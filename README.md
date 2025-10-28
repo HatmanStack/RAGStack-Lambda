@@ -51,29 +51,31 @@ Go to AWS Console > Bedrock > Model access and enable:
 git clone https://github.com/your-org/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
-# Deploy to dev environment
-./publish.sh --env dev
+# Deploy stack (all parameters required)
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region>
 
-# Or deploy to production
-./publish.sh --env prod
+# Example: Deploy customer docs project
+python publish.py \
+  --project-name customer-docs \
+  --admin-email admin@example.com \
+  --region us-east-1
 
-# If not specified via --admin-email flag, you'll be prompted to enter:
-# - Admin email address (for initial login)
-
-# Example with admin email
-./publish.sh --env prod --admin-email admin@example.com
-
-# Access UI
-# Check terminal output for CloudFront URL
+# Access UI (CloudFront URL shown in output)
+# Check email for temporary password
 ```
 
-The deployment script will:
-1. Validate prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI)
-2. Build Lambda functions and layers
-3. Deploy infrastructure via CloudFormation
-4. Build and deploy React UI
-5. Configure CloudFront for HTTPS
-6. Output the UI URL and credentials
+**Note**: Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter.
+
+The deployment will:
+1. Validate inputs and check prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI)
+2. Copy shared libraries to Lambda functions
+3. Build Lambda functions via SAM
+4. Deploy infrastructure via CloudFormation
+5. Build and deploy React UI via CodeBuild
+6. Output CloudFront URL and credentials
 
 ### Upload a Document
 
@@ -86,33 +88,30 @@ The deployment script will:
 
 ## Configuration
 
-You can customize the deployment by passing additional parameters:
+Deploy with required parameters:
 
 ```bash
-# Deploy to different environment
-./publish.sh --env dev   # Development environment (RAGStack-dev)
-./publish.sh --env prod  # Production environment (RAGStack-prod)
+# All parameters required
+python publish.py \
+  --project-name <project-name> \      # lowercase, alphanumeric + hyphens, 2-32 chars
+  --admin-email <email> \              # valid email for Cognito and alerts
+  --region <region>                    # AWS region (e.g., us-east-1)
 
-# Different region
-./publish.sh --env prod --region us-west-2
-
-# Skip UI build (backend only)
-./publish.sh --env dev --skip-ui
-
-# Skip Lambda layer build (faster rebuilds during development)
-./publish.sh --env dev --skip-layers
+# Optional: Skip UI build for backend-only changes
+python publish.py \
+  --project-name <project-name> \
+  --admin-email <email> \
+  --region <region> \
+  --skip-ui
 ```
 
-Edit `samconfig.toml` to customize environment-specific settings:
-- Stack names
-- Parameter overrides (AdminEmail, OcrBackend, model IDs)
-- AWS region
+**Advanced Configuration:**
 
-Edit `template.yaml` parameters for advanced configuration:
-- `OcrBackend`: Choose between `textract` or `bedrock`
-- `BedrockOcrModelId`: Bedrock model for OCR
-- `TextEmbedModelId`: Bedrock model for text embeddings
-- `ImageEmbedModelId`: Bedrock model for image embeddings
+Edit `template.yaml` parameters for model configuration:
+- `OcrBackend`: Choose between `textract` (cost-effective) or `bedrock` (multimodal)
+- `BedrockOcrModelId`: Bedrock model for OCR (default: claude-3-5-haiku)
+- `TextEmbedModelId`: Text embedding model (default: titan-embed-text-v2)
+- `ImageEmbedModelId`: Image embedding model (default: titan-embed-image-v1)
 
 ## Cost Estimate
 
@@ -196,9 +195,8 @@ RAGStack-Lambda/
 │   │   └── schema.graphql
 │   └── ui/                        # React WebUI
 ├── template.yaml                  # CloudFormation/SAM template
-├── samconfig.toml                 # SAM configuration
+├── samconfig.toml                 # SAM configuration (build settings only)
 ├── publish.py                     # Deployment automation
-├── publish.sh                     # Deployment wrapper
 └── docs/                          # Documentation
 ```
 
@@ -219,7 +217,7 @@ sam build --use-container
 **Problem**: CloudFormation stack fails
 ```bash
 # Check stack events
-aws cloudformation describe-stack-events --stack-name RAGStack-prod
+aws cloudformation describe-stack-events --stack-name RAGStack-<project-name>
 ```
 
 ### Runtime Issues
@@ -230,16 +228,16 @@ aws cloudformation describe-stack-events --stack-name RAGStack-prod
 aws stepfunctions list-executions --state-machine-arn <ARN>
 
 # Check Lambda logs
-aws logs tail /aws/lambda/RAGStack-prod-ProcessDocument --follow
+aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow
 ```
 
 **Problem**: UI not loading
 ```bash
 # Invalidate CloudFront cache
-./scripts/invalidate_cloudfront.sh RAGStack-prod
+aws cloudfront create-invalidation --distribution-id <distribution-id> --paths "/*"
 
 # Check S3 bucket
-aws s3 ls s3://ragstack-ui-<account-id>/
+aws s3 ls s3://ragstack-<project-name>-ui-<account-id>/
 ```
 
 ## Security
