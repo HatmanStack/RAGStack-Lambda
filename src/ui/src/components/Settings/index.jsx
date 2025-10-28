@@ -16,6 +16,8 @@ import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import { getDocumentCount } from '../../graphql/queries/getDocumentCount';
+import { getReEmbedJobStatus } from '../../graphql/queries/getReEmbedJobStatus';
+import { reEmbedAllDocuments } from '../../graphql/mutations/reEmbedAllDocuments';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -38,10 +40,31 @@ export function Settings() {
   const [pendingEmbeddingChanges, setPendingEmbeddingChanges] = useState(null);
   const [documentCount, setDocumentCount] = useState(0);
 
+  // State for re-embedding job
+  const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
+
   // Load configuration on mount
   useEffect(() => {
     loadConfiguration();
+    checkReEmbedJobStatus(); // Check for existing job on mount
   }, []);
+
+  // Poll job status when a job is in progress
+  useEffect(() => {
+    if (reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS') {
+      const interval = setInterval(() => {
+        checkReEmbedJobStatus();
+      }, 5000); // Poll every 5 seconds
+
+      setPollingInterval(interval);
+
+      return () => clearInterval(interval);
+    } else if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  }, [reEmbedJobStatus]);
 
   const loadConfiguration = async () => {
     try {
@@ -81,6 +104,24 @@ export function Settings() {
     } catch (err) {
       console.error('Error checking document count:', err);
       return 0;
+    }
+  };
+
+  const checkReEmbedJobStatus = async () => {
+    try {
+      const response = await client.graphql({ query: getReEmbedJobStatus });
+      const status = response.data.getReEmbedJobStatus;
+      setReEmbedJobStatus(status);
+
+      if (status && status.status === 'COMPLETED') {
+        // Job finished, stop polling
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking re-embed job status:', err);
     }
   };
 
@@ -180,8 +221,15 @@ export function Settings() {
       await saveConfiguration(pendingEmbeddingChanges);
       setPendingEmbeddingChanges(null);
 
-      // TODO: Trigger re-embedding job (Phase 5)
-      alert('Re-embedding job will be implemented in Phase 5');
+      // Trigger re-embedding job
+      try {
+        const response = await client.graphql({ query: reEmbedAllDocuments });
+        const jobStatus = response.data.reEmbedAllDocuments;
+        setReEmbedJobStatus(jobStatus);
+      } catch (err) {
+        console.error('Error starting re-embed job:', err);
+        setError('Failed to start re-embedding job');
+      }
     }
   };
 
@@ -247,6 +295,24 @@ export function Settings() {
       {success && (
         <Alert type="success" dismissible onDismiss={() => setSuccess(false)}>
           Configuration saved successfully
+        </Alert>
+      )}
+
+      {/* Re-embedding job progress banner */}
+      {reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS' && (
+        <Alert type="info" dismissible={false}>
+          Re-embedding documents: {reEmbedJobStatus.processedDocuments} / {reEmbedJobStatus.totalDocuments} completed
+          {' '}({Math.round((reEmbedJobStatus.processedDocuments / reEmbedJobStatus.totalDocuments) * 100)}%)
+        </Alert>
+      )}
+
+      {reEmbedJobStatus && reEmbedJobStatus.status === 'COMPLETED' && (
+        <Alert
+          type="success"
+          dismissible
+          onDismiss={() => setReEmbedJobStatus(null)}
+        >
+          Re-embedding completed! All {reEmbedJobStatus.totalDocuments} documents have been processed.
         </Alert>
       )}
 
