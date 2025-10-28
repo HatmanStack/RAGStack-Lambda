@@ -27,6 +27,7 @@ RAGStack-Lambda is a serverless document processing pipeline that transforms uns
 - [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs)
 - [Architecture Diagram](#architecture-diagram)
 - [Components](#components)
+- [Runtime Configuration System](#runtime-configuration-system)
 - [Data Flow](#data-flow)
 - [Security](#security)
 - [Scalability](#scalability)
@@ -447,6 +448,415 @@ Orchestrates document processing:
 - Identity Pool for AWS credentials
 - MFA optional
 - Password policies enforced
+
+---
+
+## Runtime Configuration System
+
+The runtime configuration system allows users to modify operational parameters (OCR backends, embedding models, response models) through a WebUI Settings page without redeploying the CloudFormation stack.
+
+### Overview
+
+Traditional AWS deployments require stack updates (via `sam deploy` or CloudFormation) to change Lambda environment variables. This process takes 10-15 minutes and disrupts experimentation. The runtime configuration system stores configuration in DynamoDB, allowing Lambda functions to read parameters at invocation time for immediate changes.
+
+### Components
+
+#### ConfigurationTable (DynamoDB)
+
+**Design**: Single-table design with partition key `Configuration`
+
+**Three Item Types**:
+
+| Type | Purpose | Writable | Seeded By |
+|------|---------|----------|-----------|
+| **Schema** | Defines available parameters, validation rules, UI metadata | Read-only | CloudFormation → publish.py |
+| **Default** | System default values | Read-only | publish.py during deployment |
+| **Custom** | User-overridden values | Read-write | Settings UI via GraphQL |
+
+**Schema Format** (JSON Schema with UI extensions):
+```json
+{
+  "properties": {
+    "ocr_backend": {
+      "type": "string",
+      "enum": ["textract", "bedrock"],
+      "description": "OCR Backend",
+      "order": 1
+    },
+    "bedrock_ocr_model_id": {
+      "type": "string",
+      "enum": ["claude-3-5-haiku", "claude-3-5-sonnet", "claude-3-opus"],
+      "description": "Bedrock OCR Model",
+      "order": 2,
+      "dependsOn": {
+        "field": "ocr_backend",
+        "value": "bedrock"
+      }
+    }
+  }
+}
+```
+
+**Effective Configuration**: Custom values override Default values (merge semantics)
+
+#### ConfigurationManager (Python Library)
+
+**Location**: `lib/ragstack_common/config.py`
+
+**Key Methods**:
+- `get_effective_config()` - Merges Custom → Default, returns effective configuration
+- `get_parameter(param_name)` - Convenience method to get a single parameter
+- `update_custom_config(custom_config)` - Updates Custom configuration (used by resolver)
+- `get_schema()` - Returns Schema configuration
+
+**Design Decision - No Caching**:
+```python
+def get_effective_config(self):
+    """NO CACHING: Reads from DynamoDB on every call"""
+    default_config = self.get_configuration_item('Default')
+    custom_config = self.get_configuration_item('Custom')
+    return {**default_config, **custom_config}
+```
+
+**Rationale**:
+- Changes take effect immediately (within milliseconds)
+- DynamoDB read latency ~0.25ms (negligible vs. 1-15 minute Lambda execution)
+- Eliminates cache invalidation complexity
+- Predictable behavior (no stale values)
+
+**Cost Impact**: ~$0.25 per million reads (minimal)
+
+#### ConfigurationResolver Lambda
+
+**Location**: `src/lambda/configuration_resolver/index.py`
+
+**Purpose**: GraphQL resolver for configuration operations
+
+**Operations**:
+
+| Operation | Type | Description | Returns |
+|-----------|------|-------------|---------|
+| `getConfiguration` | Query | Returns Schema, Default, Custom configs | `ConfigurationResponse` |
+| `updateConfiguration` | Mutation | Updates Custom configuration | `Boolean` |
+| `getDocumentCount` | Query | Returns count of COMPLETED documents | `Int` |
+| `reEmbedAllDocuments` | Mutation | Triggers re-embedding job | `ReEmbedJobStatus` |
+| `getReEmbedJobStatus` | Query | Returns latest re-embedding job status | `ReEmbedJobStatus` |
+
+**Permissions**:
+- DynamoDB: GetItem, PutItem, UpdateItem, Query on ConfigurationTable
+- DynamoDB: Scan, Query on TrackingTable (for document counts)
+- Step Functions: StartExecution on ProcessingStateMachine (for re-embedding)
+
+#### Settings UI Component
+
+**Location**: `src/ui/src/components/Settings/index.jsx`
+
+**Features**:
+1. **Dynamic Form Rendering**: Reads Schema and generates form fields
+2. **Conditional Fields**: `dependsOn` pattern hides/shows fields based on other field values
+3. **Embedding Change Detection**: Detects changes to embedding models, prompts user
+4. **Re-embedding Job UI**: Progress banner with polling (5-second intervals)
+5. **Validation Indicators**: Shows which fields are customized from defaults
+
+**State Management**:
+```javascript
+const [schema, setSchema] = useState({});           // Schema from DynamoDB
+const [defaultConfig, setDefaultConfig] = useState({}); // Default values
+const [customConfig, setCustomConfig] = useState({});   // Custom overrides
+const [formValues, setFormValues] = useState({});       // Current form state
+const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null); // Job tracking
+```
+
+**Dynamic Rendering Example**:
+```javascript
+// Conditional field visibility
+if (property.dependsOn) {
+  const depField = property.dependsOn.field;
+  const depValue = property.dependsOn.value;
+  if (formValues[depField] !== depValue) {
+    return null; // Hide this field
+  }
+}
+```
+
+### Data Flow
+
+#### Configuration Read (Lambda Invocation)
+
+```
+┌──────────────┐
+│   Lambda     │
+│  Invoked     │
+└──────┬───────┘
+       │
+       │ 1. Import ConfigurationManager
+       ▼
+┌──────────────────────┐
+│ ConfigurationManager │
+│ .get_parameter()     │
+└──────┬───────────────┘
+       │
+       │ 2. Read from DynamoDB (no cache)
+       ▼
+┌─────────────────────┐      ┌─────────────────────┐
+│ Get "Default" item  │      │ Get "Custom" item   │
+│ from DynamoDB       │      │ from DynamoDB       │
+└──────┬──────────────┘      └──────┬──────────────┘
+       │                            │
+       │ 3. Merge Custom → Default
+       └─────────────┬──────────────┘
+                     ▼
+            ┌────────────────┐
+            │ Return merged  │
+            │ configuration  │
+            └────────────────┘
+```
+
+**Latency**: ~0.5ms DynamoDB read + ~0.1ms merge = **~0.6ms overhead**
+
+#### Configuration Write (Settings UI)
+
+```
+┌──────────────┐
+│   User       │
+│ Changes OCR  │
+│ Backend      │
+└──────┬───────┘
+       │
+       │ 1. Click "Save changes"
+       ▼
+┌──────────────────────┐
+│ Settings UI          │
+│ .handleSave()        │
+└──────┬───────────────┘
+       │
+       │ 2. Check for embedding changes
+       ▼
+┌──────────────────────┐     Yes    ┌────────────────────┐
+│ Embedding model      ├───────────▶│ Show modal with    │
+│ changed?             │            │ 3 options          │
+└──────┬───────────────┘            └────────────────────┘
+       │ No
+       │ 3. GraphQL mutation
+       ▼
+┌──────────────────────┐
+│ updateConfiguration  │
+│ mutation             │
+└──────┬───────────────┘
+       │
+       │ 4. Call ConfigurationResolver Lambda
+       ▼
+┌──────────────────────┐
+│ ConfigurationResolver│
+│ .handle_update()     │
+└──────┬───────────────┘
+       │
+       │ 5. Write Custom config to DynamoDB
+       ▼
+┌──────────────────────┐
+│ DynamoDB PutItem     │
+│ Configuration=Custom │
+└──────────────────────┘
+```
+
+#### Re-embedding Job Flow
+
+```
+┌──────────────┐
+│ User chooses │
+│ "Re-embed    │
+│ all docs"    │
+└──────┬───────┘
+       │
+       │ 1. Save config + trigger reEmbedAllDocuments mutation
+       ▼
+┌──────────────────────┐
+│ ConfigurationResolver│
+│ .handle_re_embed()   │
+└──────┬───────────────┘
+       │
+       │ 2. Query COMPLETED documents from TrackingTable
+       ▼
+┌──────────────────────┐
+│ Query StatusIndex    │
+│ (GSI on TrackingTable)│
+└──────┬───────────────┘
+       │
+       │ 3. Create job tracking item
+       ▼
+┌──────────────────────┐
+│ Put ReEmbedJob#{id}  │
+│ to ConfigurationTable│
+│ status=IN_PROGRESS   │
+└──────┬───────────────┘
+       │
+       │ 4. Start Step Functions execution for each document
+       ▼
+┌──────────────────────┐     For each      ┌────────────────────┐
+│ For each document:   ├─────document──────▶│ Start Step         │
+│ sfn.start_execution()│                    │ Functions          │
+└──────────────────────┘                    │ ProcessingPipeline │
+                                            └────────────────────┘
+                                                     │
+       ┌─────────────────────────────────────────────┘
+       │ 5. Document processing
+       ▼
+┌──────────────────────┐
+│ ProcessDocument      │
+│ (reuses OCR results) │
+└──────┬───────────────┘
+       │
+       │ 6. Generate embeddings with new model
+       ▼
+┌──────────────────────┐
+│ GenerateEmbeddings   │
+│ (checks reEmbedJobId)│
+└──────┬───────────────┘
+       │
+       │ 7. Update job progress
+       ▼
+┌──────────────────────┐
+│ Increment            │
+│ processedDocuments   │
+│ in ReEmbedJob#{id}   │
+└──────────────────────┘
+```
+
+**Job Tracking**:
+- Job item stored with key `ReEmbedJob#{jobId}` in ConfigurationTable
+- Pointer item `ReEmbedJob_Latest` references current job for easy UI access
+- UI polls every 5 seconds via `getReEmbedJobStatus` query
+
+### Design Decisions
+
+#### ADR: No Configuration Caching
+
+**Decision**: Lambda functions read configuration from DynamoDB on every invocation, with no caching.
+
+**Rationale**:
+- **Immediate Consistency**: Changes take effect on next invocation (~milliseconds)
+- **Simplicity**: No cache invalidation logic
+- **Low Overhead**: DynamoDB reads ~0.25ms, negligible vs. OCR/embedding operations
+- **Predictability**: No stale cached values
+
+**Trade-offs**:
+- Additional DynamoDB read cost (~$1.25 per million reads)
+- +0.6ms latency per invocation
+- No cache warming needed
+
+#### ADR: Backend-Only Validation
+
+**Decision**: Settings UI does NOT validate configuration values; only ConfigurationResolver Lambda enforces validation.
+
+**Rationale**:
+- **Single Source of Truth**: Validation logic in one place
+- **Security**: UI can be bypassed via direct GraphQL calls
+- **Simplicity**: No duplicated validation in JavaScript
+- **Flexibility**: Schema changes only require backend updates
+
+**Trade-offs**:
+- User sees validation errors after submission (round-trip)
+- Poorer UX compared to client-side validation
+- Acceptable trade-off for security and maintainability
+
+**Mitigation**: UI uses Schema enums for dropdowns (better UX, prevents common errors)
+
+#### ADR: Schema in CloudFormation
+
+**Decision**: Schema is defined in template.yaml and seeded via publish.py, not editable via UI.
+
+**Rationale**:
+- **Infrastructure as Code**: Schema version-controlled with infrastructure
+- **Deployment Safety**: Schema changes require review and deployment
+- **Consistency**: Ensures Schema matches deployed Lambda expectations
+
+**Trade-offs**:
+- Adding new models requires template update + redeploy
+- Less flexible than editable Schema
+- Acceptable for infrequent Schema changes
+
+#### ADR: No Admin Restrictions
+
+**Decision**: All authenticated users can read and write configuration (no RBAC).
+
+**Rationale**:
+- **Simplicity**: No role-based access control implementation
+- **MVP Scope**: Admin-only restrictions can be added post-MVP
+- **Trust Model**: Assumes authorized users are trusted
+- **Single-Team Use Case**: Suitable for single-team deployments
+
+**Trade-offs**:
+- Not suitable for multi-tenant environments
+- Could add Cognito Groups-based RBAC later if needed
+
+### Performance Characteristics
+
+**Configuration Read Latency** (per Lambda invocation):
+- DynamoDB GetItem (Default): ~0.25ms
+- DynamoDB GetItem (Custom): ~0.25ms
+- Python merge operation: ~0.1ms
+- **Total overhead**: ~0.6ms
+
+**Configuration Write Latency** (Settings UI save):
+- GraphQL mutation: ~50ms (including auth)
+- Lambda cold start: ~500ms (first time)
+- Lambda warm: ~100ms
+- DynamoDB PutItem: ~10ms
+- **Total**: ~160ms (warm), ~560ms (cold)
+
+**Re-embedding Job**:
+- Document query (StatusIndex GSI): ~50-200ms (depends on document count)
+- Step Functions trigger loop: ~100ms per document (synchronous)
+- **Limit**: 500 documents per job (to prevent Lambda timeout)
+- **Scalability Note**: For >500 documents, use SQS + Lambda consumer pattern
+
+### Failure Modes
+
+#### ConfigurationTable Unavailable
+
+**Symptom**: Lambda functions fail immediately
+
+**Behavior**:
+- `ConfigurationManager.__init__()` raises `ValueError` if table name not set
+- Lambdas fail with clear error: "Configuration table name not provided"
+- No fallback to environment variables (by design)
+
+**Recovery**: Fix CloudFormation environment variables, redeploy
+
+#### ConfigurationTable Empty
+
+**Symptom**: Lambdas fail with missing configuration
+
+**Behavior**:
+- `get_effective_config()` returns empty dict
+- Lambda code expects specific keys (e.g., `ocr_backend`)
+- KeyError raised when accessing missing config
+
+**Recovery**: Run `publish.py` to seed Default configuration
+
+#### Re-embedding Job Stuck
+
+**Symptom**: Job shows IN_PROGRESS indefinitely
+
+**Causes**:
+- Step Functions executions failed
+- GenerateEmbeddings Lambda errors
+- Job progress update failed
+
+**Recovery**:
+1. Check Step Functions console for failed executions
+2. Review CloudWatch logs for GenerateEmbeddings errors
+3. Manually update job status:
+   ```bash
+   aws dynamodb update-item \
+     --table-name RAGStack-<project>-Configuration \
+     --key '{"Configuration": {"S": "ReEmbedJob#<job-id>"}}' \
+     --update-expression "SET #status = :status" \
+     --expression-attribute-names '{"#status": "status"}' \
+     --expression-attribute-values '{":status": {"S": "COMPLETED"}}'
+   ```
+
+---
 
 ## Data Flow
 
