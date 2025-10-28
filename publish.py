@@ -636,6 +636,132 @@ def print_outputs(outputs, project_name, region):
     print()
 
 
+def seed_configuration_table(stack_name, region):
+    """
+    Seed ConfigurationTable with Schema and Default configurations.
+
+    Args:
+        stack_name: CloudFormation stack name
+        region: AWS region
+    """
+    print(f"\n{Colors.HEADER}=== Seeding Configuration Table ==={Colors.ENDC}")
+
+    # Get table name from CloudFormation outputs
+    cfn = boto3.client('cloudformation', region_name=region)
+    try:
+        response = cfn.describe_stacks(StackName=stack_name)
+        outputs = response['Stacks'][0]['Outputs']
+        table_name = next(
+            (o['OutputValue'] for o in outputs if o['OutputKey'] == 'ConfigurationTableName'),
+            None
+        )
+
+        if not table_name:
+            log_warning("ConfigurationTable not found in stack outputs")
+            return
+
+    except Exception as e:
+        log_warning(f"Could not retrieve ConfigurationTable name: {e}")
+        return
+
+    log_info(f"Configuration Table: {table_name}")
+
+    # Initialize DynamoDB
+    dynamodb = boto3.resource('dynamodb', region_name=region)
+    table = dynamodb.Table(table_name)
+
+    # Define Schema
+    schema_item = {
+        'Configuration': 'Schema',
+        'Schema': {
+            'type': 'object',
+            'required': ['ocr_backend', 'text_embed_model_id'],
+            'properties': {
+                'ocr_backend': {
+                    'type': 'string',
+                    'order': 1,
+                    'description': 'OCR backend to use for document processing',
+                    'enum': ['textract', 'bedrock'],
+                    'default': 'textract'
+                },
+                'bedrock_ocr_model_id': {
+                    'type': 'string',
+                    'order': 2,
+                    'description': 'Bedrock model for OCR (only used if backend is bedrock)',
+                    'enum': [
+                        'anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'anthropic.claude-3-5-sonnet-20241022-v2:0',
+                        'anthropic.claude-3-haiku-20240307-v1:0',
+                        'anthropic.claude-3-sonnet-20240229-v1:0'
+                    ],
+                    'dependsOn': {
+                        'field': 'ocr_backend',
+                        'value': 'bedrock'
+                    }
+                },
+                'text_embed_model_id': {
+                    'type': 'string',
+                    'order': 3,
+                    'description': 'Bedrock model for text embeddings',
+                    'enum': [
+                        'amazon.titan-embed-text-v2:0',
+                        'amazon.titan-embed-text-v1',
+                        'cohere.embed-english-v3',
+                        'cohere.embed-multilingual-v3'
+                    ],
+                    'default': 'amazon.titan-embed-text-v2:0'
+                },
+                'image_embed_model_id': {
+                    'type': 'string',
+                    'order': 4,
+                    'description': 'Bedrock model for image embeddings',
+                    'enum': [
+                        'amazon.titan-embed-image-v1'
+                    ],
+                    'default': 'amazon.titan-embed-image-v1'
+                },
+                'response_model_id': {
+                    'type': 'string',
+                    'order': 5,
+                    'description': 'Bedrock model for Knowledge Base query responses',
+                    'enum': [
+                        'anthropic.claude-3-5-sonnet-20241022-v2:0',
+                        'anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'anthropic.claude-3-opus-20240229-v1:0'
+                    ],
+                    'default': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+                }
+            }
+        }
+    }
+
+    # Define Default configuration
+    default_item = {
+        'Configuration': 'Default',
+        'ocr_backend': 'textract',
+        'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
+        'text_embed_model_id': 'amazon.titan-embed-text-v2:0',
+        'image_embed_model_id': 'amazon.titan-embed-image-v1',
+        'response_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+    }
+
+    try:
+        # Put Schema
+        log_info("Seeding Schema configuration...")
+        table.put_item(Item=schema_item)
+        log_success("Schema seeded")
+
+        # Put Default
+        log_info("Seeding Default configuration...")
+        table.put_item(Item=default_item)
+        log_success("Default seeded")
+
+        log_success("Configuration table seeded successfully\n")
+
+    except Exception as e:
+        log_warning(f"Error seeding configuration table: {e}\n")
+
+
 def main():
     """
     Main execution function.
@@ -741,6 +867,9 @@ Examples:
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
+
+        # Seed configuration table
+        seed_configuration_table(stack_name, args.region)
 
         # Configure and deploy UI
         if not args.skip_ui:
