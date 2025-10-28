@@ -295,7 +295,7 @@ sam local start-api
 python publish.py --project-name <project-name> --admin-email <email> --region <region>
 
 # 5. Run integration tests
-pytest tests/integration/ --env dev
+pytest tests/integration/ --stack-name RAGStack-<project-name>
 
 # 6. Deploy to production
 python publish.py --project-name <project-name> --admin-email <email> --region <region>

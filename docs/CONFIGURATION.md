@@ -479,7 +479,7 @@ npm run build
 
 ### Environment Variables
 
-The `publish.sh` script automatically sets these during deployment:
+The `publish.py` script automatically configures these during deployment:
 
 ```bash
 # Extracted from CloudFormation outputs

@@ -115,7 +115,7 @@ brew install python@3.13
 # Ubuntu
 sudo apt install python3.13
 
-# Update publish.sh if needed to use correct Python
+# Ensure Python 3.12+ is available
 ```
 
 #### 2. Docker Not Running

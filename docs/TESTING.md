@@ -55,7 +55,7 @@ python publish.py --project-name <project-name> --admin-email <email> --region <
 
 Before testing, ensure you have:
 
-- ✅ Deployed stack (run `./publish.sh`)
+- ✅ Deployed stack (run `python publish.py`)
 - ✅ Sample documents in `tests/sample-documents/`
 - ✅ AWS CLI configured with valid credentials
 - ✅ Access to CloudWatch logs
