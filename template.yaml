@@ -610,6 +610,7 @@ Resources:
           VECTOR_BUCKET: !Ref VectorBucket
           TEXT_EMBED_MODEL: !Ref TextEmbedModelId
           IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -622,6 +623,8 @@ Resources:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MeteringTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action: bedrock:InvokeModel

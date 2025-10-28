@@ -35,9 +35,13 @@ from ragstack_common.storage import (
     read_s3_text, read_s3_binary, write_s3_json, update_item
 )
 from ragstack_common.models import Status
+from ragstack_common.config import ConfigurationManager
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Module-level initialization (reused across Lambda invocations in same container)
+config_manager = ConfigurationManager()
 
 
 def lambda_handler(event, context):
@@ -49,10 +53,19 @@ def lambda_handler(event, context):
     if not tracking_table:
         raise ValueError("TRACKING_TABLE environment variable is required")
 
-    text_embed_model = os.environ.get('TEXT_EMBED_MODEL', 'amazon.titan-embed-text-v2:0')
-    image_embed_model = os.environ.get('IMAGE_EMBED_MODEL', 'amazon.titan-embed-image-v1')
+    # Read embedding models from ConfigurationManager (runtime configuration)
+    text_embed_model = config_manager.get_parameter(
+        'text_embed_model_id',
+        default='amazon.titan-embed-text-v2:0'
+    )
+    image_embed_model = config_manager.get_parameter(
+        'image_embed_model_id',
+        default='amazon.titan-embed-image-v1'
+    )
 
     logger.info(f"Generating embeddings: {json.dumps(event)}")
+    logger.info(f"Using text embedding model: {text_embed_model}")
+    logger.info(f"Using image embedding model: {image_embed_model}")
 
     try:
         document_id = event['document_id']
