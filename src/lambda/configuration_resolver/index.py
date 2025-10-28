@@ -17,10 +17,19 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
-# Initialize boto3 clients
-dynamodb = boto3.resource('dynamodb')
-configuration_table = dynamodb.Table(os.environ['CONFIGURATION_TABLE_NAME'])
-tracking_table = dynamodb.Table(os.environ['TRACKING_TABLE'])
+# Initialize boto3 clients (lazy initialization for testing)
+dynamodb = None
+configuration_table = None
+tracking_table = None
+
+
+def _initialize_tables():
+    """Initialize DynamoDB tables (called on first use)."""
+    global dynamodb, configuration_table, tracking_table
+    if dynamodb is None:
+        dynamodb = boto3.resource('dynamodb')
+        configuration_table = dynamodb.Table(os.environ['CONFIGURATION_TABLE_NAME'])
+        tracking_table = dynamodb.Table(os.environ['TRACKING_TABLE'])
 
 
 def lambda_handler(event, context):
@@ -44,6 +53,9 @@ def lambda_handler(event, context):
             }
         }
     """
+    # Initialize tables on first invocation
+    _initialize_tables()
+
     logger.info(f"Event received: {json.dumps(event)}")
 
     # Extract GraphQL operation
