@@ -1,8 +1,28 @@
 {
   "name": "ragstack-lambda",
   "version": "1.0.0",
-  "description": "Serverless OCR-to-Knowledge Base pipeline",
+  "description": "Serverless OCR-to-Knowledge Base pipeline on AWS",
+  "private": true,
   "scripts": {
-    "deploy": "./publish.sh"
-  }
+    "deploy": "./publish.sh",
+    "lint:backend": "ruff check .",
+    "lint:backend:fix": "ruff check . --fix",
+    "format:backend": "ruff format .",
+    "format:backend:check": "ruff format . --check",
+    "test:backend": "pytest -m 'not integration'",
+    "test:backend:all": "pytest",
+    "test:backend:unit": "pytest -m 'not integration'",
+    "test:backend:integration": "pytest -m integration",
+    "test:backend:coverage": "pytest --cov=lib --cov=src/lambda --cov-report=html --cov-report=term"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "bedrock",
+    "ocr",
+    "rag",
+    "serverless"
+  ],
+  "author": "",
+  "license": "ISC"
 }
