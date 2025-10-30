@@ -300,7 +300,7 @@ The base repository README follows a comprehensive structure with clear sections
 ## Documentation Types Reference
 
 ### User-Facing Documentation
-```
+```text
 README.md                   # Project overview and quick start
 docs/USER_GUIDE.md         # Step-by-step usage instructions
 docs/DEPLOYMENT.md         # Deployment procedures
@@ -308,15 +308,15 @@ docs/TROUBLESHOOTING.md    # Common issues and solutions
 ```
 
 ### Developer Documentation
-```
+```text
 docs/ARCHITECTURE.md       # System design and components
-docs/DEVELOPMENT.md        # Development setup and workflows
+docs/DEVELOPMENT.MD        # Development setup and workflows
 docs/TESTING.md           # Testing strategies and commands
 docs/CONTRIBUTING.md      # Contribution guidelines
 ```
 
 ### Reference Documentation
-```
+```text
 docs/API.md               # API reference (if applicable)
 docs/CONFIGURATION.md     # Configuration options
 docs/CHANGELOG.md         # Version history

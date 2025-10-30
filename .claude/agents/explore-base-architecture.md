@@ -124,7 +124,7 @@ Return your findings in this structured format:
 - **Location**: `lib/idp_common_pkg/idp_common/`
 - **Pattern**: [Package structure and reuse strategy]
 - **Example**:
-  ```
+  ```text
   lib/
   └── idp_common_pkg/
       └── idp_common/
@@ -240,7 +240,7 @@ The base repository organizes Lambda functions in individual directories under s
 - **Location**: `/root/accelerated-intelligent-document-processing-on-aws/src/lambda/`
 - **Pattern**: One directory per function with handler file
 - **Example**:
-  ```
+  ```text
   src/lambda/
   ├── configuration_resolver/
   │   ├── index.py           # Handler
@@ -298,7 +298,7 @@ The base repository organizes Lambda functions in individual directories under s
 
 ## Key Files Quick Reference
 
-```
+```text
 Lambda Functions:
 /root/accelerated-intelligent-document-processing-on-aws/src/lambda/*/index.py
 

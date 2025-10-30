@@ -318,7 +318,7 @@ The base repository defines Lambda functions using AWS::Serverless::Function wit
 
 ## Key Infrastructure Files
 
-```
+```text
 SAM Template:
 /root/accelerated-intelligent-document-processing-on-aws/template.yaml
 

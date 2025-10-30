@@ -61,10 +61,10 @@ def lambda_handler(event, context):
         logger.info(f"Resolver {field_name} completed successfully")
         return result
     except ValueError as e:
-        logger.error(f"Validation error in {field_name}: {e}")
+        logger.exception(f"Validation error in {field_name}: {e}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in {field_name}: {e}", exc_info=True)
+        logger.exception(f"Unexpected error in {field_name}: {e}")
         raise
 
 
