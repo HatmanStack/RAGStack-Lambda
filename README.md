@@ -215,7 +215,7 @@ List all available subagents:
 ```
 
 Invoke a specific subagent:
-```
+```bash
 Use explore-base-testing to find pytest configuration patterns
 ```
 

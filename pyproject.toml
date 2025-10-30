@@ -9,7 +9,7 @@ requires-python = ">=3.13"
 # Ruff version: 0.14.2 (pinned in requirements-dev.txt)
 # Line length set to 100 chars (AWS Lambda best practice)
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 # Include Python source directories
 include = ["lib/**/*.py", "src/lambda/**/*.py", "tests/**/*.py"]

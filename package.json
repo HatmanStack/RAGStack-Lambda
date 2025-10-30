@@ -12,9 +12,10 @@
     "format:check": "uv run ruff format . --check",
     "test:backend": "uv run pytest -m 'not integration'",
     "test:backend:integration": "uv run pytest -m integration",
+    "test:backend:coverage": "uv run pytest -m 'not integration' --cov=lib --cov=src/lambda --cov-report=html --cov-report=term --cov-report=xml",
     "test:frontend": "cd src/ui && npm test -- --run",
     "test": "npm run test:backend && npm run test:frontend",
-    "test:coverage": "uv run pytest --cov=lib --cov=src/lambda --cov-report=html --cov-report=term && cd src/ui && npm run test:coverage",
+    "test:coverage": "npm run test:backend:coverage && cd src/ui && npm run test:coverage",
     "test:all": "npm run lint && npm run test"
   },
   "keywords": [
