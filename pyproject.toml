@@ -3,7 +3,7 @@
 [project]
 name = "ragstack-lambda"
 version = "1.0.0"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 
 [tool.ruff]
 # Ruff version: 0.14.2 (pinned in requirements-dev.txt)

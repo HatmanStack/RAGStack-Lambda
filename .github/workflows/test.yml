@@ -20,8 +20,8 @@ jobs:
     strategy:
       matrix:
         # Test on multiple Python versions if needed
-        python-version: ['3.12']
-        node-version: ['18']
+        python-version: ['3.13']
+        node-version: ['22']
 
     steps:
       - name: Checkout code

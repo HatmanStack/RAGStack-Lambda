@@ -1369,7 +1369,7 @@ The workflow runs automatically on:
 - Every pull request targeting `main` or `develop`
 
 **Steps executed**:
-1. **Setup** - Checks out code, sets up Python 3.12 and Node.js 18
+1. **Setup** - Checks out code, sets up Python 3.13 and Node.js 22
 2. **Cache dependencies** - Caches pip and npm packages for faster runs
 3. **Install dependencies** - Installs Python and Node.js packages
 4. **Lint backend** - Runs `npm run lint:backend` (ruff)

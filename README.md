@@ -70,7 +70,7 @@ python publish.py \
 **Note**: Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter.
 
 The deployment will:
-1. Validate inputs and check prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI)
+1. Validate inputs and check prerequisites (Python 3.13+, Node.js 22+, AWS CLI, SAM CLI)
 2. Copy shared libraries to Lambda functions
 3. Build Lambda functions via SAM
 4. Deploy infrastructure via CloudFormation
