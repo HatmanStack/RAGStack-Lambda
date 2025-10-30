@@ -67,50 +67,46 @@ pytest --version
 
 | Command | Purpose | Time |
 |---------|---------|------|
-| `npm run lint` | Lint backend + frontend | ~15s |
-| `npm run lint:fix` | Auto-fix lint issues | ~15s |
-| `npm test` | Run all unit tests | ~5s |
-| `npm run test:all` | Lint + test everything | ~20s |
-| `npm run lint:backend` | Lint Python code only | ~3s |
+| `npm run lint` | Auto-fix and lint all code (backend + frontend) | ~5s |
+| `npm test` | Run all unit tests (backend + frontend) | ~3s |
+| `npm run test:all` | Lint (with auto-fix) + test everything | ~8s |
+| `npm run lint:backend` | Auto-fix and lint Python code | ~2s |
+| `npm run lint:frontend` | Auto-fix and lint React code | ~3s |
 | `npm run test:backend` | Run pytest unit tests only | ~1s |
-| `npm run lint:frontend` | Lint React code only (needs fix) | ~5s |
-| `npm run test:frontend` | Run Vitest tests only (needs fix) | ~2s |
+| `npm run test:frontend` | Run Vitest tests only | ~2s |
+| `npm run test:backend:integration` | Run pytest integration tests | Varies |
+| `npm run test:coverage` | Generate coverage reports | ~5s |
 
 ### Backend Testing
 
 #### Linting with Ruff
 
-**Check code quality:**
+**Lint and auto-fix (default behavior):**
 
 ```bash
-# Lint all Python code
+# Auto-fix and format all Python code
 npm run lint:backend
 
-# Or use ruff directly
-ruff check .
-
-# Check specific directory
-ruff check lib/ragstack_common/
-```
-
-**Auto-fix issues:**
-
-```bash
-# Fix all auto-fixable violations
-npm run lint:backend:fix
+# This runs:
+# 1. ruff check . --fix  (auto-fix linting issues)
+# 2. ruff format .        (format code)
 
 # Or use ruff directly
 ruff check . --fix
+ruff format .
+
+# Check specific directory
+ruff check lib/ragstack_common/ --fix
 ```
 
-**Format code:**
+**Format code separately:**
 
 ```bash
 # Format all Python files
-npm run format:backend
+npm run format
 
-# Check formatting without changing files
-npm run format:backend:check
+# Check formatting without changing files (for CI)
+npm run format:check
 ```
 
 #### Running Tests with pytest
@@ -131,14 +127,14 @@ pytest lib/ragstack_common/test_bedrock.py
 pytest lib/ragstack_common/test_config.py::test_init_with_table_name
 ```
 
-**All tests (includes integration):**
+**Integration tests:**
 
 ```bash
-# Run all tests including integration (requires AWS credentials)
-npm run test:backend:all
+# Run integration tests only (requires AWS credentials)
+npm run test:backend:integration
 
 # Or use pytest directly
-pytest
+pytest -m integration
 ```
 
 **With coverage:**
@@ -173,29 +169,26 @@ Tests are marked with pytest markers:
 
 ### Frontend Testing
 
-**⚠️ Note:** Frontend testing currently has dependency version issues in `src/ui/package.json`. The commands are configured correctly in root `package.json`, but need `src/ui/package.json` fixes before they'll work.
-
-#### Linting with ESLint (once fixed)
+#### Linting with ESLint
 
 ```bash
-# Lint React code
+# Auto-fix and lint React code
 npm run lint:frontend
 
-# Auto-fix lint issues
-npm run lint:frontend:fix
+# This runs ESLint with --fix flag automatically
 ```
 
-#### Running Tests with Vitest (once fixed)
+#### Running Tests with Vitest
 
 ```bash
 # Run all frontend tests
 npm run test:frontend
 
-# Run in watch mode
-npm run test:frontend:watch
+# Run in watch mode (from src/ui directory)
+cd src/ui && npm run test:watch
 
 # Generate coverage report
-npm run test:frontend:coverage
+npm run test:coverage  # Includes both backend and frontend
 ```
 
 ### Unified Commands
@@ -203,16 +196,13 @@ npm run test:frontend:coverage
 Run backend and frontend together:
 
 ```bash
-# Lint everything
+# Auto-fix and lint everything (backend + frontend)
 npm run lint
 
-# Auto-fix everything
-npm run lint:fix
-
-# Run all tests
+# Run all unit tests (backend + frontend)
 npm test
 
-# Complete validation (lint + test)
+# Complete validation (auto-fix lint + test)
 npm run test:all
 ```
 
@@ -223,17 +213,24 @@ npm run test:all
 Before committing code:
 
 ```bash
-# 1. Format and lint
-npm run format
-npm run lint:fix
+# Run complete validation (auto-fixes issues, then tests)
+npm run test:all
+
+# If all pass, commit
+git add .
+git commit -m "feat: add new feature"
+```
+
+**Or step-by-step:**
+
+```bash
+# 1. Auto-fix and lint
+npm run lint
 
 # 2. Run tests
 npm test
 
-# 3. Check for errors
-npm run lint
-
-# 4. If all pass, commit
+# 3. If all pass, commit
 git add .
 git commit -m "feat: add new feature"
 ```
@@ -331,18 +328,11 @@ cd ../..
 pytest lib/ragstack_common/ tests/unit/test_ragstack_common_install.py
 ```
 
-#### Frontend commands fail
+#### Lint command seems to hang
 
-**Cause:** `src/ui/package.json` has invalid vitest version (^6.0.3 doesn't exist).
+**Cause:** Auto-fix is processing many files.
 
-**Status:** Known issue, needs `src/ui/package.json` update to fix vitest version.
-
-**Workaround:** Test backend only for now:
-
-```bash
-npm run lint:backend
-npm run test:backend
-```
+**Solution:** This is normal - ruff is fixing issues automatically. Wait for it to complete (~5s).
 
 ### Performance Expectations
 
@@ -350,13 +340,13 @@ Typical timing on a standard development machine:
 
 | Command | Expected Time | Notes |
 |---------|--------------|-------|
-| `npm run lint:backend` | < 5s | ~34 Python files |
+| `npm run lint:backend` | < 2s | Auto-fix + format ~34 Python files |
 | `npm run test:backend` | < 2s | 46 unit tests |
-| `npm run lint:frontend` | < 5s | Once dependencies fixed |
-| `npm run test:frontend` | < 3s | Once dependencies fixed |
-| `npm run lint` | < 10s | Backend + frontend |
-| `npm test` | < 5s | All unit tests |
-| `npm run test:all` | < 15s | Lint + all tests |
+| `npm run lint:frontend` | < 3s | Auto-fix React/JSX files |
+| `npm run test:frontend` | < 2s | Vitest unit tests |
+| `npm run lint` | < 5s | Auto-fix backend + frontend |
+| `npm test` | < 3s | All unit tests |
+| `npm run test:all` | < 8s | Auto-fix lint + all tests |
 
 **Note:** Times will increase as the codebase grows. Re-benchmark quarterly.
 

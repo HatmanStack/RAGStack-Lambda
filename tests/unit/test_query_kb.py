@@ -40,8 +40,7 @@ def mock_bedrock_response():
     return {
         "output": {
             "text": (
-                "Based on the documents, the main topics are "
-                "cloud architecture and AWS services."
+                "Based on the documents, the main topics are cloud architecture and AWS services."
             )
         },
         "citations": [
