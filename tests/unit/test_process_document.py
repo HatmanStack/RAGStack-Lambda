@@ -2,10 +2,16 @@
 Unit tests for process_document Lambda function.
 """
 
+import os
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
+# Add Lambda function to path
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "process_document"
+sys.path.insert(0, str(lambda_dir))
 
 # Mock the ragstack_common imports before importing index
 # Create mock modules

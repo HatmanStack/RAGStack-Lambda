@@ -4,10 +4,15 @@ Unit tests for query_kb Lambda function.
 
 # Mock imports
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from botocore.exceptions import ClientError
+
+# Add Lambda function to path
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "query_kb"
+sys.path.insert(0, str(lambda_dir))
 
 mock_config = MagicMock()
 sys.modules["ragstack_common"] = MagicMock()

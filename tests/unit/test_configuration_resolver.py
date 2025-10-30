@@ -10,7 +10,8 @@ import pytest
 from botocore.exceptions import ClientError
 
 # Import the handler module
-sys.path.insert(0, str(Path(__file__).parent))
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "appsync_resolvers"
+sys.path.insert(0, str(lambda_dir))
 import index
 
 # Fixtures
