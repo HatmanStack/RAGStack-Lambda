@@ -1298,6 +1298,180 @@ npm run test:all
 
 ---
 
+## CI/CD Integration
+
+### GitHub Actions
+
+The project includes a complete GitHub Actions workflow that automatically runs all local tests on every push and pull request.
+
+**Workflow location**: `.github/workflows/test.yml`
+
+#### What the CI Workflow Does
+
+The workflow runs automatically on:
+- Every push to `main`, `develop`, or `fix-deploy` branches
+- Every pull request targeting `main` or `develop`
+
+**Steps executed**:
+1. **Setup** - Checks out code, sets up Python 3.12 and Node.js 18
+2. **Cache dependencies** - Caches pip and npm packages for faster runs
+3. **Install dependencies** - Installs Python and Node.js packages
+4. **Lint backend** - Runs `npm run lint:backend` (ruff)
+5. **Lint frontend** - Runs `npm run lint:frontend` (ESLint)
+6. **Test backend** - Runs `npm run test:backend` (pytest)
+7. **Test frontend** - Runs `npm run test:frontend` (Vitest)
+8. **Generate coverage** - Creates coverage reports (optional)
+
+**Integration tests** (optional):
+- Runs only on pushes to `main` branch
+- Requires AWS credentials configured as GitHub Secrets
+- Runs `npm run test:backend:integration`
+
+#### Viewing Workflow Status
+
+**On GitHub**:
+1. Navigate to your repository
+2. Click the "Actions" tab
+3. View workflow runs and results
+
+**Status indicators**:
+- ✅ Green check = All tests passed
+- ❌ Red X = Tests failed
+- 🟡 Yellow dot = Tests running
+
+#### Adding Status Badges
+
+Add these badges to your README.md:
+
+```markdown
+[![Test](https://github.com/USERNAME/RAGStack-Lambda/actions/workflows/test.yml/badge.svg)](https://github.com/USERNAME/RAGStack-Lambda/actions/workflows/test.yml)
+```
+
+Replace `USERNAME` with your GitHub username or organization.
+
+#### Configuring Integration Tests (Optional)
+
+To enable integration tests in CI:
+
+**Step 1: Add GitHub Secrets**
+
+Navigate to repository Settings → Secrets and variables → Actions, then add:
+- `AWS_ACCESS_KEY_ID` - Your AWS access key
+- `AWS_SECRET_ACCESS_KEY` - Your AWS secret key
+
+**Step 2: Deploy test stack**
+
+```bash
+# Deploy a dedicated test stack for CI
+python publish.py \
+  --project-name ragstack-ci-test \
+  --admin-email ci@example.com \
+  --region us-east-1
+```
+
+**Step 3: Update workflow**
+
+The workflow is already configured to run integration tests on `main` branch pushes. No changes needed if you want this behavior.
+
+#### Customizing the Workflow
+
+Edit `.github/workflows/test.yml` to customize:
+
+**Change trigger branches**:
+```yaml
+on:
+  push:
+    branches: [ main, develop, your-branch ]
+```
+
+**Add coverage reporting**:
+```yaml
+- name: Upload coverage to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage.xml
+```
+
+**Add Slack notifications**:
+```yaml
+- name: Slack Notification
+  uses: 8398a7/action-slack@v3
+  with:
+    status: ${{ job.status }}
+    webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+```
+
+#### Troubleshooting CI Failures
+
+##### Tests pass locally but fail in CI
+
+**Check**:
+1. Python/Node versions match (see workflow)
+2. Dependencies installed correctly (check CI logs)
+3. Environment variables set (if needed)
+
+**Debug**:
+```bash
+# Run tests in same environment as CI
+docker run -it python:3.12 bash
+# Then install dependencies and run tests
+```
+
+##### Workflow doesn't trigger
+
+**Check**:
+1. Workflow file exists at `.github/workflows/test.yml`
+2. YAML syntax is valid (use YAML linter)
+3. Branch name matches trigger configuration
+
+##### Integration tests fail with AWS errors
+
+**Check**:
+1. AWS credentials are set in GitHub Secrets
+2. Credentials have required permissions
+3. Test stack is deployed and accessible
+4. Stack name matches environment variable in workflow
+
+#### Performance Optimization
+
+**Faster CI runs**:
+1. **Cache aggressively** - The workflow caches pip and npm packages
+2. **Skip optional steps** - Remove coverage or integration tests if not needed
+3. **Run in parallel** - Separate jobs for lint/test can run concurrently:
+   ```yaml
+   jobs:
+     lint:
+       # Linting job
+     test:
+       # Testing job
+   ```
+
+**Current CI performance** (typical):
+- Setup + dependencies: ~2-3 minutes (first run)
+- Setup + dependencies: ~30 seconds (cached)
+- Lint + tests: ~10-15 seconds
+- **Total**: ~1-4 minutes per run
+
+#### Best Practices
+
+1. **Run locally first** - Don't rely on CI to catch issues
+   ```bash
+   npm run test:all  # Before pushing
+   ```
+
+2. **Fix broken builds immediately** - Don't let CI stay red
+
+3. **Review CI logs** - Understand why tests failed
+
+4. **Keep workflows updated** - Update dependencies and actions regularly
+
+5. **Protect main branch** - Require CI to pass before merging:
+   - Settings → Branches → Add rule
+   - Enable "Require status checks to pass"
+   - Select "Run Tests and Linting"
+
+---
+
 ## Quick Start
 
 **Test your deployment in 5 minutes:**
