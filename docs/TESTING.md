@@ -1370,13 +1370,14 @@ The workflow runs automatically on:
 
 **Steps executed**:
 1. **Setup** - Checks out code, sets up Python 3.13 and Node.js 22
-2. **Cache dependencies** - Caches pip and npm packages for faster runs
-3. **Install dependencies** - Installs Python and Node.js packages
-4. **Lint backend** - Runs `npm run lint:backend` (ruff)
-5. **Lint frontend** - Runs `npm run lint:frontend` (ESLint)
-6. **Test backend** - Runs `npm run test:backend` (pytest)
-7. **Test frontend** - Runs `npm run test:frontend` (Vitest)
-8. **Generate coverage** - Creates coverage reports (optional)
+2. **Install uv** - Installs uv package manager for Python
+3. **Cache dependencies** - Caches uv and npm packages for faster runs
+4. **Install dependencies** - Installs Python (via uv) and Node.js packages
+5. **Lint backend** - Runs `npm run lint:backend` (ruff)
+6. **Lint frontend** - Runs `npm run lint:frontend` (ESLint)
+7. **Test backend** - Runs `npm run test:backend` (pytest)
+8. **Test frontend** - Runs `npm run test:frontend` (Vitest)
+9. **Generate coverage** - Creates coverage reports (optional)
 
 **Integration tests** (optional):
 - Runs only on pushes to `main` branch
