@@ -1,6 +1,6 @@
 ---
 name: explore-base-docs
-description: Documentation structure and style specialist. Use proactively when writing or improving documentation, analyzing doc organization, or establishing documentation standards.
+description: Documentation structure and style specialist. CAN BE USED when writing or improving documentation, analyzing doc organization, or establishing documentation standards.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---

@@ -1,6 +1,6 @@
 ---
 name: explore-base-infrastructure
-description: Infrastructure and deployment patterns specialist. Use proactively when working with SAM templates, CloudFormation resources, or deployment automation.
+description: Infrastructure and deployment patterns specialist. CAN BE USED when working with SAM templates, CloudFormation resources, or deployment automation.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---

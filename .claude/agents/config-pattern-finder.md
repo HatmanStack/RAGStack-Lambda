@@ -1,6 +1,6 @@
 ---
 name: config-pattern-finder
-description: Configuration management patterns specialist. Use proactively when implementing configuration systems, DynamoDB operations, GraphQL resolvers, or dynamic UI forms.
+description: Configuration management patterns specialist. CAN BE USED when implementing configuration systems, DynamoDB operations, GraphQL resolvers, or dynamic UI forms.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---

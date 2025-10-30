@@ -1,6 +1,6 @@
 ---
 name: explore-base-testing
-description: Testing patterns and configurations specialist. Use proactively when implementing or improving test infrastructure, analyzing test organization, or finding testing best practices.
+description: Testing patterns and configurations specialist. CAN BE USED when implementing or improving test infrastructure, analyzing test organization, or finding testing best practices.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---

@@ -1,6 +1,6 @@
 ---
 name: explore-base-general
-description: General-purpose base repository explorer. Use proactively when investigating project structure, dependencies, or cross-cutting concerns not covered by specialized agents.
+description: General-purpose base repository explorer. CAN BE USED when investigating project structure, dependencies, or cross-cutting concerns not covered by specialized agents.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---

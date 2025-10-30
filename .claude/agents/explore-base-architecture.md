@@ -1,6 +1,6 @@
 ---
 name: explore-base-architecture
-description: Lambda architecture and design patterns specialist. Use proactively when analyzing code organization, architectural patterns, or designing Lambda function structure.
+description: Lambda architecture and design patterns specialist. CAN BE USED when analyzing code organization, architectural patterns, or designing Lambda function structure.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, AskUserQuestion
 model: haiku
 ---
