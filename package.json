@@ -13,7 +13,20 @@
     "test:backend:all": "pytest",
     "test:backend:unit": "pytest -m 'not integration'",
     "test:backend:integration": "pytest -m integration",
-    "test:backend:coverage": "pytest --cov=lib --cov=src/lambda --cov-report=html --cov-report=term"
+    "test:backend:coverage": "pytest --cov=lib --cov=src/lambda --cov-report=html --cov-report=term",
+    "lint:frontend": "cd src/ui && npm run lint",
+    "lint:frontend:fix": "cd src/ui && npm run lint -- --fix",
+    "test:frontend": "cd src/ui && npm test -- --run",
+    "test:frontend:watch": "cd src/ui && npm run test:watch",
+    "test:frontend:coverage": "cd src/ui && npm run test:coverage",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:fix": "npm run lint:backend:fix && npm run lint:frontend:fix",
+    "format": "npm run format:backend",
+    "format:check": "npm run format:backend:check",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:unit": "npm run test:backend:unit && npm run test:frontend",
+    "test:coverage": "npm run test:backend:coverage && npm run test:frontend:coverage",
+    "test:all": "npm run lint && npm run test"
   },
   "keywords": [
     "aws",
