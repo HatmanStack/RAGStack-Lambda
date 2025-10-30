@@ -280,9 +280,17 @@ ptw -- -m "not integration"
 npm run test:frontend:watch
 ```
 
-### Troubleshooting
+### Troubleshooting Local Testing
 
-#### "ruff: command not found"
+This section covers common issues you may encounter during local testing.
+
+#### Dependency Issues
+
+##### Issue: "ruff: command not found"
+
+**Symptom:** Running `npm run lint` fails with "ruff: command not found"
+
+**Cause:** Ruff not installed or not in PATH
 
 **Solution:**
 
@@ -292,9 +300,18 @@ pip install -r requirements-dev.txt
 
 # Verify installation
 ruff --version
+# Expected: ruff 0.14.2
 ```
 
-#### "pytest: command not found"
+**Prevention:** Run `pip install -r requirements-dev.txt` after every `git pull`
+
+---
+
+##### Issue: "pytest: command not found"
+
+**Symptom:** Running `npm run test:backend` fails with "pytest: command not found"
+
+**Cause:** pytest not installed
 
 **Solution:**
 
@@ -304,9 +321,16 @@ pip install -r requirements-dev.txt
 
 # Verify installation
 pytest --version
+# Expected: pytest 8.x.x
 ```
 
-#### "Module not found" in frontend tests
+---
+
+##### Issue: "Module not found" in frontend tests
+
+**Symptom:** `npm run test:frontend` fails with module import errors
+
+**Cause:** Frontend dependencies not installed
 
 **Solution:**
 
@@ -315,11 +339,116 @@ pytest --version
 cd src/ui
 npm install
 cd ../..
+
+# Verify
+npm run test:frontend
 ```
 
-#### Tests fail with import errors
+---
 
-**Cause:** Some Lambda function tests have path setup issues (pre-existing).
+##### Issue: "Package not found" after npm install
+
+**Symptom:** Frontend dependencies fail to install with version conflicts
+
+**Cause:** Node.js version incompatibility or corrupted cache
+
+**Solution:**
+
+```bash
+# Try 1: Clear cache and reinstall
+cd src/ui
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+
+# Try 2: Use legacy peer deps (if conflicts)
+npm install --legacy-peer-deps
+
+# Try 3: Check Node version
+node --version
+# Expected: v18.x or higher
+```
+
+---
+
+#### Configuration Issues
+
+##### Issue: Tests pass locally but fail in CI
+
+**Symptom:** All tests pass on your machine but fail in GitHub Actions
+
+**Cause:** Different environment (Python/Node versions, missing dependencies)
+
+**Solution:**
+
+```bash
+# Check versions match CI
+python --version  # Should match CI
+node --version    # Should match CI
+
+# Run tests in clean environment
+python -m venv test_venv
+source test_venv/bin/activate
+pip install -r requirements-dev.txt
+npm run test:all
+```
+
+**Prevention:** Keep CI versions in sync with local development
+
+---
+
+##### Issue: Ruff configuration not being applied
+
+**Symptom:** Ruff doesn't enforce expected rules
+
+**Cause:** pyproject.toml not in project root or misconfigured
+
+**Solution:**
+
+```bash
+# Verify pyproject.toml exists
+ls -la pyproject.toml
+
+# Verify ruff is reading it
+ruff check . --show-settings
+
+# Check for conflicting .ruff.toml
+find . -name ".ruff.toml"
+# Should find nothing (we use pyproject.toml)
+```
+
+---
+
+##### Issue: ESLint ignoring files
+
+**Symptom:** ESLint doesn't lint some files
+
+**Cause:** .eslintignore or configuration issues
+
+**Solution:**
+
+```bash
+cd src/ui
+
+# Check what files ESLint sees
+npx eslint --debug src/
+
+# Check .eslintignore
+cat .eslintignore
+
+# Force lint specific file
+npx eslint --no-ignore src/path/to/file.js
+```
+
+---
+
+#### Execution Issues
+
+##### Issue: Tests fail with import errors
+
+**Symptom:** `ImportError: cannot import name 'X' from 'Y'`
+
+**Cause:** Python path issues or circular imports
 
 **Workaround:** Run only working tests:
 
@@ -328,11 +457,361 @@ cd ../..
 pytest lib/ragstack_common/ tests/unit/test_ragstack_common_install.py
 ```
 
-#### Lint command seems to hang
+**Proper fix:** Update test file paths (see Example 2 in Detailed Examples)
 
-**Cause:** Auto-fix is processing many files.
+---
 
-**Solution:** This is normal - ruff is fixing issues automatically. Wait for it to complete (~5s).
+##### Issue: Tests timeout or hang
+
+**Symptom:** Test execution never completes
+
+**Cause:** Infinite loop, waiting for external service, or deadlock
+
+**Solution:**
+
+```bash
+# Run with timeout
+pytest --timeout=10 path/to/test.py
+
+# Find hanging test
+pytest -v --tb=short
+# Note which test is running when it hangs
+
+# Run with verbose output
+pytest -vs path/to/hanging_test.py
+```
+
+---
+
+##### Issue: Flaky tests (pass/fail intermittently)
+
+**Symptom:** Tests pass sometimes, fail other times
+
+**Cause:** Race conditions, time dependencies, or external state
+
+**Solution:**
+
+```bash
+# Run test multiple times to confirm flakiness
+pytest --count=10 path/to/test.py
+
+# Add explicit waits/sleeps
+# Fix time-based assertions
+# Mock external dependencies
+```
+
+---
+
+##### Issue: Coverage report not generated
+
+**Symptom:** `npm run test:coverage` doesn't create htmlcov/ directory
+
+**Cause:** pytest-cov not installed or wrong working directory
+
+**Solution:**
+
+```bash
+# Install coverage tools
+pip install pytest-cov
+
+# Run from project root
+cd /path/to/project/root
+npm run test:coverage
+
+# Check htmlcov/ was created
+ls -la htmlcov/
+```
+
+---
+
+#### Performance Issues
+
+##### Issue: Tests are very slow (>2 minutes)
+
+**Symptom:** `npm run test:all` takes longer than expected
+
+**Cause:** Running integration tests, slow setup, or many files
+
+**Solution:**
+
+```bash
+# Profile test execution
+pytest --durations=10
+
+# Identify slow tests
+# Consider:
+# 1. Skip slow tests in quick runs: @pytest.mark.slow
+# 2. Use fixtures to share setup
+# 3. Mock external services
+# 4. Run in parallel: pytest -n auto
+```
+
+---
+
+##### Issue: Linting takes too long
+
+**Symptom:** `npm run lint` takes >30 seconds
+
+**Cause:** Large codebase or slow disk I/O
+
+**Solution:**
+
+```bash
+# Lint only changed files
+git diff --name-only | grep '\.py$' | xargs ruff check --fix
+
+# Use cache (enabled by default)
+ruff check . --fix
+
+# Profile ruff performance
+time ruff check .
+```
+
+---
+
+##### Issue: npm install is extremely slow
+
+**Symptom:** Frontend dependency installation takes >5 minutes
+
+**Cause:** Network issues, registry problems, or large dependency tree
+
+**Solution:**
+
+```bash
+cd src/ui
+
+# Try 1: Use different registry
+npm install --registry=https://registry.npmjs.org/
+
+# Try 2: Clear cache
+npm cache clean --force
+npm install
+
+# Try 3: Use offline mode (if packages cached)
+npm install --offline
+```
+
+---
+
+#### Environment Issues
+
+##### Issue: Different behavior in virtual environment
+
+**Symptom:** Tests pass in venv but fail globally (or vice versa)
+
+**Cause:** Different package versions or conflicting system packages
+
+**Solution:**
+
+```bash
+# Use virtual environment consistently
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
+
+# Verify you're in venv
+which python
+# Should show: /path/to/project/venv/bin/python
+
+# Add to .bashrc/.zshrc to auto-activate
+```
+
+---
+
+##### Issue: Permission denied errors
+
+**Symptom:** Cannot write test outputs or cache
+
+**Cause:** File permissions or disk space
+
+**Solution:**
+
+```bash
+# Check disk space
+df -h
+
+# Check permissions
+ls -la .pytest_cache/
+
+# Fix permissions
+chmod -R u+w .pytest_cache/
+chmod -R u+w htmlcov/
+
+# Clean and retry
+rm -rf .pytest_cache/ htmlcov/
+npm run test:all
+```
+
+---
+
+##### Issue: Windows-specific path issues
+
+**Symptom:** Tests fail on Windows but pass on Linux/Mac
+
+**Cause:** Path separators or line endings
+
+**Solution:**
+
+```bash
+# Use pathlib for cross-platform paths
+from pathlib import Path
+config_path = Path(__file__).parent / "config.json"
+
+# Or use os.path.join
+import os
+config_path = os.path.join(os.path.dirname(__file__), "config.json")
+
+# Configure git line endings
+git config core.autocrlf true
+```
+
+---
+
+#### Frontend-Specific Issues
+
+##### Issue: Vitest doesn't find tests
+
+**Symptom:** `npm run test:frontend` shows 0 tests
+
+**Cause:** Test file naming or Vitest configuration
+
+**Solution:**
+
+```bash
+cd src/ui
+
+# Verify test files follow naming convention
+ls -la src/**/*.test.{js,jsx,ts,tsx}
+
+# Check Vitest config
+cat vite.config.js
+
+# Run Vitest with debug info
+npx vitest --reporter=verbose
+```
+
+---
+
+##### Issue: React component tests fail with "document is not defined"
+
+**Symptom:** DOM-related test failures
+
+**Cause:** Missing jsdom environment
+
+**Solution:**
+
+```javascript
+// Add to test file
+/**
+ * @vitest-environment jsdom
+ */
+
+// Or configure globally in vite.config.js
+test: {
+  environment: 'jsdom'
+}
+```
+
+---
+
+#### Emergency Procedures
+
+##### Clean and Reset Everything
+
+If nothing works, reset your development environment:
+
+```bash
+# 1. Save your work
+git stash
+
+# 2. Clean all generated files
+rm -rf node_modules/
+rm -rf src/ui/node_modules/
+rm -rf htmlcov/
+rm -rf .pytest_cache/
+rm -rf __pycache__/
+find . -type d -name "__pycache__" -exec rm -rf {} +
+
+# 3. Recreate virtual environment
+deactivate  # If in venv
+rm -rf venv/
+python -m venv venv
+source venv/bin/activate
+
+# 4. Reinstall all dependencies
+pip install -r requirements-dev.txt
+cd src/ui && npm install && cd ../..
+
+# 5. Verify installations
+ruff --version
+pytest --version
+npm --version
+
+# 6. Run tests
+npm run test:all
+
+# 7. Restore your work
+git stash pop
+```
+
+---
+
+##### Rollback Recent Changes
+
+If tests broke after recent changes:
+
+```bash
+# See what changed
+git status
+git diff
+
+# Discard changes to specific file
+git checkout -- path/to/file.py
+
+# Discard all uncommitted changes
+git reset --hard HEAD
+
+# Undo last commit (keep changes)
+git reset --soft HEAD~1
+
+# Undo last commit (discard changes)
+git reset --hard HEAD~1
+```
+
+---
+
+#### Getting Help
+
+If you're still stuck after trying these solutions:
+
+1. **Check logs**:
+   ```bash
+   # Pytest verbose output
+   pytest -vvs path/to/test.py
+
+   # Ruff detailed errors
+   ruff check . --verbose
+   ```
+
+2. **Search existing issues**:
+   - Check GitHub issues for similar problems
+   - Search documentation
+
+3. **Ask for help**:
+   - Include error message
+   - Include steps to reproduce
+   - Include environment info (Python/Node versions)
+   - Show what you've tried
+
+4. **Diagnostic info to include**:
+   ```bash
+   python --version
+   node --version
+   ruff --version
+   pytest --version
+   pip list | grep -E "ruff|pytest"
+   npm list --depth=0
+   ```
 
 ### Performance Expectations
 
