@@ -1,0 +1,1996 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.9, pytest-8.4.2, pluggy-1.6.0 -- /root/RAGStack-Lambda/.worktrees/fix-tests/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /root/RAGStack-Lambda/.worktrees/fix-tests
+configfile: pytest.ini
+plugins: cov-5.0.0
+collecting ... collected 125 items / 1 skipped
+
+lib/ragstack_common/test_bedrock.py::test_backoff_calculation ERROR      [  0%]
+lib/ragstack_common/test_bedrock.py::test_metering_data ERROR            [  1%]
+lib/ragstack_common/test_bedrock.py::test_client_initialization ERROR    [  2%]
+lib/ragstack_common/test_config.py::test_init_with_table_name ERROR      [  3%]
+lib/ragstack_common/test_config.py::test_init_with_env_var ERROR         [  4%]
+lib/ragstack_common/test_config.py::test_init_without_table_name ERROR   [  4%]
+lib/ragstack_common/test_config.py::test_get_configuration_item_success ERROR [  5%]
+lib/ragstack_common/test_config.py::test_get_configuration_item_not_found ERROR [  6%]
+lib/ragstack_common/test_config.py::test_get_configuration_item_dynamodb_error ERROR [  7%]
+lib/ragstack_common/test_config.py::test_get_effective_config_with_custom_override ERROR [  8%]
+lib/ragstack_common/test_config.py::test_get_effective_config_no_custom ERROR [  8%]
+lib/ragstack_common/test_config.py::test_get_effective_config_empty_table ERROR [  9%]
+lib/ragstack_common/test_config.py::test_get_parameter_exists ERROR      [ 10%]
+lib/ragstack_common/test_config.py::test_get_parameter_with_default ERROR [ 11%]
+lib/ragstack_common/test_config.py::test_get_parameter_none_default ERROR [ 12%]
+lib/ragstack_common/test_config.py::test_update_custom_config_success ERROR [ 12%]
+lib/ragstack_common/test_config.py::test_update_custom_config_dynamodb_error ERROR [ 13%]
+lib/ragstack_common/test_config.py::test_get_schema_success ERROR        [ 14%]
+lib/ragstack_common/test_config.py::test_get_schema_not_found ERROR      [ 15%]
+lib/ragstack_common/test_config.py::test_remove_partition_key ERROR      [ 16%]
+lib/ragstack_common/test_config.py::test_remove_partition_key_none ERROR [ 16%]
+lib/ragstack_common/test_config.py::test_remove_partition_key_empty_dict ERROR [ 17%]
+lib/ragstack_common/test_image.py::test_resize_image ERROR               [ 18%]
+lib/ragstack_common/test_image.py::test_bedrock_format ERROR             [ 19%]
+lib/ragstack_common/test_models.py::test_document_creation ERROR         [ 20%]
+lib/ragstack_common/test_models.py::test_document_serialization ERROR    [ 20%]
+lib/ragstack_common/test_ocr.py::test_is_text_native_pdf ERROR           [ 21%]
+lib/ragstack_common/test_ocr.py::test_ocr_service_initialization ERROR   [ 22%]
+lib/ragstack_common/test_storage.py::test_parse_s3_uri ERROR             [ 23%]
+lib/ragstack_common/test_storage.py::test_parse_s3_uri_root ERROR        [ 24%]
+tests/unit/test_configuration_resolver.py::test_lambda_handler_get_configuration FAILED [ 24%]
+tests/unit/test_configuration_resolver.py::test_lambda_handler_update_configuration FAILED [ 25%]
+tests/unit/test_configuration_resolver.py::test_lambda_handler_unsupported_operation ERROR [ 26%]
+tests/unit/test_configuration_resolver.py::test_handle_get_configuration_success FAILED [ 27%]
+tests/unit/test_configuration_resolver.py::test_handle_get_configuration_empty_custom FAILED [ 28%]
+tests/unit/test_configuration_resolver.py::test_handle_update_configuration_with_json_string FAILED [ 28%]
+tests/unit/test_configuration_resolver.py::test_handle_update_configuration_with_dict FAILED [ 29%]
+tests/unit/test_configuration_resolver.py::test_handle_update_configuration_invalid_json FAILED [ 30%]
+tests/unit/test_configuration_resolver.py::test_handle_get_document_count_success FAILED [ 31%]
+tests/unit/test_configuration_resolver.py::test_handle_get_document_count_zero FAILED [ 32%]
+tests/unit/test_configuration_resolver.py::test_handle_get_document_count_dynamodb_error FAILED [ 32%]
+tests/unit/test_configuration_resolver.py::test_remove_partition_key FAILED [ 33%]
+tests/unit/test_configuration_resolver.py::test_remove_partition_key_none FAILED [ 34%]
+tests/unit/test_configuration_resolver.py::test_query_completed_documents_using_gsi FAILED [ 35%]
+tests/unit/test_configuration_resolver.py::test_query_completed_documents_with_pagination FAILED [ 36%]
+tests/unit/test_configuration_resolver.py::test_query_completed_documents_fallback_to_scan FAILED [ 36%]
+tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_success FAILED [ 37%]
+tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_no_documents FAILED [ 38%]
+tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_enforces_limit FAILED [ 39%]
+tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_success FAILED [ 40%]
+tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_no_job FAILED [ 40%]
+tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_completed FAILED [ 41%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_success FAILED [ 42%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_text_only FAILED [ 43%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_text_truncation FAILED [ 44%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_bedrock_failure FAILED [ 44%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_skip_pages_without_images FAILED [ 45%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_missing_required_fields FAILED [ 46%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_uses_runtime_config FAILED [ 47%]
+tests/unit/test_generate_embeddings.py::test_lambda_handler_uses_default_models_from_config FAILED [ 48%]
+tests/unit/test_prerequisites.py::TestCheckPythonVersion::test_python_312_passes PASSED [ 48%]
+tests/unit/test_prerequisites.py::TestCheckPythonVersion::test_python_313_passes PASSED [ 49%]
+tests/unit/test_prerequisites.py::TestCheckPythonVersion::test_python_311_fails PASSED [ 50%]
+tests/unit/test_prerequisites.py::TestCheckPythonVersion::test_python_2_fails PASSED [ 51%]
+tests/unit/test_prerequisites.py::TestCheckNodejsVersion::test_skip_ui_bypasses_check PASSED [ 52%]
+tests/unit/test_prerequisites.py::TestCheckNodejsVersion::test_nodejs_18_passes PASSED [ 52%]
+tests/unit/test_prerequisites.py::TestCheckNodejsVersion::test_nodejs_17_fails PASSED [ 53%]
+tests/unit/test_prerequisites.py::TestCheckNodejsVersion::test_nodejs_not_found_fails PASSED [ 54%]
+tests/unit/test_prerequisites.py::TestCheckAwsCli::test_aws_cli_configured_passes PASSED [ 55%]
+tests/unit/test_prerequisites.py::TestCheckAwsCli::test_aws_cli_not_found_fails PASSED [ 56%]
+tests/unit/test_prerequisites.py::TestCheckAwsCli::test_aws_cli_not_configured_fails PASSED [ 56%]
+tests/unit/test_prerequisites.py::TestCheckSamCli::test_sam_cli_found_passes PASSED [ 57%]
+tests/unit/test_prerequisites.py::TestCheckSamCli::test_sam_cli_not_found_fails PASSED [ 58%]
+tests/unit/test_process_document.py::test_lambda_handler_success FAILED  [ 59%]
+tests/unit/test_process_document.py::test_lambda_handler_ocr_failure FAILED [ 60%]
+tests/unit/test_process_document.py::test_lambda_handler_missing_required_field FAILED [ 60%]
+tests/unit/test_process_document.py::test_lambda_handler_with_bedrock_backend FAILED [ 61%]
+tests/unit/test_process_document.py::test_lambda_handler_page_text_truncation FAILED [ 62%]
+tests/unit/test_process_document.py::test_lambda_handler_uses_runtime_config FAILED [ 63%]
+tests/unit/test_process_document.py::test_lambda_handler_uses_textract_from_config FAILED [ 64%]
+tests/unit/test_publish_args.py::test_project_name_required PASSED       [ 64%]
+tests/unit/test_publish_args.py::test_admin_email_required PASSED        [ 65%]
+tests/unit/test_publish_args.py::test_region_required PASSED             [ 66%]
+tests/unit/test_publish_args.py::test_skip_ui_optional PASSED            [ 67%]
+tests/unit/test_publish_args.py::test_all_required_args_provided PASSED  [ 68%]
+tests/unit/test_query_kb.py::test_lambda_handler_success FAILED          [ 68%]
+tests/unit/test_query_kb.py::test_lambda_handler_empty_query PASSED      [ 69%]
+tests/unit/test_query_kb.py::test_lambda_handler_no_query_field PASSED   [ 70%]
+tests/unit/test_query_kb.py::test_lambda_handler_custom_max_results FAILED [ 71%]
+tests/unit/test_query_kb.py::test_lambda_handler_default_max_results FAILED [ 72%]
+tests/unit/test_query_kb.py::test_lambda_handler_no_results PASSED       [ 72%]
+tests/unit/test_query_kb.py::test_lambda_handler_bedrock_error FAILED    [ 73%]
+tests/unit/test_query_kb.py::test_lambda_handler_missing_content_fields FAILED [ 74%]
+tests/unit/test_query_kb.py::test_lambda_handler_result_count_logged FAILED [ 75%]
+tests/unit/test_query_kb.py::test_lambda_handler_uses_runtime_config PASSED [ 76%]
+tests/unit/test_query_kb.py::test_lambda_handler_uses_correct_region_in_model_arn PASSED [ 76%]
+tests/unit/test_ragstack_common_install.py::TestSetupPy::test_setup_py_exists PASSED [ 77%]
+tests/unit/test_ragstack_common_install.py::TestSetupPy::test_setup_py_valid_syntax PASSED [ 78%]
+tests/unit/test_ragstack_common_install.py::TestSetupPy::test_setup_py_defines_ragstack_common_package PASSED [ 79%]
+tests/unit/test_ragstack_common_install.py::TestSetupPy::test_setup_py_specifies_packages PASSED [ 80%]
+tests/unit/test_ragstack_common_install.py::TestSetupPy::test_setup_py_has_required_dependencies PASSED [ 80%]
+tests/unit/test_ragstack_common_install.py::TestRagstackCommonStructure::test_ragstack_common_directory_exists PASSED [ 81%]
+tests/unit/test_ragstack_common_install.py::TestRagstackCommonStructure::test_ragstack_common_has_init PASSED [ 82%]
+tests/unit/test_ragstack_common_install.py::TestRagstackCommonStructure::test_ragstack_common_has_required_modules PASSED [ 83%]
+tests/unit/test_ragstack_common_install.py::TestLambdaRequirements::test_process_document_requirements_reference_lib PASSED [ 84%]
+tests/unit/test_ragstack_common_install.py::TestLambdaRequirements::test_generate_embeddings_requirements_reference_lib PASSED [ 84%]
+tests/unit/test_ragstack_common_install.py::TestLambdaRequirements::test_query_kb_does_not_reference_lib PASSED [ 85%]
+tests/unit/test_ragstack_common_install.py::TestLambdaRequirements::test_lambda_functions_import_ragstack_common PASSED [ 86%]
+tests/unit/test_ragstack_common_install.py::TestPackageInstallation::test_no_symlinks_in_lambda_directories PASSED [ 87%]
+tests/unit/test_ragstack_common_install.py::TestPackageInstallation::test_gitignore_excludes_build_artifacts PASSED [ 88%]
+tests/unit/test_ragstack_common_install.py::TestNoObsoleteCode::test_no_build_lambda_layers_function PASSED [ 88%]
+tests/unit/test_ragstack_common_install.py::TestNoObsoleteCode::test_sam_build_has_no_skip_layers_parameter PASSED [ 89%]
+tests/unit/test_validation.py::TestValidateProjectName::test_valid_project_names PASSED [ 90%]
+tests/unit/test_validation.py::TestValidateProjectName::test_empty_project_name PASSED [ 91%]
+tests/unit/test_validation.py::TestValidateProjectName::test_too_short PASSED [ 92%]
+tests/unit/test_validation.py::TestValidateProjectName::test_too_long PASSED [ 92%]
+tests/unit/test_validation.py::TestValidateProjectName::test_must_start_with_letter PASSED [ 93%]
+tests/unit/test_validation.py::TestValidateProjectName::test_must_start_with_lowercase PASSED [ 94%]
+tests/unit/test_validation.py::TestValidateProjectName::test_invalid_characters PASSED [ 95%]
+tests/unit/test_validation.py::TestValidateRegion::test_valid_regions PASSED [ 96%]
+tests/unit/test_validation.py::TestValidateRegion::test_empty_region PASSED [ 96%]
+tests/unit/test_validation.py::TestValidateRegion::test_invalid_region PASSED [ 97%]
+tests/unit/test_validation.py::TestValidateRegion::test_nonexistent_region PASSED [ 98%]
+tests/unit/test_validation.py::TestValidateEmail::test_valid_emails PASSED [ 99%]
+tests/unit/test_validation.py::TestValidateEmail::test_invalid_emails PASSED [100%]
+
+==================================== ERRORS ====================================
+__________________ ERROR at setup of test_backoff_calculation __________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_____________________ ERROR at setup of test_metering_data _____________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________________ ERROR at setup of test_client_initialization _________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________________ ERROR at setup of test_init_with_table_name __________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+___________________ ERROR at setup of test_init_with_env_var ___________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+________________ ERROR at setup of test_init_without_table_name ________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+____________ ERROR at setup of test_get_configuration_item_success _____________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+___________ ERROR at setup of test_get_configuration_item_not_found ____________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________ ERROR at setup of test_get_configuration_item_dynamodb_error _________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_______ ERROR at setup of test_get_effective_config_with_custom_override _______
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+____________ ERROR at setup of test_get_effective_config_no_custom _____________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+___________ ERROR at setup of test_get_effective_config_empty_table ____________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________________ ERROR at setup of test_get_parameter_exists __________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+______________ ERROR at setup of test_get_parameter_with_default _______________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+______________ ERROR at setup of test_get_parameter_none_default _______________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_____________ ERROR at setup of test_update_custom_config_success ______________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+__________ ERROR at setup of test_update_custom_config_dynamodb_error __________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+__________________ ERROR at setup of test_get_schema_success ___________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________________ ERROR at setup of test_get_schema_not_found __________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________________ ERROR at setup of test_remove_partition_key __________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_______________ ERROR at setup of test_remove_partition_key_none _______________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+____________ ERROR at setup of test_remove_partition_key_empty_dict ____________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_____________________ ERROR at setup of test_resize_image ______________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+____________________ ERROR at setup of test_bedrock_format _____________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+___________________ ERROR at setup of test_document_creation ___________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+________________ ERROR at setup of test_document_serialization _________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+__________________ ERROR at setup of test_is_text_native_pdf ___________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+______________ ERROR at setup of test_ocr_service_initialization _______________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_____________________ ERROR at setup of test_parse_s3_uri ______________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+___________________ ERROR at setup of test_parse_s3_uri_root ___________________
+.venv/lib/python3.13/site-packages/_pytest/runner.py:344: in from_call
+    result: TResult | None = func()
+                             ^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:246: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pluggy/_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/logging.py:843: in pytest_runtest_setup
+    yield
+.venv/lib/python3.13/site-packages/_pytest/capture.py:895: in pytest_runtest_setup
+    return (yield)
+            ^^^^^
+.venv/lib/python3.13/site-packages/_pytest/runner.py:164: in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+.venv/lib/python3.13/site-packages/_pytest/runner.py:507: in setup
+    raise exc[0].with_traceback(exc[1])
+.venv/lib/python3.13/site-packages/_pytest/runner.py:514: in setup
+    col.setup()
+.venv/lib/python3.13/site-packages/_pytest/python.py:668: in setup
+    init_mod = importtestmodule(self.path / "__init__.py", self.config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/python.py:543: in importtestmodule
+    config.pluginmanager.consider_module(mod)
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:826: in consider_module
+    self._import_plugin_specs(getattr(mod, "pytest_plugins", []))
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:831: in _import_plugin_specs
+    plugins = _get_plugin_specs_as_list(spec)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/_pytest/config/__init__.py:889: in _get_plugin_specs_as_list
+    raise UsageError(
+E   _pytest.config.exceptions.UsageError: Plugins may be specified as a sequence or a ','-separated string of plugin names. Got: <MagicMock name='mock.pytest_plugins' id='139969125038608'>
+_________ ERROR at setup of test_lambda_handler_unsupported_operation __________
+file /root/RAGStack-Lambda/.worktrees/fix-tests/tests/unit/test_configuration_resolver.py, line 155
+  def test_lambda_handler_unsupported_operation(_mock_dynamodb):
+E       fixture '_mock_dynamodb' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, mock_configuration_table, mock_dynamodb, mock_env_vars, mock_tracking_table, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, sample_custom, sample_default, sample_schema, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/root/RAGStack-Lambda/.worktrees/fix-tests/tests/unit/test_configuration_resolver.py:155
+=================================== FAILURES ===================================
+____________________ test_lambda_handler_get_configuration _____________________
+tests/unit/test_configuration_resolver.py:133: in test_lambda_handler_get_configuration
+    result = index.lambda_handler(event, {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/lambda/query_kb/index.py:46: in lambda_handler
+    raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+E   ValueError: KNOWLEDGE_BASE_ID environment variable is required
+___________________ test_lambda_handler_update_configuration ___________________
+tests/unit/test_configuration_resolver.py:149: in test_lambda_handler_update_configuration
+    result = index.lambda_handler(event, {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/lambda/query_kb/index.py:46: in lambda_handler
+    raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+E   ValueError: KNOWLEDGE_BASE_ID environment variable is required
+____________________ test_handle_get_configuration_success _____________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'get_configuration_item'
+__________________ test_handle_get_configuration_empty_custom __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'get_configuration_item'
+______________ test_handle_update_configuration_with_json_string _______________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+__________________ test_handle_update_configuration_with_dict __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+________________ test_handle_update_configuration_invalid_json _________________
+tests/unit/test_configuration_resolver.py:253: in test_handle_update_configuration_invalid_json
+    index.handle_update_configuration("invalid json {")
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'index' has no attribute 'handle_update_configuration'
+____________________ test_handle_get_document_count_success ____________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+_____________________ test_handle_get_document_count_zero ______________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+________________ test_handle_get_document_count_dynamodb_error _________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+__________________________ test_remove_partition_key ___________________________
+tests/unit/test_configuration_resolver.py:300: in test_remove_partition_key
+    result = index.remove_partition_key(item)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'index' has no attribute 'remove_partition_key'
+________________________ test_remove_partition_key_none ________________________
+tests/unit/test_configuration_resolver.py:309: in test_remove_partition_key_none
+    result = index.remove_partition_key(None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'index' has no attribute 'remove_partition_key'
+___________________ test_query_completed_documents_using_gsi ___________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+________________ test_query_completed_documents_with_pagination ________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+_______________ test_query_completed_documents_fallback_to_scan ________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'tracking_table'
+__________________ test_handle_re_embed_all_documents_success __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+_______________ test_handle_re_embed_all_documents_no_documents ________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+______________ test_handle_re_embed_all_documents_enforces_limit _______________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+_________________ test_handle_get_re_embed_job_status_success __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+__________________ test_handle_get_re_embed_job_status_no_job __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+________________ test_handle_get_re_embed_job_status_completed _________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'configuration_table'
+_________________________ test_lambda_handler_success __________________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+________________________ test_lambda_handler_text_only _________________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+_____________________ test_lambda_handler_text_truncation ______________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+_____________________ test_lambda_handler_bedrock_failure ______________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+________________ test_lambda_handler_skip_pages_without_images _________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+_________________ test_lambda_handler_missing_required_fields __________________
+tests/unit/test_generate_embeddings.py:299: in test_lambda_handler_missing_required_fields
+    index.lambda_handler(invalid_event, lambda_context)
+src/lambda/query_kb/index.py:46: in lambda_handler
+    raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+E   ValueError: KNOWLEDGE_BASE_ID environment variable is required
+___________________ test_lambda_handler_uses_runtime_config ____________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+_____________ test_lambda_handler_uses_default_models_from_config ______________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'BedrockClient'
+_________________________ test_lambda_handler_success __________________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+_______________________ test_lambda_handler_ocr_failure ________________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+__________________ test_lambda_handler_missing_required_field __________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'update_item'
+___________________ test_lambda_handler_with_bedrock_backend ___________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+___________________ test_lambda_handler_page_text_truncation ___________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+___________________ test_lambda_handler_uses_runtime_config ____________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+________________ test_lambda_handler_uses_textract_from_config _________________
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1891: in _inner
+    return f(*args, **kw)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1423: in patched
+    with self.decoration_helper(patched,
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1405: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1497: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+/root/.local/share/uv/python/cpython-3.13.9-linux-x86_64-gnu/lib/python3.13/unittest/mock.py:1467: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'index' from '/root/RAGStack-Lambda/.worktrees/fix-tests/src/lambda/query_kb/index.py'> does not have the attribute 'Document'
+_________________________ test_lambda_handler_success __________________________
+tests/unit/test_query_kb.py:101: in test_lambda_handler_success
+    assert result["results"][0]["score"] == 0.95
+E   assert 0.0 == 0.95
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: anthropic.claude-3-5-haiku-20241022-v1:0
+INFO     root:index.py:128 Generated response with 2 source documents
+____________________ test_lambda_handler_custom_max_results ____________________
+tests/unit/test_query_kb.py:171: in test_lambda_handler_custom_max_results
+    call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 10
+    ^^^^^^^^^^^^
+E   TypeError: 'NoneType' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 10, "has_max_results": true, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: <MagicMock name='mock.ConfigurationManager().get_parameter()' id='139969097890992'>
+INFO     root:index.py:128 Generated response with 0 source documents
+___________________ test_lambda_handler_default_max_results ____________________
+tests/unit/test_query_kb.py:193: in test_lambda_handler_default_max_results
+    call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+    ^^^^^^^^^^^^
+E   TypeError: 'NoneType' object is not subscriptable
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 10, "has_max_results": false, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: <MagicMock name='mock.ConfigurationManager().get_parameter()' id='139969097890992'>
+INFO     root:index.py:128 Generated response with 0 source documents
+______________________ test_lambda_handler_bedrock_error _______________________
+tests/unit/test_query_kb.py:231: in test_lambda_handler_bedrock_error
+    assert "error" in result
+E   AssertionError: assert 'error' in {'query': 'What is the main topic of this document?', 'response': <MagicMock name='client().retrieve_and_generate().get().get()' id='139969111129600'>, 'results': [], 'total': 0}
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: <MagicMock name='mock.ConfigurationManager().get_parameter()' id='139969097890992'>
+INFO     root:index.py:128 Generated response with 0 source documents
+__________________ test_lambda_handler_missing_content_fields __________________
+tests/unit/test_query_kb.py:257: in test_lambda_handler_missing_content_fields
+    assert len(result["results"]) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: <MagicMock name='mock.ConfigurationManager().get_parameter()' id='139969097890992'>
+INFO     root:index.py:128 Generated response with 0 source documents
+___________________ test_lambda_handler_result_count_logged ____________________
+tests/unit/test_query_kb.py:278: in test_lambda_handler_result_count_logged
+    assert "Found 2 results" in caplog.text
+E   assert 'Found 2 results' in 'INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}\nINFO     root:index.py:66 Using response model: <MagicMock name=\'mock.ConfigurationManager().get_parameter()\' id=\'139969097890992\'>\nINFO     root:index.py:128 Generated response with 0 source documents\n'
+E    +  where 'INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}\nINFO     root:index.py:66 Using response model: <MagicMock name=\'mock.ConfigurationManager().get_parameter()\' id=\'139969097890992\'>\nINFO     root:index.py:128 Generated response with 0 source documents\n' = <_pytest.logging.LogCaptureFixture object at 0x7f4d150becf0>.text
+------------------------------ Captured log call -------------------------------
+INFO     root:index.py:65 Querying Knowledge Base: {"query_length": 40, "has_max_results": true, "knowledge_base_id": "test-kb-..."}
+INFO     root:index.py:66 Using response model: <MagicMock name='mock.ConfigurationManager().get_parameter()' id='139969097890992'>
+INFO     root:index.py:128 Generated response with 0 source documents
+=========================== short test summary info ============================
+FAILED tests/unit/test_configuration_resolver.py::test_lambda_handler_get_configuration
+FAILED tests/unit/test_configuration_resolver.py::test_lambda_handler_update_configuration
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_configuration_success
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_configuration_empty_custom
+FAILED tests/unit/test_configuration_resolver.py::test_handle_update_configuration_with_json_string
+FAILED tests/unit/test_configuration_resolver.py::test_handle_update_configuration_with_dict
+FAILED tests/unit/test_configuration_resolver.py::test_handle_update_configuration_invalid_json
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_document_count_success
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_document_count_zero
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_document_count_dynamodb_error
+FAILED tests/unit/test_configuration_resolver.py::test_remove_partition_key
+FAILED tests/unit/test_configuration_resolver.py::test_remove_partition_key_none
+FAILED tests/unit/test_configuration_resolver.py::test_query_completed_documents_using_gsi
+FAILED tests/unit/test_configuration_resolver.py::test_query_completed_documents_with_pagination
+FAILED tests/unit/test_configuration_resolver.py::test_query_completed_documents_fallback_to_scan
+FAILED tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_success
+FAILED tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_no_documents
+FAILED tests/unit/test_configuration_resolver.py::test_handle_re_embed_all_documents_enforces_limit
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_success
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_no_job
+FAILED tests/unit/test_configuration_resolver.py::test_handle_get_re_embed_job_status_completed
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_success - ...
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_text_only
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_text_truncation
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_bedrock_failure
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_skip_pages_without_images
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_missing_required_fields
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_uses_runtime_config
+FAILED tests/unit/test_generate_embeddings.py::test_lambda_handler_uses_default_models_from_config
+FAILED tests/unit/test_process_document.py::test_lambda_handler_success - Att...
+FAILED tests/unit/test_process_document.py::test_lambda_handler_ocr_failure
+FAILED tests/unit/test_process_document.py::test_lambda_handler_missing_required_field
+FAILED tests/unit/test_process_document.py::test_lambda_handler_with_bedrock_backend
+FAILED tests/unit/test_process_document.py::test_lambda_handler_page_text_truncation
+FAILED tests/unit/test_process_document.py::test_lambda_handler_uses_runtime_config
+FAILED tests/unit/test_process_document.py::test_lambda_handler_uses_textract_from_config
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_success - assert 0.0 ...
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_custom_max_results - ...
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_default_max_results
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_bedrock_error - Asser...
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_missing_content_fields
+FAILED tests/unit/test_query_kb.py::test_lambda_handler_result_count_logged
+ERROR lib/ragstack_common/test_bedrock.py::test_backoff_calculation - _pytest...
+ERROR lib/ragstack_common/test_bedrock.py::test_metering_data - _pytest.confi...
+ERROR lib/ragstack_common/test_bedrock.py::test_client_initialization - _pyte...
+ERROR lib/ragstack_common/test_config.py::test_init_with_table_name - _pytest...
+ERROR lib/ragstack_common/test_config.py::test_init_with_env_var - _pytest.co...
+ERROR lib/ragstack_common/test_config.py::test_init_without_table_name - _pyt...
+ERROR lib/ragstack_common/test_config.py::test_get_configuration_item_success
+ERROR lib/ragstack_common/test_config.py::test_get_configuration_item_not_found
+ERROR lib/ragstack_common/test_config.py::test_get_configuration_item_dynamodb_error
+ERROR lib/ragstack_common/test_config.py::test_get_effective_config_with_custom_override
+ERROR lib/ragstack_common/test_config.py::test_get_effective_config_no_custom
+ERROR lib/ragstack_common/test_config.py::test_get_effective_config_empty_table
+ERROR lib/ragstack_common/test_config.py::test_get_parameter_exists - _pytest...
+ERROR lib/ragstack_common/test_config.py::test_get_parameter_with_default - _...
+ERROR lib/ragstack_common/test_config.py::test_get_parameter_none_default - _...
+ERROR lib/ragstack_common/test_config.py::test_update_custom_config_success
+ERROR lib/ragstack_common/test_config.py::test_update_custom_config_dynamodb_error
+ERROR lib/ragstack_common/test_config.py::test_get_schema_success - _pytest.c...
+ERROR lib/ragstack_common/test_config.py::test_get_schema_not_found - _pytest...
+ERROR lib/ragstack_common/test_config.py::test_remove_partition_key - _pytest...
+ERROR lib/ragstack_common/test_config.py::test_remove_partition_key_none - _p...
+ERROR lib/ragstack_common/test_config.py::test_remove_partition_key_empty_dict
+ERROR lib/ragstack_common/test_image.py::test_resize_image - _pytest.config.e...
+ERROR lib/ragstack_common/test_image.py::test_bedrock_format - _pytest.config...
+ERROR lib/ragstack_common/test_models.py::test_document_creation - _pytest.co...
+ERROR lib/ragstack_common/test_models.py::test_document_serialization - _pyte...
+ERROR lib/ragstack_common/test_ocr.py::test_is_text_native_pdf - _pytest.conf...
+ERROR lib/ragstack_common/test_ocr.py::test_ocr_service_initialization - _pyt...
+ERROR lib/ragstack_common/test_storage.py::test_parse_s3_uri - _pytest.config...
+ERROR lib/ragstack_common/test_storage.py::test_parse_s3_uri_root - _pytest.c...
+ERROR tests/unit/test_configuration_resolver.py::test_lambda_handler_unsupported_operation
+============= 42 failed, 52 passed, 1 skipped, 31 errors in 8.43s ==============

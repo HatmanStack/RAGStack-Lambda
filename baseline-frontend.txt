@@ -1,0 +1,93 @@
+
+> ragstack-ui@1.0.0 test
+> vitest --run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.5 [39m[90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui[39m
+
+[90mstderr[2m | src/components/Settings/index.test.jsx[2m > [22m[2mSettings Component[2m > [22m[2mshows error message when configuration load fails
+[22m[39mError loading configuration: Error: Network error
+    at [90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39msrc/components/Settings/index.test.jsx:118:42
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:157:11
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:753:26
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1636:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1602:10[90m)[39m
+    at runTest [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1309:12[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runFiles [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1526:3[90m)[39m
+Error checking re-embed job status: Error: Network error
+    at [90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39msrc/components/Settings/index.test.jsx:118:42
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:157:11
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:753:26
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1636:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1602:10[90m)[39m
+    at runTest [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1309:12[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runFiles [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1526:3[90m)[39m
+
+[90mstderr[2m | src/components/Settings/index.test.jsx[2m > [22m[2mSettings Component[2m > [22m[2mdismisses error alert when dismiss button is clicked
+[22m[39mError loading configuration: Error: Network error
+    at [90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39msrc/components/Settings/index.test.jsx:303:42
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:157:11
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:753:26
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1636:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1602:10[90m)[39m
+    at runTest [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1309:12[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runFiles [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1526:3[90m)[39m
+Error checking re-embed job status: Error: Network error
+    at [90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39msrc/components/Settings/index.test.jsx:303:42
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:157:11
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:753:26
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1636:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1602:10[90m)[39m
+    at runTest [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1309:12[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runFiles [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1526:3[90m)[39m
+
+[90mstderr[2m | src/components/Settings/index.test.jsx[2m > [22m[2mSettings Component[2m > [22m[2mRe-embedding Job Features[2m > [22m[2mhandles re-embedding job error gracefully
+[22m[39mError checking re-embed job status: Error: Failed to fetch job status
+    at [90m/root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39msrc/components/Settings/index.test.jsx:619:32
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:157:11
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:753:26
+    at [90mfile:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1636:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1602:10[90m)[39m
+    at runTest [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1309:12[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+    at runSuite [90m(file:///root/RAGStack-Lambda/.worktrees/fix-tests/src/ui/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1468:8[90m)[39m
+
+ [32m✓[39m src/components/Settings/index.test.jsx [2m([22m[2m22 tests[22m[2m | [22m[33m4 skipped[39m[2m)[22m[33m 49601[2mms[22m[39m
+     [33m[2m✓[22m[39m renders loading state initially [33m 471[2mms[22m[39m
+     [33m[2m✓[22m[39m loads and displays configuration successfully [33m 3293[2mms[22m[39m
+     [33m[2m✓[22m[39m renders form fields from schema in correct order [33m 3136[2mms[22m[39m
+     [33m[2m✓[22m[39m shows error message when configuration load fails [33m 698[2mms[22m[39m
+     [33m[2m✓[22m[39m displays save and reset buttons [33m 3114[2mms[22m[39m
+     [33m[2m✓[22m[39m saves configuration successfully when no embedding changes [33m 3394[2mms[22m[39m
+     [33m[2m✓[22m[39m shows embedding change modal when documents exist and embedding model changed [33m 3295[2mms[22m[39m
+     [33m[2m✓[22m[39m handles conditional field visibility based on dependsOn [33m 3245[2mms[22m[39m
+     [33m[2m✓[22m[39m shows customized indicator for fields with custom values [33m 3944[2mms[22m[39m
+     [33m[2m✓[22m[39m displays loading state on save button while saving [33m 3129[2mms[22m[39m
+     [33m[2m✓[22m[39m resets form values when reset button is clicked [33m 3049[2mms[22m[39m
+     [33m[2m✓[22m[39m dismisses error alert when dismiss button is clicked [33m 679[2mms[22m[39m
+       [33m[2m✓[22m[39m checks for existing re-embedding job on mount [33m 2834[2mms[22m[39m
+       [33m[2m✓[22m[39m displays success banner when re-embedding job is completed [33m 3036[2mms[22m[39m
+       [33m[2m✓[22m[39m triggers re-embedding job when user selects re-embed option in modal [33m 3004[2mms[22m[39m
+       [33m[2m✓[22m[39m handles re-embedding job error gracefully [33m 3024[2mms[22m[39m
+       [33m[2m✓[22m[39m dismisses completed job banner when user clicks dismiss [33m 3186[2mms[22m[39m
+       [33m[2m✓[22m[39m shows no banner when no re-embedding job exists [33m 3067[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m18 passed[39m[22m[2m | [22m[33m4 skipped[39m[90m (22)[39m
+[2m   Start at [22m 23:25:47
+[2m   Duration [22m 62.80s[2m (transform 6.91s, setup 197ms, collect 12.14s, tests 49.60s, environment 662ms, prepare 11ms)[22m
+

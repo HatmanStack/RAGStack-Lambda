@@ -1,0 +1,64 @@
+Phase 0: Pre-Flight Checklist - Baseline Test Results
+======================================================
+
+Date: 2025-10-30
+Branch: fix-tests
+Python Version: 3.13.9
+Node.js Version: v22.21.1 (npm v10.9.4)
+
+BACKEND TESTS (pytest)
+----------------------
+Command: uv run pytest -m 'not integration' -v --tb=short
+Results: 52 passed, 42 failed, 31 errors, 1 skipped
+Total: 125 tests collected
+Pass Rate: 52/125 (41.6%)
+
+Key Issues Identified:
+1. pytest_plugins errors: 31 errors (all lib/ragstack_common tests)
+   - Error: UsageError about pytest_plugins configuration
+   - Affects: All 29 tests in lib/ragstack_common/test_*.py files
+
+2. Lambda test failures: 42 failed tests
+   - test_configuration_resolver.py: Multiple failures (import path issues)
+   - test_generate_embeddings.py: Multiple failures
+   - test_process_document.py: Multiple failures
+   - test_query_kb.py: Multiple failures (assertion errors)
+
+3. Passing tests: 52 tests
+   - test_prerequisites.py: 13 passed
+   - test_publish_args.py: 5 passed
+   - test_validation.py: 11 passed
+   - test_ragstack_common_install.py: 15 passed
+   - test_query_kb.py: 4 passed (some tests in this file pass)
+
+FRONTEND TESTS (vitest)
+-----------------------
+Command: npm test -- --run (in src/ui directory)
+Results: 18 passed, 4 skipped
+Total: 22 tests
+Pass Rate: 18/22 (81.8%)
+
+Status: Better than expected!
+- Plan expected: 12/22 passing (55%)
+- Actual: 18/22 passing (82%)
+- 4 tests skipped (likely intentional or conditional)
+
+COMPARISON TO EXPECTED BASELINE
+--------------------------------
+Backend:
+- Expected: ~52/126 passing (41%)
+- Actual: 52/125 passing (41.6%) ✓ Matches expectation
+
+Frontend:
+- Expected: 12/22 passing (55%)
+- Actual: 18/22 passing (82%) ✓ Better than expected!
+
+NEXT STEPS
+----------
+Proceed to Phase 1: Backend Quick Wins
+- Task 1.1: Fix pytest_plugins mock (will fix 31 errors)
+- Task 1.2-1.4: Fix import paths in Lambda tests
+- Task 1.5: Add missing environment variables
+- Task 1.6: Phase 1 verification
+
+Expected Phase 1 Results: ~102/125 tests passing (81%)
