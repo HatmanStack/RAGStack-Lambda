@@ -5,10 +5,11 @@ Provides simple, consistent interface for reading/writing data.
 """
 
 import json
-import boto3
-from typing import Optional, Dict, Any
-from botocore.exceptions import ClientError
 import logging
+from typing import Any
+
+import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ def get_s3_client():
     """Get or create S3 client."""
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client('s3')
+        _s3_client = boto3.client("s3")
     return _s3_client
 
 
@@ -29,13 +30,14 @@ def get_dynamodb():
     """Get or create DynamoDB resource."""
     global _dynamodb
     if _dynamodb is None:
-        _dynamodb = boto3.resource('dynamodb')
+        _dynamodb = boto3.resource("dynamodb")
     return _dynamodb
 
 
 # ============================================================================
 # S3 Operations
 # ============================================================================
+
 
 def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     """
@@ -52,16 +54,16 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
         # bucket = "my-bucket"
         # key = "docs/file.pdf"
     """
-    if not s3_uri.startswith('s3://'):
+    if not s3_uri.startswith("s3://"):
         raise ValueError(f"Invalid S3 URI: {s3_uri}")
 
-    parts = s3_uri[5:].split('/', 1)
+    parts = s3_uri[5:].split("/", 1)
     bucket = parts[0]
-    key = parts[1] if len(parts) > 1 else ''
+    key = parts[1] if len(parts) > 1 else ""
     return bucket, key
 
 
-def read_s3_text(s3_uri: str, encoding: str = 'utf-8') -> str:
+def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str:
     """
     Read text content from S3.
 
@@ -75,8 +77,8 @@ def read_s3_text(s3_uri: str, encoding: str = 'utf-8') -> str:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
-        return response['Body'].read().decode(encoding)
-    except ClientError as e:
+        return response["Body"].read().decode(encoding)
+    except ClientError:
         logger.exception(f"Failed to read S3 text from {s3_uri}")
         raise
 
@@ -92,13 +94,13 @@ def read_s3_binary(s3_uri: str) -> bytes:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
-        return response['Body'].read()
-    except ClientError as e:
+        return response["Body"].read()
+    except ClientError:
         logger.exception(f"Failed to read S3 binary from {s3_uri}")
         raise
 
 
-def write_s3_text(s3_uri: str, content: str, encoding: str = 'utf-8') -> str:
+def write_s3_text(s3_uri: str, content: str, encoding: str = "utf-8") -> str:
     """
     Write text content to S3.
 
@@ -113,14 +115,11 @@ def write_s3_text(s3_uri: str, content: str, encoding: str = 'utf-8') -> str:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         get_s3_client().put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode(encoding),
-            ContentType='text/plain'
+            Bucket=bucket, Key=key, Body=content.encode(encoding), ContentType="text/plain"
         )
         logger.info(f"Wrote text to {s3_uri}")
         return s3_uri
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Failed to write S3 text to {s3_uri}")
         raise
 
@@ -140,19 +139,18 @@ def write_s3_json(s3_uri: str, data: dict) -> str:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         get_s3_client().put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode('utf-8'),
-            ContentType='application/json'
+            Bucket=bucket, Key=key, Body=content.encode("utf-8"), ContentType="application/json"
         )
         logger.info(f"Wrote JSON to {s3_uri}")
         return s3_uri
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Failed to write S3 JSON to {s3_uri}")
         raise
 
 
-def write_s3_binary(s3_uri: str, content: bytes, content_type: str = 'application/octet-stream') -> str:
+def write_s3_binary(
+    s3_uri: str, content: bytes, content_type: str = "application/octet-stream"
+) -> str:
     """
     Write binary content to S3.
 
@@ -166,15 +164,10 @@ def write_s3_binary(s3_uri: str, content: bytes, content_type: str = 'applicatio
     """
     bucket, key = parse_s3_uri(s3_uri)
     try:
-        get_s3_client().put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content,
-            ContentType=content_type
-        )
+        get_s3_client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type)
         logger.info(f"Wrote binary to {s3_uri}")
         return s3_uri
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Failed to write S3 binary to {s3_uri}")
         raise
 
@@ -193,12 +186,13 @@ def s3_object_exists(s3_uri: str) -> bool:
 # DynamoDB Operations
 # ============================================================================
 
+
 def get_table(table_name: str):
     """Get DynamoDB table resource."""
     return get_dynamodb().Table(table_name)
 
 
-def put_item(table_name: str, item: Dict[str, Any]) -> None:
+def put_item(table_name: str, item: dict[str, Any]) -> None:
     """
     Put item into DynamoDB table.
 
@@ -210,12 +204,12 @@ def put_item(table_name: str, item: Dict[str, Any]) -> None:
     try:
         table.put_item(Item=item)
         logger.info(f"Put item to {table_name}: {item.get('document_id', 'unknown')}")
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Failed to put item to {table_name}")
         raise
 
 
-def get_item(table_name: str, key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def get_item(table_name: str, key: dict[str, Any]) -> dict[str, Any] | None:
     """
     Get item from DynamoDB table.
 
@@ -229,13 +223,13 @@ def get_item(table_name: str, key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     table = get_table(table_name)
     try:
         response = table.get_item(Key=key)
-        return response.get('Item')
-    except ClientError as e:
+        return response.get("Item")
+    except ClientError:
         logger.exception(f"Failed to get item from {table_name}")
         raise
 
 
-def update_item(table_name: str, key: Dict[str, Any], updates: Dict[str, Any]) -> None:
+def update_item(table_name: str, key: dict[str, Any], updates: dict[str, Any]) -> None:
     """
     Update item in DynamoDB table.
 
@@ -250,8 +244,8 @@ def update_item(table_name: str, key: Dict[str, Any], updates: Dict[str, Any]) -
     table = get_table(table_name)
 
     # Build update expression
-    update_expr = "SET " + ", ".join([f"#{k} = :{k}" for k in updates.keys()])
-    expr_attr_names = {f"#{k}": k for k in updates.keys()}
+    update_expr = "SET " + ", ".join([f"#{k} = :{k}" for k in updates])
+    expr_attr_names = {f"#{k}": k for k in updates}
     expr_attr_values = {f":{k}": v for k, v in updates.items()}
 
     try:
@@ -259,9 +253,9 @@ def update_item(table_name: str, key: Dict[str, Any], updates: Dict[str, Any]) -
             Key=key,
             UpdateExpression=update_expr,
             ExpressionAttributeNames=expr_attr_names,
-            ExpressionAttributeValues=expr_attr_values
+            ExpressionAttributeValues=expr_attr_values,
         )
         logger.info(f"Updated item in {table_name}: {key}")
-    except ClientError as e:
+    except ClientError:
         logger.exception(f"Failed to update item in {table_name}")
         raise

@@ -10,7 +10,6 @@ Requires:
 - openpyxl (pip install openpyxl)
 """
 
-import sys
 from pathlib import Path
 
 
@@ -87,14 +86,14 @@ def generate_invoice_image():
     print("Creating invoice.jpg...")
 
     # Create image
-    img = Image.new('RGB', (800, 1000), color='white')
+    img = Image.new("RGB", (800, 1000), color="white")
     draw = ImageDraw.Draw(img)
 
     # Try to use default font
     try:
         font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
         font_normal = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
-    except:
+    except OSError:
         font_large = ImageFont.load_default()
         font_normal = ImageFont.load_default()
 
@@ -102,7 +101,7 @@ def generate_invoice_image():
     y = 50
 
     # Header
-    draw.text((50, y), "INVOICE", fill='black', font=font_large)
+    draw.text((50, y), "INVOICE", fill="black", font=font_large)
     y += 60
 
     # Invoice details
@@ -131,7 +130,7 @@ def generate_invoice_image():
     ]
 
     for line in invoice_text:
-        draw.text((50, y), line, fill='black', font=font_normal)
+        draw.text((50, y), line, fill="black", font=font_normal)
         y += 25
 
     # Save image
@@ -154,28 +153,26 @@ def generate_word_document():
     doc = Document()
 
     # Add title
-    doc.add_heading('Sample Word Document', 0)
+    doc.add_heading("Sample Word Document", 0)
 
     # Add content
+    doc.add_paragraph("This is a sample Microsoft Word document for testing RAGStack-Lambda.")
+
+    doc.add_heading("Purpose", level=1)
     doc.add_paragraph(
-        'This is a sample Microsoft Word document for testing RAGStack-Lambda.'
+        "This document tests the format conversion pipeline. "
+        "Word documents should be converted to PDF format before OCR processing."
     )
 
-    doc.add_heading('Purpose', level=1)
-    doc.add_paragraph(
-        'This document tests the format conversion pipeline. '
-        'Word documents should be converted to PDF format before OCR processing.'
-    )
+    doc.add_heading("Test Criteria", level=1)
+    doc.add_paragraph("1. Document should be converted to PDF")
+    doc.add_paragraph("2. Text should be extracted correctly")
+    doc.add_paragraph("3. Formatting should be preserved where possible")
 
-    doc.add_heading('Test Criteria', level=1)
-    doc.add_paragraph('1. Document should be converted to PDF')
-    doc.add_paragraph('2. Text should be extracted correctly')
-    doc.add_paragraph('3. Formatting should be preserved where possible')
-
-    doc.add_heading('Expected Results', level=1)
-    doc.add_paragraph('• File format: DOCX → PDF')
-    doc.add_paragraph('• Text extraction: Successful')
-    doc.add_paragraph('• Processing time: < 15 seconds')
+    doc.add_heading("Expected Results", level=1)
+    doc.add_paragraph("• File format: DOCX → PDF")
+    doc.add_paragraph("• Text extraction: Successful")
+    doc.add_paragraph("• Processing time: < 15 seconds")
 
     # Save document
     doc.save("document.docx")
@@ -235,6 +232,7 @@ def main():
     script_dir = Path(__file__).parent
     script_dir.mkdir(parents=True, exist_ok=True)
     import os
+
     os.chdir(script_dir)
 
     results = {

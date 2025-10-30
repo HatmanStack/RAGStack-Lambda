@@ -2,10 +2,10 @@
 Unit tests for generate_embeddings Lambda function.
 """
 
-import json
-import pytest
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # Mock the ragstack_common imports before importing index
 mock_bedrock = MagicMock()
@@ -13,15 +13,15 @@ mock_storage = MagicMock()
 mock_models = MagicMock()
 mock_config = MagicMock()
 
-sys.modules['ragstack_common'] = MagicMock()
-sys.modules['ragstack_common.bedrock'] = mock_bedrock
-sys.modules['ragstack_common.storage'] = mock_storage
-sys.modules['ragstack_common.models'] = mock_models
-sys.modules['ragstack_common.config'] = mock_config
+sys.modules["ragstack_common"] = MagicMock()
+sys.modules["ragstack_common.bedrock"] = mock_bedrock
+sys.modules["ragstack_common.storage"] = mock_storage
+sys.modules["ragstack_common.models"] = mock_models
+sys.modules["ragstack_common.config"] = mock_config
 
 mock_models.Status = MagicMock()
-mock_models.Status.EMBEDDING_COMPLETE = MagicMock(value='embedding_complete')
-mock_models.Status.FAILED = MagicMock(value='failed')
+mock_models.Status.EMBEDDING_COMPLETE = MagicMock(value="embedding_complete")
+mock_models.Status.FAILED = MagicMock(value="failed")
 
 # Now import the Lambda function
 import index
@@ -31,19 +31,13 @@ import index
 def valid_event():
     """Valid input event for generate_embeddings Lambda."""
     return {
-        'document_id': 'test-doc-123',
-        'output_s3_uri': 's3://output-bucket/test-doc-123/text.txt',
-        'pages': [
-            {
-                'page_number': 1,
-                'image_s3_uri': 's3://output-bucket/test-doc-123/page_1.jpg'
-            },
-            {
-                'page_number': 2,
-                'image_s3_uri': 's3://output-bucket/test-doc-123/page_2.jpg'
-            }
+        "document_id": "test-doc-123",
+        "output_s3_uri": "s3://output-bucket/test-doc-123/text.txt",
+        "pages": [
+            {"page_number": 1, "image_s3_uri": "s3://output-bucket/test-doc-123/page_1.jpg"},
+            {"page_number": 2, "image_s3_uri": "s3://output-bucket/test-doc-123/page_2.jpg"},
         ],
-        'vector_bucket': 'test-vector-bucket'
+        "vector_bucket": "test-vector-bucket",
     }
 
 
@@ -51,26 +45,37 @@ def valid_event():
 def lambda_context():
     """Mock Lambda context."""
     context = Mock()
-    context.function_name = 'generate_embeddings'
+    context.function_name = "generate_embeddings"
     context.memory_limit_in_mb = 2048
-    context.invoked_function_arn = 'arn:aws:lambda:us-east-1:123456789012:function:generate_embeddings'
-    context.aws_request_id = 'test-request-id'
+    context.invoked_function_arn = (
+        "arn:aws:lambda:us-east-1:123456789012:function:generate_embeddings"
+    )
+    context.aws_request_id = "test-request-id"
     return context
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0',
-    'IMAGE_EMBED_MODEL': 'amazon.titan-embed-image-v1'
-})
-@patch('index.write_s3_json')
-@patch('index.read_s3_binary')
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_success(mock_bedrock_class, mock_update_item, mock_read_text,
-                                  mock_read_binary, mock_write_json,
-                                  valid_event, lambda_context):
+@patch.dict(
+    "os.environ",
+    {
+        "TRACKING_TABLE": "test-tracking-table",
+        "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
+        "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
+    },
+)
+@patch("index.write_s3_json")
+@patch("index.read_s3_binary")
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_success(
+    mock_bedrock_class,
+    mock_update_item,
+    mock_read_text,
+    mock_read_binary,
+    mock_write_json,
+    valid_event,
+    lambda_context,
+):
     """Test successful embedding generation."""
 
     # Setup mocks
@@ -85,7 +90,7 @@ def test_lambda_handler_success(mock_bedrock_class, mock_update_item, mock_read_
     mock_bedrock_instance.generate_embedding.return_value = text_embedding
 
     # Mock image content
-    mock_read_binary.return_value = b'fake_image_data'
+    mock_read_binary.return_value = b"fake_image_data"
 
     # Mock image embeddings
     image_embedding = [0.4, 0.5, 0.6] * 100
@@ -95,10 +100,10 @@ def test_lambda_handler_success(mock_bedrock_class, mock_update_item, mock_read_
     result = index.lambda_handler(valid_event, lambda_context)
 
     # Verify
-    assert result['document_id'] == 'test-doc-123'
-    assert result['status'] == 'embedding_complete'
-    assert 'text_embedding_uri' in result
-    assert len(result['image_embeddings']) == 2
+    assert result["document_id"] == "test-doc-123"
+    assert result["status"] == "embedding_complete"
+    assert "text_embedding_uri" in result
+    assert len(result["image_embeddings"]) == 2
 
     # Verify text embedding was generated
     mock_bedrock_instance.generate_embedding.assert_called_once()
@@ -113,23 +118,24 @@ def test_lambda_handler_success(mock_bedrock_class, mock_update_item, mock_read_
     mock_update_item.assert_called_once()
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0'
-})
-@patch('index.write_s3_json')
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_text_only(mock_bedrock_class, mock_update_item, mock_read_text,
-                                    mock_write_json, lambda_context):
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
+)
+@patch("index.write_s3_json")
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_text_only(
+    mock_bedrock_class, mock_update_item, mock_read_text, mock_write_json, lambda_context
+):
     """Test embedding generation with text only (no images)."""
 
     event = {
-        'document_id': 'test-doc-456',
-        'output_s3_uri': 's3://output-bucket/test-doc-456/text.txt',
-        'pages': [],  # No pages with images
-        'vector_bucket': 'test-vector-bucket'
+        "document_id": "test-doc-456",
+        "output_s3_uri": "s3://output-bucket/test-doc-456/text.txt",
+        "pages": [],  # No pages with images
+        "vector_bucket": "test-vector-bucket",
     }
 
     # Setup mocks
@@ -142,9 +148,9 @@ def test_lambda_handler_text_only(mock_bedrock_class, mock_update_item, mock_rea
     result = index.lambda_handler(event, lambda_context)
 
     # Verify
-    assert result['document_id'] == 'test-doc-456'
-    assert result['status'] == 'embedding_complete'
-    assert len(result['image_embeddings']) == 0
+    assert result["document_id"] == "test-doc-456"
+    assert result["status"] == "embedding_complete"
+    assert len(result["image_embeddings"]) == 0
 
     # Only text embedding generated
     mock_bedrock_instance.generate_embedding.assert_called_once()
@@ -154,28 +160,29 @@ def test_lambda_handler_text_only(mock_bedrock_class, mock_update_item, mock_rea
     assert mock_write_json.call_count == 1
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0'
-})
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_text_truncation(mock_bedrock_class, mock_update_item,
-                                         mock_read_text, lambda_context):
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
+)
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_text_truncation(
+    mock_bedrock_class, mock_update_item, mock_read_text, lambda_context
+):
     """Test that very long text is truncated."""
 
     event = {
-        'document_id': 'test-doc-789',
-        'output_s3_uri': 's3://output-bucket/test.txt',
-        'pages': [],
-        'vector_bucket': 'test-vector-bucket'
+        "document_id": "test-doc-789",
+        "output_s3_uri": "s3://output-bucket/test.txt",
+        "pages": [],
+        "vector_bucket": "test-vector-bucket",
     }
 
     # Setup mocks with very long text (>30k chars)
     mock_bedrock_instance = Mock()
     mock_bedrock_class.return_value = mock_bedrock_instance
-    long_text = 'x' * 50000  # 50k characters
+    long_text = "x" * 50000  # 50k characters
     mock_read_text.return_value = long_text
     mock_bedrock_instance.generate_embedding.return_value = [0.1] * 100
 
@@ -184,19 +191,20 @@ def test_lambda_handler_text_truncation(mock_bedrock_class, mock_update_item,
 
     # Verify text was truncated to 30000 chars
     call_args = mock_bedrock_instance.generate_embedding.call_args
-    truncated_text = call_args[1]['text']
+    truncated_text = call_args[1]["text"]
     assert len(truncated_text) == 30000
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0'
-})
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_bedrock_failure(mock_bedrock_class, mock_update_item,
-                                         mock_read_text, valid_event, lambda_context):
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
+)
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_bedrock_failure(
+    mock_bedrock_class, mock_update_item, mock_read_text, valid_event, lambda_context
+):
     """Test handling of Bedrock API failure."""
 
     # Setup mocks - Bedrock fails
@@ -209,39 +217,47 @@ def test_lambda_handler_bedrock_failure(mock_bedrock_class, mock_update_item,
     with pytest.raises(Exception) as exc_info:
         index.lambda_handler(valid_event, lambda_context)
 
-    assert 'Bedrock API error' in str(exc_info.value)
+    assert "Bedrock API error" in str(exc_info.value)
 
     # Verify failed status was recorded
     mock_update_item.assert_called()
     update_args = mock_update_item.call_args[0][2]
-    assert update_args['status'] == 'failed'
-    assert 'error_message' in update_args
+    assert update_args["status"] == "failed"
+    assert "error_message" in update_args
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0',
-    'IMAGE_EMBED_MODEL': 'amazon.titan-embed-image-v1'
-})
-@patch('index.write_s3_json')
-@patch('index.read_s3_binary')
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_skip_pages_without_images(mock_bedrock_class, mock_update_item,
-                                                    mock_read_text, mock_read_binary,
-                                                    mock_write_json, lambda_context):
+@patch.dict(
+    "os.environ",
+    {
+        "TRACKING_TABLE": "test-tracking-table",
+        "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
+        "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
+    },
+)
+@patch("index.write_s3_json")
+@patch("index.read_s3_binary")
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_skip_pages_without_images(
+    mock_bedrock_class,
+    mock_update_item,
+    mock_read_text,
+    mock_read_binary,
+    mock_write_json,
+    lambda_context,
+):
     """Test that pages without image_s3_uri are skipped."""
 
     event = {
-        'document_id': 'test-doc-999',
-        'output_s3_uri': 's3://output-bucket/text.txt',
-        'pages': [
-            {'page_number': 1, 'image_s3_uri': 's3://bucket/page1.jpg'},
-            {'page_number': 2},  # No image_s3_uri - should be skipped
-            {'page_number': 3, 'image_s3_uri': None},  # Explicit None - should be skipped
+        "document_id": "test-doc-999",
+        "output_s3_uri": "s3://output-bucket/text.txt",
+        "pages": [
+            {"page_number": 1, "image_s3_uri": "s3://bucket/page1.jpg"},
+            {"page_number": 2},  # No image_s3_uri - should be skipped
+            {"page_number": 3, "image_s3_uri": None},  # Explicit None - should be skipped
         ],
-        'vector_bucket': 'test-vector-bucket'
+        "vector_bucket": "test-vector-bucket",
     }
 
     # Setup mocks
@@ -249,7 +265,7 @@ def test_lambda_handler_skip_pages_without_images(mock_bedrock_class, mock_updat
     mock_bedrock_class.return_value = mock_bedrock_instance
     mock_read_text.return_value = "Text content"
     mock_bedrock_instance.generate_embedding.return_value = [0.1] * 100
-    mock_read_binary.return_value = b'image_data'
+    mock_read_binary.return_value = b"image_data"
     mock_bedrock_instance.generate_image_embedding.return_value = [0.2] * 100
 
     # Execute
@@ -257,19 +273,19 @@ def test_lambda_handler_skip_pages_without_images(mock_bedrock_class, mock_updat
 
     # Verify only 1 image embedding was generated (page 1 only)
     assert mock_bedrock_instance.generate_image_embedding.call_count == 1
-    assert len(result['image_embeddings']) == 1
-    assert result['image_embeddings'][0]['page_number'] == 1
+    assert len(result["image_embeddings"]) == 1
+    assert result["image_embeddings"][0]["page_number"] == 1
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'TEXT_EMBED_MODEL': 'amazon.titan-embed-text-v2:0'
-})
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
+)
 def test_lambda_handler_missing_required_fields(lambda_context):
     """Test handling of missing required event fields."""
 
     invalid_event = {
-        'document_id': 'test-doc-123'
+        "document_id": "test-doc-123"
         # Missing output_s3_uri and vector_bucket
     }
 
@@ -278,26 +294,33 @@ def test_lambda_handler_missing_required_fields(lambda_context):
         index.lambda_handler(invalid_event, lambda_context)
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'CONFIGURATION_TABLE_NAME': 'test-config-table'
-})
-@patch('index.config_manager')
-@patch('index.write_s3_json')
-@patch('index.read_s3_binary')
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_uses_runtime_config(mock_bedrock_class, mock_update_item, mock_read_text,
-                                              mock_read_binary, mock_write_json, mock_config_manager,
-                                              valid_event, lambda_context):
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
+@patch("index.config_manager")
+@patch("index.write_s3_json")
+@patch("index.read_s3_binary")
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_uses_runtime_config(
+    mock_bedrock_class,
+    mock_update_item,
+    mock_read_text,
+    mock_read_binary,
+    mock_write_json,
+    mock_config_manager,
+    valid_event,
+    lambda_context,
+):
     """Test that handler reads embedding models from ConfigurationManager."""
 
     # Setup config manager mock
     def config_side_effect(key, default=None):
         config_map = {
-            'text_embed_model_id': 'cohere.embed-english-v3',
-            'image_embed_model_id': 'amazon.titan-embed-image-v1'
+            "text_embed_model_id": "cohere.embed-english-v3",
+            "image_embed_model_id": "amazon.titan-embed-image-v1",
         }
         return config_map.get(key, default)
 
@@ -308,7 +331,7 @@ def test_lambda_handler_uses_runtime_config(mock_bedrock_class, mock_update_item
     mock_bedrock_class.return_value = mock_bedrock_instance
     mock_read_text.return_value = "Test content"
     mock_bedrock_instance.generate_embedding.return_value = [0.1] * 100
-    mock_read_binary.return_value = b'image_data'
+    mock_read_binary.return_value = b"image_data"
     mock_bedrock_instance.generate_image_embedding.return_value = [0.2] * 100
 
     # Execute
@@ -317,38 +340,41 @@ def test_lambda_handler_uses_runtime_config(mock_bedrock_class, mock_update_item
     # Verify config_manager was called for both model parameters
     assert mock_config_manager.get_parameter.call_count == 2
     mock_config_manager.get_parameter.assert_any_call(
-        'text_embed_model_id',
-        default='amazon.titan-embed-text-v2:0'
+        "text_embed_model_id", default="amazon.titan-embed-text-v2:0"
     )
     mock_config_manager.get_parameter.assert_any_call(
-        'image_embed_model_id',
-        default='amazon.titan-embed-image-v1'
+        "image_embed_model_id", default="amazon.titan-embed-image-v1"
     )
 
     # Verify models from config were used in Bedrock calls
     text_call = mock_bedrock_instance.generate_embedding.call_args
-    assert text_call[1]['model_id'] == 'cohere.embed-english-v3'
+    assert text_call[1]["model_id"] == "cohere.embed-english-v3"
 
     image_call = mock_bedrock_instance.generate_image_embedding.call_args
-    assert image_call[1]['model_id'] == 'amazon.titan-embed-image-v1'
+    assert image_call[1]["model_id"] == "amazon.titan-embed-image-v1"
 
     # Verify successful result
-    assert result['document_id'] == 'test-doc-123'
-    assert result['status'] == 'embedding_complete'
+    assert result["document_id"] == "test-doc-123"
+    assert result["status"] == "embedding_complete"
 
 
-@patch.dict('os.environ', {
-    'TRACKING_TABLE': 'test-tracking-table',
-    'CONFIGURATION_TABLE_NAME': 'test-config-table'
-})
-@patch('index.config_manager')
-@patch('index.write_s3_json')
-@patch('index.read_s3_text')
-@patch('index.update_item')
-@patch('index.BedrockClient')
-def test_lambda_handler_uses_default_models_from_config(mock_bedrock_class, mock_update_item,
-                                                          mock_read_text, mock_write_json,
-                                                          mock_config_manager, lambda_context):
+@patch.dict(
+    "os.environ",
+    {"TRACKING_TABLE": "test-tracking-table", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
+@patch("index.config_manager")
+@patch("index.write_s3_json")
+@patch("index.read_s3_text")
+@patch("index.update_item")
+@patch("index.BedrockClient")
+def test_lambda_handler_uses_default_models_from_config(
+    mock_bedrock_class,
+    mock_update_item,
+    mock_read_text,
+    mock_write_json,
+    mock_config_manager,
+    lambda_context,
+):
     """Test that handler uses default models when config returns defaults."""
 
     # Setup config manager mock - return defaults
@@ -359,10 +385,10 @@ def test_lambda_handler_uses_default_models_from_config(mock_bedrock_class, mock
     mock_config_manager.get_parameter.side_effect = config_side_effect
 
     event = {
-        'document_id': 'test-doc-456',
-        'output_s3_uri': 's3://output-bucket/test.txt',
-        'pages': [],  # No images
-        'vector_bucket': 'test-vector-bucket'
+        "document_id": "test-doc-456",
+        "output_s3_uri": "s3://output-bucket/test.txt",
+        "pages": [],  # No images
+        "vector_bucket": "test-vector-bucket",
     }
 
     # Setup other mocks
@@ -376,10 +402,10 @@ def test_lambda_handler_uses_default_models_from_config(mock_bedrock_class, mock
 
     # Verify default models were used
     text_call = mock_bedrock_instance.generate_embedding.call_args
-    assert text_call[1]['model_id'] == 'amazon.titan-embed-text-v2:0'
+    assert text_call[1]["model_id"] == "amazon.titan-embed-text-v2:0"
 
     # Verify successful result
-    assert result['document_id'] == 'test-doc-456'
+    assert result["document_id"] == "test-doc-456"
 
 
 if __name__ == "__main__":

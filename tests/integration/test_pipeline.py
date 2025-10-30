@@ -7,22 +7,23 @@ These tests require:
 - Sample test documents
 """
 
-import pytest
-import boto3
-import time
 import os
+import time
 from datetime import datetime
 
+import boto3
+import pytest
+
 # Initialize AWS clients
-s3 = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-stepfunctions = boto3.client('stepfunctions')
+s3 = boto3.client("s3")
+dynamodb = boto3.resource("dynamodb")
+stepfunctions = boto3.client("stepfunctions")
 
 # Get environment variables
-STACK_NAME = os.environ.get('STACK_NAME', 'RAGStack-dev')
-INPUT_BUCKET = os.environ.get('INPUT_BUCKET')
-TRACKING_TABLE = os.environ.get('TRACKING_TABLE')
-STATE_MACHINE_ARN = os.environ.get('STATE_MACHINE_ARN')
+STACK_NAME = os.environ.get("STACK_NAME", "RAGStack-dev")
+INPUT_BUCKET = os.environ.get("INPUT_BUCKET")
+TRACKING_TABLE = os.environ.get("TRACKING_TABLE")
+STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 
 if not all([INPUT_BUCKET, TRACKING_TABLE, STATE_MACHINE_ARN]):
     pytest.skip("Integration tests require deployed stack", allow_module_level=True)
@@ -31,9 +32,12 @@ if not all([INPUT_BUCKET, TRACKING_TABLE, STATE_MACHINE_ARN]):
 def create_test_pdf_with_text():
     """Create a simple text-native PDF for testing."""
     import fitz
+
     doc = fitz.open()
     page = doc.new_page()
-    page.insert_text((50, 50), "This is a test document.\nIt has multiple lines.\nFor testing purposes.")
+    page.insert_text(
+        (50, 50), "This is a test document.\nIt has multiple lines.\nFor testing purposes."
+    )
     pdf_bytes = doc.tobytes()
     doc.close()
     return pdf_bytes
@@ -44,11 +48,7 @@ def upload_test_document(filename, content):
     document_id = f"test-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     s3_key = f"{document_id}/{filename}"
 
-    s3.put_object(
-        Bucket=INPUT_BUCKET,
-        Key=s3_key,
-        Body=content
-    )
+    s3.put_object(Bucket=INPUT_BUCKET, Key=s3_key, Body=content)
 
     return document_id, f"s3://{INPUT_BUCKET}/{s3_key}"
 
@@ -63,18 +63,18 @@ def wait_for_processing(document_id, timeout=300):
     start_time = time.time()
 
     while time.time() - start_time < timeout:
-        response = table.get_item(Key={'document_id': document_id})
+        response = table.get_item(Key={"document_id": document_id})
 
-        if 'Item' not in response:
+        if "Item" not in response:
             time.sleep(2)
             continue
 
-        status = response['Item'].get('status')
+        status = response["Item"].get("status")
 
-        if status == 'indexed':
-            return response['Item']
-        elif status == 'failed':
-            error = response['Item'].get('error_message', 'Unknown error')
+        if status == "indexed":
+            return response["Item"]
+        if status == "failed":
+            error = response["Item"].get("error_message", "Unknown error")
             raise Exception(f"Processing failed: {error}")
 
         time.sleep(5)
@@ -99,7 +99,7 @@ def test_text_native_pdf_processing():
     """
     # Create and upload test PDF
     pdf_content = create_test_pdf_with_text()
-    document_id, s3_uri = upload_test_document('test.pdf', pdf_content)
+    document_id, s3_uri = upload_test_document("test.pdf", pdf_content)
 
     print(f"Uploaded test document: {document_id}")
 
@@ -107,11 +107,11 @@ def test_text_native_pdf_processing():
     result = wait_for_processing(document_id, timeout=300)
 
     # Verify results
-    assert result['status'] == 'indexed'
-    assert result['is_text_native'] == True
-    assert result['total_pages'] > 0
+    assert result["status"] == "indexed"
+    assert result["is_text_native"]
+    assert result["total_pages"] > 0
 
-    print(f"✓ Text-native PDF processed successfully")
+    print("✓ Text-native PDF processed successfully")
     print(f"  Pages: {result['total_pages']}")
     print(f"  Output: {result.get('output_s3_uri')}")
 
