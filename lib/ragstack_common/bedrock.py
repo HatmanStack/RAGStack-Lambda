@@ -128,7 +128,7 @@ class BedrockClient:
         retry_count: int,
         request_start_time: float,
         context: str = "Unspecified",
-        _last_exception: Exception = None,
+        _last_exception: Exception | None = None,
     ) -> dict[str, Any]:
         """
         Recursive helper method to handle retries for Bedrock invocation.
@@ -297,7 +297,11 @@ class BedrockClient:
         )
 
     def _generate_embedding_with_retry(
-        self, model_id: str, request_body: str, retry_count: int, _last_exception: Exception = None
+        self,
+        model_id: str,
+        request_body: str,
+        retry_count: int,
+        _last_exception: Exception | None = None,
     ) -> list[float]:
         """
         Recursive helper for embedding generation with retry.

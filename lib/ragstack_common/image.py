@@ -146,7 +146,7 @@ def apply_adaptive_binarization(image_data: bytes) -> bytes:
         blurred_pixels = list(blurred.getdata())
 
         binary_pixels = []
-        for orig, blur in zip(original_pixels, blurred_pixels, strict=False):
+        for orig, blur in zip(original_pixels, blurred_pixels, strict=True):
             threshold = blur - threshold_offset
             binary_pixels.append(255 if orig > threshold else 0)
 

@@ -25,8 +25,8 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
     try {
       const doc = await fetchDocument(documentId);
       setDocument(doc);
-    } catch (_err) {
-      setError(_err.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }

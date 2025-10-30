@@ -188,6 +188,7 @@ def create_upload_url(args):
 
         # Create tracking record
         logger.info(f"Creating tracking record for document: {document_id}")
+        now = datetime.now().isoformat()
         table = dynamodb.Table(TRACKING_TABLE)
         table.put_item(
             Item={
@@ -195,8 +196,8 @@ def create_upload_url(args):
                 "filename": filename,
                 "input_s3_uri": f"s3://{INPUT_BUCKET}/{s3_key}",
                 "status": "uploaded",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "created_at": now,
+                "updated_at": now,
             }
         )
 

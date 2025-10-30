@@ -180,7 +180,7 @@ def test_lambda_handler_missing_required_field(mock_update_item, lambda_context)
 @patch("index.OcrService")
 @patch("index.Document")
 def test_lambda_handler_with_bedrock_backend(
-    mock_document_class, mock_ocr_service_class, mock_update_item, lambda_context, mock_document
+    mock_document_class, mock_ocr_service_class, _mock_update_item, lambda_context, mock_document
 ):
     """Test Lambda with Bedrock OCR backend."""
 
@@ -217,7 +217,7 @@ def test_lambda_handler_with_bedrock_backend(
 @patch("index.OcrService")
 @patch("index.Document")
 def test_lambda_handler_page_text_truncation(
-    mock_document_class, mock_ocr_service_class, mock_update_item, valid_event, lambda_context
+    mock_document_class, mock_ocr_service_class, _mock_update_item, valid_event, lambda_context
 ):
     """Test that page text is truncated for Step Functions output."""
 
@@ -265,7 +265,7 @@ def test_lambda_handler_page_text_truncation(
 def test_lambda_handler_uses_runtime_config(
     mock_document_class,
     mock_ocr_service_class,
-    mock_update_item,
+    _mock_update_item,
     mock_config_manager,
     lambda_context,
     mock_document,
@@ -332,7 +332,7 @@ def test_lambda_handler_uses_runtime_config(
 def test_lambda_handler_uses_textract_from_config(
     mock_document_class,
     mock_ocr_service_class,
-    mock_update_item,
+    _mock_update_item,
     mock_config_manager,
     lambda_context,
     mock_document,
