@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Settings } from './index';
 import { generateClient } from 'aws-amplify/api';
@@ -322,10 +322,6 @@ describe('Settings Component', () => {
   // =========================================================================
 
   describe('Re-embedding Job Features', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
     afterEach(() => {
       vi.restoreAllMocks();
       vi.useRealTimers();
@@ -346,8 +342,6 @@ describe('Settings Component', () => {
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
-
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
@@ -360,7 +354,9 @@ describe('Settings Component', () => {
       );
     });
 
-    it.skip('displays progress banner when re-embedding job is in progress', async () => {  // TODO: Fix fake timers + waitFor compatibility
+    it('displays progress banner when re-embedding job is in progress', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+
       const inProgressJob = {
         jobId: 'test-job-123',
         status: 'IN_PROGRESS',
@@ -380,11 +376,16 @@ describe('Settings Component', () => {
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
         }));
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 45 \/ 100 completed/i)).toBeInTheDocument();
@@ -416,14 +417,14 @@ describe('Settings Component', () => {
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
-
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed! all 50 documents have been processed/i)).toBeInTheDocument();
       });
     });
 
-    it.skip('polls job status every 5 seconds when job is in progress', async () => {  // TODO: Fix fake timers + waitFor compatibility
+    it('polls job status every 5 seconds when job is in progress', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+
       const inProgressJob = {
         jobId: 'test-job-789',
         status: 'IN_PROGRESS',
@@ -449,27 +450,37 @@ describe('Settings Component', () => {
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
         }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: updatedJob
+        }))
         .mockResolvedValue(mockGraphqlResponse({
           getReEmbedJobStatus: updatedJob
         }));
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
+      // Run initial timers to complete mount
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 30 \/ 100/i)).toBeInTheDocument();
       });
 
       // Fast-forward 5 seconds to trigger polling
-      await vi.advanceTimersByTimeAsync(5000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 60 \/ 100/i)).toBeInTheDocument();
       });
     });
 
-    it.skip('stops polling when job completes', async () => {  // TODO: Fix fake timers + waitFor compatibility
+    it('stops polling when job completes', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+
       const inProgressJob = {
         jobId: 'test-job-complete',
         status: 'IN_PROGRESS',
@@ -499,18 +510,26 @@ describe('Settings Component', () => {
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: completedJob
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: completedJob
         }));
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
+      // Run initial timers
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 9 \/ 10/i)).toBeInTheDocument();
       });
 
       // Fast-forward to trigger one more poll
-      await vi.advanceTimersByTimeAsync(5000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
@@ -518,13 +537,13 @@ describe('Settings Component', () => {
 
       // Fast-forward again - should not poll anymore
       const callCountBefore = mockClient.graphql.mock.calls.length;
-      vi.advanceTimersByTime(10000);
-
-      // Call count should not increase significantly (maybe 1 more call max)
-      await waitFor(() => {
-        const callCountAfter = mockClient.graphql.mock.calls.length;
-        expect(callCountAfter - callCountBefore).toBeLessThanOrEqual(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
       });
+
+      // Call count should not increase (polling stopped)
+      const callCountAfter = mockClient.graphql.mock.calls.length;
+      expect(callCountAfter).toBe(callCountBefore);
     });
 
     it('triggers re-embedding job when user selects re-embed option in modal', async () => {
@@ -570,8 +589,6 @@ describe('Settings Component', () => {
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
-
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
@@ -597,8 +614,6 @@ describe('Settings Component', () => {
         .mockRejectedValueOnce(new Error('Failed to fetch job status'));
 
       renderSettings();
-
-      await vi.runOnlyPendingTimersAsync();
 
       // Should not crash and should handle error gracefully
       await waitFor(() => {
@@ -633,8 +648,6 @@ describe('Settings Component', () => {
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
-
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
       });
@@ -659,8 +672,6 @@ describe('Settings Component', () => {
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
-
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
@@ -670,7 +681,9 @@ describe('Settings Component', () => {
       expect(screen.queryByText(/re-embedding completed!/i)).not.toBeInTheDocument();
     });
 
-    it.skip('calculates progress percentage correctly', async () => {  // TODO: Fix fake timers + waitFor compatibility
+    it('calculates progress percentage correctly', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+
       const jobWith33Percent = {
         jobId: 'test-percentage',
         status: 'IN_PROGRESS',
@@ -690,11 +703,16 @@ describe('Settings Component', () => {
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: jobWith33Percent
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: jobWith33Percent
         }));
 
       renderSettings();
 
-      await vi.runOnlyPendingTimersAsync();
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 100 \/ 300/i)).toBeInTheDocument();
