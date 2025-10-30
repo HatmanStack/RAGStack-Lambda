@@ -9,10 +9,22 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-# Import the handler module
-lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "appsync_resolvers"
-sys.path.insert(0, str(lambda_dir))
-import index
+# Set required environment variables BEFORE importing the module
+os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
+os.environ["TRACKING_TABLE"] = "test-tracking-table"
+os.environ["INPUT_BUCKET"] = "test-input-bucket"
+os.environ["STATE_MACHINE_ARN"] = (
+    "arn:aws:states:us-east-1:123456789012:stateMachine:test-state-machine"
+)
+os.environ["LOG_LEVEL"] = "INFO"
+
+# Mock boto3 BEFORE importing the handler module to prevent AWS client initialization
+sys.path.insert(
+    0, str(Path(__file__).parent.parent.parent / "src" / "lambda" / "appsync_resolvers")
+)
+
+with patch("boto3.client"), patch("boto3.resource"):
+    import index
 
 # Fixtures
 

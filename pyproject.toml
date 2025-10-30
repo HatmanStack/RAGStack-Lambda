@@ -1,5 +1,10 @@
 # pyproject.toml - Python project configuration
 
+[project]
+name = "ragstack-lambda"
+version = "1.0.0"
+requires-python = ">=3.12"
+
 [tool.ruff]
 # Ruff version: 0.14.2 (pinned in requirements-dev.txt)
 # Line length set to 100 chars (AWS Lambda best practice)

@@ -11,15 +11,9 @@ import os
 import time
 from datetime import datetime
 
-import boto3
 import pytest
 
-# Initialize AWS clients
-s3 = boto3.client("s3")
-dynamodb = boto3.resource("dynamodb")
-stepfunctions = boto3.client("stepfunctions")
-
-# Get environment variables
+# Get environment variables - check these BEFORE importing boto3
 STACK_NAME = os.environ.get("STACK_NAME", "RAGStack-dev")
 INPUT_BUCKET = os.environ.get("INPUT_BUCKET")
 TRACKING_TABLE = os.environ.get("TRACKING_TABLE")
@@ -27,6 +21,28 @@ STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 
 if not all([INPUT_BUCKET, TRACKING_TABLE, STATE_MACHINE_ARN]):
     pytest.skip("Integration tests require deployed stack", allow_module_level=True)
+
+# Import boto3 only after environment check
+import boto3
+
+
+# Fixtures for AWS clients - lazy initialization only when tests run
+@pytest.fixture(scope="session")
+def s3_client():
+    """AWS S3 client fixture."""
+    return boto3.client("s3")
+
+
+@pytest.fixture(scope="session")
+def dynamodb_resource():
+    """AWS DynamoDB resource fixture."""
+    return boto3.resource("dynamodb")
+
+
+@pytest.fixture(scope="session")
+def stepfunctions_client():
+    """AWS Step Functions client fixture."""
+    return boto3.client("stepfunctions")
 
 
 def create_test_pdf_with_text():
@@ -43,23 +59,23 @@ def create_test_pdf_with_text():
     return pdf_bytes
 
 
-def upload_test_document(filename, content):
+def upload_test_document(s3_client, filename, content):
     """Upload test document to S3 input bucket."""
     document_id = f"test-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     s3_key = f"{document_id}/{filename}"
 
-    s3.put_object(Bucket=INPUT_BUCKET, Key=s3_key, Body=content)
+    s3_client.put_object(Bucket=INPUT_BUCKET, Key=s3_key, Body=content)
 
     return document_id, f"s3://{INPUT_BUCKET}/{s3_key}"
 
 
-def wait_for_processing(document_id, timeout=300):
+def wait_for_processing(dynamodb_resource, document_id, timeout=300):
     """
     Wait for document processing to complete.
 
     Polls DynamoDB until status is 'indexed' or 'failed'.
     """
-    table = dynamodb.Table(TRACKING_TABLE)
+    table = dynamodb_resource.Table(TRACKING_TABLE)
     start_time = time.time()
 
     while time.time() - start_time < timeout:
@@ -83,7 +99,7 @@ def wait_for_processing(document_id, timeout=300):
 
 
 @pytest.mark.integration
-def test_text_native_pdf_processing():
+def test_text_native_pdf_processing(s3_client, dynamodb_resource):
     """
     Test end-to-end processing of a text-native PDF.
 
@@ -99,12 +115,12 @@ def test_text_native_pdf_processing():
     """
     # Create and upload test PDF
     pdf_content = create_test_pdf_with_text()
-    document_id, s3_uri = upload_test_document("test.pdf", pdf_content)
+    document_id, s3_uri = upload_test_document(s3_client, "test.pdf", pdf_content)
 
     print(f"Uploaded test document: {document_id}")
 
     # Wait for processing
-    result = wait_for_processing(document_id, timeout=300)
+    result = wait_for_processing(dynamodb_resource, document_id, timeout=300)
 
     # Verify results
     assert result["status"] == "indexed"

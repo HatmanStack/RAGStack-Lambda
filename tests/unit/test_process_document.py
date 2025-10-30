@@ -2,7 +2,6 @@
 Unit tests for process_document Lambda function.
 """
 
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch

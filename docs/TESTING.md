@@ -461,6 +461,62 @@ pytest lib/ragstack_common/ tests/unit/test_ragstack_common_install.py
 
 ---
 
+##### Issue: ERROR collecting tests - boto3 initialization fails
+
+**Symptom:** Test collection fails with "KeyError" or boto3 client creation errors:
+```
+ERROR collecting tests/integration/test_pipeline.py
+...
+dynamodb = boto3.resource("dynamodb")
+...
+KeyError: 'AWS_DEFAULT_REGION'
+```
+
+**Cause:** Tests or Lambda code initialize AWS clients at module level, before mocking or environment setup
+
+**Solution:**
+
+**For test files** - Use pytest fixtures for AWS clients:
+```python
+# ❌ BAD: Module-level initialization
+import boto3
+s3 = boto3.client("s3")  # Fails if no credentials
+
+#  ✅ GOOD: Fixture-based initialization
+import pytest
+import boto3
+
+@pytest.fixture(scope="session")
+def s3_client():
+    return boto3.client("s3")
+
+@pytest.mark.integration
+def test_upload(s3_client):  # Inject fixture
+    s3_client.put_object(...)
+```
+
+**For Lambda code tests** - Mock boto3 before importing:
+```python
+# ❌ BAD: Import before mocking
+import index  # This initializes boto3 at module level
+
+# ✅ GOOD: Mock before import
+from unittest.mock import patch
+
+with patch("boto3.client"), patch("boto3.resource"):
+    import index
+```
+
+**Environment variables** - Set before importing modules:
+```python
+import os
+os.environ["TABLE_NAME"] = "test-table"  # Set FIRST
+
+import module_that_reads_env_vars  # Then import
+```
+
+---
+
 ##### Issue: Tests timeout or hang
 
 **Symptom:** Test execution never completes
