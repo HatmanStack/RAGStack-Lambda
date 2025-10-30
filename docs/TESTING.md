@@ -7,6 +7,7 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 ## Table of Contents
 
 - [Overview](#overview)
+- [Local Testing](#local-testing)
 - [Quick Start](#quick-start)
 - [Test Levels](#test-levels)
 - [Prerequisites](#prerequisites)
@@ -19,6 +20,354 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 - [Test Cleanup](#test-cleanup)
 - [Automated Testing](#automated-testing-with-github-actions)
 - [Common Test Scenarios](#common-test-scenarios)
+
+---
+
+## Local Testing
+
+Run tests and linting locally without AWS deployment for rapid development iteration.
+
+### Purpose & Benefits
+
+Local testing enables:
+
+- ✅ **Fast feedback** - No deployment required, tests run in seconds
+- ✅ **Cost savings** - No AWS charges during development
+- ✅ **Offline development** - Work without internet connection
+- ✅ **Pre-commit validation** - Catch issues before pushing code
+- ✅ **CI/CD readiness** - Same commands work in GitHub Actions
+
+### Prerequisites
+
+**One-time setup:**
+
+```bash
+# Backend dependencies (Python)
+pip install -r requirements-dev.txt
+
+# Frontend dependencies (Node.js) - NOTE: Currently has dependency issues
+cd src/ui
+npm install
+cd ../..
+```
+
+**Verify installations:**
+
+```bash
+# Check ruff
+ruff --version
+# Output: ruff 0.14.2
+
+# Check pytest
+pytest --version
+# Output: pytest 8.x.x
+```
+
+### Quick Reference
+
+| Command | Purpose | Time |
+|---------|---------|------|
+| `npm run lint` | Lint backend + frontend | ~15s |
+| `npm run lint:fix` | Auto-fix lint issues | ~15s |
+| `npm test` | Run all unit tests | ~5s |
+| `npm run test:all` | Lint + test everything | ~20s |
+| `npm run lint:backend` | Lint Python code only | ~3s |
+| `npm run test:backend` | Run pytest unit tests only | ~1s |
+| `npm run lint:frontend` | Lint React code only (needs fix) | ~5s |
+| `npm run test:frontend` | Run Vitest tests only (needs fix) | ~2s |
+
+### Backend Testing
+
+#### Linting with Ruff
+
+**Check code quality:**
+
+```bash
+# Lint all Python code
+npm run lint:backend
+
+# Or use ruff directly
+ruff check .
+
+# Check specific directory
+ruff check lib/ragstack_common/
+```
+
+**Auto-fix issues:**
+
+```bash
+# Fix all auto-fixable violations
+npm run lint:backend:fix
+
+# Or use ruff directly
+ruff check . --fix
+```
+
+**Format code:**
+
+```bash
+# Format all Python files
+npm run format:backend
+
+# Check formatting without changing files
+npm run format:backend:check
+```
+
+#### Running Tests with pytest
+
+**Unit tests only (fast):**
+
+```bash
+# Run all unit tests (excludes integration tests)
+npm run test:backend
+
+# Or use pytest directly
+pytest -m "not integration"
+
+# Run specific test file
+pytest lib/ragstack_common/test_bedrock.py
+
+# Run specific test function
+pytest lib/ragstack_common/test_config.py::test_init_with_table_name
+```
+
+**All tests (includes integration):**
+
+```bash
+# Run all tests including integration (requires AWS credentials)
+npm run test:backend:all
+
+# Or use pytest directly
+pytest
+```
+
+**With coverage:**
+
+```bash
+# Generate coverage report
+npm run test:backend:coverage
+
+# View HTML coverage report
+open htmlcov/index.html
+```
+
+**Verbose output:**
+
+```bash
+# Show detailed test output
+pytest -v
+
+# Show print statements
+pytest -s
+
+# Both verbose and print
+pytest -vs
+```
+
+#### Understanding Test Markers
+
+Tests are marked with pytest markers:
+
+- `@pytest.mark.integration` - Integration tests (require AWS)
+- No marker - Unit tests (no AWS required)
+
+### Frontend Testing
+
+**⚠️ Note:** Frontend testing currently has dependency version issues in `src/ui/package.json`. The commands are configured correctly in root `package.json`, but need `src/ui/package.json` fixes before they'll work.
+
+#### Linting with ESLint (once fixed)
+
+```bash
+# Lint React code
+npm run lint:frontend
+
+# Auto-fix lint issues
+npm run lint:frontend:fix
+```
+
+#### Running Tests with Vitest (once fixed)
+
+```bash
+# Run all frontend tests
+npm run test:frontend
+
+# Run in watch mode
+npm run test:frontend:watch
+
+# Generate coverage report
+npm run test:frontend:coverage
+```
+
+### Unified Commands
+
+Run backend and frontend together:
+
+```bash
+# Lint everything
+npm run lint
+
+# Auto-fix everything
+npm run lint:fix
+
+# Run all tests
+npm test
+
+# Complete validation (lint + test)
+npm run test:all
+```
+
+### Common Workflows
+
+#### Pre-Commit Workflow
+
+Before committing code:
+
+```bash
+# 1. Format and lint
+npm run format
+npm run lint:fix
+
+# 2. Run tests
+npm test
+
+# 3. Check for errors
+npm run lint
+
+# 4. If all pass, commit
+git add .
+git commit -m "feat: add new feature"
+```
+
+#### Debugging Failed Tests
+
+**Step 1: Identify the failure**
+
+```bash
+# Run tests with verbose output
+pytest -vs
+
+# Run specific failing test
+pytest path/to/test_file.py::test_function_name -vs
+```
+
+**Step 2: Check the code**
+
+```bash
+# Lint the file to check for issues
+ruff check path/to/file.py
+```
+
+**Step 3: Fix and re-test**
+
+```bash
+# Make changes, then re-run
+pytest path/to/test_file.py::test_function_name -vs
+```
+
+#### Continuous Testing During Development
+
+**Python/Backend:**
+
+```bash
+# Install pytest-watch for auto-rerunning
+pip install pytest-watch
+
+# Watch for changes and auto-run tests
+ptw -- -m "not integration"
+```
+
+**Frontend:**
+
+```bash
+# Vitest has built-in watch mode
+npm run test:frontend:watch
+```
+
+### Troubleshooting
+
+#### "ruff: command not found"
+
+**Solution:**
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Verify installation
+ruff --version
+```
+
+#### "pytest: command not found"
+
+**Solution:**
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Verify installation
+pytest --version
+```
+
+#### "Module not found" in frontend tests
+
+**Solution:**
+
+```bash
+# Install frontend dependencies
+cd src/ui
+npm install
+cd ../..
+```
+
+#### Tests fail with import errors
+
+**Cause:** Some Lambda function tests have path setup issues (pre-existing).
+
+**Workaround:** Run only working tests:
+
+```bash
+# Run only ragstack_common tests
+pytest lib/ragstack_common/ tests/unit/test_ragstack_common_install.py
+```
+
+#### Frontend commands fail
+
+**Cause:** `src/ui/package.json` has invalid vitest version (^6.0.3 doesn't exist).
+
+**Status:** Known issue, needs `src/ui/package.json` update to fix vitest version.
+
+**Workaround:** Test backend only for now:
+
+```bash
+npm run lint:backend
+npm run test:backend
+```
+
+### Performance Expectations
+
+Typical timing on a standard development machine:
+
+| Command | Expected Time | Notes |
+|---------|--------------|-------|
+| `npm run lint:backend` | < 5s | ~34 Python files |
+| `npm run test:backend` | < 2s | 46 unit tests |
+| `npm run lint:frontend` | < 5s | Once dependencies fixed |
+| `npm run test:frontend` | < 3s | Once dependencies fixed |
+| `npm run lint` | < 10s | Backend + frontend |
+| `npm test` | < 5s | All unit tests |
+| `npm run test:all` | < 15s | Lint + all tests |
+
+**Note:** Times will increase as the codebase grows. Re-benchmark quarterly.
+
+### Best Practices
+
+1. **Run locally before pushing** - Catch issues early with `npm run test:all`
+2. **Use watch mode during development** - Get instant feedback on changes
+3. **Fix lint issues immediately** - Don't accumulate technical debt
+4. **Write tests alongside code** - Maintain high coverage
+5. **Keep dependencies updated** - Run `pip install -r requirements-dev.txt` regularly
+6. **Use verbose mode when debugging** - `pytest -vs` shows full output
 
 ---
 
