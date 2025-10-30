@@ -8,6 +8,7 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 
 - [Overview](#overview)
 - [Local Testing](#local-testing)
+- [CI/CD Integration](#cicd-integration)
 - [Quick Start](#quick-start)
 - [Test Levels](#test-levels)
 - [Prerequisites](#prerequisites)
@@ -18,7 +19,6 @@ This guide covers testing RAGStack-Lambda from development to production, includ
 - [Monitoring During Tests](#monitoring-during-tests)
 - [Troubleshooting](#troubleshooting)
 - [Test Cleanup](#test-cleanup)
-- [Automated Testing](#automated-testing-with-github-actions)
 - [Common Test Scenarios](#common-test-scenarios)
 
 ---
@@ -1793,27 +1793,9 @@ aws s3 rm "s3://$VECTOR_BUCKET/" --recursive
 # (Optional - will auto-cleanup based on TTL if configured)
 ```
 
-## Automated Testing with GitHub Actions
+## Automated Testing
 
-See `.github/workflows/test.yml` for CI/CD pipeline.
-
-```yaml
-name: Test
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Run unit tests
-        run: pytest tests/unit/
-      - name: Deploy to test environment
-        run: python publish.py --project-name test-project --admin-email test@example.com --region us-east-1
-      - name: Run integration tests
-        run: pytest tests/integration/ --stack-name RAGStack-test-project
-```
+For automated testing with GitHub Actions and CI/CD integration, see the [CI/CD Integration](#cicd-integration) section above.
 
 ## Test Coverage Goals
 
