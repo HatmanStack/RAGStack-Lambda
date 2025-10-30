@@ -346,6 +346,8 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
@@ -382,6 +384,8 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 45 \/ 100 completed/i)).toBeInTheDocument();
         expect(screen.getByText(/\(45%\)/)).toBeInTheDocument();
@@ -411,6 +415,8 @@ describe('Settings Component', () => {
         }));
 
       renderSettings();
+
+      await vi.runOnlyPendingTimersAsync();
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed! all 50 documents have been processed/i)).toBeInTheDocument();
@@ -449,12 +455,14 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 30 \/ 100/i)).toBeInTheDocument();
       });
 
       // Fast-forward 5 seconds to trigger polling
-      vi.advanceTimersByTime(5000);
+      await vi.advanceTimersByTimeAsync(5000);
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 60 \/ 100/i)).toBeInTheDocument();
@@ -495,12 +503,14 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 9 \/ 10/i)).toBeInTheDocument();
       });
 
       // Fast-forward to trigger one more poll
-      vi.advanceTimersByTime(5000);
+      await vi.advanceTimersByTimeAsync(5000);
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
@@ -560,6 +570,8 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
@@ -585,6 +597,8 @@ describe('Settings Component', () => {
         .mockRejectedValueOnce(new Error('Failed to fetch job status'));
 
       renderSettings();
+
+      await vi.runOnlyPendingTimersAsync();
 
       // Should not crash and should handle error gracefully
       await waitFor(() => {
@@ -619,6 +633,8 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      await vi.runOnlyPendingTimersAsync();
+
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
       });
@@ -642,6 +658,8 @@ describe('Settings Component', () => {
         }));
 
       renderSettings();
+
+      await vi.runOnlyPendingTimersAsync();
 
       await waitFor(() => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
@@ -675,6 +693,8 @@ describe('Settings Component', () => {
         }));
 
       renderSettings();
+
+      await vi.runOnlyPendingTimersAsync();
 
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 100 \/ 300/i)).toBeInTheDocument();
