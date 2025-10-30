@@ -19,6 +19,7 @@
     "@cloudscape-design/collection-hooks": "^1.0.76",
     "@cloudscape-design/components": "^3.0.1118",
     "@cloudscape-design/global-styles": "^1.0.47",
+    "@csstools/css-calc": "^2.1.4",
     "aws-amplify": "^6.15.7",
     "graphql": "^16.11.0",
     "graphql-tag": "^2.12.6",

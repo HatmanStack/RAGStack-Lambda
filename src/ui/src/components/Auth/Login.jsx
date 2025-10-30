@@ -24,7 +24,7 @@ export const Login = () => {
             loginMechanisms={['email']}
             signUpAttributes={['email']}
           >
-            {({ signOut, user }) => {
+            {({ signOut: _signOut, user }) => { // eslint-disable-line no-unused-vars
               // Once authenticated, navigate to the intended destination
               if (user) {
                 navigate(from, { replace: true });

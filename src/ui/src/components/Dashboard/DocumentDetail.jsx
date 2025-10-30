@@ -25,8 +25,8 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
     try {
       const doc = await fetchDocument(documentId);
       setDocument(doc);
-    } catch (err) {
-      setError(err.message);
+    } catch (_err) {
+      setError(_err.message);
     } finally {
       setLoading(false);
     }
@@ -140,7 +140,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
                   {(() => {
                     try {
                       return JSON.stringify(JSON.parse(document.metadata), null, 2);
-                    } catch (err) {
+                    } catch {
                       return `Invalid JSON: ${document.metadata}`;
                     }
                   })()}

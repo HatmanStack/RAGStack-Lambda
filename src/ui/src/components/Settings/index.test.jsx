@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Settings } from './index';
@@ -180,7 +180,7 @@ describe('Settings Component', () => {
   });
 
   it('shows embedding change modal when documents exist and embedding model changed', async () => {
-    const customWithEmbeddingChange = {
+    const _customWithEmbeddingChange = {
       text_embed_model_id: 'cohere.embed-english-v3'
     };
 
