@@ -359,6 +359,464 @@ Typical timing on a standard development machine:
 5. **Keep dependencies updated** - Run `pip install -r requirements-dev.txt` regularly
 6. **Use verbose mode when debugging** - `pytest -vs` shows full output
 
+### Detailed Examples
+
+#### Example 1: First-Time Setup (New Developer)
+
+You've just cloned the repository and need to set up local testing.
+
+**Step 1: Install backend dependencies**
+```bash
+pip install -r requirements-dev.txt
+
+# Expected output:
+# Successfully installed ruff-0.14.2 pytest-8.x.x ...
+```
+
+**Step 2: Install frontend dependencies**
+```bash
+cd src/ui
+npm install
+cd ../..
+
+# Expected output:
+# added 1234 packages in 30s
+```
+
+**Step 3: Verify installations**
+```bash
+ruff --version
+# Output: ruff 0.14.2
+
+pytest --version
+# Output: pytest 8.x.x
+
+npm --version
+# Output: 10.x.x
+```
+
+**Step 4: Run your first test**
+```bash
+npm run test:all
+
+# Expected output:
+# > lint:backend && lint:frontend && test:backend && test:frontend
+# All checks passed! (ruff) ✓ 34 files
+# All checks passed! (eslint) ✓
+# ================================ test session starts ================================
+# collected 46 items
+# ...
+# ================================ 46 passed in 1.23s ================================
+# Test Files  1 passed (1)
+# Tests  X passed (X)
+```
+
+**Step 5: You're ready to develop!**
+
+---
+
+#### Example 2: Adding a New Lambda Function
+
+You're implementing document validation functionality.
+
+**Step 1: Create the function structure**
+```bash
+mkdir -p src/lambda/validate_document
+touch src/lambda/validate_document/index.py
+```
+
+**Step 2: Write the function (example)**
+```python
+# src/lambda/validate_document/index.py
+import json
+from typing import Dict, Any
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Validate document metadata and content."""
+    document_id = event.get('document_id')
+
+    if not document_id:
+        return {'statusCode': 400, 'body': 'Missing document_id'}
+
+    # Validation logic here
+    return {'statusCode': 200, 'body': json.dumps({'valid': True})}
+```
+
+**Step 3: Create tests (TDD approach)**
+```bash
+touch tests/unit/test_validate_document.py
+```
+
+```python
+# tests/unit/test_validate_document.py
+import pytest
+import sys
+import os
+
+# Add Lambda to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/lambda/validate_document'))
+import index
+
+def test_lambda_handler_success():
+    event = {'document_id': 'test-123'}
+    result = index.lambda_handler(event, None)
+    assert result['statusCode'] == 200
+
+def test_lambda_handler_missing_id():
+    event = {}
+    result = index.lambda_handler(event, None)
+    assert result['statusCode'] == 400
+```
+
+**Step 4: Run tests (should fail initially)**
+```bash
+pytest tests/unit/test_validate_document.py -v
+
+# Expected: Tests pass if implementation is correct
+```
+
+**Step 5: Lint the code**
+```bash
+npm run lint:backend
+
+# Output: Ruff will auto-fix and format your code
+# All checks passed! (ruff) ✓ 35 files (1 file added)
+```
+
+**Step 6: Run full test suite**
+```bash
+npm run test:all
+
+# Verify all tests still pass with new function
+```
+
+**Step 7: Commit your changes**
+```bash
+git add src/lambda/validate_document/ tests/unit/test_validate_document.py
+git commit -m "feat(lambda): add document validation function"
+```
+
+---
+
+#### Example 3: Fixing a Bug
+
+You discovered a bug where text extraction fails on empty PDFs.
+
+**Step 1: Reproduce the issue**
+```bash
+# Run specific test that's failing
+pytest lib/ragstack_common/test_ocr.py::test_extract_text_from_pdf -vs
+
+# Expected: Test fails with error message
+```
+
+**Step 2: Add a test case for the bug**
+```python
+# lib/ragstack_common/test_ocr.py
+def test_extract_text_from_empty_pdf():
+    """Test handling of empty PDFs."""
+    # Create empty PDF test case
+    result = extract_text_from_pdf(empty_pdf_path)
+    assert result == ""  # Should return empty string, not crash
+```
+
+**Step 3: Run the new test (should fail)**
+```bash
+pytest lib/ragstack_common/test_ocr.py::test_extract_text_from_empty_pdf -vs
+
+# Expected: FAILED - reproduces bug
+```
+
+**Step 4: Fix the bug**
+```python
+# lib/ragstack_common/ocr.py
+def extract_text_from_pdf(pdf_path: str) -> str:
+    doc = fitz.open(pdf_path)
+
+    # FIX: Handle empty PDFs
+    if doc.page_count == 0:
+        return ""
+
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text
+```
+
+**Step 5: Run tests again**
+```bash
+pytest lib/ragstack_common/test_ocr.py::test_extract_text_from_empty_pdf -vs
+
+# Expected: PASSED ✓
+```
+
+**Step 6: Run full backend tests**
+```bash
+npm run test:backend
+
+# Ensure fix didn't break anything else
+```
+
+**Step 7: Lint and commit**
+```bash
+npm run lint:backend
+git add lib/ragstack_common/ocr.py lib/ragstack_common/test_ocr.py
+git commit -m "fix(ocr): handle empty PDFs gracefully"
+```
+
+---
+
+#### Example 4: Responding to Code Review
+
+Code reviewer requested changes to your PR.
+
+**Reviewer comment**: "Please add type hints and fix the linting issues"
+
+**Step 1: Pull latest changes**
+```bash
+git checkout your-feature-branch
+git pull origin main
+```
+
+**Step 2: Add type hints**
+```python
+# Before
+def process_document(document_id):
+    # ...
+
+# After
+from typing import Dict, Any
+
+def process_document(document_id: str) -> Dict[str, Any]:
+    # ...
+```
+
+**Step 3: Run linter (will auto-fix many issues)**
+```bash
+npm run lint:backend
+
+# Output shows auto-fixed issues:
+# Fixed 3 errors:
+#   - Added missing imports
+#   - Removed unused variables
+#   - Fixed line length
+```
+
+**Step 4: Check for remaining issues**
+```bash
+# If any manual fixes needed, ruff will show them
+ruff check lib/ragstack_common/
+
+# Expected: All checks passed! ✓
+```
+
+**Step 5: Run tests**
+```bash
+npm run test:all
+
+# Expected: All pass
+```
+
+**Step 6: Commit and push**
+```bash
+git add .
+git commit -m "refactor: add type hints and fix linting issues"
+git push origin your-feature-branch
+```
+
+---
+
+#### Example 5: Refactoring Code
+
+You want to extract a reusable utility function.
+
+**Step 1: Identify code duplication**
+```python
+# Multiple Lambda functions have this pattern:
+result = boto3.client('s3').get_object(Bucket=bucket, Key=key)
+content = result['Body'].read()
+```
+
+**Step 2: Create shared utility**
+```python
+# lib/ragstack_common/storage.py
+import boto3
+from typing import bytes
+
+def read_s3_object(bucket: str, key: str) -> bytes:
+    """Read object from S3 and return bytes."""
+    s3 = boto3.client('s3')
+    result = s3.get_object(Bucket=bucket, Key=key)
+    return result['Body'].read()
+```
+
+**Step 3: Write tests for utility**
+```python
+# lib/ragstack_common/test_storage.py
+from unittest.mock import Mock, patch
+import pytest
+from storage import read_s3_object
+
+@patch('storage.boto3.client')
+def test_read_s3_object(mock_boto3):
+    mock_s3 = Mock()
+    mock_boto3.return_value = mock_s3
+    mock_s3.get_object.return_value = {
+        'Body': Mock(read=lambda: b'test content')
+    }
+
+    result = read_s3_object('test-bucket', 'test-key')
+    assert result == b'test content'
+```
+
+**Step 4: Run tests**
+```bash
+pytest lib/ragstack_common/test_storage.py -v
+
+# Expected: PASSED ✓
+```
+
+**Step 5: Refactor Lambda functions to use utility**
+```python
+# Before
+result = boto3.client('s3').get_object(Bucket=bucket, Key=key)
+content = result['Body'].read()
+
+# After
+from ragstack_common.storage import read_s3_object
+content = read_s3_object(bucket, key)
+```
+
+**Step 6: Run all tests to ensure refactoring didn't break anything**
+```bash
+npm run test:all
+
+# Expected: All pass
+```
+
+**Step 7: Commit**
+```bash
+git add lib/ragstack_common/storage.py lib/ragstack_common/test_storage.py
+git add src/lambda/*/index.py
+git commit -m "refactor(storage): extract S3 read utility function"
+```
+
+---
+
+#### Example 6: Daily Development Workflow
+
+Typical development cycle.
+
+**Morning: Start development**
+```bash
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+pip install -r requirements-dev.txt
+cd src/ui && npm install && cd ../..
+
+# Run tests to ensure everything works
+npm run test:all
+```
+
+**During development: Continuous testing**
+```bash
+# Terminal 1: Watch backend tests
+ptw -- -m "not integration"
+
+# Terminal 2: Watch frontend tests
+cd src/ui && npm run test:watch
+
+# Make code changes, tests auto-run
+```
+
+**Before lunch: Quick validation**
+```bash
+# Run full test suite
+npm run test:all
+
+# If passes, commit work-in-progress
+git add .
+git commit -m "wip: add feature X - tests passing"
+```
+
+**End of day: Final validation**
+```bash
+# Run complete validation
+npm run test:all
+
+# Run integration tests (if applicable)
+npm run test:backend:integration
+
+# Commit final work
+git add .
+git commit -m "feat: complete feature X implementation"
+
+# Push to remote
+git push origin feature-branch
+```
+
+---
+
+#### Example 7: Debugging a Failing Test
+
+Test suddenly starts failing after dependency update.
+
+**Step 1: Identify the failing test**
+```bash
+npm run test:backend
+
+# Output shows:
+# FAILED lib/ragstack_common/test_bedrock.py::test_generate_embedding
+```
+
+**Step 2: Run with verbose output**
+```bash
+pytest lib/ragstack_common/test_bedrock.py::test_generate_embedding -vs
+
+# Output shows detailed error:
+# AssertionError: Expected 1024 dimensions, got 256
+```
+
+**Step 3: Check recent changes**
+```bash
+git log --oneline lib/ragstack_common/bedrock.py
+
+# Shows recent commits affecting this file
+```
+
+**Step 4: Run test with debugger**
+```bash
+pytest lib/ragstack_common/test_bedrock.py::test_generate_embedding -vs --pdb
+
+# Drops into debugger at failure point
+# Can inspect variables: print(result.shape)
+```
+
+**Step 5: Fix the issue**
+```python
+# Found: Embedding model was changed from v1 to v2
+# Fix: Update test expectations
+def test_generate_embedding():
+    result = generate_embedding("test text")
+    assert len(result) == 256  # Changed from 1024
+```
+
+**Step 6: Verify fix**
+```bash
+pytest lib/ragstack_common/test_bedrock.py::test_generate_embedding -vs
+
+# Expected: PASSED ✓
+```
+
+**Step 7: Run full test suite**
+```bash
+npm run test:all
+
+# Ensure no other tests broken
+```
+
 ---
 
 ## Quick Start
