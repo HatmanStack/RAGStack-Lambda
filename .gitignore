@@ -12,6 +12,7 @@ dist/
 build/
 .claude/*
 !.claude/agents/
+!.claude/SUBAGENTS_USAGE.md
 
 # AWS
 .aws-sam/
