@@ -1,23 +1,24 @@
 """CodeBuild Starter Lambda Function for UI Deployment"""
+
+import json
 import logging
 import os
-import json
 from urllib.parse import quote
 
 import boto3
 from crhelper import CfnResource
 
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 # Initialize CloudFormation helper
 helper = CfnResource(
     json_logging=True,
-    log_level=os.getenv('LOG_LEVEL', 'INFO'),
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
 )
 
 # Initialize boto3 client
-codebuild_client = boto3.client('codebuild')
+codebuild_client = boto3.client("codebuild")
 
 
 def _redact_event(event):
@@ -34,7 +35,7 @@ def _redact_event(event):
         return "***non-dict***"
 
     redacted = event.copy()
-    sensitive_fields = ['ResourceProperties', 'ResponseURL', 'ServiceToken']
+    sensitive_fields = ["ResourceProperties", "ResponseURL", "ServiceToken"]
 
     for field in sensitive_fields:
         if field in redacted:
@@ -54,8 +55,8 @@ def create_or_update(event, context):
     logger.info("Starting CodeBuild project...")
 
     # Validate input
-    resource_properties = event.get('ResourceProperties', {})
-    project_name = resource_properties.get('BuildProjectName')
+    resource_properties = event.get("ResourceProperties", {})
+    project_name = resource_properties.get("BuildProjectName")
 
     if not project_name:
         raise ValueError("BuildProjectName is required in ResourceProperties")
@@ -63,13 +64,12 @@ def create_or_update(event, context):
     try:
         response = codebuild_client.start_build(
             projectName=project_name,
-            idempotencyToken=event.get("RequestId")  # Prevent duplicate builds on retries
+            idempotencyToken=event.get("RequestId"),  # Prevent duplicate builds on retries
         )
-        build_id = response['build']['id']
+        build_id = response["build"]["id"]
 
         # Get AWS region for console URL (prefer client metadata)
-        region = (codebuild_client.meta.region_name
-                  or os.environ.get('AWS_REGION', 'us-east-1'))
+        region = codebuild_client.meta.region_name or os.environ.get("AWS_REGION", "us-east-1")
         encoded_build_id = quote(build_id, safe="")
         console_url = (
             f"https://{region}.console.aws.amazon.com/codesuite/codebuild/"
@@ -80,7 +80,7 @@ def create_or_update(event, context):
         logger.info(f"Console URL: {console_url}")
 
         # Store build_id and console URL in helper data for polling and CFN response
-        helper.Data.update({'build_id': build_id, 'ConsoleUrl': console_url})
+        helper.Data.update({"build_id": build_id, "ConsoleUrl": console_url})
 
     except Exception:
         logger.exception("Failed to start build")
@@ -99,27 +99,27 @@ def poll_create_or_update(event, context):
         Raises: Build failed (CloudFormation rolls back)
     """
     # Defensive: validate CrHelperData exists before accessing
-    build_id = event.get('CrHelperData', {}).get('build_id')
+    build_id = event.get("CrHelperData", {}).get("build_id")
     if not build_id:
         raise ValueError("CrHelperData.build_id missing; ensure create handler stored it")
 
     try:
         response = codebuild_client.batch_get_builds(ids=[build_id])
 
-        if not response['builds']:
-            not_found = response.get('buildsNotFound') or []
+        if not response["builds"]:
+            not_found = response.get("buildsNotFound") or []
             raise RuntimeError(f"Build not found: {build_id}. NotFound: {not_found}")
 
-        build = response['builds'][0]
-        build_status = build['buildStatus']
+        build = response["builds"][0]
+        build_status = build["buildStatus"]
 
         logger.info(f"Build status: {build_status}")
 
-        if build_status == 'SUCCEEDED':
+        if build_status == "SUCCEEDED":
             logger.info("Build succeeded")
             return True
 
-        if build_status == 'IN_PROGRESS':
+        if build_status == "IN_PROGRESS":
             logger.info("Build in progress, will poll again...")
             return None
 

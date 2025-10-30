@@ -14,7 +14,7 @@ awslambdaric>=2.0.0
 moto[s3,dynamodb,lambda,stepfunctions]>=5.0.0
 
 # Code quality
-ruff>=0.1.0
+ruff==0.14.2  # Pinned for consistent linting behavior across team/CI
 
 # Include production dependencies
 -r requirements.txt

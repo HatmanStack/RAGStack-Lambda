@@ -1,6 +1,7 @@
-from .ocr import OcrService
-from .models import Document
 import fitz  # PyMuPDF
+
+from .ocr import OcrService
+
 
 def test_is_text_native_pdf():
     """Test PDF text detection with a generated PDF."""
@@ -15,25 +16,27 @@ def test_is_text_native_pdf():
     pdf_doc.close()
 
     # Test OCR service
-    ocr_service = OcrService(region='us-east-1', backend='textract')
+    ocr_service = OcrService(region="us-east-1", backend="textract")
     is_text_native = ocr_service._is_text_native_pdf(pdf_bytes)
 
-    assert is_text_native == True
+    assert is_text_native
     print(f"✓ Text-native PDF detection works: {is_text_native}")
+
 
 def test_ocr_service_initialization():
     """Test OCR service initialization."""
     # Test with textract backend
-    ocr1 = OcrService(region='us-east-1', backend='textract')
-    assert ocr1.backend == 'textract'
-    assert ocr1.region == 'us-east-1'
+    ocr1 = OcrService(region="us-east-1", backend="textract")
+    assert ocr1.backend == "textract"
+    assert ocr1.region == "us-east-1"
 
     # Test with bedrock backend
-    ocr2 = OcrService(region='us-west-2', backend='bedrock', bedrock_model_id='test-model')
-    assert ocr2.backend == 'bedrock'
-    assert ocr2.bedrock_model_id == 'test-model'
+    ocr2 = OcrService(region="us-west-2", backend="bedrock", bedrock_model_id="test-model")
+    assert ocr2.backend == "bedrock"
+    assert ocr2.bedrock_model_id == "test-model"
 
     print("✓ OCR service initialization works")
+
 
 if __name__ == "__main__":
     test_is_text_native_pdf()

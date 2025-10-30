@@ -11,12 +11,13 @@ No caching is used; configuration is read from DynamoDB on every call for
 immediate consistency.
 """
 
-import boto3
-import os
 import logging
-from typing import Dict, Any, Optional
-from botocore.exceptions import ClientError
+import os
 from copy import deepcopy
+from typing import Any
+
+import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class ConfigurationManager:
         - Merges Custom → Default: Custom values override Default values
     """
 
-    def __init__(self, table_name: Optional[str] = None):
+    def __init__(self, table_name: str | None = None):
         """
         Initialize configuration manager.
 
@@ -49,20 +50,20 @@ class ConfigurationManager:
         Raises:
             ValueError: If table_name not provided and env var not set
         """
-        table_name = table_name or os.environ.get('CONFIGURATION_TABLE_NAME')
+        table_name = table_name or os.environ.get("CONFIGURATION_TABLE_NAME")
         if not table_name:
             raise ValueError(
                 "Configuration table name not provided. "
                 "Set CONFIGURATION_TABLE_NAME environment variable or provide table_name parameter."
             )
 
-        self.dynamodb = boto3.resource('dynamodb')
+        self.dynamodb = boto3.resource("dynamodb")
         self.table = self.dynamodb.Table(table_name)
         self.table_name = table_name
 
         logger.info(f"Initialized ConfigurationManager with table: {table_name}")
 
-    def get_configuration_item(self, config_type: str) -> Optional[Dict[str, Any]]:
+    def get_configuration_item(self, config_type: str) -> dict[str, Any] | None:
         """
         Retrieve a specific configuration item from DynamoDB.
 
@@ -76,8 +77,8 @@ class ConfigurationManager:
             ClientError: If DynamoDB access fails
         """
         try:
-            response = self.table.get_item(Key={'Configuration': config_type})
-            item = response.get('Item')
+            response = self.table.get_item(Key={"Configuration": config_type})
+            item = response.get("Item")
 
             if item:
                 logger.debug(f"Retrieved {config_type} configuration from DynamoDB")
@@ -90,7 +91,7 @@ class ConfigurationManager:
             logger.exception(f"Error retrieving {config_type} configuration")
             raise
 
-    def get_effective_config(self) -> Dict[str, Any]:
+    def get_effective_config(self) -> dict[str, Any]:
         """
         Get effective configuration by merging Custom → Default.
 
@@ -104,11 +105,11 @@ class ConfigurationManager:
             ClientError: If DynamoDB access fails
         """
         # Get Default configuration
-        default_item = self.get_configuration_item('Default')
+        default_item = self.get_configuration_item("Default")
         default_config = self._remove_partition_key(default_item) if default_item else {}
 
         # Get Custom configuration
-        custom_item = self.get_configuration_item('Custom')
+        custom_item = self.get_configuration_item("Custom")
         custom_config = self._remove_partition_key(custom_item) if custom_item else {}
 
         # Merge: Custom overrides Default (deep-merge for nested dicts)
@@ -124,18 +125,14 @@ class ConfigurationManager:
 
         # Mask sensitive-looking keys in debug logs to prevent secret leakage
         masked = {
-            k: ('***' if any(s in k.lower() for s in ('secret', 'token', 'key', 'password')) else v)
+            k: ("***" if any(s in k.lower() for s in ("secret", "token", "key", "password")) else v)
             for k, v in effective_config.items()
         }
         logger.debug(f"Effective config values: {masked}")
 
         return effective_config
 
-    def get_parameter(
-        self,
-        param_name: str,
-        default: Any = None
-    ) -> Any:
+    def get_parameter(self, param_name: str, default: Any = None) -> Any:
         """
         Get a single configuration parameter value.
 
@@ -159,7 +156,7 @@ class ConfigurationManager:
 
         return value
 
-    def update_custom_config(self, custom_config: Dict[str, Any]) -> None:
+    def update_custom_config(self, custom_config: dict[str, Any]) -> None:
         """
         Update Custom configuration in DynamoDB.
 
@@ -174,15 +171,10 @@ class ConfigurationManager:
         """
         try:
             # Remove 'Configuration' key if present to prevent partition key override
-            safe_config = {k: v for k, v in custom_config.items() if k != 'Configuration'}
+            safe_config = {k: v for k, v in custom_config.items() if k != "Configuration"}
 
             # Put item to DynamoDB with protected partition key
-            self.table.put_item(
-                Item={
-                    'Configuration': 'Custom',
-                    **safe_config
-                }
-            )
+            self.table.put_item(Item={"Configuration": "Custom", **safe_config})
 
             logger.info("Updated Custom configuration in DynamoDB")
 
@@ -190,7 +182,7 @@ class ConfigurationManager:
             logger.exception("Error updating Custom configuration")
             raise
 
-    def get_schema(self) -> Dict[str, Any]:
+    def get_schema(self) -> dict[str, Any]:
         """
         Get the Schema configuration.
 
@@ -200,17 +192,17 @@ class ConfigurationManager:
         Raises:
             ClientError: If DynamoDB access fails
         """
-        schema_item = self.get_configuration_item('Schema')
+        schema_item = self.get_configuration_item("Schema")
 
         if not schema_item:
             logger.warning("Schema not found in ConfigurationTable")
             return {}
 
         # Schema is stored under 'Schema' key in the item
-        return schema_item.get('Schema', {})
+        return schema_item.get("Schema", {})
 
     @staticmethod
-    def _remove_partition_key(item: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _remove_partition_key(item: dict[str, Any] | None) -> dict[str, Any]:
         """
         Remove 'Configuration' partition key from DynamoDB item.
 
@@ -224,6 +216,6 @@ class ConfigurationManager:
             return {}
 
         item_copy = dict(item)
-        item_copy.pop('Configuration', None)
+        item_copy.pop("Configuration", None)
 
         return item_copy

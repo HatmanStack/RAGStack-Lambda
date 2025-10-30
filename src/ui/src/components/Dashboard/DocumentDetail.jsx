@@ -140,7 +140,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
                   {(() => {
                     try {
                       return JSON.stringify(JSON.parse(document.metadata), null, 2);
-                    } catch (err) {
+                    } catch {
                       return `Invalid JSON: ${document.metadata}`;
                     }
                   })()}

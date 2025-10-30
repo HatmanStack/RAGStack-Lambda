@@ -70,7 +70,7 @@ python publish.py \
 **Note**: Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter.
 
 The deployment will:
-1. Validate inputs and check prerequisites (Python 3.12+, Node.js 18+, AWS CLI, SAM CLI)
+1. Validate inputs and check prerequisites (Python 3.13+, Node.js 22+, AWS CLI, SAM CLI)
 2. Copy shared libraries to Lambda functions
 3. Build Lambda functions via SAM
 4. Deploy infrastructure via CloudFormation
@@ -133,6 +133,48 @@ Using Bedrock OCR instead of Textract: **~$27-77/month**
 
 ### Local Testing
 
+RAGStack-Lambda supports comprehensive local testing without AWS deployment.
+
+**Quick Start:**
+
+```bash
+# Install dependencies (one-time setup)
+pip install -r requirements-dev.txt
+cd src/ui && npm install && cd ../..
+
+# Run all tests
+npm test
+
+# Lint all code
+npm run lint
+
+# Full test suite (lint + tests)
+npm run test:all
+```
+
+**Available Commands:**
+
+| Command | Purpose | Time |
+|---------|---------|------|
+| `npm run lint` | Auto-fix and lint all code | ~5s |
+| `npm test` | Run all unit tests | ~3s |
+| `npm run test:all` | Lint + test everything | ~8s |
+| `npm run test:backend` | Run backend tests only | ~1s |
+| `npm run test:frontend` | Run frontend tests only | ~2s |
+| `npm run test:coverage` | Generate coverage reports | ~5s |
+
+**Benefits:**
+- ✅ Instant feedback (no deployment required)
+- ✅ No AWS costs during development
+- ✅ Work offline
+- ✅ Pre-commit validation
+
+For detailed testing documentation, see [TESTING.md](docs/TESTING.md).
+
+### SAM Local Testing (Optional)
+
+Test Lambda functions locally with SAM:
+
 ```bash
 # Build
 sam build
@@ -150,17 +192,48 @@ sam local start-api
 cd src/ui
 npm install
 npm start
+# or
+npm run dev
 ```
 
-### Running Tests
+### Subagent System
 
+This project includes specialized AI subagents for exploring the base repository patterns:
+
+**Available Subagents:**
+- `explore-base-testing` - Testing patterns and configurations
+- `explore-base-architecture` - Lambda structure and design patterns
+- `explore-base-docs` - Documentation style and structure
+- `explore-base-infrastructure` - SAM templates and deployment patterns
+- `explore-base-general` - General-purpose base repo explorer
+
+**Using Subagents:**
+
+List all available subagents:
 ```bash
-# Unit tests
-pytest tests/unit/
-
-# Integration tests (requires deployed stack)
-pytest tests/integration/
+/agents
 ```
+
+Invoke a specific subagent:
+```
+Use explore-base-testing to find pytest configuration patterns
+```
+
+The subagents can be invoked automatically when Claude judges they're helpful for the current task, or explicitly invoked as shown above.
+
+**Documentation:** See [.claude/SUBAGENTS_USAGE.md](.claude/SUBAGENTS_USAGE.md) for detailed usage guide.
+
+### CI/CD Integration
+
+GitHub Actions workflow automatically runs all tests on every push and PR:
+- Lints backend (ruff) and frontend (ESLint)
+- Runs all unit tests (pytest + Vitest)
+- Generates coverage reports
+- Optional integration tests on main branch
+
+**Workflow location:** `.github/workflows/test.yml`
+
+See [docs/TESTING.md](docs/TESTING.md#cicd-integration) for CI/CD setup details.
 
 ## Documentation
 

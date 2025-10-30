@@ -1,7 +1,8 @@
 from .bedrock import BedrockClient
 
+
 def test_backoff_calculation():
-    client = BedrockClient(region='us-east-1')
+    client = BedrockClient(region="us-east-1")
 
     # Test exponential backoff
     backoff0 = client._calculate_backoff(0)
@@ -15,21 +16,23 @@ def test_backoff_calculation():
 
     print(f"✓ Backoff calculation works: {backoff0:.2f}s, {backoff1:.2f}s, {backoff2:.2f}s")
 
+
 def test_metering_data():
-    client = BedrockClient(region='us-east-1')
+    client = BedrockClient(region="us-east-1")
 
     # Initially empty
     assert client.get_metering_data() == {}
     print("✓ Metering data initialization works")
 
+
 def test_client_initialization():
     # Test default region
     client1 = BedrockClient()
-    assert client1.region == 'us-east-1'
+    assert client1.region == "us-east-1"
 
     # Test custom region
-    client2 = BedrockClient(region='us-west-2')
-    assert client2.region == 'us-west-2'
+    client2 = BedrockClient(region="us-west-2")
+    assert client2.region == "us-west-2"
 
     # Test retry settings
     assert client1.max_retries == 7
@@ -37,6 +40,7 @@ def test_client_initialization():
     assert client1.max_backoff == 300
 
     print("✓ Client initialization works")
+
 
 if __name__ == "__main__":
     test_backoff_calculation()

@@ -10,7 +10,9 @@ venv/
 *.egg-info/
 dist/
 build/
-.claude/
+.claude/*
+!.claude/agents/
+!.claude/SUBAGENTS_USAGE.md
 
 # AWS
 .aws-sam/

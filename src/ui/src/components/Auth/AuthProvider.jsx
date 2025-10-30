@@ -3,6 +3,7 @@ import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 
 const AuthContext = createContext(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -27,7 +28,7 @@ export const AuthProvider = ({ children }) => {
         signInDetails: currentUser.signInDetails,
         tokens: session.tokens
       });
-    } catch (err) {
+    } catch {  
       // User not signed in
       setUser(null);
     } finally {

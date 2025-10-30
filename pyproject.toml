@@ -1,0 +1,97 @@
+# pyproject.toml - Python project configuration
+
+[project]
+name = "ragstack-lambda"
+version = "1.0.0"
+requires-python = ">=3.13"
+
+[tool.ruff]
+# Ruff version: 0.14.2 (pinned in requirements-dev.txt)
+# Line length set to 100 chars (AWS Lambda best practice)
+line-length = 100
+target-version = "py312"
+
+# Include Python source directories
+include = ["lib/**/*.py", "src/lambda/**/*.py", "tests/**/*.py"]
+
+# Exclude build artifacts, virtual environments, and frontend code
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".coverage",
+    "htmlcov",
+    "dist",
+    "build",
+    "*.egg-info",
+    ".aws-sam",
+    "node_modules",
+    "src/ui",
+]
+
+[tool.ruff.lint]
+# Enable recommended rules by default
+# https://docs.astral.sh/ruff/rules/
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade (modern Python syntax)
+    "B",    # flake8-bugbear (common bugs)
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez (timezone-aware datetimes)
+    "PIE",  # flake8-pie (misc lints)
+    "RET",  # flake8-return (return statement checks)
+    "SIM",  # flake8-simplify
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+]
+
+# Rules to ignore (with justification)
+ignore = [
+    # AWS Lambda functions require (event, context) signature even if context unused
+    "ARG001",  # Unused function argument (common in Lambda handlers)
+
+    # Datetime usage for logging and internal timestamps doesn't require timezone awareness
+    "DTZ003",  # datetime.utcnow() - used for ISO8601 timestamps in logs
+    "DTZ005",  # datetime.now() - used for internal timing/logging
+
+    # Naming conventions for AWS SDK mocking and constants
+    "N803",    # DynamoDB parameter names like 'Key' match AWS SDK conventions
+    "N806",    # UPPER_CASE constants in functions (e.g., MAX_DOCUMENTS_PER_JOB)
+
+    # Test files using pathlib.Path with open() is acceptable
+    # PTH123 is handled via per-file-ignores for tests/
+]
+
+# Allow auto-fixing for safe rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have additional flexibility
+"tests/**/*.py" = [
+    "ARG001",  # Unused function arguments (common in fixtures)
+    "S101",    # Use of assert (required for pytest)
+    "PTH123",  # Using open() instead of Path.open() is acceptable in tests
+    "E402",    # Module imports after sys.path manipulation (required for Lambda tests)
+]
+
+[tool.ruff.format]
+# Use consistent formatting
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint.isort]
+# Import sorting configuration
+known-first-party = ["ragstack_common"]
