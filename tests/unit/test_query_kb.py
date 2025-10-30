@@ -3,12 +3,18 @@ Unit tests for query_kb Lambda function.
 """
 
 # Mock imports
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from botocore.exceptions import ClientError
+
+# Set required environment variables BEFORE importing the module
+os.environ["KNOWLEDGE_BASE_ID"] = "test-kb-id-12345"
+os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
+os.environ["REGION"] = "us-east-1"
 
 # Add Lambda function to path
 lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "query_kb"

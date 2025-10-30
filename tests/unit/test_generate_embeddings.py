@@ -2,11 +2,17 @@
 Unit tests for generate_embeddings Lambda function.
 """
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
+# Set required environment variables BEFORE importing the module
+os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
+os.environ["TRACKING_TABLE"] = "test-tracking-table"
+os.environ["REGION"] = "us-east-1"
 
 # Add Lambda function to path
 lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "generate_embeddings"
