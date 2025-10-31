@@ -510,12 +510,15 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      // Wait for initial job status to display
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 30 \/ 100/i)).toBeInTheDocument();
       });
 
-      // Trigger polling interval will be added in subsequent task
+      // Manually trigger the polling interval
+      await triggerAllIntervals();
 
+      // Wait for updated job status
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 60 \/ 100/i)).toBeInTheDocument();
       });
