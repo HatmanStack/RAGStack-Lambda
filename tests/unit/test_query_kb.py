@@ -187,25 +187,34 @@ def test_lambda_handler_custom_max_results(
     )
 
 
-@patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
+@patch.dict("os.environ", {
+    "KNOWLEDGE_BASE_ID": "test-kb-123",
+    "CONFIGURATION_TABLE_NAME": "test-config-table"
+})
+@patch("index.config_manager")
 @patch("index.boto3.client")
 def test_lambda_handler_default_max_results(
-    mock_boto3_client, lambda_context, mock_bedrock_response
+    mock_boto3_client, mock_config_manager, lambda_context, mock_bedrock_response
 ):
     """Test default max_results when not specified."""
+
+    # Setup config mock
+    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     event = {"query": "test query"}  # No max_results
 
     mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve.return_value = mock_bedrock_response
+    mock_bedrock_agent.retrieve_and_generate.return_value = mock_bedrock_response
 
     # Execute
     index.lambda_handler(event, lambda_context)
 
     # Verify default numberOfResults is 5
-    call_args = mock_bedrock_agent.retrieve.call_args
+    call_args = mock_bedrock_agent.retrieve_and_generate.call_args
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+        call_args[1]["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"][
+            "retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 5
     )
 
 
