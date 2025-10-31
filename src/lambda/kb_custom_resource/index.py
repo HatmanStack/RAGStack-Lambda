@@ -185,11 +185,33 @@ def create_knowledge_base(properties):
         kb_arn = kb_response["knowledgeBase"]["knowledgeBaseArn"]
         logger.info(f"Created Knowledge Base: {kb_id}")
     except Exception as e:
-        logger.error(f"Failed to create Knowledge Base: {e}")
-        # Clean up index on failure
-        with contextlib.suppress(builtins.BaseException):
-            s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
-        raise
+        error_str = str(e)
+        # If KB already exists (ConflictException), find and reuse it
+        if "ConflictException" in error_str or "already exists" in error_str:
+            logger.info(f"Knowledge Base already exists: {kb_name}")
+            # List KBs to find the existing one
+            try:
+                kbs_response = bedrock_agent.list_knowledge_bases()
+                for kb_summary in kbs_response.get("knowledgeBaseSummaries", []):
+                    if kb_summary.get("name") == kb_name:
+                        kb_id = kb_summary.get("id")
+                        logger.info(f"Found existing Knowledge Base: {kb_id}")
+                        # Get full KB details to get ARN
+                        kb_details = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
+                        kb_arn = kb_details["knowledgeBase"]["knowledgeBaseArn"]
+                        break
+                else:
+                    logger.error(f"ConflictException but KB not found in list")
+                    raise
+            except Exception as list_e:
+                logger.error(f"Failed to list KBs after ConflictException: {list_e}")
+                raise
+        else:
+            logger.error(f"Failed to create Knowledge Base: {e}")
+            # Clean up index on failure
+            with contextlib.suppress(builtins.BaseException):
+                s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
+            raise
 
     # Note: S3 Vectors doesn't require a separate data source
     # Vectors are written directly to S3 and indexed automatically
