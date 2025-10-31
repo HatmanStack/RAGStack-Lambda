@@ -102,7 +102,7 @@ def create_knowledge_base(properties):
 
     try:
         logger.info(f"Initializing S3 Vectors bucket: {vector_bucket}")
-        s3vectors_client.create_vector_bucket(bucketName=vector_bucket)
+        s3vectors_client.create_vector_bucket(vectorBucketName=vector_bucket)
         logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
     except Exception as e:
         error_str = str(e)
@@ -112,6 +112,14 @@ def create_knowledge_base(properties):
         else:
             logger.warning(f"Warning creating S3 Vectors bucket: {e}")
             # Continue anyway - bucket might already be initialized
+
+    # Step 0.5: Verify bucket exists before creating index
+    try:
+        bucket_info = s3vectors_client.get_vector_bucket(vectorBucketName=vector_bucket)
+        logger.info(f"Verified S3 Vectors bucket exists: {vector_bucket}")
+    except Exception as e:
+        logger.error(f"Failed to verify S3 Vectors bucket {vector_bucket}: {e}")
+        raise
 
     # Step 1: Create S3 Vectors index
     try:
