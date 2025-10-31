@@ -936,11 +936,14 @@ Resources:
             - Effect: Allow
               Action:
                 - s3vectors:CreateVectorBucket
+                - s3vectors:GetVectorBucket
                 - s3vectors:CreateIndex
                 - s3vectors:DeleteIndex
                 - s3vectors:DescribeIndex
                 - s3vectors:ListIndices
-              Resource: !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
+                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
             - Effect: Allow
               Action:
                 - iam:PassRole
