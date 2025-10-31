@@ -389,6 +389,9 @@ describe('Settings Component', () => {
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: null
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: null
         }));
 
       renderSettings();
