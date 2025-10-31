@@ -138,17 +138,23 @@ def create_knowledge_base(properties):
                 ]
             },
         )
+        logger.info(f"Created S3 vector index: {index_name}")
 
-        # Construct index ARN manually (API doesn't return it)
-        # Format: arn:aws:s3vectors:region:account-id:bucket/bucket-name/index/index-name
-        sts_client = boto3.client("sts")
-        account_id = sts_client.get_caller_identity()["Account"]
-        index_arn = f"arn:aws:s3vectors:{region}:{account_id}:bucket/{vector_bucket}/index/{index_name}"
-
-        logger.info(f"Created S3 vector index: {index_arn}")
     except Exception as e:
-        logger.error(f"Failed to create S3 vector index: {e}")
-        raise
+        error_str = str(e)
+        # If index already exists (ConflictException), that's fine - reuse it
+        if "ConflictException" in error_str or "already exists" in error_str:
+            logger.info(f"S3 Vectors index already exists: {index_name}")
+        else:
+            logger.error(f"Failed to create S3 vector index: {e}")
+            raise
+
+    # Construct index ARN manually (API doesn't return it)
+    # Format: arn:aws:s3vectors:region:account-id:bucket/bucket-name/index/index-name
+    sts_client = boto3.client("sts")
+    account_id = sts_client.get_caller_identity()["Account"]
+    index_arn = f"arn:aws:s3vectors:{region}:{account_id}:bucket/{vector_bucket}/index/{index_name}"
+    logger.info(f"Using S3 vector index ARN: {index_arn}")
 
     # Step 2: Create Knowledge Base with S3 Vectors
     try:
