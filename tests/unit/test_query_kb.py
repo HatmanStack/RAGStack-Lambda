@@ -218,14 +218,24 @@ def test_lambda_handler_default_max_results(
     )
 
 
-@patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
+@patch.dict("os.environ", {
+    "KNOWLEDGE_BASE_ID": "test-kb-123",
+    "CONFIGURATION_TABLE_NAME": "test-config-table"
+})
+@patch("index.config_manager")
 @patch("index.boto3.client")
-def test_lambda_handler_no_results(mock_boto3_client, valid_event, lambda_context):
+def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling when Knowledge Base returns no results."""
+
+    # Setup config mock
+    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     # Mock empty response
     mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve.return_value = {"retrievalResults": []}
+    mock_bedrock_agent.retrieve_and_generate.return_value = {
+        "output": {"text": ""},
+        "citations": []
+    }
 
     # Execute
     result = index.lambda_handler(valid_event, lambda_context)
