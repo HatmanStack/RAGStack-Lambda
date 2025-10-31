@@ -32,7 +32,7 @@ const triggerInterval = async (id) => {
   const interval = intervalCallbacks.find(cb => cb.id === id);
   if (interval) {
     await act(async () => {
-      interval.callback();
+      await interval.callback();
     });
   }
 };
@@ -41,7 +41,7 @@ const triggerAllIntervals = async () => {
   const callbacks = [...intervalCallbacks];
   for (const interval of callbacks) {
     await act(async () => {
-      interval.callback();
+      await interval.callback();
     });
   }
 };
