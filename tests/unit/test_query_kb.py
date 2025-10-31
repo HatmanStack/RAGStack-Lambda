@@ -158,10 +158,10 @@ def test_lambda_handler_no_query_field(mock_boto3_client, lambda_context):
     mock_bedrock_agent.retrieve.assert_not_called()
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
 def test_lambda_handler_custom_max_results(
@@ -184,15 +184,16 @@ def test_lambda_handler_custom_max_results(
     call_args = mock_bedrock_agent.retrieve_and_generate.call_args
     assert (
         call_args[1]["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"][
-            "retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+            "retrievalConfiguration"
+        ]["vectorSearchConfiguration"]["numberOfResults"]
         == 10
     )
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
 def test_lambda_handler_default_max_results(
@@ -215,18 +216,21 @@ def test_lambda_handler_default_max_results(
     call_args = mock_bedrock_agent.retrieve_and_generate.call_args
     assert (
         call_args[1]["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"][
-            "retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+            "retrievalConfiguration"
+        ]["vectorSearchConfiguration"]["numberOfResults"]
         == 5
     )
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
-def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
+def test_lambda_handler_no_results(
+    mock_boto3_client, mock_config_manager, valid_event, lambda_context
+):
     """Test handling when Knowledge Base returns no results."""
 
     # Setup config mock
@@ -236,7 +240,7 @@ def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid
     mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve_and_generate.return_value = {
         "output": {"text": ""},
-        "citations": []
+        "citations": [],
     }
 
     # Execute
@@ -247,13 +251,15 @@ def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid
     assert result["query"] == valid_event["query"]
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
-def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
+def test_lambda_handler_bedrock_error(
+    mock_boto3_client, mock_config_manager, valid_event, lambda_context
+):
     """Test handling of Bedrock API error."""
 
     # Setup config mock
@@ -262,7 +268,7 @@ def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, va
     # Mock Bedrock error
     error = ClientError(
         {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
-        "retrieve_and_generate"
+        "retrieve_and_generate",
     )
     mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve_and_generate.side_effect = error
@@ -275,13 +281,15 @@ def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, va
     assert "error" in result
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
-def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
+def test_lambda_handler_missing_content_fields(
+    mock_boto3_client, mock_config_manager, valid_event, lambda_context
+):
     """Test handling of incomplete retrieval results."""
 
     # Setup config mock
@@ -300,7 +308,7 @@ def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_ma
                     }
                 ]
             }
-        ]
+        ],
     }
 
     mock_bedrock_agent = mock_boto3_client.return_value
@@ -316,14 +324,19 @@ def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_ma
     assert result["results"][0]["score"] == 0.5
 
 
-@patch.dict("os.environ", {
-    "KNOWLEDGE_BASE_ID": "test-kb-123",
-    "CONFIGURATION_TABLE_NAME": "test-config-table"
-})
+@patch.dict(
+    "os.environ",
+    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
+)
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
 def test_lambda_handler_result_count_logged(
-    mock_boto3_client, mock_config_manager, valid_event, lambda_context, mock_bedrock_response, caplog
+    mock_boto3_client,
+    mock_config_manager,
+    valid_event,
+    lambda_context,
+    mock_bedrock_response,
+    caplog,
 ):
     """Test that result count is logged."""
 

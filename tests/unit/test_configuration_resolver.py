@@ -74,8 +74,12 @@ def mock_dynamodb(mock_configuration_table, mock_tracking_table):
         import importlib.util
 
         # Re-execute the module spec to reload it with mocked boto3
-        lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "configuration_resolver"
-        spec = importlib.util.spec_from_file_location("index_config_resolver_reloaded", lambda_dir / "index.py")
+        lambda_dir = (
+            Path(__file__).parent.parent.parent / "src" / "lambda" / "configuration_resolver"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "index_config_resolver_reloaded", lambda_dir / "index.py"
+        )
         index_config_resolver_reloaded = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(index_config_resolver_reloaded)
 

@@ -115,10 +115,15 @@ def test_lambda_handler_success(
     # Setup config manager mock
     mock_config_manager = Mock()
     mock_get_config_manager.return_value = mock_config_manager
-    mock_config_manager.get_parameter.side_effect = lambda key, default=None: {
-        "ocr_backend": "textract",
-        "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-    }.get(key, default)
+
+    def config_side_effect_1(key, default=None):
+        config_map = {
+            "ocr_backend": "textract",
+            "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect_1
 
     # Setup mocks
     mock_document_class.return_value = Mock()
@@ -204,7 +209,12 @@ def test_lambda_handler_missing_required_field(mock_update_item, lambda_context)
 @patch("index_process_document.OcrService")
 @patch("index_process_document.Document")
 def test_lambda_handler_with_bedrock_backend(
-    mock_document_class, mock_ocr_service_class, _mock_update_item, mock_get_config_manager, lambda_context, mock_document
+    mock_document_class,
+    mock_ocr_service_class,
+    _mock_update_item,
+    mock_get_config_manager,
+    lambda_context,
+    mock_document,
 ):
     """Test Lambda with Bedrock OCR backend."""
 
@@ -220,10 +230,15 @@ def test_lambda_handler_with_bedrock_backend(
     # Setup config manager mock
     mock_config_manager = Mock()
     mock_get_config_manager.return_value = mock_config_manager
-    mock_config_manager.get_parameter.side_effect = lambda key, default=None: {
-        "ocr_backend": "bedrock",
-        "bedrock_ocr_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    }.get(key, default)
+
+    def config_side_effect_2(key, default=None):
+        config_map = {
+            "ocr_backend": "bedrock",
+            "bedrock_ocr_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect_2
 
     # Setup mocks
     mock_document_class.return_value = Mock()
