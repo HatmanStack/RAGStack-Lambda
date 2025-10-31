@@ -124,6 +124,50 @@ describe('Settings Component', () => {
     );
   };
 
+  // Validation tests for setInterval mock utility
+  describe('setInterval mock utility', () => {
+    it('should track intervals correctly', () => {
+      const id = mockSetInterval(() => {}, 1000);
+      expect(intervalCallbacks).toHaveLength(1);
+      expect(intervalCallbacks[0].id).toBe(id);
+      expect(intervalCallbacks[0].delay).toBe(1000);
+
+      mockClearInterval(id);
+      expect(intervalCallbacks).toHaveLength(0);
+    });
+
+    it('should trigger interval callbacks', async () => {
+      let callCount = 0;
+      const id = mockSetInterval(() => { callCount++; }, 1000);
+
+      expect(callCount).toBe(0);
+
+      await triggerInterval(id);
+      expect(callCount).toBe(1);
+
+      await triggerInterval(id);
+      expect(callCount).toBe(2);
+
+      mockClearInterval(id);
+    });
+
+    it('should trigger all intervals', async () => {
+      let count1 = 0;
+      let count2 = 0;
+
+      mockSetInterval(() => { count1++; }, 1000);
+      mockSetInterval(() => { count2++; }, 2000);
+
+      await triggerAllIntervals();
+
+      expect(count1).toBe(1);
+      expect(count2).toBe(1);
+
+      clearAllIntervals();
+      expect(intervalCallbacks).toHaveLength(0);
+    });
+  });
+
   it('renders loading state initially', () => {
     mockClient.graphql.mockImplementation(() => new Promise(() => {})); // Never resolves
     renderSettings();
@@ -375,7 +419,6 @@ describe('Settings Component', () => {
   describe('Re-embedding Job Features', () => {
     afterEach(() => {
       vi.restoreAllMocks();
-      vi.useRealTimers();
     });
 
     it('checks for existing re-embedding job on mount', async () => {
@@ -426,6 +469,12 @@ describe('Settings Component', () => {
             Default: JSON.stringify(sampleDefault),
             Custom: JSON.stringify(sampleCustom)
           }
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
         }))
         .mockResolvedValue(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
@@ -498,6 +547,9 @@ describe('Settings Component', () => {
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
         }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
+        }))
         .mockResolvedValue(mockGraphqlResponse({
           getReEmbedJobStatus: updatedJob
         }));
@@ -543,6 +595,9 @@ describe('Settings Component', () => {
             Default: JSON.stringify(sampleDefault),
             Custom: JSON.stringify(sampleCustom)
           }
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
@@ -732,6 +787,12 @@ describe('Settings Component', () => {
             Default: JSON.stringify(sampleDefault),
             Custom: JSON.stringify(sampleCustom)
           }
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: jobWith33Percent
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: jobWith33Percent
         }))
         .mockResolvedValue(mockGraphqlResponse({
           getReEmbedJobStatus: jobWith33Percent
