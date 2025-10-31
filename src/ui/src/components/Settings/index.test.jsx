@@ -562,17 +562,21 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      // Wait for initial in-progress display
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 9 \/ 10/i)).toBeInTheDocument();
       });
 
-      // Trigger polling interval will be added in subsequent task
+      // Trigger one poll to complete the job
+      await triggerAllIntervals();
 
+      // Wait for completion banner
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
       });
 
-      // Verify polling stopped (will be added in subsequent task)
+      // Verify polling stopped (no more intervals registered)
+      expect(intervalCallbacks.length).toBe(0);
     });
 
     it('triggers re-embedding job when user selects re-embed option in modal', async () => {
