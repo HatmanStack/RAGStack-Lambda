@@ -124,7 +124,8 @@ def create_knowledge_base(properties):
     # Step 1: Create S3 Vectors index
     try:
         logger.info(f"Creating S3 vector index: {index_name} in bucket: {vector_bucket}")
-        index_response = s3vectors_client.create_index(
+        # Note: create_index returns empty response (HTTP 200 with no body)
+        s3vectors_client.create_index(
             vectorBucketName=vector_bucket,
             indexName=index_name,
             dataType="float32",  # Titan Embed models output float32
@@ -137,7 +138,13 @@ def create_knowledge_base(properties):
                 ]
             },
         )
-        index_arn = index_response["indexArn"]
+
+        # Construct index ARN manually (API doesn't return it)
+        # Format: arn:aws:s3vectors:region:account-id:bucket/bucket-name/index/index-name
+        sts_client = boto3.client("sts")
+        account_id = sts_client.get_caller_identity()["Account"]
+        index_arn = f"arn:aws:s3vectors:{region}:{account_id}:bucket/{vector_bucket}/index/{index_name}"
+
         logger.info(f"Created S3 vector index: {index_arn}")
     except Exception as e:
         logger.error(f"Failed to create S3 vector index: {e}")
