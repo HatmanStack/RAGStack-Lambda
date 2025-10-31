@@ -10,7 +10,7 @@ on:
   push:
     branches: [ main, develop, fix-deploy ]
   pull_request:
-    branches: [ develop ]
+    branches: [ main, develop ]
 
 jobs:
   test:
