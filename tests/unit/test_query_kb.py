@@ -3,6 +3,7 @@ Unit tests for query_kb Lambda function.
 """
 
 # Mock imports
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -16,16 +17,17 @@ os.environ["KNOWLEDGE_BASE_ID"] = "test-kb-id-12345"
 os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
 os.environ["REGION"] = "us-east-1"
 
-# Add Lambda function to path
-lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "query_kb"
-sys.path.insert(0, str(lambda_dir))
-
 mock_config = MagicMock()
 sys.modules["ragstack_common"] = MagicMock()
 sys.modules["ragstack_common.config"] = mock_config
 
-# Now import the Lambda function
-import index
+# Use importlib to load the Lambda function with a unique module name
+# This avoids sys.modules['index'] caching issues when multiple tests load different index.py files
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "query_kb"
+spec = importlib.util.spec_from_file_location("index_query_kb", lambda_dir / "index.py")
+index = importlib.util.module_from_spec(spec)
+sys.modules["index_query_kb"] = index
+spec.loader.exec_module(index)
 
 
 @pytest.fixture
@@ -81,8 +83,8 @@ def mock_bedrock_response():
         "CONFIGURATION_TABLE_NAME": "test-config-table",
     },
 )
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_success(
     mock_boto3_client, mock_config_manager, valid_event, lambda_context, mock_bedrock_response
 ):
@@ -119,8 +121,8 @@ def test_lambda_handler_success(
     "os.environ",
     {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table"},
 )
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_empty_query(mock_boto3_client, mock_config_manager, lambda_context):
     """Test handling of empty query."""
 
@@ -139,7 +141,7 @@ def test_lambda_handler_empty_query(mock_boto3_client, mock_config_manager, lamb
 
 
 @patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
-@patch("index.boto3.client")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_no_query_field(mock_boto3_client, lambda_context):
     """Test handling of missing query field."""
 
@@ -160,8 +162,8 @@ def test_lambda_handler_no_query_field(mock_boto3_client, lambda_context):
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_custom_max_results(
     mock_boto3_client, mock_config_manager, lambda_context, mock_bedrock_response
 ):
@@ -191,8 +193,8 @@ def test_lambda_handler_custom_max_results(
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_default_max_results(
     mock_boto3_client, mock_config_manager, lambda_context, mock_bedrock_response
 ):
@@ -222,8 +224,8 @@ def test_lambda_handler_default_max_results(
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling when Knowledge Base returns no results."""
 
@@ -249,8 +251,8 @@ def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling of Bedrock API error."""
 
@@ -277,8 +279,8 @@ def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, va
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling of incomplete retrieval results."""
 
@@ -318,8 +320,8 @@ def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_ma
     "KNOWLEDGE_BASE_ID": "test-kb-123",
     "CONFIGURATION_TABLE_NAME": "test-config-table"
 })
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_result_count_logged(
     mock_boto3_client, mock_config_manager, valid_event, lambda_context, mock_bedrock_response, caplog
 ):
@@ -347,8 +349,8 @@ def test_lambda_handler_result_count_logged(
         "CONFIGURATION_TABLE_NAME": "test-config-table",
     },
 )
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_uses_runtime_config(
     mock_boto3_client, mock_config_manager, valid_event, lambda_context
 ):
@@ -392,8 +394,8 @@ def test_lambda_handler_uses_runtime_config(
         "CONFIGURATION_TABLE_NAME": "test-config-table",
     },
 )
-@patch("index.config_manager")
-@patch("index.boto3.client")
+@patch("index_query_kb.config_manager")
+@patch("index_query_kb.boto3.client")
 def test_lambda_handler_uses_correct_region_in_model_arn(
     mock_boto3_client, mock_config_manager, valid_event, lambda_context
 ):
