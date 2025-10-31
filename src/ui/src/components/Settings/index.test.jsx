@@ -644,7 +644,10 @@ describe('Settings Component', () => {
             Custom: JSON.stringify(sampleCustom)
           }
         }))
-        .mockRejectedValueOnce(new Error('Failed to fetch job status'));
+        .mockRejectedValueOnce(new Error('Failed to fetch job status'))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: null
+        }));
 
       renderSettings();
 
@@ -677,6 +680,9 @@ describe('Settings Component', () => {
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: completedJob
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: completedJob
         }));
 
       renderSettings();
@@ -700,6 +706,9 @@ describe('Settings Component', () => {
           }
         }))
         .mockResolvedValueOnce(mockGraphqlResponse({
+          getReEmbedJobStatus: null
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
           getReEmbedJobStatus: null
         }));
 
