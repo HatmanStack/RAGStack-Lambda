@@ -258,6 +258,14 @@ Resources:
                 Action:
                   - cloudformation:DescribeStacks
                 Resource: !Ref AWS::StackId
+              # EventBridge rule creation
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:DeleteRule
+                Resource: !Sub 'arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*'
               # Logs
               - Effect: Allow
                 Action:
