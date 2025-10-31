@@ -381,7 +381,6 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    DeletionPolicy: Retain
     Properties:
       DistributionConfig:
         Enabled: true

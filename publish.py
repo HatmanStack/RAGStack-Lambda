@@ -376,7 +376,7 @@ def handle_failed_stack(stack_name, region):
                 return True  # Return True to allow proceeding even if deletion times out
 
         # Check if stack is in a failed/rollback state
-        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE']:
+        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE', 'ROLLBACK_FAILED']:
             log_warning(f"Stack '{stack_name}' is in {stack_status} state")
             log_info(f"Deleting failed stack '{stack_name}'...")
 
