@@ -477,6 +477,7 @@ def cleanup_orphaned_resources(project_name, region):
         f'ragstack-{project_name}-vectors-{account_id}',
         f'ragstack-{project_name}-working-{account_id}',
         f'ragstack-{project_name}-ui-{account_id}',
+        f'ragstack-{project_name}-cloudtrail-{account_id}',  # CloudTrail bucket has DeletionPolicy:Retain
     ]
 
     for bucket_name in bucket_names:
