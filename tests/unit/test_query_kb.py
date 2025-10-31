@@ -60,12 +60,12 @@ def mock_bedrock_response():
                     {
                         "content": {"text": "This document discusses cloud architecture."},
                         "location": {"s3Location": {"uri": "s3://bucket/doc1.pdf"}},
-                        "metadata": {"score": 0.95},
+                        "score": 0.95,
                     },
                     {
                         "content": {"text": "AWS services are covered in detail."},
                         "location": {"s3Location": {"uri": "s3://bucket/doc2.pdf"}},
-                        "metadata": {"score": 0.87},
+                        "score": 0.87,
                     },
                 ]
             }
