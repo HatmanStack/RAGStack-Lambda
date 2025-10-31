@@ -331,7 +331,393 @@ def sam_build():
     log_success("SAM build complete")
 
 
-def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_source_key=None, skip_ui=False):
+def handle_failed_stack(stack_name, region):
+    """
+    Check if stack exists and is in a failed state (ROLLBACK_COMPLETE or CREATE_FAILED).
+
+    If the stack is in a failed state, delete it so a fresh deployment can proceed.
+    This handles the case where a previous deployment failed and needs to be retried.
+
+    Args:
+        stack_name: CloudFormation stack name
+        region: AWS region
+
+    Returns:
+        bool: True if stack was deleted or doesn't exist, False if stack exists and is healthy
+
+    Raises:
+        IOError: If deletion fails
+    """
+    cf_client = boto3.client('cloudformation', region_name=region)
+
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        stack = response['Stacks'][0]
+        stack_status = stack['StackStatus']
+
+        # Check if stack is already being deleted
+        if stack_status == 'DELETE_IN_PROGRESS':
+            log_info(f"Stack '{stack_name}' is already being deleted, waiting for completion...")
+            try:
+                waiter = cf_client.get_waiter('stack_delete_complete')
+                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter.wait(
+                    StackName=stack_name,
+                    WaiterConfig={
+                        'Delay': 30,  # Check every 30 seconds
+                        'MaxAttempts': 120  # Wait up to 1 hour (120 * 30s)
+                    }
+                )
+                log_success(f"Stack '{stack_name}' deleted successfully")
+                return True
+            except Exception as e:
+                log_warning(f"Stack deletion timed out or failed: {e}")
+                log_warning(f"You may need to manually delete the stack or clean up resources")
+                return True  # Return True to allow proceeding even if deletion times out
+
+        # Check if stack is in a failed/rollback state
+        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE']:
+            log_warning(f"Stack '{stack_name}' is in {stack_status} state")
+            log_info(f"Deleting failed stack '{stack_name}'...")
+
+            try:
+                cf_client.delete_stack(StackName=stack_name)
+
+                # Wait for deletion to complete with longer timeout
+                waiter = cf_client.get_waiter('stack_delete_complete')
+                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter.wait(
+                    StackName=stack_name,
+                    WaiterConfig={
+                        'Delay': 30,  # Check every 30 seconds
+                        'MaxAttempts': 120  # Wait up to 1 hour (120 * 30s)
+                    }
+                )
+
+                log_success(f"Stack '{stack_name}' deleted successfully")
+                return True
+            except Exception as e:
+                log_warning(f"Stack deletion timed out: {e}")
+                log_warning(f"Stack may still be deleting in the background. You can check CloudFormation console.")
+                return True  # Return True to allow proceeding
+
+        # Stack exists and is in a healthy state
+        return False
+
+    except cf_client.exceptions.ClientError as e:
+        error_code = e.response['Error']['Code']
+
+        # Stack doesn't exist - this is fine, we can proceed
+        if error_code == 'ValidationError' and 'does not exist' in str(e):
+            log_info(f"Stack '{stack_name}' does not exist, proceeding with fresh deployment")
+            return True
+
+        # Other errors should be raised
+        raise IOError(f"Failed to check stack status: {e}") from e
+
+
+def cleanup_orphaned_resources(project_name, region):
+    """
+    Clean up orphaned AWS resources from failed deployments.
+
+    When a CloudFormation stack fails during creation, some resources may be created
+    but not tracked by CloudFormation. This function identifies and deletes such orphaned
+    resources so a fresh deployment can proceed.
+
+    Args:
+        project_name: Project name for resource naming
+        region: AWS region
+
+    Raises:
+        IOError: If cleanup fails
+    """
+    log_info("Checking for orphaned resources from failed deployments...")
+
+    # Clean up DynamoDB tables
+    dynamodb_client = boto3.client('dynamodb', region_name=region)
+    table_names = [
+        f'RAGStack-{project_name}-Tracking',
+        f'RAGStack-{project_name}-Metering',
+        f'RAGStack-{project_name}-Configuration',
+    ]
+
+    for table_name in table_names:
+        try:
+            dynamodb_client.describe_table(TableName=table_name)
+            # Table exists, delete it
+            log_warning(f"Found orphaned DynamoDB table: {table_name}")
+            log_info(f"Deleting table: {table_name}")
+            dynamodb_client.delete_table(TableName=table_name)
+
+            # Wait for deletion
+            waiter = dynamodb_client.get_waiter('table_not_exists')
+            waiter.wait(TableName=table_name)
+            log_success(f"Deleted table: {table_name}")
+
+        except dynamodb_client.exceptions.ResourceNotFoundException:
+            # Table doesn't exist, that's fine
+            pass
+        except Exception as e:
+            log_warning(f"Failed to delete orphaned table {table_name}: {e}")
+            # Continue with other tables instead of failing completely
+
+    # Clean up S3 buckets (empty them first, then delete)
+    s3_client = boto3.client('s3', region_name=region)
+    sts_client = boto3.client('sts', region_name=region)
+
+    try:
+        account_id = sts_client.get_caller_identity()['Account']
+    except ClientError as e:
+        log_warning(f"Could not get account ID for S3 cleanup: {e}")
+        return
+
+    bucket_names = [
+        f'ragstack-{project_name}-input-{account_id}',
+        f'ragstack-{project_name}-output-{account_id}',
+        f'ragstack-{project_name}-vectors-{account_id}',
+        f'ragstack-{project_name}-working-{account_id}',
+        f'ragstack-{project_name}-ui-{account_id}',
+    ]
+
+    for bucket_name in bucket_names:
+        try:
+            # Check if bucket exists
+            s3_client.head_bucket(Bucket=bucket_name)
+
+            # Bucket exists, empty it first
+            log_warning(f"Found orphaned S3 bucket: {bucket_name}")
+            log_info(f"Emptying bucket: {bucket_name}")
+
+            # Delete all objects
+            paginator = s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=bucket_name)
+
+            for page in pages:
+                if 'Contents' in page:
+                    objects = [{'Key': obj['Key']} for obj in page['Contents']]
+                    if objects:
+                        s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': objects})
+
+            # Delete all object versions if versioning is enabled
+            version_paginator = s3_client.get_paginator('list_object_versions')
+            version_pages = version_paginator.paginate(Bucket=bucket_name)
+
+            for page in version_pages:
+                objects_to_delete = []
+
+                if 'Versions' in page:
+                    objects_to_delete.extend([
+                        {'Key': obj['Key'], 'VersionId': obj['VersionId']}
+                        for obj in page['Versions']
+                    ])
+
+                if 'DeleteMarkers' in page:
+                    objects_to_delete.extend([
+                        {'Key': obj['Key'], 'VersionId': obj['VersionId']}
+                        for obj in page['DeleteMarkers']
+                    ])
+
+                if objects_to_delete:
+                    s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': objects_to_delete})
+
+            # Now delete the bucket
+            log_info(f"Deleting bucket: {bucket_name}")
+            s3_client.delete_bucket(Bucket=bucket_name)
+            log_success(f"Deleted bucket: {bucket_name}")
+
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                # Bucket doesn't exist, that's fine
+                pass
+            else:
+                log_warning(f"Failed to delete orphaned bucket {bucket_name}: {e}")
+
+    # Clean up CloudFront distributions (which can get stuck in DELETE_IN_PROGRESS)
+    cloudfront_client = boto3.client('cloudfront')
+
+    try:
+        # List all distributions
+        paginator = cloudfront_client.get_paginator('list_distributions')
+        for page in paginator.paginate():
+            if 'DistributionList' not in page or 'Items' not in page['DistributionList']:
+                continue
+
+            for distribution in page['DistributionList']:
+                # Check if this distribution belongs to our project
+                comment = distribution.get('Comment', '')
+                if project_name in comment:
+                    dist_id = distribution['Id']
+                    is_enabled = distribution.get('Enabled', False)
+
+                    if is_enabled:
+                        log_warning(f"Found CloudFront distribution {dist_id} for project {project_name}")
+                        log_info(f"Disabling distribution: {dist_id}")
+
+                        try:
+                            # Get current distribution config
+                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
+                            config = dist_config['DistributionConfig']
+                            etag = dist_config['ETag']
+
+                            # Disable the distribution
+                            config['Enabled'] = False
+                            update_response = cloudfront_client.update_distribution(
+                                Id=dist_id,
+                                DistributionConfig=config,
+                                IfMatch=etag
+                            )
+
+                            log_success(f"Disabled CloudFront distribution: {dist_id}")
+
+                            # Get fresh ETag after disabling
+                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
+                            etag = dist_config['ETag']
+
+                            # Try to delete it
+                            log_info(f"Deleting distribution: {dist_id}")
+                            cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
+                            log_success(f"Deleted CloudFront distribution: {dist_id}")
+
+                        except Exception as e:
+                            log_warning(f"Failed to delete CloudFront distribution {dist_id}: {e}")
+                            log_warning(f"Distribution may need to be manually deleted from CloudFront console")
+
+    except Exception as e:
+        log_warning(f"Error cleaning up CloudFront distributions: {e}")
+
+
+def cleanup_stuck_cloudfront_distributions(project_name):
+    """
+    Clean up any CloudFront distributions that are stuck in DELETE_IN_PROGRESS.
+
+    This is called before deployment to ensure a clean slate. Distributions that are
+    stuck typically need to be disabled and have their ETag refreshed before deletion.
+
+    Args:
+        project_name: Project name to match against distribution comments
+    """
+    log_info("Checking for stuck CloudFront distributions...")
+    cloudfront_client = boto3.client('cloudfront')
+
+    try:
+        paginator = cloudfront_client.get_paginator('list_distributions')
+        for page in paginator.paginate():
+            if 'DistributionList' not in page or 'Items' not in page['DistributionList']:
+                continue
+
+            for distribution in page['DistributionList']:
+                comment = distribution.get('Comment', '')
+                if project_name in comment:
+                    dist_id = distribution['Id']
+                    status = distribution.get('Status', '')
+                    is_enabled = distribution.get('Enabled', False)
+
+                    log_warning(f"Found existing distribution {dist_id} (status: {status}, enabled: {is_enabled})")
+
+                    # If distribution is disabled, we can delete it
+                    if not is_enabled:
+                        try:
+                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
+                            etag = dist_config['ETag']
+
+                            log_info(f"Deleting disabled distribution: {dist_id}")
+                            cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
+                            log_success(f"Deleted disabled CloudFront distribution: {dist_id}")
+                        except ClientError as e:
+                            error_code = e.response.get('Error', {}).get('Code', '')
+                            # If distribution is still being deleted, that's OK - wait
+                            if 'InvalidIfMatchVersion' in error_code or 'DistributionNotDisabled' in error_code:
+                                log_warning(f"Distribution {dist_id} is still propagating - will skip for now")
+                            else:
+                                log_warning(f"Could not delete distribution {dist_id}: {e}")
+                        except Exception as e:
+                            log_warning(f"Unexpected error deleting distribution {dist_id}: {e}")
+                    # If still enabled, disable it (this is the normal case)
+                    elif is_enabled:
+                        try:
+                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
+                            config = dist_config['DistributionConfig']
+                            etag = dist_config['ETag']
+
+                            config['Enabled'] = False
+                            cloudfront_client.update_distribution(
+                                Id=dist_id,
+                                DistributionConfig=config,
+                                IfMatch=etag
+                            )
+                            log_warning(f"Disabled CloudFront distribution {dist_id} - will be cleaned up during stack deletion")
+                        except Exception as e:
+                            log_warning(f"Could not disable distribution {dist_id}: {e}")
+
+    except Exception as e:
+        log_warning(f"Error checking CloudFront distributions: {e}")
+
+
+def create_sam_artifact_bucket(project_name, region):
+    """
+    Create S3 bucket for deployment artifacts if it doesn't exist.
+
+    This single bucket stores both SAM/CloudFormation artifacts and UI source code.
+    SAM uses it for Lambda functions, layers, and templates.
+    CodeBuild uses it to fetch UI source for building and deploying.
+
+    Args:
+        project_name: Project name for bucket naming
+        region: AWS region
+
+    Returns:
+        str: Bucket name
+
+    Raises:
+        IOError: If bucket creation fails
+    """
+    s3_client = boto3.client('s3', region_name=region)
+    sts_client = boto3.client('sts', region_name=region)
+
+    # Get account ID for bucket naming
+    try:
+        account_id = sts_client.get_caller_identity()['Account']
+    except ClientError as e:
+        raise IOError(f"Failed to get AWS account ID: {e}") from e
+
+    # Use project-specific bucket for all deployment artifacts
+    bucket_name = f'ragstack-{project_name}-artifacts-{account_id}'
+
+    # Create bucket if it doesn't exist
+    try:
+        s3_client.head_bucket(Bucket=bucket_name)
+        log_info(f"Using existing artifact bucket: {bucket_name}")
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+
+        if error_code == '404' or error_code == 'NoSuchBucket':
+            log_info(f"Creating artifact bucket: {bucket_name}")
+            try:
+                if region == 'us-east-1':
+                    s3_client.create_bucket(Bucket=bucket_name)
+                else:
+                    s3_client.create_bucket(
+                        Bucket=bucket_name,
+                        CreateBucketConfiguration={'LocationConstraint': region}
+                    )
+
+                # Enable versioning for artifact tracking
+                s3_client.put_bucket_versioning(
+                    Bucket=bucket_name,
+                    VersioningConfiguration={'Status': 'Enabled'}
+                )
+
+                log_success(f"Created artifact bucket: {bucket_name}")
+            except ClientError as create_error:
+                raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
+        else:
+            raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
+
+    return bucket_name
+
+
+def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -339,7 +725,7 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
         project_name: Project name for resource naming
         admin_email: Admin email for Cognito and alerts
         region: AWS region
-        ui_source_bucket: S3 bucket containing UI source zip (if not skip_ui)
+        artifact_bucket: S3 bucket for SAM artifacts and UI source
         ui_source_key: S3 key for UI source zip (if not skip_ui)
         skip_ui: Whether to skip UI deployment
 
@@ -358,9 +744,9 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
     ]
 
     # Add UI parameters if building UI
-    if not skip_ui and ui_source_bucket and ui_source_key:
+    if not skip_ui and ui_source_key:
         log_info("UI will be deployed via CodeBuild during stack creation")
-        param_overrides.append(f"UISourceBucket={ui_source_bucket}")
+        param_overrides.append(f"UISourceBucket={artifact_bucket}")
         param_overrides.append(f"UISourceKey={ui_source_key}")
 
     cmd = [
@@ -368,7 +754,7 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
         "--stack-name", stack_name,
         "--region", region,
         "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
-        "--resolve-s3",
+        "--s3-bucket", artifact_bucket,
         "--no-confirm-changeset",
         "--parameter-overrides",
     ] + param_overrides
@@ -378,19 +764,19 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
     return stack_name
 
 
-def package_ui_source(region, project_name):
+def package_ui_source(bucket_name, region):
     """
     Package UI source code as zip and upload to S3.
 
     Creates a zip file of the UI source (excluding node_modules and build directories),
-    uploads it to a project-specific S3 bucket, and returns the bucket/key for CloudFormation.
+    uploads it to the provided S3 bucket, and returns the bucket/key for CloudFormation.
 
     Args:
+        bucket_name: S3 bucket name to upload to
         region: AWS region for bucket operations
-        project_name: Project name for bucket naming
 
     Returns:
-        tuple: (bucket_name, key) of uploaded UI source zip
+        str: S3 key of uploaded UI source zip
 
     Raises:
         FileNotFoundError: If UI source directory doesn't exist
@@ -427,48 +813,8 @@ def package_ui_source(region, project_name):
 
         log_success(f"UI source packaged: {zip_path}")
 
-        # Upload to S3 - use project-specific bucket for UI source
-        # SAM will handle its own deployment artifacts via --resolve-s3
+        # Upload to S3
         s3_client = boto3.client('s3', region_name=region)
-        sts_client = boto3.client('sts', region_name=region)
-
-        # Get account ID for bucket naming
-        try:
-            account_id = sts_client.get_caller_identity()['Account']
-        except ClientError as e:
-            raise IOError(f"Failed to get AWS account ID: {e}") from e
-
-        # Use project-specific bucket (not SAM managed bucket)
-        # This bucket is specifically for UI source code that CodeBuild will access
-        bucket_name = f'ragstack-{project_name}-ui-source-{account_id}'
-
-        # Create bucket if it doesn't exist
-        try:
-            s3_client.head_bucket(Bucket=bucket_name)
-            log_info(f"Using existing UI source bucket: {bucket_name}")
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', '')
-
-            if error_code == '404' or error_code == 'NoSuchBucket':
-                log_info(f"Creating UI source bucket: {bucket_name}")
-                try:
-                    if region == 'us-east-1':
-                        s3_client.create_bucket(Bucket=bucket_name)
-                    else:
-                        s3_client.create_bucket(
-                            Bucket=bucket_name,
-                            CreateBucketConfiguration={'LocationConstraint': region}
-                        )
-
-                    # Enable versioning for source tracking
-                    s3_client.put_bucket_versioning(
-                        Bucket=bucket_name,
-                        VersioningConfiguration={'Status': 'Enabled'}
-                    )
-                except ClientError as create_error:
-                    raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
-            else:
-                raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
 
         # Upload with timestamp-based key
         timestamp = int(time.time())
@@ -484,7 +830,7 @@ def package_ui_source(region, project_name):
         # Clean up temporary file
         os.remove(zip_path)
 
-        return (bucket_name, key)
+        return key
 
     except (FileNotFoundError, IOError):
         # Re-raise expected exceptions
@@ -842,12 +1188,19 @@ Examples:
         log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
+        # Create artifact bucket first
+        try:
+            artifact_bucket = create_sam_artifact_bucket(args.project_name, args.region)
+        except IOError as e:
+            log_error(f"Failed to create artifact bucket: {e}")
+            sys.exit(1)
+
         # Package UI source (unless --skip-ui)
-        ui_source_bucket = None
         ui_source_key = None
         if not args.skip_ui:
             try:
-                ui_source_bucket, ui_source_key = package_ui_source(args.region, args.project_name)
+                ui_source_key = package_ui_source(artifact_bucket, args.region)
+                log_info(f"UI source uploaded to {artifact_bucket}/{ui_source_key}")
             except (FileNotFoundError, IOError) as e:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
@@ -855,12 +1208,25 @@ Examples:
         # SAM build
         sam_build()
 
-        # SAM deploy
+        # Check for failed stack and clean up if needed
+        stack_name = f"RAGStack-{args.project_name}"
+        try:
+            # First, check for any stuck CloudFront distributions and disable them
+            cleanup_stuck_cloudfront_distributions(args.project_name)
+
+            handle_failed_stack(stack_name, args.region)
+            # Also clean up orphaned resources from failed deployments
+            cleanup_orphaned_resources(args.project_name, args.region)
+        except IOError as e:
+            log_error(f"Failed to handle existing stack: {e}")
+            sys.exit(1)
+
+        # SAM deploy with UI parameters
         stack_name = sam_deploy(
             args.project_name,
             args.admin_email,
             args.region,
-            ui_source_bucket=ui_source_bucket,
+            artifact_bucket,
             ui_source_key=ui_source_key,
             skip_ui=args.skip_ui
         )

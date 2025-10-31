@@ -97,23 +97,36 @@ def create_knowledge_base(properties):
 
     logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors")
 
-    # Step 1: Create S3 Vectors index
+    # Step 0: Create/Initialize S3 Vectors bucket
     s3vectors_client = boto3.client("s3vectors", region_name=region)
 
     try:
+        logger.info(f"Initializing S3 Vectors bucket: {vector_bucket}")
+        s3vectors_client.create_vector_bucket(bucketName=vector_bucket)
+        logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
+    except Exception as e:
+        error_str = str(e)
+        # If bucket already exists (ConflictException), that's fine
+        if "ConflictException" in error_str or "already exists" in error_str:
+            logger.info(f"S3 Vectors bucket already exists: {vector_bucket}")
+        else:
+            logger.warning(f"Warning creating S3 Vectors bucket: {e}")
+            # Continue anyway - bucket might already be initialized
+
+    # Step 1: Create S3 Vectors index
+    try:
         logger.info(f"Creating S3 vector index: {index_name} in bucket: {vector_bucket}")
         index_response = s3vectors_client.create_index(
-            bucketName=vector_bucket,
+            vectorBucketName=vector_bucket,
             indexName=index_name,
-            indexConfiguration={
-                "dimension": 1024,  # Titan Embed models output 1024 dimensions
-                "distanceMetric": "cosine",
-                "metadataConfiguration": {
-                    "nonFilterableMetadataKeys": [
-                        "AMAZON_BEDROCK_METADATA",
-                        "AMAZON_BEDROCK_TEXT_CHUNK",
-                    ]
-                },
+            dataType="float32",  # Titan Embed models output float32
+            dimension=1024,  # Titan Embed models output 1024 dimensions
+            distanceMetric="cosine",
+            metadataConfiguration={
+                "nonFilterableMetadataKeys": [
+                    "AMAZON_BEDROCK_METADATA",
+                    "AMAZON_BEDROCK_TEXT_CHUNK",
+                ]
             },
         )
         index_arn = index_response["indexArn"]
@@ -154,7 +167,7 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         # Clean up index on failure
         with contextlib.suppress(builtins.BaseException):
-            s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
+            s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
         raise
 
     # Note: S3 Vectors doesn't require a separate data source
@@ -243,7 +256,7 @@ def delete_knowledge_base(kb_id, project_name="RAGStack"):
             try:
                 region = boto3.session.Session().region_name
                 s3vectors_client = boto3.client("s3vectors", region_name=region)
-                s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
+                s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
                 logger.info(f"Deleted S3 vector index: {index_name}")
             except Exception as e:
                 logger.warning(f"Failed to delete S3 vector index: {e}")

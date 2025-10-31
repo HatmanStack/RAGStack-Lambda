@@ -381,6 +381,7 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    DeletionPolicy: Retain
     Properties:
       DistributionConfig:
         Enabled: true
@@ -533,6 +534,19 @@ Resources:
           Value: Runtime Configuration Storage
 
   # =========================================================================
+  # Lambda Layers
+  # =========================================================================
+
+  RagstackCommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub 'RAGStack-${ProjectName}-Common'
+      Description: Shared utilities for RAGStack Lambda functions
+      ContentUri: lib/
+      CompatibleRuntimes:
+        - python3.13
+
+  # =========================================================================
   # Lambda Functions
   # =========================================================================
 
@@ -543,6 +557,8 @@ Resources:
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 900  # 15 minutes for large documents
       MemorySize: 3008  # Max memory for OCR processing
@@ -595,6 +611,8 @@ Resources:
       CodeUri: src/lambda/generate_embeddings/
       Handler: index.lambda_handler
       Description: Generate text and image embeddings
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 900
       MemorySize: 2048
@@ -639,6 +657,8 @@ Resources:
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 60
       MemorySize: 512
@@ -676,10 +696,12 @@ Resources:
       FunctionName: !Sub 'RAGStack-${ProjectName}-ConfigurationResolver'
       CodeUri: src/lambda/configuration_resolver/
       Handler: index.lambda_handler
+      Description: GraphQL resolver for configuration management
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 30
       MemorySize: 256
-      Description: GraphQL resolver for configuration management
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -862,13 +884,16 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:ListBucket
+                Resource:
+                  - !Sub '${VectorBucket.Arn}'
+                  - !Sub '${VectorBucket.Arn}/*'
+              - Effect: Allow
+                Action:
                   - s3vectors:DescribeIndex
                   - s3vectors:ReadVectors
                   - s3vectors:WriteVectors
                 Resource:
-                  - !Sub '${VectorBucket.Arn}'
-                  - !Sub '${VectorBucket.Arn}/*'
-                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
         - PolicyName: BedrockModelAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -885,6 +910,8 @@ Resources:
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 300
       MemorySize: 512
@@ -909,11 +936,12 @@ Resources:
               Resource: '*'
             - Effect: Allow
               Action:
+                - s3vectors:CreateVectorBucket
                 - s3vectors:CreateIndex
                 - s3vectors:DeleteIndex
                 - s3vectors:DescribeIndex
                 - s3vectors:ListIndices
-              Resource: !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:index/${VectorBucket}/*'
+              Resource: !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
             - Effect: Allow
               Action:
                 - iam:PassRole
@@ -931,9 +959,9 @@ Resources:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
       KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
-      VectorBucket: !Ref VectorBucket
+      VectorBucket: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub 'RAGStack-${ProjectName}-vector-index'
+      IndexName: !Sub 'ragstack-${ProjectName}-vector-index'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 
@@ -978,9 +1006,13 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
-      RefreshTokenValidity: 30  # Days
-      AccessTokenValidity: 60   # Minutes
-      IdTokenValidity: 60       # Minutes
+      RefreshTokenValidity: 30
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      TokenValidityUnits:
+        RefreshToken: days
+        AccessToken: minutes
+        IdToken: minutes
 
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
@@ -1087,6 +1119,8 @@ Resources:
       FunctionName: !Sub 'RAGStack-${ProjectName}-AppSyncResolvers'
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref RagstackCommonLayer
       Tracing: Active
       Environment:
         Variables:
@@ -1115,6 +1149,8 @@ Resources:
       CodeUri: src/lambda/start_codebuild/
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
+      Layers:
+        - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 300  # 5 minutes
       MemorySize: 256
