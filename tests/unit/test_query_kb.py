@@ -273,24 +273,36 @@ def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, va
     assert "error" in result
 
 
-@patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
+@patch.dict("os.environ", {
+    "KNOWLEDGE_BASE_ID": "test-kb-123",
+    "CONFIGURATION_TABLE_NAME": "test-config-table"
+})
+@patch("index.config_manager")
 @patch("index.boto3.client")
-def test_lambda_handler_missing_content_fields(mock_boto3_client, valid_event, lambda_context):
+def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling of incomplete retrieval results."""
+
+    # Setup config mock
+    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     # Mock response with missing fields
     incomplete_response = {
-        "retrievalResults": [
+        "output": {"text": "Generated response"},
+        "citations": [
             {
-                "content": {},  # Missing 'text'
-                "location": {},  # Missing 's3Location'
-                "score": 0.5,
+                "retrievedReferences": [
+                    {
+                        "content": {},  # Missing 'text' - tests graceful handling
+                        "location": {},  # Missing 's3Location' - tests graceful handling
+                        "score": 0.5,
+                    }
+                ]
             }
         ]
     }
 
     mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve.return_value = incomplete_response
+    mock_bedrock_agent.retrieve_and_generate.return_value = incomplete_response
 
     # Execute
     result = index.lambda_handler(valid_event, lambda_context)
