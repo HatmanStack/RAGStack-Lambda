@@ -419,14 +419,17 @@ describe('Settings Component', () => {
         completionTime: null
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(sampleSchema),
-          Default: JSON.stringify(sampleDefault),
-          Custom: JSON.stringify(sampleCustom)
-        },
-        getReEmbedJobStatus: inProgressJob
-      }));
+      mockClient.graphql
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getConfiguration: {
+            Schema: JSON.stringify(sampleSchema),
+            Default: JSON.stringify(sampleDefault),
+            Custom: JSON.stringify(sampleCustom)
+          }
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: inProgressJob
+        }));
 
       renderSettings();
 
@@ -490,15 +493,12 @@ describe('Settings Component', () => {
             Schema: JSON.stringify(sampleSchema),
             Default: JSON.stringify(sampleDefault),
             Custom: JSON.stringify(sampleCustom)
-          },
+          }
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
         }))
         .mockResolvedValue(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          },
           getReEmbedJobStatus: updatedJob
         }));
 
@@ -542,15 +542,12 @@ describe('Settings Component', () => {
             Schema: JSON.stringify(sampleSchema),
             Default: JSON.stringify(sampleDefault),
             Custom: JSON.stringify(sampleCustom)
-          },
+          }
+        }))
+        .mockResolvedValueOnce(mockGraphqlResponse({
           getReEmbedJobStatus: inProgressJob
         }))
         .mockResolvedValue(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          },
           getReEmbedJobStatus: completedJob
         }));
 
@@ -728,14 +725,17 @@ describe('Settings Component', () => {
         completionTime: null
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(sampleSchema),
-          Default: JSON.stringify(sampleDefault),
-          Custom: JSON.stringify(sampleCustom)
-        },
-        getReEmbedJobStatus: jobWith33Percent
-      }));
+      mockClient.graphql
+        .mockResolvedValueOnce(mockGraphqlResponse({
+          getConfiguration: {
+            Schema: JSON.stringify(sampleSchema),
+            Default: JSON.stringify(sampleDefault),
+            Custom: JSON.stringify(sampleCustom)
+          }
+        }))
+        .mockResolvedValue(mockGraphqlResponse({
+          getReEmbedJobStatus: jobWith33Percent
+        }));
 
       renderSettings();
 
