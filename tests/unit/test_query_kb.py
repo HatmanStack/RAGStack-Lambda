@@ -245,17 +245,25 @@ def test_lambda_handler_no_results(mock_boto3_client, mock_config_manager, valid
     assert result["query"] == valid_event["query"]
 
 
-@patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
+@patch.dict("os.environ", {
+    "KNOWLEDGE_BASE_ID": "test-kb-123",
+    "CONFIGURATION_TABLE_NAME": "test-config-table"
+})
+@patch("index.config_manager")
 @patch("index.boto3.client")
-def test_lambda_handler_bedrock_error(mock_boto3_client, valid_event, lambda_context):
+def test_lambda_handler_bedrock_error(mock_boto3_client, mock_config_manager, valid_event, lambda_context):
     """Test handling of Bedrock API error."""
+
+    # Setup config mock
+    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     # Mock Bedrock error
     error = ClientError(
-        {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}}, "retrieve"
+        {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
+        "retrieve_and_generate"
     )
     mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve.side_effect = error
+    mock_bedrock_agent.retrieve_and_generate.side_effect = error
 
     # Execute - handler catches exceptions and returns error dict
     result = index.lambda_handler(valid_event, lambda_context)
