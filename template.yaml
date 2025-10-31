@@ -891,7 +891,9 @@ Resources:
                   - s3vectors:DescribeIndex
                   - s3vectors:ReadVectors
                   - s3vectors:WriteVectors
+                  - s3vectors:QueryVectors
                 Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
                   - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
         - PolicyName: BedrockModelAccess
           PolicyDocument:
