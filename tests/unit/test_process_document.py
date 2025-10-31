@@ -2,15 +2,18 @@
 Unit tests for process_document Lambda function.
 """
 
+import importlib.util
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-# Add Lambda function to path
-lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "process_document"
-sys.path.insert(0, str(lambda_dir))
+# Set required environment variables BEFORE importing the module
+os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
+os.environ["TRACKING_TABLE"] = "test-tracking-table"
+os.environ["REGION"] = "us-east-1"
 
 # Mock the ragstack_common imports before importing index
 # Create mock modules
@@ -32,8 +35,13 @@ mock_models.Status.OCR_COMPLETE = MagicMock(value="ocr_complete")
 mock_models.Status.FAILED = MagicMock(value="failed")
 mock_models.OcrBackend = MagicMock()
 
-# Now import the Lambda function
-import index
+# Use importlib to load the Lambda function with a unique module name
+# This avoids sys.modules['index'] caching issues when multiple tests load different index.py files
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "process_document"
+spec = importlib.util.spec_from_file_location("index_process_document", lambda_dir / "index.py")
+index = importlib.util.module_from_spec(spec)
+sys.modules["index_process_document"] = index
+spec.loader.exec_module(index)
 
 
 @pytest.fixture
@@ -89,18 +97,33 @@ def mock_document():
 
 
 @patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table", "AWS_REGION": "us-east-1"})
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document._get_config_manager")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_success(
     mock_document_class,
     mock_ocr_service_class,
     mock_update_item,
+    mock_get_config_manager,
     valid_event,
     lambda_context,
     mock_document,
 ):
     """Test successful document processing."""
+
+    # Setup config manager mock
+    mock_config_manager = Mock()
+    mock_get_config_manager.return_value = mock_config_manager
+
+    def config_side_effect_1(key, default=None):
+        config_map = {
+            "ocr_backend": "textract",
+            "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect_1
 
     # Setup mocks
     mock_document_class.return_value = Mock()
@@ -131,9 +154,9 @@ def test_lambda_handler_success(
 
 
 @patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table", "AWS_REGION": "us-east-1"})
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_ocr_failure(
     mock_document_class, mock_ocr_service_class, mock_update_item, valid_event, lambda_context
 ):
@@ -160,7 +183,7 @@ def test_lambda_handler_ocr_failure(
 
 
 @patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table", "AWS_REGION": "us-east-1"})
-@patch("index.update_item")
+@patch("index_process_document.update_item")
 def test_lambda_handler_missing_required_field(mock_update_item, lambda_context):
     """Test handling of missing required event fields."""
 
@@ -181,11 +204,17 @@ def test_lambda_handler_missing_required_field(mock_update_item, lambda_context)
 
 
 @patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table", "AWS_REGION": "us-east-1"})
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document._get_config_manager")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_with_bedrock_backend(
-    mock_document_class, mock_ocr_service_class, _mock_update_item, lambda_context, mock_document
+    mock_document_class,
+    mock_ocr_service_class,
+    _mock_update_item,
+    mock_get_config_manager,
+    lambda_context,
+    mock_document,
 ):
     """Test Lambda with Bedrock OCR backend."""
 
@@ -197,6 +226,19 @@ def test_lambda_handler_with_bedrock_backend(
         "ocr_backend": "bedrock",
         "bedrock_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     }
+
+    # Setup config manager mock
+    mock_config_manager = Mock()
+    mock_get_config_manager.return_value = mock_config_manager
+
+    def config_side_effect_2(key, default=None):
+        config_map = {
+            "ocr_backend": "bedrock",
+            "bedrock_ocr_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        }
+        return config_map.get(key, default)
+
+    mock_config_manager.get_parameter.side_effect = config_side_effect_2
 
     # Setup mocks
     mock_document_class.return_value = Mock()
@@ -218,9 +260,9 @@ def test_lambda_handler_with_bedrock_backend(
 
 
 @patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table", "AWS_REGION": "us-east-1"})
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_page_text_truncation(
     mock_document_class, mock_ocr_service_class, _mock_update_item, valid_event, lambda_context
 ):
@@ -263,21 +305,24 @@ def test_lambda_handler_page_text_truncation(
         "CONFIGURATION_TABLE_NAME": "test-config-table",
     },
 )
-@patch("index.config_manager")
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document._get_config_manager")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_uses_runtime_config(
     mock_document_class,
     mock_ocr_service_class,
     _mock_update_item,
-    mock_config_manager,
+    mock_get_config_manager,
     lambda_context,
     mock_document,
 ):
     """Test that handler reads OCR configuration from ConfigurationManager."""
 
     # Setup config manager mock
+    mock_config_manager = Mock()
+    mock_get_config_manager.return_value = mock_config_manager
+
     def config_side_effect(key, default=None):
         config_map = {
             "ocr_backend": "bedrock",
@@ -330,21 +375,24 @@ def test_lambda_handler_uses_runtime_config(
         "CONFIGURATION_TABLE_NAME": "test-config-table",
     },
 )
-@patch("index.config_manager")
-@patch("index.update_item")
-@patch("index.OcrService")
-@patch("index.Document")
+@patch("index_process_document._get_config_manager")
+@patch("index_process_document.update_item")
+@patch("index_process_document.OcrService")
+@patch("index_process_document.Document")
 def test_lambda_handler_uses_textract_from_config(
     mock_document_class,
     mock_ocr_service_class,
     _mock_update_item,
-    mock_config_manager,
+    mock_get_config_manager,
     lambda_context,
     mock_document,
 ):
     """Test that handler correctly uses textract backend from ConfigurationManager."""
 
     # Setup config manager mock - return textract
+    mock_config_manager = Mock()
+    mock_get_config_manager.return_value = mock_config_manager
+
     def config_side_effect(key, default=None):
         config_map = {
             "ocr_backend": "textract",

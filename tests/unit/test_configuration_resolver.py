@@ -1,5 +1,6 @@
 """Unit tests for ConfigurationResolver Lambda"""
 
+import importlib.util
 import json
 import os
 import sys
@@ -18,13 +19,14 @@ os.environ["STATE_MACHINE_ARN"] = (
 )
 os.environ["LOG_LEVEL"] = "INFO"
 
-# Mock boto3 BEFORE importing the handler module to prevent AWS client initialization
-sys.path.insert(
-    0, str(Path(__file__).parent.parent.parent / "src" / "lambda" / "appsync_resolvers")
-)
-
+# Use importlib to load the Lambda function with a unique module name
+# This avoids sys.modules['index'] caching issues when multiple tests load different index.py files
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "configuration_resolver"
 with patch("boto3.client"), patch("boto3.resource"):
-    import index
+    spec = importlib.util.spec_from_file_location("index_config_resolver", lambda_dir / "index.py")
+    index = importlib.util.module_from_spec(spec)
+    sys.modules["index_config_resolver"] = index
+    spec.loader.exec_module(index)
 
 # Fixtures
 
@@ -69,14 +71,22 @@ def mock_dynamodb(mock_configuration_table, mock_tracking_table):
 
         # Reload the module to pick up mocked boto3
         import importlib
+        import importlib.util
 
-        import index
-
-        importlib.reload(index)
+        # Re-execute the module spec to reload it with mocked boto3
+        lambda_dir = (
+            Path(__file__).parent.parent.parent / "src" / "lambda" / "configuration_resolver"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "index_config_resolver_reloaded", lambda_dir / "index.py"
+        )
+        index_config_resolver_reloaded = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(index_config_resolver_reloaded)
 
         yield {
             "configuration_table": mock_configuration_table,
             "tracking_table": mock_tracking_table,
+            "index": index_config_resolver_reloaded,
         }
 
 
@@ -115,6 +125,7 @@ def test_lambda_handler_get_configuration(
 ):
     """Test lambda_handler routes getConfiguration correctly."""
     mock_table = mock_dynamodb["configuration_table"]
+    index_module = mock_dynamodb["index"]
 
     def get_item_side_effect(Key):
         config_type = Key["Configuration"]
@@ -130,7 +141,7 @@ def test_lambda_handler_get_configuration(
 
     event = {"info": {"fieldName": "getConfiguration"}, "arguments": {}}
 
-    result = index.lambda_handler(event, {})
+    result = index_module.lambda_handler(event, {})
 
     assert "Schema" in result
     assert "Default" in result
@@ -140,30 +151,32 @@ def test_lambda_handler_get_configuration(
 def test_lambda_handler_update_configuration(mock_dynamodb):
     """Test lambda_handler routes updateConfiguration correctly."""
     mock_table = mock_dynamodb["configuration_table"]
+    index_module = mock_dynamodb["index"]
 
     event = {
         "info": {"fieldName": "updateConfiguration"},
         "arguments": {"customConfig": json.dumps({"ocr_backend": "bedrock"})},
     }
 
-    result = index.lambda_handler(event, {})
+    result = index_module.lambda_handler(event, {})
 
     assert result is True
     mock_table.put_item.assert_called_once()
 
 
-def test_lambda_handler_unsupported_operation(_mock_dynamodb):
+def test_lambda_handler_unsupported_operation(mock_dynamodb):
     """Test lambda_handler raises error for unsupported operation."""
+    index_module = mock_dynamodb["index"]
     event = {"info": {"fieldName": "unknownOperation"}, "arguments": {}}
 
     with pytest.raises(ValueError, match="Unsupported operation"):
-        index.lambda_handler(event, {})
+        index_module.lambda_handler(event, {})
 
 
 # Test: handle_get_configuration
 
 
-@patch("index.get_configuration_item")
+@patch("index_config_resolver.get_configuration_item")
 def test_handle_get_configuration_success(
     mock_get_item, sample_schema, sample_default, sample_custom
 ):
@@ -196,7 +209,7 @@ def test_handle_get_configuration_success(
     assert "properties" in schema
 
 
-@patch("index.get_configuration_item")
+@patch("index_config_resolver.get_configuration_item")
 def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sample_default):
     """Test handle_get_configuration when Custom config is empty."""
 
@@ -220,7 +233,7 @@ def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sam
 # Test: handle_update_configuration
 
 
-@patch("index.configuration_table")
+@patch("index_config_resolver.configuration_table")
 def test_handle_update_configuration_with_json_string(mock_table):
     """Test updating configuration with JSON string."""
     custom_config = json.dumps(
@@ -236,7 +249,7 @@ def test_handle_update_configuration_with_json_string(mock_table):
     assert call_args["Item"]["ocr_backend"] == "bedrock"
 
 
-@patch("index.configuration_table")
+@patch("index_config_resolver.configuration_table")
 def test_handle_update_configuration_with_dict(mock_table):
     """Test updating configuration with dictionary."""
     custom_config = {"ocr_backend": "bedrock"}
@@ -256,7 +269,7 @@ def test_handle_update_configuration_invalid_json():
 # Test: handle_get_document_count
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_handle_get_document_count_success(mock_table):
     """Test getting document count."""
     mock_table.scan.return_value = {"Count": 42}
@@ -267,7 +280,7 @@ def test_handle_get_document_count_success(mock_table):
     mock_table.scan.assert_called_once()
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_handle_get_document_count_zero(mock_table):
     """Test getting document count when no documents exist."""
     mock_table.scan.return_value = {"Count": 0}
@@ -277,7 +290,7 @@ def test_handle_get_document_count_zero(mock_table):
     assert result == 0
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_handle_get_document_count_dynamodb_error(mock_table):
     """Test getting document count handles DynamoDB errors gracefully."""
     mock_table.scan.side_effect = ClientError(
@@ -313,7 +326,7 @@ def test_remove_partition_key_none():
 # Test: query_completed_documents
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_query_completed_documents_using_gsi(mock_table):
     """Test querying COMPLETED documents using StatusIndex GSI."""
     mock_table.query.return_value = {
@@ -341,7 +354,7 @@ def test_query_completed_documents_using_gsi(mock_table):
     mock_table.query.assert_called_once()
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_query_completed_documents_with_pagination(mock_table):
     """Test querying COMPLETED documents with pagination."""
     # First call returns data with pagination token
@@ -375,7 +388,7 @@ def test_query_completed_documents_with_pagination(mock_table):
     assert mock_table.query.call_count == 2
 
 
-@patch("index.tracking_table")
+@patch("index_config_resolver.tracking_table")
 def test_query_completed_documents_fallback_to_scan(mock_table):
     """Test fallback to scan when GSI is not available."""
     # First call (query) fails, fallback to scan
@@ -404,8 +417,8 @@ def test_query_completed_documents_fallback_to_scan(mock_table):
 
 
 @patch("boto3.client")
-@patch("index.query_completed_documents")
-@patch("index.configuration_table")
+@patch("index_config_resolver.query_completed_documents")
+@patch("index_config_resolver.configuration_table")
 def test_handle_re_embed_all_documents_success(
     mock_config_table, mock_query_docs, mock_boto_client
 ):
@@ -433,8 +446,8 @@ def test_handle_re_embed_all_documents_success(
     assert mock_sfn_client.start_execution.call_count == 2
 
 
-@patch("index.query_completed_documents")
-@patch("index.configuration_table")
+@patch("index_config_resolver.query_completed_documents")
+@patch("index_config_resolver.configuration_table")
 def test_handle_re_embed_all_documents_no_documents(mock_config_table, mock_query_docs):
     """Test re-embedding when no documents exist."""
     mock_query_docs.return_value = []
@@ -451,8 +464,8 @@ def test_handle_re_embed_all_documents_no_documents(mock_config_table, mock_quer
 
 
 @patch("boto3.client")
-@patch("index.query_completed_documents")
-@patch("index.configuration_table")
+@patch("index_config_resolver.query_completed_documents")
+@patch("index_config_resolver.configuration_table")
 def test_handle_re_embed_all_documents_enforces_limit(
     _mock_config_table, mock_query_docs, mock_boto_client
 ):
@@ -477,7 +490,7 @@ def test_handle_re_embed_all_documents_enforces_limit(
 # Test: handle_get_re_embed_job_status
 
 
-@patch("index.configuration_table")
+@patch("index_config_resolver.configuration_table")
 def test_handle_get_re_embed_job_status_success(mock_table):
     """Test getting re-embed job status."""
     job_id = "test-job-123"
@@ -509,7 +522,7 @@ def test_handle_get_re_embed_job_status_success(mock_table):
     assert result["completionTime"] is None
 
 
-@patch("index.configuration_table")
+@patch("index_config_resolver.configuration_table")
 def test_handle_get_re_embed_job_status_no_job(mock_table):
     """Test getting re-embed job status when no job exists."""
     mock_table.get_item.return_value = {}
@@ -519,7 +532,7 @@ def test_handle_get_re_embed_job_status_no_job(mock_table):
     assert result is None
 
 
-@patch("index.configuration_table")
+@patch("index_config_resolver.configuration_table")
 def test_handle_get_re_embed_job_status_completed(mock_table):
     """Test getting completed re-embed job status."""
     job_id = "test-job-456"

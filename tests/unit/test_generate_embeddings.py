@@ -2,15 +2,18 @@
 Unit tests for generate_embeddings Lambda function.
 """
 
+import importlib.util
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-# Add Lambda function to path
-lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "generate_embeddings"
-sys.path.insert(0, str(lambda_dir))
+# Set required environment variables BEFORE importing the module
+os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
+os.environ["TRACKING_TABLE"] = "test-tracking-table"
+os.environ["REGION"] = "us-east-1"
 
 # Mock the ragstack_common imports before importing index
 mock_bedrock = MagicMock()
@@ -28,8 +31,13 @@ mock_models.Status = MagicMock()
 mock_models.Status.EMBEDDING_COMPLETE = MagicMock(value="embedding_complete")
 mock_models.Status.FAILED = MagicMock(value="failed")
 
-# Now import the Lambda function
-import index
+# Use importlib to load the Lambda function with a unique module name
+# This avoids sys.modules['index'] caching issues when multiple tests load different index.py files
+lambda_dir = Path(__file__).parent.parent.parent / "src" / "lambda" / "generate_embeddings"
+spec = importlib.util.spec_from_file_location("index_gen_embeddings", lambda_dir / "index.py")
+index = importlib.util.module_from_spec(spec)
+sys.modules["index_gen_embeddings"] = index
+spec.loader.exec_module(index)
 
 
 @pytest.fixture
@@ -67,11 +75,11 @@ def lambda_context():
         "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
     },
 )
-@patch("index.write_s3_json")
-@patch("index.read_s3_binary")
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.write_s3_json")
+@patch("index_gen_embeddings.read_s3_binary")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_success(
     mock_bedrock_class,
     mock_update_item,
@@ -127,10 +135,10 @@ def test_lambda_handler_success(
     "os.environ",
     {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
 )
-@patch("index.write_s3_json")
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.write_s3_json")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_text_only(
     mock_bedrock_class, mock_update_item, mock_read_text, mock_write_json, lambda_context
 ):
@@ -169,9 +177,9 @@ def test_lambda_handler_text_only(
     "os.environ",
     {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
 )
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_text_truncation(
     mock_bedrock_class, mock_update_item, mock_read_text, lambda_context
 ):
@@ -204,9 +212,9 @@ def test_lambda_handler_text_truncation(
     "os.environ",
     {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
 )
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_bedrock_failure(
     mock_bedrock_class, mock_update_item, mock_read_text, valid_event, lambda_context
 ):
@@ -239,11 +247,11 @@ def test_lambda_handler_bedrock_failure(
         "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
     },
 )
-@patch("index.write_s3_json")
-@patch("index.read_s3_binary")
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.write_s3_json")
+@patch("index_gen_embeddings.read_s3_binary")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_skip_pages_without_images(
     mock_bedrock_class,
     mock_update_item,
@@ -303,12 +311,12 @@ def test_lambda_handler_missing_required_fields(lambda_context):
     "os.environ",
     {"TRACKING_TABLE": "test-tracking-table", "CONFIGURATION_TABLE_NAME": "test-config-table"},
 )
-@patch("index.config_manager")
-@patch("index.write_s3_json")
-@patch("index.read_s3_binary")
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.config_manager")
+@patch("index_gen_embeddings.write_s3_json")
+@patch("index_gen_embeddings.read_s3_binary")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_uses_runtime_config(
     mock_bedrock_class,
     mock_update_item,
@@ -367,11 +375,11 @@ def test_lambda_handler_uses_runtime_config(
     "os.environ",
     {"TRACKING_TABLE": "test-tracking-table", "CONFIGURATION_TABLE_NAME": "test-config-table"},
 )
-@patch("index.config_manager")
-@patch("index.write_s3_json")
-@patch("index.read_s3_text")
-@patch("index.update_item")
-@patch("index.BedrockClient")
+@patch("index_gen_embeddings.config_manager")
+@patch("index_gen_embeddings.write_s3_json")
+@patch("index_gen_embeddings.read_s3_text")
+@patch("index_gen_embeddings.update_item")
+@patch("index_gen_embeddings.BedrockClient")
 def test_lambda_handler_uses_default_models_from_config(
     mock_bedrock_class,
     mock_update_item,

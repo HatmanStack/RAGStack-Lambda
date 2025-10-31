@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.9, pytest-8.4.2, pluggy-1.6.0 -- /root/RAGStack-Lambda/.worktrees/fix-tests/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /root/RAGStack-Lambda/.worktrees/fix-tests
+configfile: pytest.ini
+plugins: cov-5.0.0
+collecting ... ERROR: file or directory not found: tests/unit/
+
+collected 0 items
+
+============================ no tests ran in 0.02s =============================
