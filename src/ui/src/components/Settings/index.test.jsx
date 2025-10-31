@@ -419,20 +419,23 @@ describe('Settings Component', () => {
         completionTime: null
       };
 
-      mockClient.graphql
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          }
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: inProgressJob
-        }))
-        .mockResolvedValue(mockGraphqlResponse({
-          getReEmbedJobStatus: inProgressJob
-        }));
+      mockClient.graphql.mockImplementation((request) => {
+        if (request.query.includes('getConfiguration')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getConfiguration: {
+              Schema: JSON.stringify(sampleSchema),
+              Default: JSON.stringify(sampleDefault),
+              Custom: JSON.stringify(sampleCustom)
+            }
+          }));
+        }
+        if (request.query.includes('getReEmbedJobStatus')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getReEmbedJobStatus: inProgressJob
+          }));
+        }
+        return Promise.resolve(mockGraphqlResponse({}));
+      });
 
       renderSettings();
 
@@ -490,23 +493,27 @@ describe('Settings Component', () => {
         processedDocuments: 60
       };
 
-      mockClient.graphql
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          }
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: inProgressJob
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: updatedJob
-        }))
-        .mockResolvedValue(mockGraphqlResponse({
-          getReEmbedJobStatus: updatedJob
-        }));
+      let jobStatusCallCount = 0;
+      mockClient.graphql.mockImplementation((request) => {
+        if (request.query.includes('getConfiguration')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getConfiguration: {
+              Schema: JSON.stringify(sampleSchema),
+              Default: JSON.stringify(sampleDefault),
+              Custom: JSON.stringify(sampleCustom)
+            }
+          }));
+        }
+        if (request.query.includes('getReEmbedJobStatus')) {
+          jobStatusCallCount++;
+          // First call returns initial job, subsequent calls return updated job
+          const job = jobStatusCallCount === 1 ? inProgressJob : updatedJob;
+          return Promise.resolve(mockGraphqlResponse({
+            getReEmbedJobStatus: job
+          }));
+        }
+        return Promise.resolve(mockGraphqlResponse({}));
+      });
 
       renderSettings();
 
@@ -542,23 +549,27 @@ describe('Settings Component', () => {
         completionTime: '2025-10-28T10:05:00Z'
       };
 
-      mockClient.graphql
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          }
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: inProgressJob
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: completedJob
-        }))
-        .mockResolvedValue(mockGraphqlResponse({
-          getReEmbedJobStatus: completedJob
-        }));
+      let jobStatusCallCount = 0;
+      mockClient.graphql.mockImplementation((request) => {
+        if (request.query.includes('getConfiguration')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getConfiguration: {
+              Schema: JSON.stringify(sampleSchema),
+              Default: JSON.stringify(sampleDefault),
+              Custom: JSON.stringify(sampleCustom)
+            }
+          }));
+        }
+        if (request.query.includes('getReEmbedJobStatus')) {
+          jobStatusCallCount++;
+          // First call returns in-progress, subsequent calls return completed
+          const job = jobStatusCallCount === 1 ? inProgressJob : completedJob;
+          return Promise.resolve(mockGraphqlResponse({
+            getReEmbedJobStatus: job
+          }));
+        }
+        return Promise.resolve(mockGraphqlResponse({}));
+      });
 
       renderSettings();
 
@@ -734,20 +745,23 @@ describe('Settings Component', () => {
         completionTime: null
       };
 
-      mockClient.graphql
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getConfiguration: {
-            Schema: JSON.stringify(sampleSchema),
-            Default: JSON.stringify(sampleDefault),
-            Custom: JSON.stringify(sampleCustom)
-          }
-        }))
-        .mockResolvedValueOnce(mockGraphqlResponse({
-          getReEmbedJobStatus: jobWith33Percent
-        }))
-        .mockResolvedValue(mockGraphqlResponse({
-          getReEmbedJobStatus: jobWith33Percent
-        }));
+      mockClient.graphql.mockImplementation((request) => {
+        if (request.query.includes('getConfiguration')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getConfiguration: {
+              Schema: JSON.stringify(sampleSchema),
+              Default: JSON.stringify(sampleDefault),
+              Custom: JSON.stringify(sampleCustom)
+            }
+          }));
+        }
+        if (request.query.includes('getReEmbedJobStatus')) {
+          return Promise.resolve(mockGraphqlResponse({
+            getReEmbedJobStatus: jobWith33Percent
+          }));
+        }
+        return Promise.resolve(mockGraphqlResponse({}));
+      });
 
       renderSettings();
 
