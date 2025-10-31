@@ -347,4 +347,97 @@ Our `triggerAllIntervals()` utility wraps callbacks in `act()`, which should han
 
 ---
 
+## Phase 3 Review Fix Attempt (2025-10-31)
+
+**Status**: 🔧 In Progress - Fixing review findings
+
+**Review Findings**:
+After Phase 3 implementation review, found:
+1. ❌ **Missing validation tests** (spec violation) - Phase-3.md Task 3.1 Step 5 requires 3 validation tests for setInterval mock utility
+2. ❌ **Mock sequencing bug** in 4 failing tests - Missing intermediate `.mockResolvedValueOnce()` call
+3. ⚠️ **Unnecessary cleanup code** - `vi.useRealTimers()` not needed
+
+**Current Fix Approach**:
+
+### Fix #1: Add Missing Validation Tests ✅
+**Location**: `src/ui/src/components/Settings/index.test.jsx` line ~127
+
+Added `describe('setInterval mock utility')` block with 3 tests:
+1. `should track intervals correctly` - Verifies interval tracking and clearInterval
+2. `should trigger interval callbacks` - Verifies manual callback triggering works
+3. `should trigger all intervals` - Verifies batch triggering works
+
+**Why This Matters**: These tests validate the custom mock infrastructure before using it in complex component tests. Without them, we can't be confident the mock utility actually works.
+
+### Fix #2: Fix Mock Sequencing in 4 Failing Tests ✅
+**Problem**: Component makes 2+ GraphQL calls but mocks only had responses for 1-2 calls.
+
+**Pattern Found**:
+```javascript
+// ❌ WRONG (causes "Cannot read properties of undefined (reading 'Schema')")
+mockClient.graphql
+  .mockResolvedValueOnce(getConfiguration)  // 1st call ✅
+  .mockResolvedValue(getReEmbedJobStatus);   // 2nd+ calls ❌ (wrong data)
+
+// Component actually calls:
+// 1. getConfiguration (gets config ✅)
+// 2. getReEmbedJobStatus (gets job status ✅)
+// 3. getConfiguration (on re-render) → gets job status ❌ → crashes
+```
+
+**Solution Applied**:
+```javascript
+// ✅ CORRECT
+mockClient.graphql
+  .mockResolvedValueOnce(getConfiguration)     // 1st call
+  .mockResolvedValueOnce(getReEmbedJobStatus)  // 2nd call
+  .mockResolvedValueOnce(getReEmbedJobStatus)  // 3rd call (re-render)
+  .mockResolvedValue(getReEmbedJobStatus);     // 4th+ calls (fallback)
+```
+
+**Tests Fixed**:
+1. Line ~455: `displays progress banner when re-embedding job is in progress`
+2. Line ~521: `polls job status every 5 seconds when job is in progress`
+3. Line ~568: `stops polling when job completes`
+4. Line ~764: `calculates progress percentage correctly`
+
+### Fix #3: Remove Unnecessary Cleanup ✅
+**Location**: `src/ui/src/components/Settings/index.test.jsx` line ~420
+
+**Before**:
+```javascript
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();  // ❌ Not needed - we never use fake timers
+});
+```
+
+**After**:
+```javascript
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+```
+
+**Why**: We use a custom setInterval mock (not Vitest fake timers), so calling `vi.useRealTimers()` is unnecessary and confusing.
+
+---
+
+## Expected Outcome
+
+**If fixes work**:
+- All 25 frontend tests should pass (100%)
+- Validation tests prove mock utility works
+- No more GraphQL mock exhaustion errors
+
+**If tests still fail**:
+- We've ruled out mock sequencing issues
+- We've added proper test infrastructure validation
+- Remaining issues would be deeper component/React timing problems
+- Would need to investigate component source code for IN_PROGRESS rendering logic
+
+**Next Action**: Run tests to verify fixes, document results, commit changes.
+
+---
+
 **Next Step**: Start with Phase 1 backend fixes - they're straightforward and will have immediate impact.
