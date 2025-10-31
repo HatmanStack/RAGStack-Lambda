@@ -314,22 +314,29 @@ def test_lambda_handler_missing_content_fields(mock_boto3_client, mock_config_ma
     assert result["results"][0]["score"] == 0.5
 
 
-@patch.dict("os.environ", {"KNOWLEDGE_BASE_ID": "test-kb-123"})
+@patch.dict("os.environ", {
+    "KNOWLEDGE_BASE_ID": "test-kb-123",
+    "CONFIGURATION_TABLE_NAME": "test-config-table"
+})
+@patch("index.config_manager")
 @patch("index.boto3.client")
 def test_lambda_handler_result_count_logged(
-    mock_boto3_client, valid_event, lambda_context, mock_bedrock_response, caplog
+    mock_boto3_client, mock_config_manager, valid_event, lambda_context, mock_bedrock_response, caplog
 ):
     """Test that result count is logged."""
 
+    # Setup config mock
+    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+
     mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve.return_value = mock_bedrock_response
+    mock_bedrock_agent.retrieve_and_generate.return_value = mock_bedrock_response
 
     # Execute
     with caplog.at_level("INFO"):
         index.lambda_handler(valid_event, lambda_context)
 
     # Verify logging
-    assert "Found 2 results" in caplog.text
+    assert "Generated response with 2 source documents" in caplog.text
 
 
 @patch.dict(
