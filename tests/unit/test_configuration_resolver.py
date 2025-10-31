@@ -20,7 +20,7 @@ os.environ["LOG_LEVEL"] = "INFO"
 
 # Mock boto3 BEFORE importing the handler module to prevent AWS client initialization
 sys.path.insert(
-    0, str(Path(__file__).parent.parent.parent / "src" / "lambda" / "appsync_resolvers")
+    0, str(Path(__file__).parent.parent.parent / "src" / "lambda" / "configuration_resolver")
 )
 
 with patch("boto3.client"), patch("boto3.resource"):
@@ -152,7 +152,7 @@ def test_lambda_handler_update_configuration(mock_dynamodb):
     mock_table.put_item.assert_called_once()
 
 
-def test_lambda_handler_unsupported_operation(_mock_dynamodb):
+def test_lambda_handler_unsupported_operation(mock_dynamodb):
     """Test lambda_handler raises error for unsupported operation."""
     event = {"info": {"fieldName": "unknownOperation"}, "arguments": {}}
 

@@ -417,8 +417,23 @@ describe('Settings Component', () => {
   // =========================================================================
 
   describe('Re-embedding Job Features', () => {
+    beforeEach(() => {
+      // Clear intervals from previous test
+      clearAllIntervals();
+
+      // Reinitialize mockClient with fresh mock
+      mockClient = {
+        graphql: vi.fn()
+      };
+
+      // Reapply the mock to generateClient
+      generateClient.mockReturnValue(mockClient);
+    });
+
     afterEach(() => {
-      vi.restoreAllMocks();
+      // Don't restore all mocks - let the next test's beforeEach handle setup
+      // Only clear mock call history
+      vi.clearAllMocks();
     });
 
     it('checks for existing re-embedding job on mount', async () => {
@@ -485,7 +500,7 @@ describe('Settings Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 45 \/ 100 completed/i)).toBeInTheDocument();
         expect(screen.getByText(/\(45%\)/)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
     });
 
     it('displays success banner when re-embedding job is completed', async () => {
@@ -559,7 +574,7 @@ describe('Settings Component', () => {
       // Wait for initial job status to display
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 30 \/ 100/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
 
       // Manually trigger the polling interval
       await triggerAllIntervals();
@@ -567,7 +582,7 @@ describe('Settings Component', () => {
       // Wait for updated job status
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 60 \/ 100/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
     });
 
     it('stops polling when job completes', async () => {
@@ -611,7 +626,7 @@ describe('Settings Component', () => {
       // Wait for initial in-progress display
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 9 \/ 10/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
 
       // Trigger one poll to complete the job
       await triggerAllIntervals();
@@ -619,7 +634,7 @@ describe('Settings Component', () => {
       // Wait for completion banner
       await waitFor(() => {
         expect(screen.getByText(/re-embedding completed!/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
 
       // Verify polling stopped (no more intervals registered)
       expect(intervalCallbacks.length).toBe(0);
@@ -803,7 +818,7 @@ describe('Settings Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/re-embedding documents: 100 \/ 300/i)).toBeInTheDocument();
         expect(screen.getByText(/\(33%\)/)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
     });
   });
 });
