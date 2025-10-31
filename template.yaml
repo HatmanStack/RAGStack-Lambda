@@ -1609,7 +1609,8 @@ Resources:
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'ragstack-${ProjectName}-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
