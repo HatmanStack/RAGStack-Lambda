@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Settings } from './index';
@@ -12,6 +12,42 @@ vi.mock('aws-amplify/api', () => ({
 const mockGraphqlResponse = (data) => ({
   data
 });
+
+// Custom setInterval mock for controlling polling behavior
+let intervalCallbacks = [];
+let intervalIds = 0;
+
+const mockSetInterval = (callback, delay) => {
+  const id = ++intervalIds;
+  intervalCallbacks.push({ id, callback, delay });
+  return id;
+};
+
+const mockClearInterval = (id) => {
+  intervalCallbacks = intervalCallbacks.filter(cb => cb.id !== id);
+};
+
+const triggerInterval = async (id) => {
+  const interval = intervalCallbacks.find(cb => cb.id === id);
+  if (interval) {
+    await act(async () => {
+      interval.callback();
+    });
+  }
+};
+
+const triggerAllIntervals = async () => {
+  const callbacks = [...intervalCallbacks];
+  for (const interval of callbacks) {
+    await act(async () => {
+      interval.callback();
+    });
+  }
+};
+
+const clearAllIntervals = () => {
+  intervalCallbacks = [];
+};
 
 const sampleSchema = {
   properties: {
@@ -57,8 +93,23 @@ const sampleCustom = {};
 
 describe('Settings Component', () => {
   let mockClient;
+  let originalSetInterval;
+  let originalClearInterval;
+
+  beforeAll(() => {
+    originalSetInterval = global.setInterval;
+    originalClearInterval = global.clearInterval;
+    global.setInterval = mockSetInterval;
+    global.clearInterval = mockClearInterval;
+  });
+
+  afterAll(() => {
+    global.setInterval = originalSetInterval;
+    global.clearInterval = originalClearInterval;
+  });
 
   beforeEach(() => {
+    clearAllIntervals(); // Reset intervals before each test
     mockClient = {
       graphql: vi.fn()
     };
