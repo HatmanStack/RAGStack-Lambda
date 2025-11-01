@@ -17,7 +17,7 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-bedrock_agent = boto3.client("bedrock")
+bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
 
 
