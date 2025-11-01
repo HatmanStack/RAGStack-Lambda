@@ -954,15 +954,6 @@ Resources:
                 - bedrock:DeleteDataSource
                 - bedrock:GetDataSource
                 - bedrock:ListDataSources
-                - bedrock-agent:CreateKnowledgeBase
-                - bedrock-agent:DeleteKnowledgeBase
-                - bedrock-agent:GetKnowledgeBase
-                - bedrock-agent:UpdateKnowledgeBase
-                - bedrock-agent:ListKnowledgeBases
-                - bedrock-agent:CreateDataSource
-                - bedrock-agent:DeleteDataSource
-                - bedrock-agent:GetDataSource
-                - bedrock-agent:ListDataSources
               Resource: '*'
             - Effect: Allow
               Action:
