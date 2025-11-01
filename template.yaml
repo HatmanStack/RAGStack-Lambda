@@ -1196,6 +1196,12 @@ Resources:
                 - events:PutTargets
                 - events:RemoveTargets
               Resource: !Sub 'arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:AddPermission
+                - lambda:RemovePermission
+              Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-ui-builder-*'
 
   CodeBuildRun:
     Type: Custom::CodeBuildRun
