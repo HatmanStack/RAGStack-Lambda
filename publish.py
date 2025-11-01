@@ -420,9 +420,9 @@ def cleanup_orphaned_resources(project_name, region):
     """
     Clean up orphaned AWS resources from failed deployments.
 
-    When a CloudFormation stack fails during creation, some resources may be created
-    but not tracked by CloudFormation. This function identifies and deletes such orphaned
-    resources so a fresh deployment can proceed.
+    Since CloudFormation resources now use deployment-unique suffixes, this function
+    only needs to handle CloudFront distributions that may be stuck in enabled state
+    from a previous deployment.
 
     Args:
         project_name: Project name for resource naming
@@ -431,108 +431,7 @@ def cleanup_orphaned_resources(project_name, region):
     Raises:
         IOError: If cleanup fails
     """
-    log_info("Checking for orphaned resources from failed deployments...")
-
-    # Clean up DynamoDB tables
-    dynamodb_client = boto3.client('dynamodb', region_name=region)
-    table_names = [
-        f'RAGStack-{project_name}-Tracking',
-        f'RAGStack-{project_name}-Metering',
-        f'RAGStack-{project_name}-Configuration',
-    ]
-
-    for table_name in table_names:
-        try:
-            dynamodb_client.describe_table(TableName=table_name)
-            # Table exists, delete it
-            log_warning(f"Found orphaned DynamoDB table: {table_name}")
-            log_info(f"Deleting table: {table_name}")
-            dynamodb_client.delete_table(TableName=table_name)
-
-            # Wait for deletion
-            waiter = dynamodb_client.get_waiter('table_not_exists')
-            waiter.wait(TableName=table_name)
-            log_success(f"Deleted table: {table_name}")
-
-        except dynamodb_client.exceptions.ResourceNotFoundException:
-            # Table doesn't exist, that's fine
-            pass
-        except Exception as e:
-            log_warning(f"Failed to delete orphaned table {table_name}: {e}")
-            # Continue with other tables instead of failing completely
-
-    # Clean up S3 buckets (empty them first, then delete)
-    s3_client = boto3.client('s3', region_name=region)
-    sts_client = boto3.client('sts', region_name=region)
-
-    try:
-        account_id = sts_client.get_caller_identity()['Account']
-    except ClientError as e:
-        log_warning(f"Could not get account ID for S3 cleanup: {e}")
-        return
-
-    bucket_names = [
-        f'ragstack-{project_name}-input-{account_id}',
-        f'ragstack-{project_name}-output-{account_id}',
-        f'ragstack-{project_name}-vectors-{account_id}',
-        f'ragstack-{project_name}-working-{account_id}',
-        f'ragstack-{project_name}-ui-{account_id}',
-        f'ragstack-{project_name}-cloudtrail-{account_id}',  # CloudTrail bucket has DeletionPolicy:Retain
-    ]
-
-    for bucket_name in bucket_names:
-        try:
-            # Check if bucket exists
-            s3_client.head_bucket(Bucket=bucket_name)
-
-            # Bucket exists, empty it first
-            log_warning(f"Found orphaned S3 bucket: {bucket_name}")
-            log_info(f"Emptying bucket: {bucket_name}")
-
-            # Delete all objects
-            paginator = s3_client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=bucket_name)
-
-            for page in pages:
-                if 'Contents' in page:
-                    objects = [{'Key': obj['Key']} for obj in page['Contents']]
-                    if objects:
-                        s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': objects})
-
-            # Delete all object versions if versioning is enabled
-            version_paginator = s3_client.get_paginator('list_object_versions')
-            version_pages = version_paginator.paginate(Bucket=bucket_name)
-
-            for page in version_pages:
-                objects_to_delete = []
-
-                if 'Versions' in page:
-                    objects_to_delete.extend([
-                        {'Key': obj['Key'], 'VersionId': obj['VersionId']}
-                        for obj in page['Versions']
-                    ])
-
-                if 'DeleteMarkers' in page:
-                    objects_to_delete.extend([
-                        {'Key': obj['Key'], 'VersionId': obj['VersionId']}
-                        for obj in page['DeleteMarkers']
-                    ])
-
-                if objects_to_delete:
-                    s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': objects_to_delete})
-
-            # Now delete the bucket
-            log_info(f"Deleting bucket: {bucket_name}")
-            s3_client.delete_bucket(Bucket=bucket_name)
-            log_success(f"Deleted bucket: {bucket_name}")
-
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == '404' or error_code == 'NoSuchBucket':
-                # Bucket doesn't exist, that's fine
-                pass
-            else:
-                log_warning(f"Failed to delete orphaned bucket {bucket_name}: {e}")
+    log_info("Checking for any stuck CloudFront distributions from previous deployments...")
 
     # Clean up CloudFront distributions (which can get stuck in DELETE_IN_PROGRESS)
     cloudfront_client = boto3.client('cloudfront')
@@ -541,10 +440,11 @@ def cleanup_orphaned_resources(project_name, region):
         # List all distributions
         paginator = cloudfront_client.get_paginator('list_distributions')
         for page in paginator.paginate():
-            if 'DistributionList' not in page or 'Items' not in page['DistributionList']:
+            if 'DistributionList' not in page or 'Items' not in page.get('DistributionList', {}):
                 continue
 
-            for distribution in page['DistributionList']:
+            items = page.get('DistributionList', {}).get('Items', [])
+            for distribution in items:
                 # Check if this distribution belongs to our project
                 comment = distribution.get('Comment', '')
                 if project_name in comment:
@@ -552,18 +452,22 @@ def cleanup_orphaned_resources(project_name, region):
                     is_enabled = distribution.get('Enabled', False)
 
                     if is_enabled:
-                        log_warning(f"Found CloudFront distribution {dist_id} for project {project_name}")
+                        log_warning(f"Found enabled CloudFront distribution {dist_id} for project {project_name}")
                         log_info(f"Disabling distribution: {dist_id}")
 
                         try:
                             # Get current distribution config
                             dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            config = dist_config['DistributionConfig']
-                            etag = dist_config['ETag']
+                            config = dist_config.get('DistributionConfig', {})
+                            etag = dist_config.get('ETag', '')
+
+                            if not config or not etag:
+                                log_warning(f"Could not get config for distribution {dist_id}")
+                                continue
 
                             # Disable the distribution
                             config['Enabled'] = False
-                            update_response = cloudfront_client.update_distribution(
+                            cloudfront_client.update_distribution(
                                 Id=dist_id,
                                 DistributionConfig=config,
                                 IfMatch=etag
@@ -573,12 +477,13 @@ def cleanup_orphaned_resources(project_name, region):
 
                             # Get fresh ETag after disabling
                             dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            etag = dist_config['ETag']
+                            etag = dist_config.get('ETag', '')
 
                             # Try to delete it
-                            log_info(f"Deleting distribution: {dist_id}")
-                            cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
-                            log_success(f"Deleted CloudFront distribution: {dist_id}")
+                            if etag:
+                                log_info(f"Deleting distribution: {dist_id}")
+                                cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
+                                log_success(f"Deleted CloudFront distribution: {dist_id}")
 
                         except Exception as e:
                             log_warning(f"Failed to delete CloudFront distribution {dist_id}: {e}")
@@ -590,46 +495,52 @@ def cleanup_orphaned_resources(project_name, region):
 
 def cleanup_stuck_cloudfront_distributions(project_name):
     """
-    Clean up any CloudFront distributions that are stuck in DELETE_IN_PROGRESS.
+    Clean up any CloudFront distributions that are stuck or enabled for the project.
 
     This is called before deployment to ensure a clean slate. Distributions that are
-    stuck typically need to be disabled and have their ETag refreshed before deletion.
+    enabled will be disabled, and disabled ones will be deleted.
 
     Args:
         project_name: Project name to match against distribution comments
     """
-    log_info("Checking for stuck CloudFront distributions...")
+    log_info("Checking for CloudFront distributions from previous deployments...")
     cloudfront_client = boto3.client('cloudfront')
 
     try:
         paginator = cloudfront_client.get_paginator('list_distributions')
         for page in paginator.paginate():
-            if 'DistributionList' not in page or 'Items' not in page['DistributionList']:
+            distribution_list = page.get('DistributionList', {})
+            if not distribution_list or 'Items' not in distribution_list:
                 continue
 
-            for distribution in page['DistributionList']:
+            for distribution in distribution_list.get('Items', []):
                 comment = distribution.get('Comment', '')
                 if project_name in comment:
                     dist_id = distribution['Id']
                     status = distribution.get('Status', '')
                     is_enabled = distribution.get('Enabled', False)
 
-                    log_warning(f"Found existing distribution {dist_id} (status: {status}, enabled: {is_enabled})")
+                    log_warning(f"Found distribution {dist_id} (status: {status}, enabled: {is_enabled})")
 
                     # If distribution is disabled, we can delete it
                     if not is_enabled:
                         try:
                             dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            etag = dist_config['ETag']
+                            config = dist_config.get('DistributionConfig', {})
+                            etag = dist_config.get('ETag', '')
+
+                            if not etag:
+                                log_warning(f"Could not get ETag for distribution {dist_id}")
+                                continue
 
                             log_info(f"Deleting disabled distribution: {dist_id}")
                             cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
-                            log_success(f"Deleted disabled CloudFront distribution: {dist_id}")
+                            log_success(f"Deleted CloudFront distribution: {dist_id}")
                         except ClientError as e:
                             error_code = e.response.get('Error', {}).get('Code', '')
-                            # If distribution is still being deleted, that's OK - wait
+                            # If distribution is still being deleted, that's OK - continue
                             if 'InvalidIfMatchVersion' in error_code or 'DistributionNotDisabled' in error_code:
-                                log_warning(f"Distribution {dist_id} is still propagating - will skip for now")
+                                log_warning(f"Distribution {dist_id} is still propagating - will retry later")
                             else:
                                 log_warning(f"Could not delete distribution {dist_id}: {e}")
                         except Exception as e:
@@ -638,8 +549,12 @@ def cleanup_stuck_cloudfront_distributions(project_name):
                     elif is_enabled:
                         try:
                             dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            config = dist_config['DistributionConfig']
-                            etag = dist_config['ETag']
+                            config = dist_config.get('DistributionConfig', {})
+                            etag = dist_config.get('ETag', '')
+
+                            if not config or not etag:
+                                log_warning(f"Could not get config for distribution {dist_id}")
+                                continue
 
                             config['Enabled'] = False
                             cloudfront_client.update_distribution(
@@ -647,7 +562,7 @@ def cleanup_stuck_cloudfront_distributions(project_name):
                                 DistributionConfig=config,
                                 IfMatch=etag
                             )
-                            log_warning(f"Disabled CloudFront distribution {dist_id} - will be cleaned up during stack deletion")
+                            log_warning(f"Disabled CloudFront distribution {dist_id}")
                         except Exception as e:
                             log_warning(f"Could not disable distribution {dist_id}: {e}")
 
