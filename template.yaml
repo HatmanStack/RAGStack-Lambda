@@ -92,7 +92,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-input-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-input-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -123,7 +123,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-output-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-output-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -161,7 +161,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-working-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-working-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -188,7 +188,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-vectors-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -354,7 +354,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-ui-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-ui-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -453,7 +453,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      TableName: !Sub 'RAGStack-${ProjectName}-Tracking'
+      TableName: !Sub '${ProjectName}-tracking-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -496,7 +496,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: RetainExceptOnCreate
     Properties:
-      TableName: !Sub 'RAGStack-${ProjectName}-Metering'
+      TableName: !Sub '${ProjectName}-metering-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -530,7 +530,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub 'RAGStack-${ProjectName}-Configuration'
+      TableName: !Sub '${ProjectName}-config-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -568,7 +568,7 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-ProcessDocument'
+      FunctionName: !Sub '${ProjectName}-process-${DeploymentSuffix}'
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
@@ -622,7 +622,7 @@ Resources:
   GenerateEmbeddingsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings'
+      FunctionName: !Sub '${ProjectName}-embed-${DeploymentSuffix}'
       CodeUri: src/lambda/generate_embeddings/
       Handler: index.lambda_handler
       Description: Generate text and image embeddings
@@ -668,7 +668,7 @@ Resources:
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-QueryKB'
+      FunctionName: !Sub '${ProjectName}-query-${DeploymentSuffix}'
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
@@ -708,7 +708,7 @@ Resources:
   ConfigurationResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-ConfigurationResolver'
+      FunctionName: !Sub '${ProjectName}-config-${DeploymentSuffix}'
       CodeUri: src/lambda/configuration_resolver/
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
@@ -926,7 +926,7 @@ Resources:
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-KBCustomResource'
+      FunctionName: !Sub '${ProjectName}-kb-init-${DeploymentSuffix}'
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
@@ -981,11 +981,11 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB-${DeploymentSuffix}'
+      KnowledgeBaseName: !Sub '${ProjectName}-kb-${DeploymentSuffix}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
-      VectorBucket: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
+      VectorBucket: !Ref VectorBucket
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub 'ragstack-${ProjectName}-vector-index-${DeploymentSuffix}'
+      IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 
@@ -1140,7 +1140,7 @@ Resources:
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-AppSyncResolvers'
+      FunctionName: !Sub '${ProjectName}-appsync-${DeploymentSuffix}'
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
       Layers:
@@ -1169,7 +1169,7 @@ Resources:
     Type: AWS::Serverless::Function
     Condition: BuildUI
     Properties:
-      FunctionName: !Sub 'RAGStack-${ProjectName}-StartUICodeBuild'
+      FunctionName: !Sub '${ProjectName}-ui-builder-${DeploymentSuffix}'
       CodeUri: src/lambda/start_codebuild/
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
@@ -1629,7 +1629,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'ragstack-${ProjectName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-cloudtrail-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
