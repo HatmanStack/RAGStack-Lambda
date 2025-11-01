@@ -813,62 +813,6 @@ REACT_APP_INPUT_BUCKET={outputs.get('InputBucketName', '')}
     return outputs
 
 
-def build_ui():
-    """Build React UI."""
-    log_info("Building UI...")
-
-    ui_dir = Path("src/ui")
-
-    if not ui_dir.exists():
-        log_warning("UI directory not found, skipping UI build")
-        return
-
-    # Install dependencies
-    log_info("Installing UI dependencies...")
-    run_command(["npm", "install"], cwd=ui_dir)
-
-    # Build
-    log_info("Building production UI...")
-    run_command(["npm", "run", "build"], cwd=ui_dir)
-
-    log_success("UI build complete")
-
-
-def deploy_ui(ui_bucket, region="us-east-1"):
-    """Deploy UI to S3."""
-    log_info(f"Deploying UI to {ui_bucket}...")
-
-    ui_build_dir = Path("src/ui/build")
-
-    if not ui_build_dir.exists():
-        log_error("UI build directory not found. Run build first.")
-        return
-
-    # Sync build to S3
-    run_command([
-        "aws", "s3", "sync",
-        str(ui_build_dir),
-        f"s3://{ui_bucket}/",
-        "--delete",
-        "--region", region
-    ])
-
-    log_success("UI deployed to S3")
-
-
-def invalidate_cloudfront(distribution_id):
-    """Invalidate CloudFront cache."""
-    log_info(f"Invalidating CloudFront cache for distribution {distribution_id}...")
-
-    run_command([
-        "aws", "cloudfront", "create-invalidation",
-        "--distribution-id", distribution_id,
-        "--paths", "/*"
-    ])
-
-    log_success("CloudFront cache invalidation initiated")
-
-
 def print_outputs(outputs, project_name, region):
     """Print stack outputs in a nice format."""
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
@@ -1160,17 +1104,9 @@ Examples:
         # Seed configuration table
         seed_configuration_table(stack_name, args.region)
 
-        # Configure and deploy UI
+        # Configure UI
         if not args.skip_ui:
             configure_ui(stack_name, args.region)
-            build_ui()
-
-            if 'UIBucketName' in outputs:
-                deploy_ui(outputs['UIBucketName'], args.region)
-
-                # Invalidate CloudFront if available
-                if 'CloudFrontDistributionId' in outputs:
-                    invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
         print_outputs(outputs, args.project_name, args.region)
