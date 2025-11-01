@@ -973,11 +973,11 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB-${AWS::AccountId}'
+      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub 'ragstack-${ProjectName}-vector-index-${AWS::AccountId}'
+      IndexName: !Sub 'ragstack-${ProjectName}-vector-index'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 

@@ -5,10 +5,10 @@ CloudFormation doesn't natively support KB creation with S3 vectors,
 so we use a custom resource to create and manage the Knowledge Base.
 """
 
-import builtins
-import contextlib
 import json
 import logging
+import random
+import string
 import time
 from urllib.request import Request, urlopen
 
@@ -19,6 +19,11 @@ logger.setLevel(logging.INFO)
 
 bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
+
+
+def generate_random_suffix(length=5):
+    """Generate a random alphanumeric suffix for unique resource naming."""
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 def send_response(event, context, status, data=None, reason=None, physical_resource_id=None):
@@ -88,43 +93,46 @@ def lambda_handler(event, context):
 def create_knowledge_base(properties):
     """Create Bedrock Knowledge Base with S3 Vectors storage."""
 
-    kb_name = properties["KnowledgeBaseName"]
+    kb_name_base = properties["KnowledgeBaseName"]
     role_arn = properties["RoleArn"]
     vector_bucket = properties["VectorBucket"]
     embed_model_arn = properties["EmbedModelArn"]
-    index_name = properties.get("IndexName", "bedrock-kb-default-index")
+    index_name_base = properties.get("IndexName", "bedrock-kb-default-index")
     region = properties.get("Region", boto3.session.Session().region_name)
 
-    logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors")
+    # Generate unique suffix for this deployment
+    suffix = generate_random_suffix()
+    kb_name = f"{kb_name_base}-{suffix}"
+    index_name = f"{index_name_base}-{suffix}"
 
-    # Step 0: Create/Initialize S3 Vectors bucket
+    logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors (suffix: {suffix})")
+
+    # Step 1: Initialize S3 Vectors bucket
     s3vectors_client = boto3.client("s3vectors", region_name=region)
 
+    logger.info(f"Initializing S3 Vectors bucket: {vector_bucket}")
     try:
-        logger.info(f"Initializing S3 Vectors bucket: {vector_bucket}")
         s3vectors_client.create_vector_bucket(vectorBucketName=vector_bucket)
         logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
     except Exception as e:
         error_str = str(e)
-        # If bucket already exists (ConflictException), that's fine
         if "ConflictException" in error_str or "already exists" in error_str:
             logger.info(f"S3 Vectors bucket already exists: {vector_bucket}")
         else:
             logger.warning(f"Warning creating S3 Vectors bucket: {e}")
-            # Continue anyway - bucket might already be initialized
 
-    # Step 0.5: Verify bucket exists before creating index
+    # Step 2: Verify bucket exists
+    logger.info(f"Verifying S3 Vectors bucket: {vector_bucket}")
     try:
-        bucket_info = s3vectors_client.get_vector_bucket(vectorBucketName=vector_bucket)
+        s3vectors_client.get_vector_bucket(vectorBucketName=vector_bucket)
         logger.info(f"Verified S3 Vectors bucket exists: {vector_bucket}")
     except Exception as e:
         logger.error(f"Failed to verify S3 Vectors bucket {vector_bucket}: {e}")
         raise
 
-    # Step 1: Create S3 Vectors index
+    # Step 3: Create S3 Vectors index with unique suffix
+    logger.info(f"Creating S3 vector index: {index_name}")
     try:
-        logger.info(f"Creating S3 vector index: {index_name} in bucket: {vector_bucket}")
-        # Note: create_index returns empty response (HTTP 200 with no body)
         s3vectors_client.create_index(
             vectorBucketName=vector_bucket,
             indexName=index_name,
@@ -139,24 +147,18 @@ def create_knowledge_base(properties):
             },
         )
         logger.info(f"Created S3 vector index: {index_name}")
-
     except Exception as e:
-        error_str = str(e)
-        # If index already exists (ConflictException), that's fine - reuse it
-        if "ConflictException" in error_str or "already exists" in error_str:
-            logger.info(f"S3 Vectors index already exists: {index_name}")
-        else:
-            logger.error(f"Failed to create S3 vector index: {e}")
-            raise
+        logger.error(f"Failed to create S3 vector index: {e}")
+        raise
 
-    # Construct index ARN manually (API doesn't return it)
-    # Format: arn:aws:s3vectors:region:account-id:bucket/bucket-name/index/index-name
+    # Construct index ARN
     sts_client = boto3.client("sts")
     account_id = sts_client.get_caller_identity()["Account"]
     index_arn = f"arn:aws:s3vectors:{region}:{account_id}:bucket/{vector_bucket}/index/{index_name}"
     logger.info(f"Using S3 vector index ARN: {index_arn}")
 
-    # Step 2: Create Knowledge Base with S3 Vectors
+    # Step 4: Create Knowledge Base with unique suffix
+    logger.info(f"Creating Knowledge Base: {kb_name}")
     try:
         kb_response = bedrock_agent.create_knowledge_base(
             clientToken=f"cfn-{int(time.time())}-{'a' * 20}",  # 33+ chars required
@@ -185,37 +187,8 @@ def create_knowledge_base(properties):
         kb_arn = kb_response["knowledgeBase"]["knowledgeBaseArn"]
         logger.info(f"Created Knowledge Base: {kb_id}")
     except Exception as e:
-        error_str = str(e)
-        # If KB already exists (ConflictException), find and reuse it
-        if "ConflictException" in error_str or "already exists" in error_str:
-            logger.info(f"Knowledge Base already exists: {kb_name}")
-            # List KBs to find the existing one
-            try:
-                kbs_response = bedrock_agent.list_knowledge_bases()
-                for kb_summary in kbs_response.get("knowledgeBaseSummaries", []):
-                    if kb_summary.get("name") == kb_name:
-                        kb_id = kb_summary.get("id")
-                        logger.info(f"Found existing Knowledge Base: {kb_id}")
-                        # Get full KB details to get ARN
-                        kb_details = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
-                        kb_arn = kb_details["knowledgeBase"]["knowledgeBaseArn"]
-                        break
-                else:
-                    logger.error(f"ConflictException but KB not found in list")
-                    raise
-            except Exception as list_e:
-                logger.error(f"Failed to list KBs after ConflictException: {list_e}")
-                raise
-        else:
-            logger.error(f"Failed to create Knowledge Base: {e}")
-            # Clean up index on failure
-            with contextlib.suppress(builtins.BaseException):
-                s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
-            raise
-
-    # Note: S3 Vectors doesn't require a separate data source
-    # Vectors are written directly to S3 and indexed automatically
-    data_source_id = None
+        logger.error(f"Failed to create Knowledge Base: {e}")
+        raise
 
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "RAGStack")
@@ -239,7 +212,7 @@ def create_knowledge_base(properties):
     return {
         "KnowledgeBaseId": kb_id,
         "KnowledgeBaseArn": kb_arn,
-        "DataSourceId": data_source_id,
+        "DataSourceId": None,
         "IndexArn": index_arn,
     }
 
@@ -250,59 +223,10 @@ def delete_knowledge_base(kb_id, project_name="RAGStack"):
         logger.info("Physical ID is placeholder, skipping deletion")
         return
 
-    vector_bucket = None
-    index_name = None
-
     try:
-        # Get KB details to find S3 Vectors index
-        try:
-            kb_response = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
-            kb_config = kb_response["knowledgeBase"]
-            storage_config = kb_config.get("storageConfiguration", {})
-
-            # Extract index ARN if using S3 Vectors
-            if storage_config.get("type") == "S3_VECTORS":
-                index_arn = storage_config.get("s3VectorsConfiguration", {}).get("indexArn")
-                if index_arn:
-                    # Parse bucket and index name from ARN
-                    # Format: arn:aws:s3vectors:region:account:index/bucket-name/index-name
-                    arn_parts = index_arn.split(":")
-                    if len(arn_parts) >= 6:
-                        resource = arn_parts[-1]  # index/bucket-name/index-name
-                        parts = resource.split("/")
-                        if len(parts) >= 3:
-                            vector_bucket = parts[1]
-                            index_name = parts[2]
-                            logger.info(
-                                f"Found S3 vector index: {index_name} in bucket: {vector_bucket}"
-                            )
-        except Exception as e:
-            logger.warning(f"Could not retrieve KB details: {e}")
-
-        # List and delete data sources (usually none for S3 Vectors)
-        try:
-            data_sources = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
-            for ds in data_sources.get("dataSourceSummaries", []):
-                bedrock_agent.delete_data_source(
-                    knowledgeBaseId=kb_id, dataSourceId=ds["dataSourceId"]
-                )
-                logger.info(f"Deleted data source: {ds['dataSourceId']}")
-        except Exception as e:
-            logger.warning(f"Error deleting data sources: {e}")
-
         # Delete Knowledge Base
         bedrock_agent.delete_knowledge_base(knowledgeBaseId=kb_id)
         logger.info(f"Deleted Knowledge Base: {kb_id}")
-
-        # Delete S3 Vectors index
-        if vector_bucket and index_name:
-            try:
-                region = boto3.session.Session().region_name
-                s3vectors_client = boto3.client("s3vectors", region_name=region)
-                s3vectors_client.delete_index(vectorBucketName=vector_bucket, indexName=index_name)
-                logger.info(f"Deleted S3 vector index: {index_name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete S3 vector index: {e}")
 
         # Clean up Parameter Store
         ssm_param_name = f"/{project_name}/KnowledgeBaseId"
