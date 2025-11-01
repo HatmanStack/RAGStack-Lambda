@@ -39,7 +39,7 @@ python publish.py \
   --skip-ui
 ```
 
-**Note**: All parameters are required. Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter. The `publish.py` script validates prerequisites (Python 3.13+, Node.js 22+, AWS CLI, SAM CLI) before deployment.
+**Note**: All parameters are required. Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter. The `publish.py` script validates prerequisites (Python 3.13+, Node.js 24+, AWS CLI, SAM CLI) before deployment.
 
 ### Building and Testing
 
@@ -352,7 +352,7 @@ For production deployments, the custom resource at `src/lambda/kb_custom_resourc
 ### Deployment Fails
 
 - Check SAM CLI version: `sam --version` (requires 1.100.0+)
-- Verify Python 3.13+ and Node.js 22+
+- Verify Python 3.13+ and Node.js 24+
 - Check AWS credentials: `aws sts get-caller-identity`
 - Review CloudFormation events: `aws cloudformation describe-stack-events --stack-name RAGStack-<project-name>`
 

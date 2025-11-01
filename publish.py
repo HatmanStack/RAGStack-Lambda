@@ -202,7 +202,7 @@ def check_python_version():
 
 def check_nodejs_version(skip_ui=False):
     """
-    Check if Node.js 18+ and npm are available.
+    Check if Node.js 24+ and npm are available.
 
     Args:
         skip_ui: If True, skip Node.js check
@@ -226,7 +226,7 @@ def check_nodejs_version(skip_ui=False):
 
     if node_result.returncode != 0:
         log_error("Node.js not found but is required for UI build")
-        log_info("Install Node.js 18+ from: https://nodejs.org/")
+        log_info("Install Node.js 24+ from: https://nodejs.org/")
         log_info("Or use --skip-ui flag to skip UI build")
         sys.exit(1)
 
@@ -247,9 +247,9 @@ def check_nodejs_version(skip_ui=False):
     try:
         node_major = int(node_version.split('.')[0])
 
-        if node_major < 18:
-            log_error(f"Node.js {node_version} found, but 18+ is required for UI build")
-            log_info("Please upgrade Node.js to version 18 or later")
+        if node_major < 24:
+            log_error(f"Node.js {node_version} found, but 24+ is required for UI build")
+            log_info("Please upgrade Node.js to version 24 or later")
             log_info("Or use --skip-ui flag to skip UI build")
             sys.exit(1)
 
@@ -331,7 +331,162 @@ def sam_build():
     log_success("SAM build complete")
 
 
-def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_source_key=None, skip_ui=False):
+def handle_failed_stack(stack_name, region):
+    """
+    Check if stack exists and is in a failed state (ROLLBACK_COMPLETE or CREATE_FAILED).
+
+    If the stack is in a failed state, delete it so a fresh deployment can proceed.
+    This handles the case where a previous deployment failed and needs to be retried.
+
+    Args:
+        stack_name: CloudFormation stack name
+        region: AWS region
+
+    Returns:
+        bool: True if stack was deleted or doesn't exist, False if stack exists and is healthy
+
+    Raises:
+        IOError: If deletion fails
+    """
+    cf_client = boto3.client('cloudformation', region_name=region)
+
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        stack = response['Stacks'][0]
+        stack_status = stack['StackStatus']
+
+        # Check if stack is already being deleted
+        if stack_status == 'DELETE_IN_PROGRESS':
+            log_info(f"Stack '{stack_name}' is already being deleted, waiting for completion...")
+            try:
+                waiter = cf_client.get_waiter('stack_delete_complete')
+                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter.wait(
+                    StackName=stack_name,
+                    WaiterConfig={
+                        'Delay': 30,  # Check every 30 seconds
+                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
+                    }
+                )
+                log_success(f"Stack '{stack_name}' deleted successfully")
+                return True
+            except Exception as e:
+                log_error(f"Stack deletion timed out or failed: {e}")
+                log_error(f"Stack '{stack_name}' is still deleting. Please wait for deletion to complete:")
+                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error(f"  2. Or run: aws cloudformation wait stack-delete-complete --stack-name {stack_name}")
+                log_error(f"  3. Then retry this deployment")
+                raise IOError(f"Stack deletion timeout - stack '{stack_name}' may still be deleting") from e
+
+        # Check if stack is in a failed/rollback state
+        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE', 'ROLLBACK_FAILED']:
+            log_warning(f"Stack '{stack_name}' is in {stack_status} state")
+            log_info(f"Deleting failed stack '{stack_name}'...")
+
+            try:
+                cf_client.delete_stack(StackName=stack_name)
+
+                # Wait for deletion to complete
+                waiter = cf_client.get_waiter('stack_delete_complete')
+                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter.wait(
+                    StackName=stack_name,
+                    WaiterConfig={
+                        'Delay': 30,  # Check every 30 seconds
+                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
+                    }
+                )
+
+                log_success(f"Stack '{stack_name}' deleted successfully")
+                return True
+            except Exception as e:
+                log_error(f"Stack deletion timed out: {e}")
+                log_error(f"Stack '{stack_name}' deletion is taking longer than expected. Please verify deletion:")
+                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error(f"  2. Or run: aws cloudformation describe-stacks --stack-name {stack_name}")
+                log_error(f"  3. If stuck, manually delete: aws cloudformation delete-stack --stack-name {stack_name}")
+                log_error(f"  4. Then retry this deployment")
+                raise IOError(f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting") from e
+
+        # Stack exists and is in a healthy state
+        return False
+
+    except cf_client.exceptions.ClientError as e:
+        error_code = e.response['Error']['Code']
+
+        # Stack doesn't exist - this is fine, we can proceed
+        if error_code == 'ValidationError' and 'does not exist' in str(e):
+            log_info(f"Stack '{stack_name}' does not exist, proceeding with fresh deployment")
+            return True
+
+        # Other errors should be raised
+        raise IOError(f"Failed to check stack status: {e}") from e
+
+
+def create_sam_artifact_bucket(project_name, region):
+    """
+    Create S3 bucket for deployment artifacts if it doesn't exist.
+
+    This single bucket stores both SAM/CloudFormation artifacts and UI source code.
+    SAM uses it for Lambda functions, layers, and templates.
+    CodeBuild uses it to fetch UI source for building and deploying.
+
+    Args:
+        project_name: Project name for bucket naming
+        region: AWS region
+
+    Returns:
+        str: Bucket name
+
+    Raises:
+        IOError: If bucket creation fails
+    """
+    s3_client = boto3.client('s3', region_name=region)
+    sts_client = boto3.client('sts', region_name=region)
+
+    # Get account ID for bucket naming
+    try:
+        account_id = sts_client.get_caller_identity()['Account']
+    except ClientError as e:
+        raise IOError(f"Failed to get AWS account ID: {e}") from e
+
+    # Use project-specific bucket for all deployment artifacts
+    bucket_name = f'ragstack-{project_name}-artifacts-{account_id}'
+
+    # Create bucket if it doesn't exist
+    try:
+        s3_client.head_bucket(Bucket=bucket_name)
+        log_info(f"Using existing artifact bucket: {bucket_name}")
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+
+        if error_code == '404' or error_code == 'NoSuchBucket':
+            log_info(f"Creating artifact bucket: {bucket_name}")
+            try:
+                if region == 'us-east-1':
+                    s3_client.create_bucket(Bucket=bucket_name)
+                else:
+                    s3_client.create_bucket(
+                        Bucket=bucket_name,
+                        CreateBucketConfiguration={'LocationConstraint': region}
+                    )
+
+                # Enable versioning for artifact tracking
+                s3_client.put_bucket_versioning(
+                    Bucket=bucket_name,
+                    VersioningConfiguration={'Status': 'Enabled'}
+                )
+
+                log_success(f"Created artifact bucket: {bucket_name}")
+            except ClientError as create_error:
+                raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
+        else:
+            raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
+
+    return bucket_name
+
+
+def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -339,7 +494,7 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
         project_name: Project name for resource naming
         admin_email: Admin email for Cognito and alerts
         region: AWS region
-        ui_source_bucket: S3 bucket containing UI source zip (if not skip_ui)
+        artifact_bucket: S3 bucket for SAM artifacts and UI source
         ui_source_key: S3 key for UI source zip (if not skip_ui)
         skip_ui: Whether to skip UI deployment
 
@@ -351,16 +506,43 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
     # Stack name follows pattern: RAGStack-{project-name}
     stack_name = f"RAGStack-{project_name}"
 
+    # Check if stack exists and get existing DeploymentSuffix
+    cf_client = boto3.client('cloudformation', region_name=region)
+    deployment_suffix = None
+
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        # Stack exists - retrieve existing DeploymentSuffix parameter
+        parameters = response['Stacks'][0].get('Parameters', [])
+        for param in parameters:
+            if param['ParameterKey'] == 'DeploymentSuffix':
+                deployment_suffix = param['ParameterValue']
+                log_info(f"Reusing existing deployment suffix: {deployment_suffix}")
+                break
+    except cf_client.exceptions.ClientError as e:
+        if 'does not exist' in str(e):
+            log_info("Stack does not exist - will create new stack")
+        else:
+            raise
+
+    # Generate new suffix only if stack doesn't exist or suffix not found
+    if not deployment_suffix:
+        import random
+        import string
+        deployment_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+        log_info(f"Generated new deployment suffix: {deployment_suffix}")
+
     # Base parameter overrides
     param_overrides = [
+        f"DeploymentSuffix={deployment_suffix}",
         f"ProjectName={project_name}",
         f"AdminEmail={admin_email}",
     ]
 
     # Add UI parameters if building UI
-    if not skip_ui and ui_source_bucket and ui_source_key:
+    if not skip_ui and ui_source_key:
         log_info("UI will be deployed via CodeBuild during stack creation")
-        param_overrides.append(f"UISourceBucket={ui_source_bucket}")
+        param_overrides.append(f"UISourceBucket={artifact_bucket}")
         param_overrides.append(f"UISourceKey={ui_source_key}")
 
     cmd = [
@@ -368,29 +550,41 @@ def sam_deploy(project_name, admin_email, region, ui_source_bucket=None, ui_sour
         "--stack-name", stack_name,
         "--region", region,
         "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
-        "--resolve-s3",
+        "--s3-bucket", artifact_bucket,
         "--no-confirm-changeset",
         "--parameter-overrides",
     ] + param_overrides
 
     run_command(cmd)
+
+    # Enable termination protection on the stack to prevent accidental deletion
+    try:
+        log_info("Enabling stack termination protection...")
+        cf_client.update_termination_protection(
+            StackName=stack_name,
+            EnableTerminationProtection=True
+        )
+        log_success("Stack termination protection enabled")
+    except Exception as e:
+        log_error(f"Warning: Failed to enable termination protection: {e}")
+
     log_success(f"Deployment of project '{project_name}' complete")
     return stack_name
 
 
-def package_ui_source(region, project_name):
+def package_ui_source(bucket_name, region):
     """
     Package UI source code as zip and upload to S3.
 
     Creates a zip file of the UI source (excluding node_modules and build directories),
-    uploads it to a project-specific S3 bucket, and returns the bucket/key for CloudFormation.
+    uploads it to the provided S3 bucket, and returns the bucket/key for CloudFormation.
 
     Args:
+        bucket_name: S3 bucket name to upload to
         region: AWS region for bucket operations
-        project_name: Project name for bucket naming
 
     Returns:
-        tuple: (bucket_name, key) of uploaded UI source zip
+        str: S3 key of uploaded UI source zip
 
     Raises:
         FileNotFoundError: If UI source directory doesn't exist
@@ -427,48 +621,8 @@ def package_ui_source(region, project_name):
 
         log_success(f"UI source packaged: {zip_path}")
 
-        # Upload to S3 - use project-specific bucket for UI source
-        # SAM will handle its own deployment artifacts via --resolve-s3
+        # Upload to S3
         s3_client = boto3.client('s3', region_name=region)
-        sts_client = boto3.client('sts', region_name=region)
-
-        # Get account ID for bucket naming
-        try:
-            account_id = sts_client.get_caller_identity()['Account']
-        except ClientError as e:
-            raise IOError(f"Failed to get AWS account ID: {e}") from e
-
-        # Use project-specific bucket (not SAM managed bucket)
-        # This bucket is specifically for UI source code that CodeBuild will access
-        bucket_name = f'ragstack-{project_name}-ui-source-{account_id}'
-
-        # Create bucket if it doesn't exist
-        try:
-            s3_client.head_bucket(Bucket=bucket_name)
-            log_info(f"Using existing UI source bucket: {bucket_name}")
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', '')
-
-            if error_code == '404' or error_code == 'NoSuchBucket':
-                log_info(f"Creating UI source bucket: {bucket_name}")
-                try:
-                    if region == 'us-east-1':
-                        s3_client.create_bucket(Bucket=bucket_name)
-                    else:
-                        s3_client.create_bucket(
-                            Bucket=bucket_name,
-                            CreateBucketConfiguration={'LocationConstraint': region}
-                        )
-
-                    # Enable versioning for source tracking
-                    s3_client.put_bucket_versioning(
-                        Bucket=bucket_name,
-                        VersioningConfiguration={'Status': 'Enabled'}
-                    )
-                except ClientError as create_error:
-                    raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
-            else:
-                raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
 
         # Upload with timestamp-based key
         timestamp = int(time.time())
@@ -484,7 +638,7 @@ def package_ui_source(region, project_name):
         # Clean up temporary file
         os.remove(zip_path)
 
-        return (bucket_name, key)
+        return key
 
     except (FileNotFoundError, IOError):
         # Re-raise expected exceptions
@@ -542,62 +696,6 @@ REACT_APP_INPUT_BUCKET={outputs.get('InputBucketName', '')}
     log_success(f"UI configuration written to {env_file}")
 
     return outputs
-
-
-def build_ui():
-    """Build React UI."""
-    log_info("Building UI...")
-
-    ui_dir = Path("src/ui")
-
-    if not ui_dir.exists():
-        log_warning("UI directory not found, skipping UI build")
-        return
-
-    # Install dependencies
-    log_info("Installing UI dependencies...")
-    run_command(["npm", "install"], cwd=ui_dir)
-
-    # Build
-    log_info("Building production UI...")
-    run_command(["npm", "run", "build"], cwd=ui_dir)
-
-    log_success("UI build complete")
-
-
-def deploy_ui(ui_bucket, region="us-east-1"):
-    """Deploy UI to S3."""
-    log_info(f"Deploying UI to {ui_bucket}...")
-
-    ui_build_dir = Path("src/ui/build")
-
-    if not ui_build_dir.exists():
-        log_error("UI build directory not found. Run build first.")
-        return
-
-    # Sync build to S3
-    run_command([
-        "aws", "s3", "sync",
-        str(ui_build_dir),
-        f"s3://{ui_bucket}/",
-        "--delete",
-        "--region", region
-    ])
-
-    log_success("UI deployed to S3")
-
-
-def invalidate_cloudfront(distribution_id):
-    """Invalidate CloudFront cache."""
-    log_info(f"Invalidating CloudFront cache for distribution {distribution_id}...")
-
-    run_command([
-        "aws", "cloudfront", "create-invalidation",
-        "--distribution-id", distribution_id,
-        "--paths", "/*"
-    ])
-
-    log_success("CloudFront cache invalidation initiated")
 
 
 def print_outputs(outputs, project_name, region):
@@ -842,12 +940,19 @@ Examples:
         log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
+        # Create artifact bucket first
+        try:
+            artifact_bucket = create_sam_artifact_bucket(args.project_name, args.region)
+        except IOError as e:
+            log_error(f"Failed to create artifact bucket: {e}")
+            sys.exit(1)
+
         # Package UI source (unless --skip-ui)
-        ui_source_bucket = None
         ui_source_key = None
         if not args.skip_ui:
             try:
-                ui_source_bucket, ui_source_key = package_ui_source(args.region, args.project_name)
+                ui_source_key = package_ui_source(artifact_bucket, args.region)
+                log_info(f"UI source uploaded to {artifact_bucket}/{ui_source_key}")
             except (FileNotFoundError, IOError) as e:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
@@ -855,12 +960,20 @@ Examples:
         # SAM build
         sam_build()
 
-        # SAM deploy
+        # Check for failed stack and clean up if needed
+        stack_name = f"RAGStack-{args.project_name}"
+        try:
+            handle_failed_stack(stack_name, args.region)
+        except IOError as e:
+            log_error(f"Failed to handle existing stack: {e}")
+            sys.exit(1)
+
+        # SAM deploy with UI parameters
         stack_name = sam_deploy(
             args.project_name,
             args.admin_email,
             args.region,
-            ui_source_bucket=ui_source_bucket,
+            artifact_bucket,
             ui_source_key=ui_source_key,
             skip_ui=args.skip_ui
         )
@@ -871,17 +984,9 @@ Examples:
         # Seed configuration table
         seed_configuration_table(stack_name, args.region)
 
-        # Configure and deploy UI
+        # Configure UI
         if not args.skip_ui:
             configure_ui(stack_name, args.region)
-            build_ui()
-
-            if 'UIBucketName' in outputs:
-                deploy_ui(outputs['UIBucketName'], args.region)
-
-                # Invalidate CloudFront if available
-                if 'CloudFrontDistributionId' in outputs:
-                    invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
         print_outputs(outputs, args.project_name, args.region)

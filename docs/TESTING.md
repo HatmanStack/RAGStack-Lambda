@@ -43,7 +43,7 @@ Local testing enables:
 
 ```bash
 # Backend dependencies (Python)
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Frontend dependencies (Node.js) - NOTE: Currently has dependency issues
 cd src/ui
@@ -296,14 +296,14 @@ This section covers common issues you may encounter during local testing.
 
 ```bash
 # Install dev dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Verify installation
 ruff --version
 # Expected: ruff 0.14.2
 ```
 
-**Prevention:** Run `pip install -r requirements-dev.txt` after every `git pull`
+**Prevention:** Run `pip install -r requirements.txt` after every `git pull`
 
 ---
 
@@ -317,7 +317,7 @@ ruff --version
 
 ```bash
 # Install dev dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Verify installation
 pytest --version
@@ -389,7 +389,7 @@ node --version    # Should match CI
 # Run tests in clean environment
 python -m venv test_venv
 source test_venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 npm run test:all
 ```
 
@@ -663,7 +663,7 @@ npm install --offline
 # Use virtual environment consistently
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Verify you're in venv
 which python
@@ -795,7 +795,7 @@ python -m venv venv
 source venv/bin/activate
 
 # 4. Reinstall all dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 cd src/ui && npm install && cd ../..
 
 # 5. Verify installations
@@ -891,7 +891,7 @@ Typical timing on a standard development machine:
 2. **Use watch mode during development** - Get instant feedback on changes
 3. **Fix lint issues immediately** - Don't accumulate technical debt
 4. **Write tests alongside code** - Maintain high coverage
-5. **Keep dependencies updated** - Run `pip install -r requirements-dev.txt` regularly
+5. **Keep dependencies updated** - Run `pip install -r requirements.txt` regularly
 6. **Use verbose mode when debugging** - `pytest -vs` shows full output
 
 ### Detailed Examples
@@ -902,7 +902,7 @@ You've just cloned the repository and need to set up local testing.
 
 #### Step 1: Install backend dependencies
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Expected output:
 # Successfully installed ruff-0.14.2 pytest-8.x.x ...
@@ -1248,7 +1248,7 @@ Typical development cycle.
 git pull origin main
 
 # Update dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 cd src/ui && npm install && cd ../..
 
 # Run tests to ensure everything works
@@ -1369,7 +1369,7 @@ The workflow runs automatically on:
 - Every pull request targeting `main` or `develop`
 
 **Steps executed**:
-1. **Setup** - Checks out code, sets up Python 3.13 and Node.js 22
+1. **Setup** - Checks out code, sets up Python 3.13 and Node.js 24
 2. **Install uv** - Installs uv package manager for Python
 3. **Cache dependencies** - Caches uv and npm packages for faster runs
 4. **Install dependencies** - Installs Python (via uv) and Node.js packages

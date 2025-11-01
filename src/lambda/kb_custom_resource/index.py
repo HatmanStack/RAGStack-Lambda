@@ -5,20 +5,26 @@ CloudFormation doesn't natively support KB creation with S3 vectors,
 so we use a custom resource to create and manage the Knowledge Base.
 """
 
-import builtins
-import contextlib
 import json
 import logging
+import random
+import string
 import time
 from urllib.request import Request, urlopen
 
 import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
+
+
+def generate_random_suffix(length=5):
+    """Generate a random alphanumeric suffix for unique resource naming."""
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 def send_response(event, context, status, data=None, reason=None, physical_resource_id=None):
@@ -97,32 +103,62 @@ def create_knowledge_base(properties):
 
     logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors")
 
-    # Step 1: Create S3 Vectors index
+    # Step 1: Initialize S3 Vectors bucket
     s3vectors_client = boto3.client("s3vectors", region_name=region)
 
+    logger.info(f"Initializing S3 Vectors bucket: {vector_bucket}")
     try:
-        logger.info(f"Creating S3 vector index: {index_name} in bucket: {vector_bucket}")
-        index_response = s3vectors_client.create_index(
-            bucketName=vector_bucket,
+        s3vectors_client.create_vector_bucket(vectorBucketName=vector_bucket)
+        logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        error_msg = str(e)
+        # Bucket already exists is a non-fatal condition
+        if error_code == 'ConflictException' or 'already exists' in error_msg.lower():
+            logger.info(f"S3 Vectors bucket already exists: {vector_bucket}")
+        else:
+            # All other errors are fatal - re-raise
+            logger.error(f"Failed to create S3 Vectors bucket {vector_bucket}: {e}")
+            raise
+
+    # Step 2: Verify bucket exists
+    logger.info(f"Verifying S3 Vectors bucket: {vector_bucket}")
+    try:
+        s3vectors_client.get_vector_bucket(vectorBucketName=vector_bucket)
+        logger.info(f"Verified S3 Vectors bucket exists: {vector_bucket}")
+    except Exception as e:
+        logger.error(f"Failed to verify S3 Vectors bucket {vector_bucket}: {e}")
+        raise
+
+    # Step 3: Create S3 Vectors index with unique suffix
+    logger.info(f"Creating S3 vector index: {index_name}")
+    try:
+        s3vectors_client.create_index(
+            vectorBucketName=vector_bucket,
             indexName=index_name,
-            indexConfiguration={
-                "dimension": 1024,  # Titan Embed models output 1024 dimensions
-                "distanceMetric": "cosine",
-                "metadataConfiguration": {
-                    "nonFilterableMetadataKeys": [
-                        "AMAZON_BEDROCK_METADATA",
-                        "AMAZON_BEDROCK_TEXT_CHUNK",
-                    ]
-                },
+            dataType="float32",  # Titan Embed models output float32
+            dimension=1024,  # Titan Embed models output 1024 dimensions
+            distanceMetric="cosine",
+            metadataConfiguration={
+                "nonFilterableMetadataKeys": [
+                    "AMAZON_BEDROCK_METADATA",
+                    "AMAZON_BEDROCK_TEXT_CHUNK",
+                ]
             },
         )
-        index_arn = index_response["indexArn"]
-        logger.info(f"Created S3 vector index: {index_arn}")
+        logger.info(f"Created S3 vector index: {index_name}")
     except Exception as e:
         logger.error(f"Failed to create S3 vector index: {e}")
         raise
 
-    # Step 2: Create Knowledge Base with S3 Vectors
+    # Construct index ARN
+    sts_client = boto3.client("sts")
+    account_id = sts_client.get_caller_identity()["Account"]
+    index_arn = f"arn:aws:s3vectors:{region}:{account_id}:bucket/{vector_bucket}/index/{index_name}"
+    logger.info(f"Using S3 vector index ARN: {index_arn}")
+
+    # Step 4: Create Knowledge Base with unique suffix
+    logger.info(f"Creating Knowledge Base: {kb_name}")
     try:
         kb_response = bedrock_agent.create_knowledge_base(
             clientToken=f"cfn-{int(time.time())}-{'a' * 20}",  # 33+ chars required
@@ -152,14 +188,37 @@ def create_knowledge_base(properties):
         logger.info(f"Created Knowledge Base: {kb_id}")
     except Exception as e:
         logger.error(f"Failed to create Knowledge Base: {e}")
-        # Clean up index on failure
-        with contextlib.suppress(builtins.BaseException):
-            s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
         raise
 
-    # Note: S3 Vectors doesn't require a separate data source
-    # Vectors are written directly to S3 and indexed automatically
-    data_source_id = None
+    # Step 5: Create Data Source for S3 Vector bucket
+    # This allows Bedrock KB to sync vectors from the S3 Vector bucket
+    data_source_name = f"{kb_name}-datasource"
+    logger.info(f"Creating Data Source: {data_source_name}")
+
+    try:
+        # Get the S3 bucket ARN for the vector bucket
+        sts_client = boto3.client("sts")
+        account_id = sts_client.get_caller_identity()["Account"]
+        vector_bucket_arn = f"arn:aws:s3:::{vector_bucket}"
+
+        ds_response = bedrock_agent.create_data_source(
+            knowledgeBaseId=kb_id,
+            name=data_source_name,
+            description=f"S3 Vector data source for {project_name}",
+            dataSourceConfiguration={
+                "type": "S3",
+                "s3Configuration": {
+                    "bucketArn": vector_bucket_arn,
+                    "bucketOwnerAccountId": account_id,
+                },
+            },
+        )
+
+        data_source_id = ds_response["dataSource"]["dataSourceId"]
+        logger.info(f"Created Data Source: {data_source_id}")
+    except Exception as e:
+        logger.error(f"Failed to create Data Source: {e}")
+        raise
 
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "RAGStack")
@@ -177,7 +236,7 @@ def create_knowledge_base(properties):
     except Exception as e:
         logger.warning(f"Failed to store KB ID in Parameter Store: {e}")
 
-    # Wait for KB to be ready
+    # Wait for KB and Data Source to be ready
     time.sleep(10)
 
     return {
@@ -194,59 +253,24 @@ def delete_knowledge_base(kb_id, project_name="RAGStack"):
         logger.info("Physical ID is placeholder, skipping deletion")
         return
 
-    vector_bucket = None
-    index_name = None
-
     try:
-        # Get KB details to find S3 Vectors index
+        # Delete Data Sources first (best practice, though KB deletion should cascade)
         try:
-            kb_response = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
-            kb_config = kb_response["knowledgeBase"]
-            storage_config = kb_config.get("storageConfiguration", {})
-
-            # Extract index ARN if using S3 Vectors
-            if storage_config.get("type") == "S3_VECTORS":
-                index_arn = storage_config.get("s3VectorsConfiguration", {}).get("indexArn")
-                if index_arn:
-                    # Parse bucket and index name from ARN
-                    # Format: arn:aws:s3vectors:region:account:index/bucket-name/index-name
-                    arn_parts = index_arn.split(":")
-                    if len(arn_parts) >= 6:
-                        resource = arn_parts[-1]  # index/bucket-name/index-name
-                        parts = resource.split("/")
-                        if len(parts) >= 3:
-                            vector_bucket = parts[1]
-                            index_name = parts[2]
-                            logger.info(
-                                f"Found S3 vector index: {index_name} in bucket: {vector_bucket}"
-                            )
-        except Exception as e:
-            logger.warning(f"Could not retrieve KB details: {e}")
-
-        # List and delete data sources (usually none for S3 Vectors)
-        try:
-            data_sources = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
-            for ds in data_sources.get("dataSourceSummaries", []):
+            ds_list = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+            for ds in ds_list.get("dataSourceSummaries", []):
+                ds_id = ds["dataSourceId"]
+                logger.info(f"Deleting Data Source: {ds_id}")
                 bedrock_agent.delete_data_source(
-                    knowledgeBaseId=kb_id, dataSourceId=ds["dataSourceId"]
+                    knowledgeBaseId=kb_id,
+                    dataSourceId=ds_id
                 )
-                logger.info(f"Deleted data source: {ds['dataSourceId']}")
+                logger.info(f"Deleted Data Source: {ds_id}")
         except Exception as e:
-            logger.warning(f"Error deleting data sources: {e}")
+            logger.warning(f"Error deleting Data Sources: {e}")
 
         # Delete Knowledge Base
         bedrock_agent.delete_knowledge_base(knowledgeBaseId=kb_id)
         logger.info(f"Deleted Knowledge Base: {kb_id}")
-
-        # Delete S3 Vectors index
-        if vector_bucket and index_name:
-            try:
-                region = boto3.session.Session().region_name
-                s3vectors_client = boto3.client("s3vectors", region_name=region)
-                s3vectors_client.delete_index(bucketName=vector_bucket, indexName=index_name)
-                logger.info(f"Deleted S3 vector index: {index_name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete S3 vector index: {e}")
 
         # Clean up Parameter Store
         ssm_param_name = f"/{project_name}/KnowledgeBaseId"
