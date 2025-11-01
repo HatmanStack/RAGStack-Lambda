@@ -1163,12 +1163,14 @@ Examples:
         # Configure and deploy UI
         if not args.skip_ui:
             configure_ui(stack_name, args.region)
-            # UI is built and deployed via CodeBuild during stack creation
-            # No need to build locally
+            build_ui()
 
-            # Invalidate CloudFront if available
-            if 'CloudFrontDistributionId' in outputs:
-                invalidate_cloudfront(outputs['CloudFrontDistributionId'])
+            if 'UIBucketName' in outputs:
+                deploy_ui(outputs['UIBucketName'], args.region)
+
+                # Invalidate CloudFront if available
+                if 'CloudFrontDistributionId' in outputs:
+                    invalidate_cloudfront(outputs['CloudFrontDistributionId'])
 
         # Print outputs
         print_outputs(outputs, args.project_name, args.region)
