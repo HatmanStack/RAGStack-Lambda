@@ -1202,6 +1202,13 @@ Resources:
                 - lambda:AddPermission
                 - lambda:RemovePermission
               Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-ui-builder-*'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
 
   CodeBuildRun:
     Type: Custom::CodeBuildRun
