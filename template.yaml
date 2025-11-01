@@ -285,6 +285,7 @@ Resources:
   UICodeBuildProject:
     Type: AWS::CodeBuild::Project
     Condition: BuildUI
+    DeletionPolicy: Retain
     Properties:
       Name: !Sub '${AWS::StackName}-webui-build'
       Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
