@@ -323,7 +323,7 @@ Resources:
             post_build:
               commands:
                 - echo "Deploying to S3..."
-                - aws s3 sync build/ s3://${UI_BUCKET}/ --delete
+                - aws s3 sync dist/ s3://${UI_BUCKET}/ --delete
                 - echo "Invalidating CloudFront cache..."
                 - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths "/*"
       Environment:
