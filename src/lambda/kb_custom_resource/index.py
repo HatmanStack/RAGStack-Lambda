@@ -93,19 +93,14 @@ def lambda_handler(event, context):
 def create_knowledge_base(properties):
     """Create Bedrock Knowledge Base with S3 Vectors storage."""
 
-    kb_name_base = properties["KnowledgeBaseName"]
+    kb_name = properties["KnowledgeBaseName"]
     role_arn = properties["RoleArn"]
     vector_bucket = properties["VectorBucket"]
     embed_model_arn = properties["EmbedModelArn"]
-    index_name_base = properties.get("IndexName", "bedrock-kb-default-index")
+    index_name = properties.get("IndexName", "bedrock-kb-default-index")
     region = properties.get("Region", boto3.session.Session().region_name)
 
-    # Generate unique suffix for this deployment
-    suffix = generate_random_suffix()
-    kb_name = f"{kb_name_base}-{suffix}"
-    index_name = f"{index_name_base}-{suffix}"
-
-    logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors (suffix: {suffix})")
+    logger.info(f"Creating Knowledge Base: {kb_name} with S3 Vectors")
 
     # Step 1: Initialize S3 Vectors bucket
     s3vectors_client = boto3.client("s3vectors", region_name=region)

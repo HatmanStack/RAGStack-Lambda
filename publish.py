@@ -738,8 +738,15 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     # Stack name follows pattern: RAGStack-{project-name}
     stack_name = f"RAGStack-{project_name}"
 
+    # Generate unique deployment suffix (5 lowercase alphanumeric chars)
+    import random
+    import string
+    deployment_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    log_info(f"Generated deployment suffix: {deployment_suffix}")
+
     # Base parameter overrides
     param_overrides = [
+        f"DeploymentSuffix={deployment_suffix}",
         f"ProjectName={project_name}",
         f"AdminEmail={admin_email}",
     ]
