@@ -302,6 +302,7 @@ Resources:
             pre_build:
               commands:
                 - echo "Installing dependencies..."
+                - cd ui
                 - npm install
             build:
               commands:
