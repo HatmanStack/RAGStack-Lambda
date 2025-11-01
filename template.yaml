@@ -307,18 +307,6 @@ Resources:
             build:
               commands:
                 - echo "Building React application..."
-                - |
-                  # Generate aws-exports.js from CloudFormation outputs
-                  cat > src/aws-exports.js << EOF
-                  const awsConfig = {
-                    region: '${AWS_REGION}',
-                    userPoolId: '${USER_POOL_ID}',
-                    userPoolWebClientId: '${USER_POOL_CLIENT_ID}',
-                    identityPoolId: '${IDENTITY_POOL_ID}',
-                    apiEndpoint: '${GRAPHQL_API_URL}',
-                  };
-                  export default awsConfig;
-                  EOF
                 - npm run build
             post_build:
               commands:
@@ -331,16 +319,18 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         EnvironmentVariables:
-          - Name: AWS_REGION
+          - Name: VITE_AWS_REGION
             Value: !Ref AWS::Region
-          - Name: USER_POOL_ID
+          - Name: VITE_USER_POOL_ID
             Value: !Ref UserPool
-          - Name: USER_POOL_CLIENT_ID
+          - Name: VITE_USER_POOL_CLIENT_ID
             Value: !Ref UserPoolClient
-          - Name: IDENTITY_POOL_ID
+          - Name: VITE_IDENTITY_POOL_ID
             Value: !Ref IdentityPool
-          - Name: GRAPHQL_API_URL
+          - Name: VITE_GRAPHQL_URL
             Value: !GetAtt GraphQLApi.GraphQLUrl
+          - Name: VITE_INPUT_BUCKET
+            Value: !Ref InputBucket
           - Name: UI_BUCKET
             Value: !Ref UIBucket
           - Name: CLOUDFRONT_DIST_ID
@@ -1650,83 +1640,6 @@ Resources:
         - !Ref AlarmTopic
       OKActions:
         - !Ref AlarmTopic
-
-  # =========================================================================
-  # CloudTrail for Audit Logging
-  # =========================================================================
-
-  CloudTrailBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub '${ProjectName}-cloudtrail-${DeploymentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: Engineering
-
-  CloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub 'RAGStack-${ProjectName}-Trail'
-      S3BucketName: !Ref CloudTrailBucket
-      IsLogging: true
-      IsMultiRegionTrail: false
-      IncludeGlobalServiceEvents: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub '${InputBucket.Arn}/*'
-                - !Sub '${OutputBucket.Arn}/*'
-                - !Sub '${VectorBucket.Arn}/*'
-            - Type: AWS::Lambda::Function
-              Values:
-                - !GetAtt ProcessDocumentFunction.Arn
-                - !GetAtt GenerateEmbeddingsFunction.Arn
 
   # =========================================================================
   # Cost Management - Monthly Budget

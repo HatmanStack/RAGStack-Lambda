@@ -202,7 +202,7 @@ def check_python_version():
 
 def check_nodejs_version(skip_ui=False):
     """
-    Check if Node.js 18+ and npm are available.
+    Check if Node.js 24+ and npm are available.
 
     Args:
         skip_ui: If True, skip Node.js check
@@ -226,7 +226,7 @@ def check_nodejs_version(skip_ui=False):
 
     if node_result.returncode != 0:
         log_error("Node.js not found but is required for UI build")
-        log_info("Install Node.js 18+ from: https://nodejs.org/")
+        log_info("Install Node.js 24+ from: https://nodejs.org/")
         log_info("Or use --skip-ui flag to skip UI build")
         sys.exit(1)
 
@@ -247,9 +247,9 @@ def check_nodejs_version(skip_ui=False):
     try:
         node_major = int(node_version.split('.')[0])
 
-        if node_major < 18:
-            log_error(f"Node.js {node_version} found, but 18+ is required for UI build")
-            log_info("Please upgrade Node.js to version 18 or later")
+        if node_major < 24:
+            log_error(f"Node.js {node_version} found, but 24+ is required for UI build")
+            log_info("Please upgrade Node.js to version 24 or later")
             log_info("Or use --skip-ui flag to skip UI build")
             sys.exit(1)
 
@@ -416,160 +416,6 @@ def handle_failed_stack(stack_name, region):
         raise IOError(f"Failed to check stack status: {e}") from e
 
 
-def cleanup_orphaned_resources(project_name, region):
-    """
-    Clean up orphaned AWS resources from failed deployments.
-
-    Since CloudFormation resources now use deployment-unique suffixes, this function
-    only needs to handle CloudFront distributions that may be stuck in enabled state
-    from a previous deployment.
-
-    Args:
-        project_name: Project name for resource naming
-        region: AWS region
-
-    Raises:
-        IOError: If cleanup fails
-    """
-    log_info("Checking for any stuck CloudFront distributions from previous deployments...")
-
-    # Clean up CloudFront distributions (which can get stuck in DELETE_IN_PROGRESS)
-    cloudfront_client = boto3.client('cloudfront')
-
-    try:
-        # List all distributions
-        paginator = cloudfront_client.get_paginator('list_distributions')
-        for page in paginator.paginate():
-            if 'DistributionList' not in page or 'Items' not in page.get('DistributionList', {}):
-                continue
-
-            items = page.get('DistributionList', {}).get('Items', [])
-            for distribution in items:
-                # Check if this distribution belongs to our project
-                comment = distribution.get('Comment', '')
-                if project_name in comment:
-                    dist_id = distribution['Id']
-                    is_enabled = distribution.get('Enabled', False)
-
-                    if is_enabled:
-                        log_warning(f"Found enabled CloudFront distribution {dist_id} for project {project_name}")
-                        log_info(f"Disabling distribution: {dist_id}")
-
-                        try:
-                            # Get current distribution config
-                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            config = dist_config.get('DistributionConfig', {})
-                            etag = dist_config.get('ETag', '')
-
-                            if not config or not etag:
-                                log_warning(f"Could not get config for distribution {dist_id}")
-                                continue
-
-                            # Disable the distribution
-                            config['Enabled'] = False
-                            cloudfront_client.update_distribution(
-                                Id=dist_id,
-                                DistributionConfig=config,
-                                IfMatch=etag
-                            )
-
-                            log_success(f"Disabled CloudFront distribution: {dist_id}")
-
-                            # Get fresh ETag after disabling
-                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            etag = dist_config.get('ETag', '')
-
-                            # Try to delete it
-                            if etag:
-                                log_info(f"Deleting distribution: {dist_id}")
-                                cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
-                                log_success(f"Deleted CloudFront distribution: {dist_id}")
-
-                        except Exception as e:
-                            log_warning(f"Failed to delete CloudFront distribution {dist_id}: {e}")
-                            log_warning(f"Distribution may need to be manually deleted from CloudFront console")
-
-    except Exception as e:
-        log_warning(f"Error cleaning up CloudFront distributions: {e}")
-
-
-def cleanup_stuck_cloudfront_distributions(project_name):
-    """
-    Clean up any CloudFront distributions that are stuck or enabled for the project.
-
-    This is called before deployment to ensure a clean slate. Distributions that are
-    enabled will be disabled, and disabled ones will be deleted.
-
-    Args:
-        project_name: Project name to match against distribution comments
-    """
-    log_info("Checking for CloudFront distributions from previous deployments...")
-    cloudfront_client = boto3.client('cloudfront')
-
-    try:
-        paginator = cloudfront_client.get_paginator('list_distributions')
-        for page in paginator.paginate():
-            distribution_list = page.get('DistributionList', {})
-            if not distribution_list or 'Items' not in distribution_list:
-                continue
-
-            for distribution in distribution_list.get('Items', []):
-                comment = distribution.get('Comment', '')
-                if project_name in comment:
-                    dist_id = distribution['Id']
-                    status = distribution.get('Status', '')
-                    is_enabled = distribution.get('Enabled', False)
-
-                    log_warning(f"Found distribution {dist_id} (status: {status}, enabled: {is_enabled})")
-
-                    # If distribution is disabled, we can delete it
-                    if not is_enabled:
-                        try:
-                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            config = dist_config.get('DistributionConfig', {})
-                            etag = dist_config.get('ETag', '')
-
-                            if not etag:
-                                log_warning(f"Could not get ETag for distribution {dist_id}")
-                                continue
-
-                            log_info(f"Deleting disabled distribution: {dist_id}")
-                            cloudfront_client.delete_distribution(Id=dist_id, IfMatch=etag)
-                            log_success(f"Deleted CloudFront distribution: {dist_id}")
-                        except ClientError as e:
-                            error_code = e.response.get('Error', {}).get('Code', '')
-                            # If distribution is still being deleted, that's OK - continue
-                            if 'InvalidIfMatchVersion' in error_code or 'DistributionNotDisabled' in error_code:
-                                log_warning(f"Distribution {dist_id} is still propagating - will retry later")
-                            else:
-                                log_warning(f"Could not delete distribution {dist_id}: {e}")
-                        except Exception as e:
-                            log_warning(f"Unexpected error deleting distribution {dist_id}: {e}")
-                    # If still enabled, disable it (this is the normal case)
-                    elif is_enabled:
-                        try:
-                            dist_config = cloudfront_client.get_distribution_config(Id=dist_id)
-                            config = dist_config.get('DistributionConfig', {})
-                            etag = dist_config.get('ETag', '')
-
-                            if not config or not etag:
-                                log_warning(f"Could not get config for distribution {dist_id}")
-                                continue
-
-                            config['Enabled'] = False
-                            cloudfront_client.update_distribution(
-                                Id=dist_id,
-                                DistributionConfig=config,
-                                IfMatch=etag
-                            )
-                            log_warning(f"Disabled CloudFront distribution {dist_id}")
-                        except Exception as e:
-                            log_warning(f"Could not disable distribution {dist_id}: {e}")
-
-    except Exception as e:
-        log_warning(f"Error checking CloudFront distributions: {e}")
-
-
 def create_sam_artifact_bucket(project_name, region):
     """
     Create S3 bucket for deployment artifacts if it doesn't exist.
@@ -653,11 +499,31 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     # Stack name follows pattern: RAGStack-{project-name}
     stack_name = f"RAGStack-{project_name}"
 
-    # Generate unique deployment suffix (5 lowercase alphanumeric chars)
-    import random
-    import string
-    deployment_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
-    log_info(f"Generated deployment suffix: {deployment_suffix}")
+    # Check if stack exists and get existing DeploymentSuffix
+    cf_client = boto3.client('cloudformation', region_name=region)
+    deployment_suffix = None
+
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        # Stack exists - retrieve existing DeploymentSuffix parameter
+        parameters = response['Stacks'][0].get('Parameters', [])
+        for param in parameters:
+            if param['ParameterKey'] == 'DeploymentSuffix':
+                deployment_suffix = param['ParameterValue']
+                log_info(f"Reusing existing deployment suffix: {deployment_suffix}")
+                break
+    except cf_client.exceptions.ClientError as e:
+        if 'does not exist' in str(e):
+            log_info("Stack does not exist - will create new stack")
+        else:
+            raise
+
+    # Generate new suffix only if stack doesn't exist or suffix not found
+    if not deployment_suffix:
+        import random
+        import string
+        deployment_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+        log_info(f"Generated new deployment suffix: {deployment_suffix}")
 
     # Base parameter overrides
     param_overrides = [
@@ -683,6 +549,18 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     ] + param_overrides
 
     run_command(cmd)
+
+    # Enable termination protection on the stack to prevent accidental deletion
+    try:
+        log_info("Enabling stack termination protection...")
+        cf_client.update_termination_protection(
+            StackName=stack_name,
+            EnableTerminationProtection=True
+        )
+        log_success("Stack termination protection enabled")
+    except Exception as e:
+        log_error(f"Warning: Failed to enable termination protection: {e}")
+
     log_success(f"Deployment of project '{project_name}' complete")
     return stack_name
 
@@ -1078,12 +956,7 @@ Examples:
         # Check for failed stack and clean up if needed
         stack_name = f"RAGStack-{args.project_name}"
         try:
-            # First, check for any stuck CloudFront distributions and disable them
-            cleanup_stuck_cloudfront_distributions(args.project_name)
-
             handle_failed_stack(stack_name, args.region)
-            # Also clean up orphaned resources from failed deployments
-            cleanup_orphaned_resources(args.project_name, args.region)
         except IOError as e:
             log_error(f"Failed to handle existing stack: {e}")
             sys.exit(1)
