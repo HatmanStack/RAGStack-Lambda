@@ -365,15 +365,18 @@ def handle_failed_stack(stack_name, region):
                     StackName=stack_name,
                     WaiterConfig={
                         'Delay': 30,  # Check every 30 seconds
-                        'MaxAttempts': 120  # Wait up to 1 hour (120 * 30s)
+                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
                     }
                 )
                 log_success(f"Stack '{stack_name}' deleted successfully")
                 return True
             except Exception as e:
-                log_warning(f"Stack deletion timed out or failed: {e}")
-                log_warning(f"You may need to manually delete the stack or clean up resources")
-                return True  # Return True to allow proceeding even if deletion times out
+                log_error(f"Stack deletion timed out or failed: {e}")
+                log_error(f"Stack '{stack_name}' is still deleting. Please wait for deletion to complete:")
+                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error(f"  2. Or run: aws cloudformation wait stack-delete-complete --stack-name {stack_name}")
+                log_error(f"  3. Then retry this deployment")
+                raise IOError(f"Stack deletion timeout - stack '{stack_name}' may still be deleting") from e
 
         # Check if stack is in a failed/rollback state
         if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE', 'ROLLBACK_FAILED']:
@@ -383,23 +386,27 @@ def handle_failed_stack(stack_name, region):
             try:
                 cf_client.delete_stack(StackName=stack_name)
 
-                # Wait for deletion to complete with longer timeout
+                # Wait for deletion to complete
                 waiter = cf_client.get_waiter('stack_delete_complete')
                 log_info("Waiting for stack deletion to complete (this may take several minutes)...")
                 waiter.wait(
                     StackName=stack_name,
                     WaiterConfig={
                         'Delay': 30,  # Check every 30 seconds
-                        'MaxAttempts': 120  # Wait up to 1 hour (120 * 30s)
+                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
                     }
                 )
 
                 log_success(f"Stack '{stack_name}' deleted successfully")
                 return True
             except Exception as e:
-                log_warning(f"Stack deletion timed out: {e}")
-                log_warning(f"Stack may still be deleting in the background. You can check CloudFormation console.")
-                return True  # Return True to allow proceeding
+                log_error(f"Stack deletion timed out: {e}")
+                log_error(f"Stack '{stack_name}' deletion is taking longer than expected. Please verify deletion:")
+                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error(f"  2. Or run: aws cloudformation describe-stacks --stack-name {stack_name}")
+                log_error(f"  3. If stuck, manually delete: aws cloudformation delete-stack --stack-name {stack_name}")
+                log_error(f"  4. Then retry this deployment")
+                raise IOError(f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting") from e
 
         # Stack exists and is in a healthy state
         return False

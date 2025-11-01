@@ -13,6 +13,7 @@ import time
 from urllib.request import Request, urlopen
 
 import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -109,12 +110,16 @@ def create_knowledge_base(properties):
     try:
         s3vectors_client.create_vector_bucket(vectorBucketName=vector_bucket)
         logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
-    except Exception as e:
-        error_str = str(e)
-        if "ConflictException" in error_str or "already exists" in error_str:
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        error_msg = str(e)
+        # Bucket already exists is a non-fatal condition
+        if error_code == 'ConflictException' or 'already exists' in error_msg.lower():
             logger.info(f"S3 Vectors bucket already exists: {vector_bucket}")
         else:
-            logger.warning(f"Warning creating S3 Vectors bucket: {e}")
+            # All other errors are fatal - re-raise
+            logger.error(f"Failed to create S3 Vectors bucket {vector_bucket}: {e}")
+            raise
 
     # Step 2: Verify bucket exists
     logger.info(f"Verifying S3 Vectors bucket: {vector_bucket}")
