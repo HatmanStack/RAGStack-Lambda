@@ -21,7 +21,7 @@ React-based web interface for RAGStack-Lambda serverless document processing sys
 
 ## Prerequisites
 
-- Node.js 22+ (installed via nvm)
+- Node.js 24+ (installed via nvm)
 - CloudFormation stack deployed (Phases 0-4)
 - AWS CLI configured
 

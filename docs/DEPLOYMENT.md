@@ -47,7 +47,7 @@ Install these tools on your local machine:
 # 1. Python 3.13 or later
 python3.13 --version
 
-# 2. Node.js 22 or later
+# 2. Node.js 24 or later
 node --version
 
 # 3. AWS CLI
@@ -143,7 +143,7 @@ python publish.py \
 
 The `publish.py` script performs these steps:
 
-1. **Validates inputs and prerequisites** - Checks project name format, Python 3.12+, Node.js 18+, AWS CLI, SAM CLI
+1. **Validates inputs and prerequisites** - Checks project name format, Python 3.13+, Node.js 24+, AWS CLI, SAM CLI
 2. **Copies shared libraries** - Distributes lib/ragstack_common to Lambda functions
 3. **Runs SAM build** - Packages Lambda functions
 4. **Deploys infrastructure** - Creates CloudFormation stack with ~60 resources

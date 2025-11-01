@@ -33,7 +33,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture.
 - AWS Account with Bedrock access
 - AWS CLI configured
 - Python 3.13+
-- Node.js 22+
+- Node.js 24+
 - SAM CLI
 - Docker (for local testing)
 
@@ -70,7 +70,7 @@ python publish.py \
 **Note**: Project name must be lowercase alphanumeric + hyphens, 2-32 chars, starting with a letter.
 
 The deployment will:
-1. Validate inputs and check prerequisites (Python 3.13+, Node.js 22+, AWS CLI, SAM CLI)
+1. Validate inputs and check prerequisites (Python 3.13+, Node.js 24+, AWS CLI, SAM CLI)
 2. Copy shared libraries to Lambda functions
 3. Build Lambda functions via SAM
 4. Deploy infrastructure via CloudFormation
@@ -139,7 +139,7 @@ RAGStack-Lambda supports comprehensive local testing without AWS deployment.
 
 ```bash
 # Install dependencies (one-time setup)
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 cd src/ui && npm install && cd ../..
 
 # Run all tests

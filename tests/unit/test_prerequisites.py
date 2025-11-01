@@ -43,32 +43,32 @@ class TestCheckNodejsVersion:
         assert publish.check_nodejs_version(skip_ui=True) is True
 
     @patch("subprocess.run")
-    def test_nodejs_18_passes(self, mock_run):
-        """Test Node.js 18+ passes"""
+    def test_nodejs_24_passes(self, mock_run):
+        """Test Node.js 24+ passes"""
         # Mock node --version
         node_result = MagicMock()
         node_result.returncode = 0
-        node_result.stdout = "v18.0.0\n"
+        node_result.stdout = "v24.0.0\n"
 
         # Mock npm --version
         npm_result = MagicMock()
         npm_result.returncode = 0
-        npm_result.stdout = "9.0.0\n"
+        npm_result.stdout = "10.0.0\n"
 
         mock_run.side_effect = [node_result, npm_result]
 
         assert publish.check_nodejs_version(skip_ui=False) is True
 
     @patch("subprocess.run")
-    def test_nodejs_17_fails(self, mock_run):
-        """Test Node.js 17 fails"""
+    def test_nodejs_23_fails(self, mock_run):
+        """Test Node.js 23 fails"""
         node_result = MagicMock()
         node_result.returncode = 0
-        node_result.stdout = "v17.9.0\n"
+        node_result.stdout = "v23.9.0\n"
 
         npm_result = MagicMock()
         npm_result.returncode = 0
-        npm_result.stdout = "8.0.0\n"
+        npm_result.stdout = "10.0.0\n"
 
         mock_run.side_effect = [node_result, npm_result]
 
