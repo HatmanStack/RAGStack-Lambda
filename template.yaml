@@ -945,6 +945,15 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - bedrock:CreateKnowledgeBase
+                - bedrock:DeleteKnowledgeBase
+                - bedrock:GetKnowledgeBase
+                - bedrock:UpdateKnowledgeBase
+                - bedrock:ListKnowledgeBases
+                - bedrock:CreateDataSource
+                - bedrock:DeleteDataSource
+                - bedrock:GetDataSource
+                - bedrock:ListDataSources
                 - bedrock-agent:CreateKnowledgeBase
                 - bedrock-agent:DeleteKnowledgeBase
                 - bedrock-agent:GetKnowledgeBase
