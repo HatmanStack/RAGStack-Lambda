@@ -190,6 +190,36 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         raise
 
+    # Step 5: Create Data Source for S3 Vector bucket
+    # This allows Bedrock KB to sync vectors from the S3 Vector bucket
+    data_source_name = f"{kb_name}-datasource"
+    logger.info(f"Creating Data Source: {data_source_name}")
+
+    try:
+        # Get the S3 bucket ARN for the vector bucket
+        sts_client = boto3.client("sts")
+        account_id = sts_client.get_caller_identity()["Account"]
+        vector_bucket_arn = f"arn:aws:s3:::{vector_bucket}"
+
+        ds_response = bedrock_agent.create_data_source(
+            knowledgeBaseId=kb_id,
+            name=data_source_name,
+            description=f"S3 Vector data source for {project_name}",
+            dataSourceConfiguration={
+                "type": "S3",
+                "s3Configuration": {
+                    "bucketArn": vector_bucket_arn,
+                    "bucketOwnerAccountId": account_id,
+                },
+            },
+        )
+
+        data_source_id = ds_response["dataSource"]["dataSourceId"]
+        logger.info(f"Created Data Source: {data_source_id}")
+    except Exception as e:
+        logger.error(f"Failed to create Data Source: {e}")
+        raise
+
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "RAGStack")
     ssm_param_name = f"/{project_name}/KnowledgeBaseId"
@@ -206,13 +236,13 @@ def create_knowledge_base(properties):
     except Exception as e:
         logger.warning(f"Failed to store KB ID in Parameter Store: {e}")
 
-    # Wait for KB to be ready
+    # Wait for KB and Data Source to be ready
     time.sleep(10)
 
     return {
         "KnowledgeBaseId": kb_id,
         "KnowledgeBaseArn": kb_arn,
-        "DataSourceId": None,
+        "DataSourceId": data_source_id,
         "IndexArn": index_arn,
     }
 
@@ -224,6 +254,20 @@ def delete_knowledge_base(kb_id, project_name="RAGStack"):
         return
 
     try:
+        # Delete Data Sources first (best practice, though KB deletion should cascade)
+        try:
+            ds_list = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+            for ds in ds_list.get("dataSourceSummaries", []):
+                ds_id = ds["dataSourceId"]
+                logger.info(f"Deleting Data Source: {ds_id}")
+                bedrock_agent.delete_data_source(
+                    knowledgeBaseId=kb_id,
+                    dataSourceId=ds_id
+                )
+                logger.info(f"Deleted Data Source: {ds_id}")
+        except Exception as e:
+            logger.warning(f"Error deleting Data Sources: {e}")
+
         # Delete Knowledge Base
         bedrock_agent.delete_knowledge_base(knowledgeBaseId=kb_id)
         logger.info(f"Deleted Knowledge Base: {kb_id}")
