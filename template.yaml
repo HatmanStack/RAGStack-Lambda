@@ -287,7 +287,7 @@ Resources:
     Condition: BuildUI
     DeletionPolicy: Retain
     Properties:
-      Name: !Sub '${AWS::StackName}-webui-build'
+      Name: !Sub '${AWS::StackName}-webui-build-${DeploymentSuffix}'
       Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
       ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
       EncryptionKey: alias/aws/s3
