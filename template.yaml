@@ -941,6 +941,7 @@ Resources:
                 - bedrock:DeleteKnowledgeBase
                 - bedrock:GetKnowledgeBase
                 - bedrock:UpdateKnowledgeBase
+                - bedrock:ListKnowledgeBases
                 - bedrock:CreateDataSource
                 - bedrock:DeleteDataSource
                 - bedrock:GetDataSource
@@ -972,11 +973,11 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB'
+      KnowledgeBaseName: !Sub 'RAGStack-${ProjectName}-KB-${AWS::AccountId}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Sub 'ragstack-${ProjectName}-vectors-${AWS::AccountId}'
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
-      IndexName: !Sub 'ragstack-${ProjectName}-vector-index'
+      IndexName: !Sub 'ragstack-${ProjectName}-vector-index-${AWS::AccountId}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
 
