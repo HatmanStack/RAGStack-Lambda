@@ -1188,6 +1188,14 @@ Resources:
                 - codebuild:StartBuild
                 - codebuild:BatchGetBuilds
               Resource: !GetAtt UICodeBuildProject.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - events:PutRule
+                - events:DeleteRule
+                - events:PutTargets
+                - events:RemoveTargets
+              Resource: !Sub 'arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*'
 
   CodeBuildRun:
     Type: Custom::CodeBuildRun
