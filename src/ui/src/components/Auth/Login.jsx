@@ -1,8 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, Header, SpaceBetween } from '@cloudscape-design/components';
+
+// Component to handle redirect after authentication
+// Extracted to comply with Rules of Hooks (hooks must be at top level)
+const RedirectOnAuth = ({ user, from, navigate }) => {
+  useEffect(() => {
+    if (user) {
+      navigate(from, { replace: true });
+    }
+  }, [user, from, navigate]);
+
+  return null;
+};
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -24,13 +36,9 @@ export const Login = () => {
             loginMechanisms={['email']}
             signUpAttributes={['email']}
           >
-            {({ signOut: _signOut, user }) => { // eslint-disable-line no-unused-vars
-              // Once authenticated, navigate to the intended destination
-              if (user) {
-                navigate(from, { replace: true });
-              }
-              return null;
-            }}
+            {({ signOut: _signOut, user }) => ( // eslint-disable-line no-unused-vars
+              <RedirectOnAuth user={user} from={from} navigate={navigate} />
+            )}
           </Authenticator>
         </SpaceBetween>
       </Container>

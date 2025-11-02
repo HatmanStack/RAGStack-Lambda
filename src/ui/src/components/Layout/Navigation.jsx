@@ -23,6 +23,11 @@ export const Navigation = () => {
       href: '/search'
     },
     {
+      type: 'link',
+      text: 'Chat',
+      href: '/chat'
+    },
+    {
       type: 'divider'
     },
     {

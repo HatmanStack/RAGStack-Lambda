@@ -92,22 +92,49 @@ def mock_dynamodb(mock_configuration_table, mock_tracking_table):
 
 @pytest.fixture
 def sample_schema():
-    """Sample Schema configuration."""
+    """Sample Schema configuration with all new fields."""
     return {
         "Configuration": "Schema",
         "Schema": {
-            "properties": {"ocr_backend": {"type": "string", "enum": ["textract", "bedrock"]}}
+            "properties": {
+                "ocr_backend": {
+                    "type": "string",
+                    "enum": ["textract", "bedrock"],
+                    "order": 1
+                },
+                "bedrock_ocr_model_id": {
+                    "type": "string",
+                    "enum": [
+                        "anthropic.claude-3-5-haiku-20241022-v1:0",
+                        "anthropic.claude-3-5-sonnet-20241022-v2:0"
+                    ],
+                    "order": 2,
+                    "dependsOn": {"field": "ocr_backend", "value": "bedrock"}
+                },
+                "chat_model_id": {
+                    "type": "string",
+                    "enum": [
+                        "amazon.nova-pro-v1:0",
+                        "amazon.nova-lite-v1:0",
+                        "anthropic.claude-3-5-sonnet-20241022-v2:0"
+                    ],
+                    "order": 3
+                }
+            }
         },
     }
 
 
 @pytest.fixture
 def sample_default():
-    """Sample Default configuration."""
+    """Sample Default configuration with all fields."""
     return {
         "Configuration": "Default",
         "ocr_backend": "textract",
+        "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "chat_model_id": "amazon.nova-pro-v1:0",
         "text_embed_model_id": "amazon.titan-embed-text-v2:0",
+        "image_embed_model_id": "amazon.titan-embed-image-v1"
     }
 
 
@@ -228,6 +255,105 @@ def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sam
 
     custom_config = json.loads(result["Custom"])
     assert custom_config == {}
+
+
+# Test: handle_get_configuration with new configuration fields
+
+
+@patch("index_config_resolver.get_configuration_item")
+def test_get_configuration_includes_new_fields(mock_get_item, sample_schema, sample_default):
+    """Test that getConfiguration returns schema with new OCR and chat fields."""
+
+    def get_item_side_effect(config_type):
+        if config_type == "Schema":
+            return sample_schema
+        if config_type == "Default":
+            return sample_default
+        if config_type == "Custom":
+            return {"Configuration": "Custom"}
+        return None
+
+    mock_get_item.side_effect = get_item_side_effect
+
+    result = index.handle_get_configuration()
+    schema = json.loads(result["Schema"])
+
+    # Assert new fields exist in schema
+    assert "ocr_backend" in schema["properties"]
+    assert "bedrock_ocr_model_id" in schema["properties"]
+    assert "chat_model_id" in schema["properties"]
+
+    # Assert ocr_backend structure
+    ocr_field = schema["properties"]["ocr_backend"]
+    assert ocr_field["type"] == "string"
+    assert set(ocr_field["enum"]) == {"textract", "bedrock"}
+    assert ocr_field["order"] == 1
+
+    # Assert bedrock_ocr_model_id has dependsOn
+    bedrock_model_field = schema["properties"]["bedrock_ocr_model_id"]
+    assert "dependsOn" in bedrock_model_field
+    assert bedrock_model_field["dependsOn"]["field"] == "ocr_backend"
+    assert bedrock_model_field["dependsOn"]["value"] == "bedrock"
+    assert bedrock_model_field["order"] == 2
+
+    # Assert chat_model_id structure
+    chat_field = schema["properties"]["chat_model_id"]
+    assert chat_field["type"] == "string"
+    assert len(chat_field["enum"]) >= 3  # Should have multiple model options
+    assert chat_field["order"] == 3
+
+
+@patch("index_config_resolver.get_configuration_item")
+def test_get_configuration_includes_default_values(mock_get_item, sample_schema, sample_default):
+    """Test that default configuration includes new fields."""
+
+    def get_item_side_effect(config_type):
+        if config_type == "Schema":
+            return sample_schema
+        if config_type == "Default":
+            return sample_default
+        if config_type == "Custom":
+            return {"Configuration": "Custom"}
+        return None
+
+    mock_get_item.side_effect = get_item_side_effect
+
+    result = index.handle_get_configuration()
+    defaults = json.loads(result["Default"])
+
+    # Assert defaults exist
+    assert defaults["ocr_backend"] == "textract"
+    assert defaults["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
+    assert defaults["chat_model_id"] == "amazon.nova-pro-v1:0"
+
+    # Assert existing defaults preserved
+    assert "text_embed_model_id" in defaults
+    assert "image_embed_model_id" in defaults
+
+
+@patch("index_config_resolver.get_configuration_item")
+def test_field_ordering(mock_get_item, sample_schema, sample_default):
+    """Test that fields have correct order property for UI sorting."""
+
+    def get_item_side_effect(config_type):
+        if config_type == "Schema":
+            return sample_schema
+        return None
+
+    mock_get_item.side_effect = get_item_side_effect
+
+    result = index.handle_get_configuration()
+    schema = json.loads(result["Schema"])
+
+    # Get all orders
+    ocr_order = schema["properties"]["ocr_backend"]["order"]
+    bedrock_order = schema["properties"]["bedrock_ocr_model_id"]["order"]
+    chat_order = schema["properties"]["chat_model_id"]["order"]
+
+    # Assert logical ordering (OCR fields first, then chat)
+    assert ocr_order == 1
+    assert bedrock_order == 2
+    assert chat_order == 3
 
 
 # Test: handle_update_configuration
