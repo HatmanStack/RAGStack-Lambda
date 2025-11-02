@@ -23,9 +23,6 @@ type Mutation {
 
   # Update custom configuration
   updateConfiguration(customConfig: AWSJSON!): Boolean
-
-  # Trigger re-embedding of all documents
-  reEmbedAllDocuments: ReEmbedJobStatus
 }
 
 # Document type
