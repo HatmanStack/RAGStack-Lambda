@@ -8,15 +8,11 @@ import {
   Select,
   Button,
   Alert,
-  Modal,
   Box,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
-import { getDocumentCount } from '../../graphql/queries/getDocumentCount';
-import { getReEmbedJobStatus } from '../../graphql/queries/getReEmbedJobStatus';
-import { reEmbedAllDocuments } from '../../graphql/mutations/reEmbedAllDocuments';
 
 export function Settings() {
   // State for loading and errors
