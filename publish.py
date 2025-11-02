@@ -773,7 +773,7 @@ def seed_configuration_table(stack_name, region):
         'Configuration': 'Schema',
         'Schema': {
             'type': 'object',
-            'required': ['ocr_backend', 'text_embed_model_id'],
+            'required': ['ocr_backend'],
             'properties': {
                 'ocr_backend': {
                     'type': 'string',
@@ -797,30 +797,9 @@ def seed_configuration_table(stack_name, region):
                         'value': 'bedrock'
                     }
                 },
-                'text_embed_model_id': {
-                    'type': 'string',
-                    'order': 3,
-                    'description': 'Bedrock model for text embeddings',
-                    'enum': [
-                        'amazon.titan-embed-text-v2:0',
-                        'amazon.titan-embed-text-v1',
-                        'cohere.embed-english-v3',
-                        'cohere.embed-multilingual-v3'
-                    ],
-                    'default': 'amazon.titan-embed-text-v2:0'
-                },
-                'image_embed_model_id': {
-                    'type': 'string',
-                    'order': 4,
-                    'description': 'Bedrock model for image embeddings',
-                    'enum': [
-                        'amazon.titan-embed-image-v1'
-                    ],
-                    'default': 'amazon.titan-embed-image-v1'
-                },
                 'chat_model_id': {
                     'type': 'string',
-                    'order': 5,
+                    'order': 3,
                     'description': 'Bedrock model for Knowledge Base chat queries',
                     'enum': [
                         'amazon.nova-pro-v1:0',
@@ -840,8 +819,6 @@ def seed_configuration_table(stack_name, region):
         'Configuration': 'Default',
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
-        'text_embed_model_id': 'amazon.titan-embed-text-v2:0',
-        'image_embed_model_id': 'amazon.titan-embed-image-v1',
         'chat_model_id': 'amazon.nova-pro-v1:0'
     }
 
