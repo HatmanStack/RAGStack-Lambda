@@ -45,9 +45,9 @@ def lambda_handler(event, context):
     if not knowledge_base_id:
         raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
 
-    # Read response model from ConfigurationManager (runtime configuration)
-    response_model_id = config_manager.get_parameter(
-        "response_model_id", default="anthropic.claude-3-5-haiku-20241022-v1:0"
+    # Read chat model from ConfigurationManager (runtime configuration)
+    chat_model_id = config_manager.get_parameter(
+        "chat_model_id", default="amazon.nova-pro-v1:0"
     )
 
     bedrock_agent = boto3.client("bedrock-agent-runtime")
@@ -63,7 +63,7 @@ def lambda_handler(event, context):
         else knowledge_base_id,
     }
     logger.info(f"Querying Knowledge Base: {json.dumps(safe_summary)}")
-    logger.info(f"Using response model: {response_model_id}")
+    logger.info(f"Using chat model: {chat_model_id}")
 
     try:
         # Extract and validate query
@@ -91,14 +91,14 @@ def lambda_handler(event, context):
             return {"results": [], "error": "max_results must be between 1 and 100"}
 
         # Query Knowledge Base with retrieve_and_generate API
-        # This uses the configured response model to generate answers
+        # This uses the configured chat model to generate answers
         response = bedrock_agent.retrieve_and_generate(
             input={"text": query},
             retrieveAndGenerateConfiguration={
                 "type": "KNOWLEDGE_BASE",
                 "knowledgeBaseConfiguration": {
                     "knowledgeBaseId": knowledge_base_id,
-                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/{response_model_id}",
+                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}",
                     "retrievalConfiguration": {
                         "vectorSearchConfiguration": {"numberOfResults": max_results}
                     },

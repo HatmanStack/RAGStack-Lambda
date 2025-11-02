@@ -367,7 +367,7 @@ def test_lambda_handler_result_count_logged(
 def test_lambda_handler_uses_runtime_config(
     mock_boto3_client, mock_config_manager, valid_event, lambda_context
 ):
-    """Test that handler reads response_model_id from ConfigurationManager."""
+    """Test that handler reads chat_model_id from ConfigurationManager."""
 
     # Setup config manager mock
     mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-sonnet-20241022-v2:0"
@@ -385,7 +385,7 @@ def test_lambda_handler_uses_runtime_config(
 
     # Verify config_manager was called with correct parameter
     mock_config_manager.get_parameter.assert_called_once_with(
-        "response_model_id", default="anthropic.claude-3-5-haiku-20241022-v1:0"
+        "chat_model_id", default="amazon.nova-pro-v1:0"
     )
 
     # Verify retrieve_and_generate was called with the configured model
