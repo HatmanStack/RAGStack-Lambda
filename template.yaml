@@ -631,8 +631,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           METERING_TABLE: !Ref MeteringTable
           VECTOR_BUCKET: !Ref VectorBucket
-          TEXT_EMBED_MODEL: !Ref TextEmbedModelId
-          IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
@@ -911,7 +909,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
 
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
@@ -983,7 +981,7 @@ Resources:
       KnowledgeBaseName: !Sub '${ProjectName}-kb-${DeploymentSuffix}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
-      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
