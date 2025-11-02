@@ -51,63 +51,6 @@ IMAGE_EMBED_MODEL = "amazon.titan-embed-image-v1"
 TEXT_CHAR_LIMIT = 30000
 
 
-def update_re_embed_job_progress(job_id):
-    """
-    Increment processed count for re-embedding job.
-
-    Args:
-        job_id: Re-embedding job ID
-    """
-    if not job_id:
-        return
-
-    try:
-        configuration_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
-        if not configuration_table_name:
-            logger.warning("CONFIGURATION_TABLE_NAME not set, skipping job progress update")
-            return
-
-        dynamodb = boto3.resource("dynamodb")
-        configuration_table = dynamodb.Table(configuration_table_name)
-
-        # Use composite key to update the correct job
-        job_key = f"ReEmbedJob#{job_id}"
-
-        # Increment processedDocuments (conditional to prevent phantom job creation)
-        response = configuration_table.update_item(
-            Key={"Configuration": job_key},
-            UpdateExpression="ADD processedDocuments :inc",
-            ExpressionAttributeValues={":inc": 1},
-            ConditionExpression="attribute_exists(#pk)",  # Require job item to exist
-            ExpressionAttributeNames={"#pk": "Configuration"},
-            ReturnValues="ALL_NEW",
-        )
-
-        item = response.get("Attributes", {})
-        processed = item.get("processedDocuments", 0)
-        total = item.get("totalDocuments", 0)
-
-        logger.info(f"Re-embed job {job_id} progress: {processed}/{total}")
-
-        # Check if job is complete (guard against total=0)
-        if processed >= total and total > 0:
-            completion_time = datetime.utcnow().isoformat() + "Z"
-            # Idempotent completion: only set status if not already COMPLETED
-            configuration_table.update_item(
-                Key={"Configuration": job_key},
-                UpdateExpression="SET #status = :status, completionTime = :time",
-                ConditionExpression="attribute_not_exists(#status) OR #status <> :status",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={":status": "COMPLETED", ":time": completion_time},
-            )
-            logger.info(f"Re-embedding job {job_id} completed")
-
-    except ClientError as e:
-        logger.warning(f"Error updating re-embed job progress: {e}", exc_info=True)
-    except Exception:
-        logger.exception("Unexpected error updating re-embed job progress")
-
-
 def lambda_handler(event, context):
     """
     Generate embeddings for text and images.
@@ -221,15 +164,6 @@ def lambda_handler(event, context):
             {"document_id": document_id},
             {"status": Status.EMBEDDING_COMPLETE.value, "updated_at": datetime.now().isoformat()},
         )
-
-        # ===================================================================
-        # Update re-embedding job progress (if applicable)
-        # ===================================================================
-
-        re_embed_job_id = event.get("reEmbedJobId")
-        if re_embed_job_id:
-            logger.info(f"Updating re-embedding job progress for job {re_embed_job_id}")
-            update_re_embed_job_progress(re_embed_job_id)
 
         return {
             "document_id": document_id,
