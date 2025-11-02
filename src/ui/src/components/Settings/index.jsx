@@ -31,14 +31,6 @@ export function Settings() {
   const [customConfig, setCustomConfig] = useState({});
   const [formValues, setFormValues] = useState({});
 
-  // State for embedding change detection
-  const [showEmbeddingModal, setShowEmbeddingModal] = useState(false);
-  const [pendingEmbeddingChanges, setPendingEmbeddingChanges] = useState(null);
-  const [documentCount, setDocumentCount] = useState(0);
-
-  // State for re-embedding job
-  const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null);
-
   // Memoize the client to prevent recreation on every render
   const client = React.useMemo(() => generateClient(), []);
 
