@@ -7,6 +7,7 @@ import { AppLayout } from './components/Layout/AppLayout';
 import { Dashboard } from './components/Dashboard';
 import { Upload } from './components/Upload';
 import { Search } from './components/Search';
+import { Chat } from './components/Chat';
 import { Settings } from './components/Settings';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/upload" element={<Upload />} />
                     <Route path="/search" element={<Search />} />
+                    <Route path="/chat" element={<Chat />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </AppLayout>
