@@ -3,8 +3,8 @@
 This Lambda function handles GraphQL queries and mutations for configuration management:
 - getConfiguration: Returns Schema, Default, and Custom configurations
 - updateConfiguration: Updates Custom configuration
-- getDocumentCount: Returns count of COMPLETED documents
-- (reEmbedAllDocuments implemented in Phase 5)
+- reEmbedAllDocuments: Triggers re-embedding of all documents
+- getReEmbedJobStatus: Returns status of re-embedding job
 """
 
 import json
@@ -60,7 +60,7 @@ def lambda_handler(event, context):
     Event structure:
         {
             'info': {
-                'fieldName': 'getConfiguration' | 'updateConfiguration' | 'getDocumentCount'
+                'fieldName': 'getConfiguration' | 'updateConfiguration' | 'reEmbedAllDocuments' | 'getReEmbedJobStatus'
             },
             'arguments': {
                 'customConfig': {...}  # For updateConfiguration
@@ -88,9 +88,6 @@ def lambda_handler(event, context):
         if operation == "updateConfiguration":
             custom_config = event["arguments"].get("customConfig")
             return handle_update_configuration(custom_config)
-
-        if operation == "getDocumentCount":
-            return handle_get_document_count()
 
         if operation == "reEmbedAllDocuments":
             return handle_re_embed_all_documents()
@@ -133,9 +130,9 @@ def handle_get_configuration():
         def convert_decimals(obj):
             if isinstance(obj, dict):
                 return {k: convert_decimals(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
+            if isinstance(obj, list):
                 return [convert_decimals(item) for item in obj]
-            elif isinstance(obj, Decimal):
+            if isinstance(obj, Decimal):
                 return int(obj) if obj % 1 == 0 else float(obj)
             return obj
 
@@ -199,56 +196,6 @@ def handle_update_configuration(custom_config):
 
     except Exception:
         logger.exception("Error in updateConfiguration")
-        raise
-
-
-def handle_get_document_count():
-    """
-    Handle getDocumentCount query.
-
-    Returns count of documents with status='COMPLETED' for embedding change detection.
-
-    Returns:
-        Integer count of COMPLETED documents
-    """
-    try:
-        # Scan tracking table for COMPLETED status with pagination
-        # Note: In production with large datasets, consider using a GSI or cached count
-        count = 0
-        scan_kwargs = {
-            "FilterExpression": "#status = :status",
-            "ExpressionAttributeNames": {"#status": "status"},
-            "ExpressionAttributeValues": {":status": "COMPLETED"},
-            "Select": "COUNT",
-        }
-
-        # Paginate through all results
-        while True:
-            response = tracking_table.scan(**scan_kwargs)
-            count += response.get("Count", 0)
-
-            # Check if there are more pages
-            last_key = response.get("LastEvaluatedKey")
-            if not last_key:
-                break
-
-            # Set up for next page
-            scan_kwargs["ExclusiveStartKey"] = last_key
-
-        logger.info(f"Found {count} COMPLETED documents (paginated scan)")
-
-        return count
-
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        logger.exception(f"DynamoDB error counting documents ({error_code})")
-
-        # Only return 0 for non-critical errors (ResourceNotFoundException, etc.)
-        # Raise for critical errors (AccessDeniedException, etc.)
-        if error_code in ["ResourceNotFoundException", "ValidationException"]:
-            logger.warning(f"Non-critical error, returning 0: {error_code}")
-            return 0
-        # Re-raise for critical errors so UI knows something is wrong
         raise
 
 
