@@ -13,9 +13,6 @@ type Query {
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
 
-  # Get document count for embedding change detection
-  getDocumentCount: Int
-
   # Get re-embedding job status
   getReEmbedJobStatus: ReEmbedJobStatus
 }
