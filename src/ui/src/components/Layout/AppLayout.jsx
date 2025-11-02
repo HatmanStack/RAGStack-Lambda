@@ -15,7 +15,7 @@ export const AppLayout = ({ children, contentType = 'default' }) => {
       <TopNavigation
         identity={{
           href: '/',
-          title: 'RAGStack-Lambda'
+          title: 'Document Pipeline'
         }}
         utilities={[
           {

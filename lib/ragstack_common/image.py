@@ -1,5 +1,5 @@
 """
-Image processing utilities for RAGStack-Lambda.
+Image processing utilities for document pipeline.
 
 Provides functions for resizing images, preparing them for Bedrock API,
 and applying preprocessing for improved OCR accuracy.

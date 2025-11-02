@@ -1,5 +1,5 @@
 """
-Bedrock client module for RAGStack-Lambda.
+Bedrock client module for document pipeline.
 
 Provides a simplified client for invoking Amazon Bedrock models with:
 - Exponential backoff retry logic

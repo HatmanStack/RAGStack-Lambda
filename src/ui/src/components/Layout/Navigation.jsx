@@ -19,11 +19,6 @@ export const Navigation = () => {
     },
     {
       type: 'link',
-      text: 'Search',
-      href: '/search'
-    },
-    {
-      type: 'link',
       text: 'Chat',
       href: '/chat'
     },
@@ -40,7 +35,7 @@ export const Navigation = () => {
   return (
     <SideNavigation
       activeHref={location.pathname}
-      header={{ text: 'RAGStack-Lambda', href: '/' }}
+      header={{ text: 'Document Pipeline', href: '/' }}
       items={navItems}
       onFollow={(event) => {
         if (!event.detail.external) {

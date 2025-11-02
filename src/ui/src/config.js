@@ -1,7 +1,7 @@
 /**
  * AWS Configuration
  *
- * This file contains AWS resource configuration for RAGStack-Lambda UI.
+ * This file contains AWS resource configuration for document pipeline UI.
  * Values are populated from CloudFormation outputs after deployment.
  *
  * To update after deployment:

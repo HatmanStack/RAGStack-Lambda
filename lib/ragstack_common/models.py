@@ -1,5 +1,5 @@
 """
-Core data models for RAGStack-Lambda.
+Core data models for document pipeline.
 
 These models represent documents as they flow through the pipeline:
 upload -> OCR -> embedding -> knowledge base

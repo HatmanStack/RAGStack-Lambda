@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
+Description: OCR to Bedrock Knowledge Base Pipeline
 
 Parameters:
   DeploymentSuffix:
@@ -113,6 +113,20 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - PUT
+              - POST
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - 'http://localhost:5173'
+              - 'http://localhost:3000'
+              - !Sub 'https://${CloudFrontDistribution.DomainName}'
+            MaxAge: 3000
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -288,7 +302,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       Name: !Sub '${AWS::StackName}-webui-build-${DeploymentSuffix}'
-      Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
+      Description: !Sub 'Web UI build for ${AWS::StackName}'
       ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
       EncryptionKey: alias/aws/s3
       Artifacts:
@@ -546,11 +560,13 @@ Resources:
   RagstackCommonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub 'RAGStack-${ProjectName}-Common'
-      Description: Shared utilities for RAGStack Lambda functions
+      LayerName: !Sub '${ProjectName}-Common'
+      Description: Shared utilities for Lambda functions
       ContentUri: lib/
       CompatibleRuntimes:
         - python3.13
+    Metadata:
+      BuildMethod: python3.13
 
   # =========================================================================
   # Lambda Functions
@@ -785,7 +801,7 @@ Resources:
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-ProcessingPipeline'
+      Name: !Sub '${ProjectName}-ProcessingPipeline'
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
@@ -811,7 +827,7 @@ Resources:
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-S3UploadTrigger'
+      Name: !Sub '${ProjectName}-S3UploadTrigger'
       Description: Trigger processing pipeline on S3 upload
       EventPattern:
         source:
@@ -996,7 +1012,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub 'RAGStack-${ProjectName}-Users'
+      UserPoolName: !Sub '${ProjectName}-Users'
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -1023,7 +1039,7 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub 'RAGStack-${ProjectName}-WebClient'
+      ClientName: !Sub '${ProjectName}-WebClient'
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -1041,7 +1057,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub 'RAGStack${ProjectName}Identity'
+      IdentityPoolName: !Sub '${ProjectName}Identity'
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -1107,7 +1123,7 @@ Resources:
   GraphQLApi:
     Type: AWS::AppSync::GraphQLApi
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-API'
+      Name: !Sub '${ProjectName}-API'
       AuthenticationType: AMAZON_COGNITO_USER_POOLS
       UserPoolConfig:
         UserPoolId: !Ref UserPool
@@ -1374,7 +1390,7 @@ Resources:
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub 'RAGStack-${ProjectName}-Processing-DLQ'
+      QueueName: !Sub '${ProjectName}-Processing-DLQ'
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
@@ -1386,8 +1402,8 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'RAGStack-${ProjectName}-Alarms'
-      DisplayName: !Sub 'RAGStack-${ProjectName} CloudWatch Alarms'
+      TopicName: !Sub '${ProjectName}-Alarms'
+      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
         - Endpoint: !Ref AdminEmail
@@ -1400,7 +1416,7 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'RAGStack-${ProjectName}-Monitor'
+      DashboardName: !Sub '${ProjectName}-Monitor'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1539,7 +1555,7 @@ Resources:
   ProcessDocumentErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Errors'
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
       AlarmDescription: Alert when ProcessDocument Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1560,7 +1576,7 @@ Resources:
   GenerateEmbeddingsErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings-Errors'
+      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
       AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1581,7 +1597,7 @@ Resources:
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-DLQ-Messages'
+      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
       AlarmDescription: Alert when messages appear in DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -1602,7 +1618,7 @@ Resources:
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-StepFunctions-Failures'
+      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
       AlarmDescription: Alert when Step Functions executions fail
       MetricName: ExecutionsFailed
       Namespace: AWS/States
@@ -1623,7 +1639,7 @@ Resources:
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Throttles'
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
       AlarmDescription: Alert when ProcessDocument Lambda is throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -1649,7 +1665,7 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: !Sub 'RAGStack-${ProjectName}-Monthly-Budget'
+        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
         BudgetLimit:
           Amount: 100
           Unit: USD

@@ -6,7 +6,7 @@
 """
 Setup configuration for ragstack_common package.
 
-This shared library provides utilities for RAGStack Lambda functions including:
+This shared library provides utilities for Lambda functions including:
 - Bedrock client and model interactions
 - OCR backends (Textract and Bedrock)
 - Image processing utilities
@@ -19,7 +19,7 @@ from setuptools import setup
 setup(
     name="ragstack_common",
     version="0.1.0",
-    description="Shared utilities for RAGStack Lambda functions",
+    description="Shared utilities for Lambda functions",
     packages=["ragstack_common"],
     python_requires=">=3.12",
     install_requires=[
@@ -27,7 +27,7 @@ setup(
         "PyMuPDF>=1.23.0",
         "Pillow>=10.0.0",
     ],
-    author="RAGStack Team",
+    author="Development Team",
     license="MIT-0",
     classifiers=[
         "Development Status :: 4 - Beta",

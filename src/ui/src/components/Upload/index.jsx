@@ -15,10 +15,16 @@ export const Upload = () => {
   } = useUpload();
 
   const handleFilesSelected = useCallback((files) => {
+    console.log('Files selected:', files);
     files.forEach(file => {
+      console.log('Processing file:', file.name);
       const uploadId = addUpload(file);
+      console.log('Upload ID created:', uploadId);
       // Auto-start upload
-      setTimeout(() => uploadFile(uploadId), 100);
+      setTimeout(() => {
+        console.log('Starting upload for ID:', uploadId);
+        uploadFile(uploadId);
+      }, 100);
     });
   }, [addUpload, uploadFile]);
 

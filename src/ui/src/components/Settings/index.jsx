@@ -50,6 +50,8 @@ export function Settings() {
       const response = await client.graphql({ query: getConfiguration });
       const config = response.data.getConfiguration;
 
+      console.log('GraphQL response:', config);
+
       // Parse JSON strings
       const parsedSchema = JSON.parse(config.Schema);
       const parsedDefault = JSON.parse(config.Default);
@@ -62,6 +64,13 @@ export function Settings() {
       // Initialize form with custom values overriding defaults
       const initialValues = { ...parsedDefault, ...parsedCustom };
       setFormValues(initialValues);
+
+      console.log('Configuration loaded:', {
+        schema: parsedSchema,
+        default: parsedDefault,
+        custom: parsedCustom,
+        formValues: initialValues
+      });
 
       setLoading(false);
     } catch (err) {

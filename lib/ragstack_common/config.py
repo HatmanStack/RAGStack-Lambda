@@ -1,4 +1,4 @@
-"""Configuration Management for RAGStack-Lambda
+"""Configuration Management for document pipeline
 
 This module provides runtime configuration management using DynamoDB as the
 storage backend. Configuration is structured as three entries:
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigurationManager:
     """
-    Manages configuration retrieval and updates for RAGStack-Lambda.
+    Manages configuration retrieval and updates for document pipeline.
 
     This class reads configuration from a DynamoDB table with a single partition key
     'Configuration' that has three reserved values: Schema, Default, and Custom.

@@ -129,18 +129,21 @@ def handle_get_configuration():
         custom_item = get_configuration_item("Custom")
         custom_config = remove_partition_key(custom_item) if custom_item else {}
 
-        # Decimal-safe JSON serialization for DynamoDB items
-        def decimal_default(obj):
-            if isinstance(obj, Decimal):
+        # Convert Decimals to native Python types for JSON serialization
+        def convert_decimals(obj):
+            if isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_decimals(item) for item in obj]
+            elif isinstance(obj, Decimal):
                 return int(obj) if obj % 1 == 0 else float(obj)
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+            return obj
 
+        # Return raw dicts - AppSync will handle AWSJSON serialization
         result = {
-            "Schema": json.dumps(
-                schema_config, default=decimal_default
-            ),  # AppSync expects JSON string
-            "Default": json.dumps(default_config, default=decimal_default),
-            "Custom": json.dumps(custom_config, default=decimal_default),
+            "Schema": convert_decimals(schema_config),
+            "Default": convert_decimals(default_config),
+            "Custom": convert_decimals(custom_config),
         }
 
         logger.info("Returning configuration to client")

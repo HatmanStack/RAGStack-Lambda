@@ -32,7 +32,7 @@ STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 # Validation constants
 MAX_FILENAME_LENGTH = 255
 MAX_DOCUMENTS_LIMIT = 100
-FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\-\s]+$")
+FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\-\s()]+$")
 
 
 def lambda_handler(event, context):
@@ -169,7 +169,7 @@ def create_upload_url(args):
             logger.warning(f"Filename contains invalid characters: {filename}")
             raise ValueError(
                 "Filename contains invalid characters "
-                "(use alphanumeric, dots, dashes, underscores, spaces only)"
+                "(use alphanumeric, dots, dashes, underscores, spaces, parentheses only)"
             )
 
         document_id = str(uuid4())

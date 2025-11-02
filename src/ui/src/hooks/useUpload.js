@@ -35,9 +35,21 @@ export const useUpload = () => {
   }, []);
 
   const uploadFile = useCallback(async (uploadId) => {
-    const upload = uploads.find(u => u.id === uploadId);
-    if (!upload) return;
+    console.log('uploadFile called with ID:', uploadId);
 
+    // Use functional setState to get current uploads without stale closure
+    let upload = null;
+    setUploads(prev => {
+      upload = prev.find(u => u.id === uploadId);
+      return prev; // Don't modify state here
+    });
+
+    if (!upload) {
+      console.error('Upload not found for ID:', uploadId);
+      return;
+    }
+
+    console.log('Found upload:', upload);
     setUploading(true);
 
     try {
@@ -47,11 +59,13 @@ export const useUpload = () => {
       ));
 
       // Get presigned URL
+      console.log('Requesting presigned URL for:', upload.file.name);
       const { data } = await client.graphql({
         query: CREATE_UPLOAD_URL,
         variables: { filename: upload.file.name }
       });
 
+      console.log('Received presigned URL response:', data.createUploadUrl);
       const { documentId } = data.createUploadUrl;
 
       // Upload to S3 using Amplify Storage
@@ -68,7 +82,8 @@ export const useUpload = () => {
         }
       });
 
-      await operation.result;
+      const result = await operation.result;
+      console.log('Upload to S3 complete:', result);
 
       // Update status to complete
       setUploads(prev => prev.map(u =>
@@ -87,7 +102,7 @@ export const useUpload = () => {
     } finally {
       setUploading(false);
     }
-  }, [uploads]);
+  }, []); // Empty dependency array - no stale closures!
 
   const removeUpload = useCallback((uploadId) => {
     setUploads(prev => prev.filter(u => u.id !== uploadId));

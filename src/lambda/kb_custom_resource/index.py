@@ -82,7 +82,7 @@ def lambda_handler(event, context):
 
         elif request_type == "Delete":
             kb_id = event.get("PhysicalResourceId", "KnowledgeBase")
-            project_name = properties.get("ProjectName", "RAGStack")
+            project_name = properties.get("ProjectName", "default")
             delete_knowledge_base(kb_id, project_name)
             send_response(event, context, "SUCCESS", physical_resource_id=kb_id)
 
@@ -163,7 +163,7 @@ def create_knowledge_base(properties):
         kb_response = bedrock_agent.create_knowledge_base(
             clientToken=f"cfn-{int(time.time())}-{'a' * 20}",  # 33+ chars required
             name=kb_name,
-            description="RAGStack-Lambda Knowledge Base for document search",
+            description="Knowledge Base for document search",
             roleArn=role_arn,
             knowledgeBaseConfiguration={
                 "type": "VECTOR",
@@ -192,6 +192,7 @@ def create_knowledge_base(properties):
 
     # Step 5: Create Data Source for S3 Vector bucket
     # This allows Bedrock KB to sync vectors from the S3 Vector bucket
+    project_name = properties.get("ProjectName", "default")
     data_source_name = f"{kb_name}-datasource"
     logger.info(f"Creating Data Source: {data_source_name}")
 
@@ -221,7 +222,7 @@ def create_knowledge_base(properties):
         raise
 
     # Store KB ID in Parameter Store for easy reference
-    project_name = properties.get("ProjectName", "RAGStack")
+    project_name = properties.get("ProjectName", "default")
     ssm_param_name = f"/{project_name}/KnowledgeBaseId"
 
     try:
@@ -247,7 +248,7 @@ def create_knowledge_base(properties):
     }
 
 
-def delete_knowledge_base(kb_id, project_name="RAGStack"):
+def delete_knowledge_base(kb_id, project_name="default"):
     """Delete Knowledge Base and S3 Vectors index."""
     if kb_id == "KnowledgeBase":
         logger.info("Physical ID is placeholder, skipping deletion")
