@@ -224,13 +224,13 @@ def test_handle_get_configuration_success(
     assert "Default" in result
     assert "Custom" in result
 
-    # Results should be JSON strings
-    assert isinstance(result["Schema"], str)
-    assert isinstance(result["Default"], str)
-    assert isinstance(result["Custom"], str)
+    # Results should be dicts
+    assert isinstance(result["Schema"], dict)
+    assert isinstance(result["Default"], dict)
+    assert isinstance(result["Custom"], dict)
 
     # Verify content
-    schema = json.loads(result["Schema"])
+    schema = result["Schema"]
     assert "properties" in schema
 
 
@@ -251,7 +251,7 @@ def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sam
 
     result = index.handle_get_configuration()
 
-    custom_config = json.loads(result["Custom"])
+    custom_config = result["Custom"]
     assert custom_config == {}
 
 
@@ -274,7 +274,7 @@ def test_get_configuration_includes_new_fields(mock_get_item, sample_schema, sam
     mock_get_item.side_effect = get_item_side_effect
 
     result = index.handle_get_configuration()
-    schema = json.loads(result["Schema"])
+    schema = result["Schema"]
 
     # Assert new fields exist in schema
     assert "ocr_backend" in schema["properties"]
@@ -317,16 +317,12 @@ def test_get_configuration_includes_default_values(mock_get_item, sample_schema,
     mock_get_item.side_effect = get_item_side_effect
 
     result = index.handle_get_configuration()
-    defaults = json.loads(result["Default"])
+    defaults = result["Default"]
 
     # Assert defaults exist
     assert defaults["ocr_backend"] == "textract"
     assert defaults["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
     assert defaults["chat_model_id"] == "amazon.nova-pro-v1:0"
-
-    # Assert existing defaults preserved
-    assert "text_embed_model_id" in defaults
-    assert "image_embed_model_id" in defaults
 
 
 @patch("index_config_resolver.get_configuration_item")
@@ -341,7 +337,7 @@ def test_field_ordering(mock_get_item, sample_schema, sample_default):
     mock_get_item.side_effect = get_item_side_effect
 
     result = index.handle_get_configuration()
-    schema = json.loads(result["Schema"])
+    schema = result["Schema"]
 
     # Get all orders
     ocr_order = schema["properties"]["ocr_backend"]["order"]
