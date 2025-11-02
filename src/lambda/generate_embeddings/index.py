@@ -34,15 +34,18 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.bedrock import BedrockClient
-from ragstack_common.config import ConfigurationManager
 from ragstack_common.models import Status
 from ragstack_common.storage import read_s3_binary, read_s3_text, update_item, write_s3_json
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Module-level initialization (reused across Lambda invocations in same container)
-config_manager = ConfigurationManager()
+# Embedding models are hardcoded to Titan defaults. These models provide
+# excellent performance for most use cases. Changing models requires
+# re-embedding all documents, which is a costly operation best handled
+# through code deployment rather than runtime configuration.
+TEXT_EMBED_MODEL = "amazon.titan-embed-text-v2:0"
+IMAGE_EMBED_MODEL = "amazon.titan-embed-image-v1"
 
 # Text length limits (Titan Embed Text V2: max 8192 tokens ≈ 32k chars)
 TEXT_CHAR_LIMIT = 30000
@@ -114,14 +117,6 @@ def lambda_handler(event, context):
     if not tracking_table:
         raise ValueError("TRACKING_TABLE environment variable is required")
 
-    # Read embedding models from ConfigurationManager (runtime configuration)
-    text_embed_model = config_manager.get_parameter(
-        "text_embed_model_id", default="amazon.titan-embed-text-v2:0"
-    )
-    image_embed_model = config_manager.get_parameter(
-        "image_embed_model_id", default="amazon.titan-embed-image-v1"
-    )
-
     # Log safe summary (not full event payload to avoid PII leakage)
     safe_summary = {
         "document_id": event.get("document_id"),
@@ -130,8 +125,8 @@ def lambda_handler(event, context):
         "vector_bucket": event.get("vector_bucket"),
     }
     logger.info(f"Generating embeddings: {json.dumps(safe_summary)}")
-    logger.info(f"Using text embedding model: {text_embed_model}")
-    logger.info(f"Using image embedding model: {image_embed_model}")
+    logger.info(f"Using text embedding model: {TEXT_EMBED_MODEL}")
+    logger.info(f"Using image embedding model: {IMAGE_EMBED_MODEL}")
 
     try:
         document_id = event["document_id"]
@@ -158,7 +153,7 @@ def lambda_handler(event, context):
 
         logger.info("Generating text embedding...")
         text_embedding = bedrock_client.generate_embedding(
-            text=full_text, model_id=text_embed_model
+            text=full_text, model_id=TEXT_EMBED_MODEL
         )
 
         # Save text embedding
@@ -170,7 +165,7 @@ def lambda_handler(event, context):
                 "content": full_text,
                 "embedding": text_embedding,
                 "type": "text",
-                "model": text_embed_model,
+                "model": TEXT_EMBED_MODEL,
                 "timestamp": datetime.now().isoformat(),
             },
         )
@@ -195,7 +190,7 @@ def lambda_handler(event, context):
 
             # Generate embedding
             image_embedding = bedrock_client.generate_image_embedding(
-                image_bytes=image_bytes, model_id=image_embed_model
+                image_bytes=image_bytes, model_id=IMAGE_EMBED_MODEL
             )
 
             # Save image embedding
@@ -208,7 +203,7 @@ def lambda_handler(event, context):
                     "image_s3_uri": image_s3_uri,
                     "embedding": image_embedding,
                     "type": "image",
-                    "model": image_embed_model,
+                    "model": IMAGE_EMBED_MODEL,
                     "timestamp": datetime.now().isoformat(),
                 },
             )
