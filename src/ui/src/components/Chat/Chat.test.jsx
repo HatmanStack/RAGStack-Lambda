@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Chat } from './index';
+
+// Mock scrollIntoView (not available in JSDOM)
+Element.prototype.scrollIntoView = vi.fn();
+
+// Mock AWS Amplify API
+vi.mock('aws-amplify/api', () => ({
+  generateClient: vi.fn(() => ({
+    graphql: vi.fn()
+  }))
+}));
 
 describe('Chat Page', () => {
   it('renders header', () => {
@@ -15,7 +25,7 @@ describe('Chat Page', () => {
 
   it('renders ChatPanel component', () => {
     render(<Chat />);
-    // ChatPanel stub should render "ChatPanel - TODO"
-    expect(screen.getByText(/ChatPanel - TODO/i)).toBeInTheDocument();
+    // ChatPanel should render with empty state
+    expect(screen.getByText(/Start a conversation/i)).toBeInTheDocument();
   });
 });
