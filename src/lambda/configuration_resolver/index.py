@@ -60,7 +60,8 @@ def lambda_handler(event, context):
     Event structure:
         {
             'info': {
-                'fieldName': 'getConfiguration' | 'updateConfiguration' | 'reEmbedAllDocuments' | 'getReEmbedJobStatus'
+                'fieldName': 'getConfiguration' | 'updateConfiguration' |
+                            'reEmbedAllDocuments' | 'getReEmbedJobStatus'
             },
             'arguments': {
                 'customConfig': {...}  # For updateConfiguration
