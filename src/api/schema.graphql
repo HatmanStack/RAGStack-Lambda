@@ -103,16 +103,6 @@ type ConfigurationResponse @aws_cognito_user_pools {
   Custom: AWSJSON
 }
 
-# Re-embedding job status
-type ReEmbedJobStatus @aws_cognito_user_pools {
-  jobId: ID
-  status: String
-  totalDocuments: Int
-  processedDocuments: Int
-  startTime: AWSDateTime
-  completionTime: AWSDateTime
-}
-
 schema {
   query: Query
   mutation: Mutation
