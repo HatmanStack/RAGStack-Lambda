@@ -1,16 +1,12 @@
 # Example GitHub Actions Workflow for Local Testing
 # Location: .github/workflows/test.yml
 #
-# This workflow runs the unified local testing commands on every push and pull request.
+# This workflow runs the unified local testing commands on every push to any branch.
 # Copy this file to .github/workflows/test.yml to enable CI/CD testing.
 
 name: Test
 
-on:
-  push:
-    branches: [ main, develop, fix-deploy ]
-  pull_request:
-    branches: [ main, develop ]
+on: push
 
 jobs:
   test:

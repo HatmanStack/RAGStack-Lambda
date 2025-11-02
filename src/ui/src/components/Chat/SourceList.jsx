@@ -13,8 +13,11 @@ export function SourceList({ sources }) {
       variant="footer"
     >
       <Box variant="small">
-        {sources.map((source, index) => (
-          <Box key={index} padding={{ bottom: 's' }}>
+        {sources.map((source) => (
+          <Box
+            key={`${source.documentId}-${source.pageNumber || 0}`}
+            padding={{ bottom: 's' }}
+          >
             <Box variant="strong">{source.documentId}</Box>
 
             {source.pageNumber && (
