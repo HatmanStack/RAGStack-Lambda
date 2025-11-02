@@ -1337,33 +1337,6 @@ Resources:
       FieldName: updateConfiguration
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
-  GetDocumentCountResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getDocumentCount
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
-  GetReEmbedJobStatusResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getReEmbedJobStatus
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
-  ReEmbedAllDocumentsResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Mutation
-      FieldName: reEmbedAllDocuments
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
   # =========================================================================
   # Dead Letter Queue for Error Handling
   # =========================================================================
