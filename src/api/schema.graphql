@@ -7,8 +7,8 @@ type Query {
   # List all documents (paginated)
   listDocuments(limit: Int, nextToken: String): DocumentConnection
 
-  # Query Knowledge Base
-  queryKnowledgeBase(query: String!, maxResults: Int): KBQueryResult
+  # Query Knowledge Base with optional session for conversation continuity
+  queryKnowledgeBase(query: String!, sessionId: String): ChatResponse
 
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
@@ -73,19 +73,20 @@ type UploadUrl {
   fields: AWSJSON
 }
 
-# Knowledge Base query result
-type KBQueryResult {
-  query: String!
-  results: [KBResult!]!
-  total: Int
+# Chat response with session support for conversation continuity
+type ChatResponse {
+  answer: String!
+  sessionId: String!
+  sources: [Source!]!
   error: String
 }
 
-# Individual KB search result
-type KBResult {
-  content: String!
-  source: String
-  score: Float
+# Source citation from Knowledge Base retrieval
+type Source {
+  documentId: String!
+  pageNumber: Int
+  s3Uri: String!
+  snippet: String
 }
 
 # Configuration response containing Schema, Default, and Custom configs
