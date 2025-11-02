@@ -165,38 +165,6 @@ export function Settings() {
     setError(null);
   };
 
-  const handleEmbeddingModalChoice = async (choice) => {
-    setShowEmbeddingModal(false);
-
-    if (choice === 'cancel') {
-      // Revert embedding field changes
-      setPendingEmbeddingChanges(null);
-      return;
-    }
-
-    if (choice === 'continue') {
-      // Save with mixed embeddings
-      await saveConfiguration(pendingEmbeddingChanges);
-      setPendingEmbeddingChanges(null);
-    }
-
-    if (choice === 're-embed') {
-      // Save config and trigger re-embedding job
-      await saveConfiguration(pendingEmbeddingChanges);
-      setPendingEmbeddingChanges(null);
-
-      // Trigger re-embedding job
-      try {
-        const response = await client.graphql({ query: reEmbedAllDocuments });
-        const jobStatus = response.data.reEmbedAllDocuments;
-        setReEmbedJobStatus(jobStatus);
-      } catch (err) {
-        console.error('Error starting re-embed job:', err);
-        setError('Failed to start re-embedding job');
-      }
-    }
-  };
-
   const renderField = (key, property) => {
     if (!property) return null;
 
@@ -306,52 +274,6 @@ export function Settings() {
           </SpaceBetween>
         </Form>
       </Container>
-
-      {/* Embedding Change Modal */}
-      <Modal
-        visible={showEmbeddingModal}
-        onDismiss={() => handleEmbeddingModalChoice('cancel')}
-        header="Embedding Model Change Detected"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => handleEmbeddingModalChoice('cancel')}>
-                Cancel
-              </Button>
-              <Button variant="normal" onClick={() => handleEmbeddingModalChoice('continue')}>
-                Continue with mixed embeddings
-              </Button>
-              <Button variant="primary" onClick={() => handleEmbeddingModalChoice('re-embed')}>
-                Re-embed all documents
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <Box>
-            You have changed the embedding model, and you have <strong>{documentCount} documents</strong> already processed with the previous model.
-          </Box>
-          <Box>
-            <strong>Options:</strong>
-          </Box>
-          <Box>
-            <ul>
-              <li>
-                <strong>Continue with mixed embeddings:</strong> New documents will use the new model.
-                Existing documents keep their current embeddings. Search quality may be inconsistent.
-              </li>
-              <li>
-                <strong>Re-embed all documents:</strong> Regenerate embeddings for all documents using
-                the new model. This ensures consistency but takes time (estimated: {Math.ceil(documentCount / 10)} minutes).
-              </li>
-              <li>
-                <strong>Cancel:</strong> Don't change the embedding model.
-              </li>
-            </ul>
-          </Box>
-        </SpaceBetween>
-      </Modal>
     </SpaceBetween>
   );
 }
