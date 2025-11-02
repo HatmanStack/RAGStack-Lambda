@@ -67,14 +67,7 @@ def lambda_context():
     return context
 
 
-@patch.dict(
-    "os.environ",
-    {
-        "TRACKING_TABLE": "test-tracking-table",
-        "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
-        "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
-    },
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 @patch("index_gen_embeddings.write_s3_json")
 @patch("index_gen_embeddings.read_s3_binary")
 @patch("index_gen_embeddings.read_s3_text")
@@ -131,10 +124,7 @@ def test_lambda_handler_success(
     mock_update_item.assert_called_once()
 
 
-@patch.dict(
-    "os.environ",
-    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 @patch("index_gen_embeddings.write_s3_json")
 @patch("index_gen_embeddings.read_s3_text")
 @patch("index_gen_embeddings.update_item")
@@ -173,10 +163,7 @@ def test_lambda_handler_text_only(
     assert mock_write_json.call_count == 1
 
 
-@patch.dict(
-    "os.environ",
-    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 @patch("index_gen_embeddings.read_s3_text")
 @patch("index_gen_embeddings.update_item")
 @patch("index_gen_embeddings.BedrockClient")
@@ -208,10 +195,7 @@ def test_lambda_handler_text_truncation(
     assert len(truncated_text) == 30000
 
 
-@patch.dict(
-    "os.environ",
-    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 @patch("index_gen_embeddings.read_s3_text")
 @patch("index_gen_embeddings.update_item")
 @patch("index_gen_embeddings.BedrockClient")
@@ -239,14 +223,7 @@ def test_lambda_handler_bedrock_failure(
     assert "error_message" in update_args
 
 
-@patch.dict(
-    "os.environ",
-    {
-        "TRACKING_TABLE": "test-tracking-table",
-        "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0",
-        "IMAGE_EMBED_MODEL": "amazon.titan-embed-image-v1",
-    },
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 @patch("index_gen_embeddings.write_s3_json")
 @patch("index_gen_embeddings.read_s3_binary")
 @patch("index_gen_embeddings.read_s3_text")
@@ -290,10 +267,7 @@ def test_lambda_handler_skip_pages_without_images(
     assert result["image_embeddings"][0]["page_number"] == 1
 
 
-@patch.dict(
-    "os.environ",
-    {"TRACKING_TABLE": "test-tracking-table", "TEXT_EMBED_MODEL": "amazon.titan-embed-text-v2:0"},
-)
+@patch.dict("os.environ", {"TRACKING_TABLE": "test-tracking-table"})
 def test_lambda_handler_missing_required_fields(lambda_context):
     """Test handling of missing required event fields."""
 
