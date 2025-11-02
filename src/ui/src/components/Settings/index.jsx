@@ -113,29 +113,7 @@ export function Settings() {
 
   const handleSave = async () => {
     try {
-      // Get previous effective configuration (Custom overrides Default)
-      const previousEffective = { ...defaultConfig, ...customConfig };
-
-      // Check if embedding models changed from previous effective values
-      const embeddingFieldsChanged =
-        formValues.text_embed_model_id !== previousEffective.text_embed_model_id ||
-        formValues.image_embed_model_id !== previousEffective.image_embed_model_id;
-
-      if (embeddingFieldsChanged) {
-        // Check if documents exist
-        const count = await checkDocumentCount();
-
-        if (count > 0) {
-          // Show modal for user decision
-          setPendingEmbeddingChanges(formValues);
-          setShowEmbeddingModal(true);
-          return; // Don't save yet
-        }
-      }
-
-      // No embedding changes or no documents, save directly
       await saveConfiguration(formValues);
-
     } catch (err) {
       console.error('Error in handleSave:', err);
       setError('Failed to save configuration. Please try again.');
