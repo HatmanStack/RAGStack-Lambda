@@ -2,30 +2,37 @@
 Knowledge Base Query Lambda
 
 AppSync resolver for searching/chatting with the Knowledge Base.
+Supports conversation continuity via Bedrock session management.
 
 Input (AppSync):
 {
     "query": "What is in this document?",
-    "max_results": 5
+    "sessionId": "optional-session-id-for-conversation"
 }
 
-Output:
+Output (ChatResponse):
 {
-    "results": [
+    "answer": "Generated response text",
+    "sessionId": "session-id-from-bedrock",
+    "sources": [
         {
-            "content": "...",
-            "source": "document_id",
-            "score": 0.85
+            "documentId": "document.pdf",
+            "pageNumber": 3,
+            "s3Uri": "s3://...",
+            "snippet": "First 200 chars..."
         }
-    ]
+    ],
+    "error": null
 }
 """
 
 import json
 import logging
 import os
+from urllib.parse import unquote
 
 import boto3
+from botocore.exceptions import ClientError
 
 from ragstack_common.config import ConfigurationManager
 
@@ -36,28 +43,119 @@ logger.setLevel(logging.INFO)
 config_manager = ConfigurationManager()
 
 
+def extract_sources(citations):
+    """
+    Parse Bedrock citations into structured sources.
+
+    Args:
+        citations (list): Bedrock citation objects from retrieve_and_generate
+
+    Returns:
+        list[dict]: Parsed sources with documentId, pageNumber, s3Uri, snippet
+
+    Example citation structure:
+        [{
+            'retrievedReferences': [{
+                'content': {'text': 'chunk text...'},
+                'location': {
+                    's3Location': {
+                        'uri': 's3://bucket/doc-id/pages/page-1.json'
+                    }
+                },
+                'metadata': {...}
+            }]
+        }]
+    """
+    sources = []
+    seen = set()  # Deduplicate sources
+
+    for citation in citations:
+        for ref in citation.get("retrievedReferences", []):
+            # Extract S3 URI
+            uri = ref.get("location", {}).get("s3Location", {}).get("uri", "")
+            if not uri:
+                continue
+
+            # Parse S3 URI: s3://bucket/document-id/pages/page-1.json
+            try:
+                parts = uri.replace("s3://", "").split("/")
+                if len(parts) < 2:
+                    logger.warning(f"Invalid S3 URI format: {uri}")
+                    continue
+
+                # Decode document ID (may have URL encoding)
+                document_id = unquote(parts[1])
+                page_num = None
+
+                # Extract page number if available
+                if "pages" in parts and len(parts) > 3:
+                    page_file = parts[-1]  # e.g., "page-3.json"
+                    try:
+                        # Extract number from "page-3.json" -> 3
+                        page_num = int(page_file.split("-")[1].split(".")[0])
+                    except (IndexError, ValueError):
+                        logger.debug(f"Could not extract page number from: {page_file}")
+
+                # Deduplicate by document + page
+                source_key = f"{document_id}:{page_num}"
+                if source_key not in seen:
+                    # Extract snippet (first 200 chars)
+                    content_text = ref.get("content", {}).get("text", "")
+                    snippet = content_text[:200] if content_text else ""
+
+                    sources.append(
+                        {
+                            "documentId": document_id,
+                            "pageNumber": page_num,
+                            "s3Uri": uri,
+                            "snippet": snippet,
+                        }
+                    )
+                    seen.add(source_key)
+
+            except Exception as e:
+                logger.warning(f"Failed to parse source URI {uri}: {e}")
+                continue
+
+    logger.info(f"Extracted {len(sources)} unique sources from {len(citations)} citations")
+    return sources
+
+
 def lambda_handler(event, context):
     """
-    Query Bedrock Knowledge Base.
+    Query Bedrock Knowledge Base with optional session for conversation continuity.
+
+    Args:
+        event['query'] (str): User's question
+        event['sessionId'] (str, optional): Conversation session ID
+
+    Returns:
+        dict: ChatResponse with answer, sessionId, sources, and optional error
     """
     # Get environment variables (moved here for testability)
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     if not knowledge_base_id:
-        raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+        return {
+            "answer": "",
+            "sessionId": None,
+            "sources": [],
+            "error": "KNOWLEDGE_BASE_ID environment variable is required",
+        }
 
     # Read chat model from ConfigurationManager (runtime configuration)
-    chat_model_id = config_manager.get_parameter(
-        "chat_model_id", default="amazon.nova-pro-v1:0"
-    )
+    chat_model_id = config_manager.get_parameter("chat_model_id", default="amazon.nova-pro-v1:0")
 
     bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
 
-    # Log safe summary (not full event payload to avoid PII/user data leakage)
+    # Extract inputs
     query = event.get("query", "")
+    session_id = event.get("sessionId")
+
+    # Log safe summary (not full event payload to avoid PII/user data leakage)
     safe_summary = {
         "query_length": len(query) if isinstance(query, str) else 0,
-        "has_max_results": "max_results" in event,
+        "has_session": session_id is not None,
         "knowledge_base_id": knowledge_base_id[:8] + "..."
         if len(knowledge_base_id) > 8
         else knowledge_base_id,
@@ -66,74 +164,88 @@ def lambda_handler(event, context):
     logger.info(f"Using chat model: {chat_model_id}")
 
     try:
-        # Extract and validate query
-        query = event.get("query", "")
-
+        # Validate query
         if not query:
-            return {"results": [], "message": "No query provided"}
+            return {"answer": "", "sessionId": None, "sources": [], "message": "No query provided"}
 
         if not isinstance(query, str):
-            return {"results": [], "error": "Query must be a string"}
+            return {
+                "answer": "",
+                "sessionId": None,
+                "sources": [],
+                "error": "Query must be a string",
+            }
 
         if len(query) > 10000:
-            return {"results": [], "error": "Query exceeds maximum length of 10000 characters"}
+            return {
+                "answer": "",
+                "sessionId": None,
+                "sources": [],
+                "error": "Query exceeds maximum length of 10000 characters",
+            }
 
-        # Extract and validate max_results
-        max_results = event.get("max_results", 5)
-
-        if not isinstance(max_results, int):
-            try:
-                max_results = int(max_results)
-            except (ValueError, TypeError):
-                return {"results": [], "error": "max_results must be an integer"}
-
-        if max_results < 1 or max_results > 100:
-            return {"results": [], "error": "max_results must be between 1 and 100"}
-
-        # Query Knowledge Base with retrieve_and_generate API
-        # This uses the configured chat model to generate answers
-        response = bedrock_agent.retrieve_and_generate(
-            input={"text": query},
-            retrieveAndGenerateConfiguration={
+        # Build request
+        request = {
+            "input": {"text": query},
+            "retrieveAndGenerateConfiguration": {
                 "type": "KNOWLEDGE_BASE",
                 "knowledgeBaseConfiguration": {
                     "knowledgeBaseId": knowledge_base_id,
                     "modelArn": f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}",
-                    "retrievalConfiguration": {
-                        "vectorSearchConfiguration": {"numberOfResults": max_results}
-                    },
                 },
             },
-        )
+        }
 
-        # Parse results from retrieve_and_generate response
-        # This API returns a generated output text and citations
-        output_text = response.get("output", {}).get("text", "")
+        # Add sessionId if provided (for conversation continuity)
+        if session_id:
+            request["sessionId"] = session_id
+
+        # Call Bedrock
+        response = bedrock_agent.retrieve_and_generate(**request)
+
+        # Extract data
+        answer = response.get("output", {}).get("text", "")
+        new_session_id = response.get("sessionId")
         citations = response.get("citations", [])
 
-        # Extract retrieved documents from citations
-        results = []
-        for citation in citations:
-            for reference in citation.get("retrievedReferences", []):
-                results.append(
-                    {
-                        "content": reference.get("content", {}).get("text", ""),
-                        "source": reference.get("location", {})
-                        .get("s3Location", {})
-                        .get("uri", ""),
-                        "score": reference.get("score", 0.0),
-                    }
-                )
+        logger.info(
+            f"KB query successful. SessionId: {new_session_id}, Citations: {len(citations)}"
+        )
 
-        logger.info(f"Generated response with {len(results)} source documents")
+        # Parse sources
+        sources = extract_sources(citations)
 
+        return {"answer": answer, "sessionId": new_session_id, "sources": sources}
+
+    except ClientError as e:
+        # Handle session expiration specifically
+        error_code = e.response.get("Error", {}).get("Code", "")
+        error_msg = e.response.get("Error", {}).get("Message", "")
+
+        if error_code == "ValidationException" and "session" in error_msg.lower():
+            logger.warning(f"Session expired: {session_id}")
+            return {
+                "error": "Session expired. Please start a new conversation.",
+                "answer": "",
+                "sessionId": None,
+                "sources": [],
+            }
+
+        # Other client errors
+        logger.error(f"Bedrock client error: {error_code} - {error_msg}")
         return {
-            "results": results,
-            "query": query,
-            "total": len(results),
-            "response": output_text,  # Generated response from the model
+            "error": f"Failed to query knowledge base: {error_msg}",
+            "answer": "",
+            "sessionId": None,
+            "sources": [],
         }
 
     except Exception as e:
-        logger.error(f"Knowledge Base query failed: {e}", exc_info=True)
-        return {"results": [], "error": str(e)}
+        # Generic error handling
+        logger.error(f"Error querying KB: {e}", exc_info=True)
+        return {
+            "error": "Failed to query knowledge base. Please try again.",
+            "answer": "",
+            "sessionId": None,
+            "sources": [],
+        }
