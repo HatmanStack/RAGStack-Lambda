@@ -818,16 +818,18 @@ def seed_configuration_table(stack_name, region):
                     ],
                     'default': 'amazon.titan-embed-image-v1'
                 },
-                'response_model_id': {
+                'chat_model_id': {
                     'type': 'string',
                     'order': 5,
-                    'description': 'Bedrock model for Knowledge Base query responses',
+                    'description': 'Bedrock model for Knowledge Base chat queries',
                     'enum': [
+                        'amazon.nova-pro-v1:0',
+                        'amazon.nova-lite-v1:0',
+                        'amazon.nova-micro-v1:0',
                         'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                        'anthropic.claude-3-5-haiku-20241022-v1:0',
-                        'anthropic.claude-3-opus-20240229-v1:0'
+                        'anthropic.claude-3-5-haiku-20241022-v1:0'
                     ],
-                    'default': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+                    'default': 'amazon.nova-pro-v1:0'
                 }
             }
         }
@@ -840,7 +842,7 @@ def seed_configuration_table(stack_name, region):
         'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
         'text_embed_model_id': 'amazon.titan-embed-text-v2:0',
         'image_embed_model_id': 'amazon.titan-embed-image-v1',
-        'response_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+        'chat_model_id': 'amazon.nova-pro-v1:0'
     }
 
     try:
