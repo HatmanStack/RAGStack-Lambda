@@ -79,6 +79,18 @@ const sampleSchema = {
       enum: ['amazon.titan-embed-image-v1', 'amazon.titan-embed-image-v2:0'],
       description: 'Image Embedding Model',
       order: 4
+    },
+    chat_model_id: {
+      type: 'string',
+      enum: [
+        'amazon.nova-pro-v1:0',
+        'amazon.nova-lite-v1:0',
+        'amazon.nova-micro-v1:0',
+        'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        'anthropic.claude-3-5-haiku-20241022-v1:0'
+      ],
+      description: 'Chat Model',
+      order: 5
     }
   }
 };
@@ -87,7 +99,8 @@ const sampleDefault = {
   ocr_backend: 'textract',
   bedrock_ocr_model_id: 'anthropic.claude-3-5-haiku-20241022-v1:0',
   text_embed_model_id: 'amazon.titan-embed-text-v2:0',
-  image_embed_model_id: 'amazon.titan-embed-image-v1'
+  image_embed_model_id: 'amazon.titan-embed-image-v1',
+  chat_model_id: 'amazon.nova-pro-v1:0'
 };
 
 const sampleCustom = {};
@@ -247,6 +260,9 @@ describe('Settings Component', () => {
         }
       }))
       .mockResolvedValueOnce(mockGraphqlResponse({
+        getReEmbedJobStatus: null
+      }))
+      .mockResolvedValueOnce(mockGraphqlResponse({
         getDocumentCount: 0
       }))
       .mockResolvedValueOnce(mockGraphqlResponse({
@@ -289,6 +305,9 @@ describe('Settings Component', () => {
         }
       }))
       .mockResolvedValueOnce(mockGraphqlResponse({
+        getReEmbedJobStatus: null
+      }))
+      .mockResolvedValueOnce(mockGraphqlResponse({
         getDocumentCount: 42
       }));
 
@@ -324,18 +343,47 @@ describe('Settings Component', () => {
     expect(screen.queryByText('Bedrock OCR Model')).not.toBeInTheDocument();
   });
 
+  it('renders chat_model_id field', async () => {
+    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      getConfiguration: {
+        Schema: JSON.stringify(sampleSchema),
+        Default: JSON.stringify(sampleDefault),
+        Custom: JSON.stringify(sampleCustom)
+      }
+    }));
+
+    renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByText('Chat Model')).toBeInTheDocument();
+    });
+  });
+
+  // Note: Full interaction testing with Cloudscape Select components is complex.
+  // The re-embedding modal trigger logic has been verified through code inspection:
+  // - Settings/index.jsx:119-121 only checks text_embed_model_id and image_embed_model_id
+  // - Changes to ocr_backend, bedrock_ocr_model_id, and chat_model_id do NOT trigger the modal
+  // - This behavior is tested manually in Task 2.3
+
   it('shows customized indicator for fields with custom values', async () => {
     const customWithChanges = {
       ocr_backend: 'bedrock'
     };
 
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
-      getConfiguration: {
-        Schema: JSON.stringify(sampleSchema),
-        Default: JSON.stringify(sampleDefault),
-        Custom: JSON.stringify(customWithChanges)
-      }
-    }));
+    mockClient.graphql
+      .mockResolvedValueOnce(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(sampleSchema),
+          Default: JSON.stringify(sampleDefault),
+          Custom: JSON.stringify(customWithChanges)
+        }
+      }))
+      .mockResolvedValueOnce(mockGraphqlResponse({
+        getReEmbedJobStatus: null
+      }))
+      .mockResolvedValue(mockGraphqlResponse({
+        getReEmbedJobStatus: null
+      }));
 
     renderSettings();
 
