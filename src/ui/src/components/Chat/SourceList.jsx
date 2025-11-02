@@ -1,5 +1,36 @@
 import React from 'react';
+import { Box, ExpandableSection } from '@cloudscape-design/components';
 
 export function SourceList({ sources }) {
-  return null; // Render nothing for now
+  // Early return if no sources
+  if (!sources || sources.length === 0) {
+    return null;
+  }
+
+  return (
+    <ExpandableSection
+      headerText={`Sources (${sources.length})`}
+      variant="footer"
+    >
+      <Box variant="small">
+        {sources.map((source, index) => (
+          <Box key={index} padding={{ bottom: 's' }}>
+            <Box variant="strong">{source.documentId}</Box>
+
+            {source.pageNumber && (
+              <Box variant="small" color="text-body-secondary">
+                Page {source.pageNumber}
+              </Box>
+            )}
+
+            {source.snippet && (
+              <Box variant="small" color="text-body-secondary">
+                "{source.snippet}"...
+              </Box>
+            )}
+          </Box>
+        ))}
+      </Box>
+    </ExpandableSection>
+  );
 }
