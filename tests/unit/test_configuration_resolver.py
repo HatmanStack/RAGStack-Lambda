@@ -257,7 +257,7 @@ def test_handle_get_configuration_empty_custom(mock_get_item, sample_schema, sam
     assert custom_config == {}
 
 
-# Test: New configuration fields (Phase 1)
+# Test: handle_get_configuration with new configuration fields
 
 
 @patch("index_config_resolver.get_configuration_item")
