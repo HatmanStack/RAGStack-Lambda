@@ -1,0 +1,10 @@
+{
+  "arguments": {
+    "query": "Test query with expired session",
+    "sessionId": "expired-session-abc"
+  },
+  "info": {
+    "fieldName": "queryKnowledgeBase",
+    "parentTypeName": "Query"
+  }
+}

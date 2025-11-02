@@ -1,0 +1,9 @@
+{
+  "arguments": {
+    "query": "What documents do we have about invoices?"
+  },
+  "info": {
+    "fieldName": "queryKnowledgeBase",
+    "parentTypeName": "Query"
+  }
+}

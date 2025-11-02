@@ -1,0 +1,10 @@
+{
+  "arguments": {
+    "query": "Show me the one from January",
+    "sessionId": "test-session-123"
+  },
+  "info": {
+    "fieldName": "queryKnowledgeBase",
+    "parentTypeName": "Query"
+  }
+}
