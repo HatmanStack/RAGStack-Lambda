@@ -12,9 +12,6 @@ type Query {
 
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
-
-  # Get re-embedding job status
-  getReEmbedJobStatus: ReEmbedJobStatus
 }
 
 type Mutation {
