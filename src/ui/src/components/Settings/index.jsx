@@ -72,44 +72,10 @@ export function Settings() {
     }
   }, [client]);
 
-  const checkDocumentCount = async () => {
-    try {
-      const response = await client.graphql({ query: getDocumentCount });
-      const count = response.data.getDocumentCount;
-      setDocumentCount(count);
-      return count;
-    } catch (err) {
-      console.error('Error checking document count:', err);
-      return 0;
-    }
-  };
-
-  const checkReEmbedJobStatus = useCallback(async () => {
-    try {
-      const response = await client.graphql({ query: getReEmbedJobStatus });
-      const status = response.data.getReEmbedJobStatus;
-      setReEmbedJobStatus(status);
-    } catch (err) {
-      console.error('Error checking re-embed job status:', err);
-    }
-  }, [client]);
-
   // Load configuration on mount
   useEffect(() => {
     loadConfiguration();
-    checkReEmbedJobStatus(); // Check for existing job on mount
-  }, [loadConfiguration, checkReEmbedJobStatus]);
-
-  // Poll job status when a job is in progress
-  useEffect(() => {
-    if (reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS') {
-      const interval = setInterval(() => {
-        checkReEmbedJobStatus();
-      }, 5000); // Poll every 5 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [reEmbedJobStatus, checkReEmbedJobStatus]);
+  }, [loadConfiguration]);
 
   const handleSave = async () => {
     try {
@@ -226,26 +192,6 @@ export function Settings() {
       {success && (
         <Alert type="success" dismissible onDismiss={() => setSuccess(false)}>
           Configuration saved successfully
-        </Alert>
-      )}
-
-      {/* Re-embedding job progress banner */}
-      {reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS' && (
-        <Alert type="info" dismissible={false}>
-          Re-embedding documents: {reEmbedJobStatus.processedDocuments} / {reEmbedJobStatus.totalDocuments} completed
-          {' '}({reEmbedJobStatus.totalDocuments > 0
-            ? Math.round((reEmbedJobStatus.processedDocuments / reEmbedJobStatus.totalDocuments) * 100)
-            : 0}%)
-        </Alert>
-      )}
-
-      {reEmbedJobStatus && reEmbedJobStatus.status === 'COMPLETED' && (
-        <Alert
-          type="success"
-          dismissible
-          onDismiss={() => setReEmbedJobStatus(null)}
-        >
-          Re-embedding completed! All {reEmbedJobStatus.totalDocuments} documents have been processed.
         </Alert>
       )}
 
