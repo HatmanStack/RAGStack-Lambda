@@ -19,8 +19,6 @@ import { getReEmbedJobStatus } from '../../graphql/queries/getReEmbedJobStatus';
 import { reEmbedAllDocuments } from '../../graphql/mutations/reEmbedAllDocuments';
 
 export function Settings() {
-  const client = generateClient();
-
   // State for loading and errors
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,7 +38,9 @@ export function Settings() {
 
   // State for re-embedding job
   const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null);
-  const [pollingInterval, setPollingInterval] = useState(null);
+
+  // Memoize the client to prevent recreation on every render
+  const client = React.useMemo(() => generateClient(), []);
 
   const loadConfiguration = useCallback(async () => {
     try {
@@ -88,18 +88,10 @@ export function Settings() {
       const response = await client.graphql({ query: getReEmbedJobStatus });
       const status = response.data.getReEmbedJobStatus;
       setReEmbedJobStatus(status);
-
-      if (status && status.status === 'COMPLETED') {
-        // Job finished, stop polling
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          setPollingInterval(null);
-        }
-      }
     } catch (err) {
       console.error('Error checking re-embed job status:', err);
     }
-  }, [client, pollingInterval]);
+  }, [client]);
 
   // Load configuration on mount
   useEffect(() => {
@@ -114,14 +106,9 @@ export function Settings() {
         checkReEmbedJobStatus();
       }, 5000); // Poll every 5 seconds
 
-      setPollingInterval(interval);
-
       return () => clearInterval(interval);
-    } else if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
     }
-  }, [reEmbedJobStatus, pollingInterval, checkReEmbedJobStatus]);
+  }, [reEmbedJobStatus, checkReEmbedJobStatus]);
 
   const handleSave = async () => {
     try {
@@ -252,7 +239,6 @@ export function Settings() {
     if (property.enum && Array.isArray(property.enum)) {
       return (
         <FormField
-          key={key}
           label={property.description || key}
           description={isCustomized ? 'Customized from default' : ''}
         >
@@ -261,7 +247,7 @@ export function Settings() {
             onChange={({ detail }) => {
               setFormValues({ ...formValues, [key]: detail.selectedOption.value });
             }}
-            options={property.enum.map(v => ({ label: v, value: v }))}
+            options={property.enum.map(v => ({ label: v, value: v, key: v }))}
           />
         </FormField>
       );
@@ -333,7 +319,11 @@ export function Settings() {
             {schema.properties &&
               Object.entries(schema.properties)
                 .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
-                .map(([key, property]) => renderField(key, property))}
+                .map(([key, property]) => (
+                  <React.Fragment key={key}>
+                    {renderField(key, property)}
+                  </React.Fragment>
+                ))}
           </SpaceBetween>
         </Form>
       </Container>

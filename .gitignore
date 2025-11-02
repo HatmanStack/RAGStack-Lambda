@@ -32,5 +32,5 @@ npm-debug.log
 *.swp
 
 # Implementation plans (not part of project)
-docs/plans/
+#docs/plans/
 TEST_FIXES_NEEDED.md

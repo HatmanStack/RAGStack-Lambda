@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -26,9 +26,13 @@ export const Login = () => {
           >
             {({ signOut: _signOut, user }) => { // eslint-disable-line no-unused-vars
               // Once authenticated, navigate to the intended destination
-              if (user) {
-                navigate(from, { replace: true });
-              }
+              // Use useEffect to avoid updating BrowserRouter during render
+              useEffect(() => {
+                if (user) {
+                  navigate(from, { replace: true });
+                }
+              }, [user, navigate, from]);
+
               return null;
             }}
           </Authenticator>
