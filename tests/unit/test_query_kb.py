@@ -388,7 +388,7 @@ def test_lambda_handler_uses_runtime_config(
 
     # Verify config_manager was called with correct parameter
     mock_config_manager.get_parameter.assert_called_once_with(
-        "chat_model_id", default="amazon.nova-pro-v1:0"
+        "chat_model_id", default="us.amazon.nova-pro-v1:0"
     )
 
     # Verify retrieve_and_generate was called with the configured model

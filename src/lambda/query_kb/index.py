@@ -143,7 +143,7 @@ def lambda_handler(event, context):
         }
 
     # Read chat model from ConfigurationManager (runtime configuration)
-    chat_model_id = config_manager.get_parameter("chat_model_id", default="amazon.nova-pro-v1:0")
+    chat_model_id = config_manager.get_parameter("chat_model_id", default="us.amazon.nova-pro-v1:0")
 
     bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
