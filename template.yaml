@@ -38,23 +38,6 @@ Parameters:
       - anthropic.claude-3-sonnet-20240229-v1:0
     ConstraintDescription: Must be a valid Bedrock Claude model ID
 
-  TextEmbedModelId:
-    Type: String
-    Default: amazon.titan-embed-text-v2:0
-    Description: Bedrock model ID for text embeddings
-    AllowedValues:
-      - amazon.titan-embed-text-v2:0
-      - amazon.titan-embed-text-v1
-    ConstraintDescription: Must be a valid Bedrock Titan text embedding model ID
-
-  ImageEmbedModelId:
-    Type: String
-    Default: amazon.titan-embed-image-v1
-    Description: Bedrock model ID for image embeddings
-    AllowedValues:
-      - amazon.titan-embed-image-v1
-    ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
-
   UISourceBucket:
     Type: String
     Description: S3 bucket containing UI source code zip
