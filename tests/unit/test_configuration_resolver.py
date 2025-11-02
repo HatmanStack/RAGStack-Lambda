@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
 
 # Set required environment variables BEFORE importing the module
 os.environ["CONFIGURATION_TABLE_NAME"] = "test-config-table"
@@ -97,29 +96,25 @@ def sample_schema():
         "Configuration": "Schema",
         "Schema": {
             "properties": {
-                "ocr_backend": {
-                    "type": "string",
-                    "enum": ["textract", "bedrock"],
-                    "order": 1
-                },
+                "ocr_backend": {"type": "string", "enum": ["textract", "bedrock"], "order": 1},
                 "bedrock_ocr_model_id": {
                     "type": "string",
                     "enum": [
                         "anthropic.claude-3-5-haiku-20241022-v1:0",
-                        "anthropic.claude-3-5-sonnet-20241022-v2:0"
+                        "anthropic.claude-3-5-sonnet-20241022-v2:0",
                     ],
                     "order": 2,
-                    "dependsOn": {"field": "ocr_backend", "value": "bedrock"}
+                    "dependsOn": {"field": "ocr_backend", "value": "bedrock"},
                 },
                 "chat_model_id": {
                     "type": "string",
                     "enum": [
                         "amazon.nova-pro-v1:0",
                         "amazon.nova-lite-v1:0",
-                        "anthropic.claude-3-5-sonnet-20241022-v2:0"
+                        "anthropic.claude-3-5-sonnet-20241022-v2:0",
                     ],
-                    "order": 3
-                }
+                    "order": 3,
+                },
             }
         },
     }
@@ -132,7 +127,7 @@ def sample_default():
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "chat_model_id": "amazon.nova-pro-v1:0"
+        "chat_model_id": "amazon.nova-pro-v1:0",
     }
 
 
@@ -350,15 +345,42 @@ def test_field_ordering(mock_get_item, sample_schema, sample_default):
     assert chat_order == 3
 
 
+@patch("index_config_resolver.get_configuration_item")
+def test_schema_excludes_embedding_model_fields(mock_get_item, sample_schema):
+    """Test that schema does NOT include embedding model configuration fields."""
+
+    def get_item_side_effect(config_type):
+        if config_type == "Schema":
+            return sample_schema
+        return None
+
+    mock_get_item.side_effect = get_item_side_effect
+
+    result = index.handle_get_configuration()
+    schema = result["Schema"]
+
+    # Verify only 3 fields exist
+    assert len(schema["properties"]) == 3
+
+    # Verify embedding model fields are NOT present
+    assert "text_embed_model_id" not in schema["properties"]
+    assert "image_embed_model_id" not in schema["properties"]
+
+    # Verify only allowed fields are present
+    assert set(schema["properties"].keys()) == {
+        "ocr_backend",
+        "bedrock_ocr_model_id",
+        "chat_model_id",
+    }
+
+
 # Test: handle_update_configuration
 
 
 @patch("index_config_resolver.configuration_table")
 def test_handle_update_configuration_with_json_string(mock_table):
     """Test updating configuration with JSON string."""
-    custom_config = json.dumps(
-        {"ocr_backend": "bedrock", "text_embed_model_id": "cohere.embed-english-v3"}
-    )
+    custom_config = json.dumps({"ocr_backend": "bedrock", "chat_model_id": "amazon.nova-lite-v1:0"})
 
     result = index.handle_update_configuration(custom_config)
 
