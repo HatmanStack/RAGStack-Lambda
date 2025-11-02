@@ -1,5 +1,13 @@
 import React from 'react';
 
 export function MessageBubble({ message }) {
-  return <div>MessageBubble - TODO</div>;
+  // Minimal implementation for ChatPanel tests
+  return (
+    <div className={`message-bubble ${message.type === 'user' ? 'user-message' : 'assistant-message'}`}>
+      <div className="message-content">{message.content}</div>
+      <div className="message-timestamp">
+        {new Date(message.timestamp).toLocaleTimeString()}
+      </div>
+    </div>
+  );
 }
