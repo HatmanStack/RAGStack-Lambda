@@ -132,9 +132,7 @@ def sample_default():
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "chat_model_id": "amazon.nova-pro-v1:0",
-        "text_embed_model_id": "amazon.titan-embed-text-v2:0",
-        "image_embed_model_id": "amazon.titan-embed-image-v1"
+        "chat_model_id": "amazon.nova-pro-v1:0"
     }
 
 
