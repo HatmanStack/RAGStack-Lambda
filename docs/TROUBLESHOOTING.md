@@ -27,8 +27,8 @@ Quick reference for common issues and solutions.
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Search returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. Manually sync: trigger `IngestToKb` Lambda. |
-| Search results irrelevant | Wrong embeddings or chunking | Check embedding model ID. Try rephrasing query (more specific). Adjust knowledge base chunk size. |
+| Chat returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. Chat requires --deploy-chat flag. |
+| Chat results irrelevant | Query too vague | Try rephrasing query (be more specific). Ensure documents are fully processed. |
 | "Knowledge Base not found" error | KB ID incorrect or missing | Check SAM outputs for Knowledge Base ID. Set in environment variables. Verify KB in Bedrock console. |
 
 ## UI Issues

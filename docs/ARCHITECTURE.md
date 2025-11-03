@@ -19,9 +19,9 @@ Upload → OCR → Embeddings → Bedrock KB
 |-----------|---------|
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) |
 | GenerateEmbeddings Lambda | Create embeddings (Titan) |
-| QueryKB Lambda | Search documents |
+| QueryKB Lambda | Query documents (used by chat) |
 | Step Functions | Orchestrate workflow |
-| Bedrock KB | Vector storage & search |
+| Bedrock KB | Vector storage & retrieval |
 | S3 | File storage |
 | DynamoDB | Metadata & config |
 | AppSync | GraphQL API |
@@ -32,7 +32,7 @@ Upload → OCR → Embeddings → Bedrock KB
 
 1. **Upload:** User → S3 → EventBridge → ProcessDocument
 2. **Processing:** ProcessDocument → GenerateEmbeddings → IngestToKB → Bedrock KB
-3. **Search:** User → AppSync → QueryKB → Bedrock KB → Results
+3. **Chat:** User → AppSync → QueryKB → Bedrock KB → Results
 
 ## Architecture Decisions
 
@@ -48,14 +48,14 @@ Upload → OCR → Embeddings → Bedrock KB
 
 ## Optional: Amplify Chat
 
-Core (SAM) provides search. Optional Amplify adds chat.
+Core (SAM) provides document processing. Optional Amplify adds chat interface.
 
 ```
         Bedrock KB
             ↑
      ┌──────┴──────┐
      │             │
-  SAM(Search)  Amplify(Chat)
+  SAM(Core)  Amplify(Chat)
 ```
 
 Deploy chat:

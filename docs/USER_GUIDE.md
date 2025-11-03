@@ -25,11 +25,13 @@ Reset password: Click "Forgot Password?" on login
 2. Files upload immediately
 3. Processing: UPLOADED → PROCESSING → GENERATING_EMBEDDINGS → SYNCING_KB → COMPLETED (2-15 min)
 
-## Search
+## Chat
 
-1. Search page → Enter question
-2. Press Enter
-3. Results show relevance score, excerpt, source
+Use the Chat page to ask questions about your documents:
+
+1. Chat page → Enter question
+2. AI responds with answer + sources
+3. Follow-up questions in same conversation
 
 **Tip:** Be specific ("What is the return policy?") not vague ("stuff")
 
@@ -60,12 +62,12 @@ Configure OCR and models (no redeployment):
 
 - Text-native PDFs process fastest (no OCR)
 - Avoid huge files (>50MB)
-- Search requires COMPLETED status
+- Chat requires documents in COMPLETED status
 
 ## Troubleshooting
 
 **UI not loading?** Invalidate CloudFront cache
 **Upload fails?** Check file format/size (<10MB)
-**No search results?** Documents must be COMPLETED status
+**Chat not working?** Documents must be COMPLETED status, check --deploy-chat was used
 
 See [Troubleshooting](TROUBLESHOOTING.md)

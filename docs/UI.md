@@ -1,6 +1,6 @@
 # React Web UI
 
-The web interface for RAGStack-Lambda document upload, management, and search.
+The web interface for RAGStack-Lambda document upload and management.
 
 ## Quick Setup
 
@@ -23,7 +23,7 @@ npm start  # http://localhost:5173
 - **Authentication** - Cognito-backed login/signup
 - **Document Upload** - Drag-and-drop with progress tracking
 - **Document Dashboard** - Table with filtering, sorting, pagination
-- **Knowledge Base Search** - Query documents with expandable results
+- **Chat Interface** - Query documents via AI chat (requires --deploy-chat)
 - **Responsive** - Works on desktop, tablet, mobile
 
 ## Configuration
@@ -55,7 +55,8 @@ src/ui/
 │   │   ├── Auth/          # Authentication
 │   │   ├── Dashboard/     # Document management
 │   │   ├── Upload/        # File upload
-│   │   ├── Search/        # KB search
+│   │   ├── Chat/          # AI chat interface
+│   │   ├── Settings/      # Configuration
 │   │   └── Layout/        # Navigation and layout
 │   ├── hooks/             # Custom React hooks
 │   ├── config.js          # Amplify configuration

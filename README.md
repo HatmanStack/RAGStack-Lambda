@@ -4,7 +4,7 @@ Serverless document processing with AI chat. Upload documents, extract text with
 
 ## Features
 
-- 🔍 Document search (PDF, images, Office docs)
+- 📄 Document processing (PDF, images, Office docs)
 - 💬 AI chat with source attribution
 - 🌐 Web component for any framework (Vue, Angular, Svelte)
 - 🚀 One-click deploy
@@ -88,7 +88,7 @@ import { ChatWithSources } from '@ragstack/amplify-chat';
 ```
 Upload → OCR → Embeddings → Bedrock KB
                                 ↓
- Web UI ←→ GraphQL API ←→ Query/Search
+ Web UI (Dashboard + Chat) ←→ GraphQL API
                                 ↓
  Web Component ←→ AI Chat with Sources
 ```
@@ -114,10 +114,10 @@ npm run lint     # Lint code
 ## Deployment Options
 
 ```bash
-# Full (search + chat)
+# With chat (recommended)
 python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --deploy-chat
 
-# Search only
+# Without chat
 python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1
 
 # Update chat only
