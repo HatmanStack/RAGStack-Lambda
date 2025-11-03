@@ -111,7 +111,6 @@ class TestLambdaRequirements:
         content = req_file.read_text()
         assert "./lib" in content, "process_document requirements should reference ./lib package"
 
-
     def test_query_kb_does_not_reference_lib(self):
         """Verify query_kb doesn't reference lib (doesn't use ragstack_common)"""
         req_file = Path("src/lambda/query_kb/requirements.txt")
