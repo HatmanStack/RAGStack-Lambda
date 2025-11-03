@@ -199,7 +199,7 @@ class TestPublishPyIntegration:
 
     @patch('publish.boto3')
     @patch('publish.run_command')
-    def test_chat_only_deployment_flow(self, mock_run_cmd, mock_boto3):
+    def test_chat_only_deployment_flow(self, _mock_run_cmd, mock_boto3):
         """Test chat-only deployment including config generation."""
         from publish import extract_knowledge_base_id, write_amplify_config
 
