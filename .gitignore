@@ -25,6 +25,7 @@ src/lambda/*/ragstack_common/
 node_modules/
 npm-debug.log
 .env.local
+.env.amplify
 
 # IDEs
 .vscode/
@@ -34,3 +35,8 @@ npm-debug.log
 # Implementation plans (not part of project)
 docs/plans/
 TEST_FIXES_NEEDED.md
+
+# amplify
+.amplify
+amplify_outputs*
+amplifyconfiguration*
