@@ -1,0 +1,68 @@
+/**
+ * SourcesDisplay Component
+ *
+ * Renders a list of sources/citations from the knowledge base.
+ * Displays document title, location, and snippet for each source.
+ *
+ * This component is embeddable and works in any React application.
+ */
+
+import React from 'react';
+import { SourcesDisplayProps } from '../types';
+import styles from '../styles/ChatWithSources.module.css';
+
+/**
+ * SourcesDisplay Component
+ *
+ * @param sources - Array of sources to display
+ * @param className - Optional custom CSS class
+ * @returns React component rendering the sources
+ */
+export const SourcesDisplay: React.FC<SourcesDisplayProps> = ({
+  sources,
+  className,
+}) => {
+  // Don't render if no sources
+  if (!sources || sources.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`${styles.sourcesContainer} ${className || ''}`}>
+      {/* Header with source count */}
+      <div className={styles.sourcesHeader}>
+        <span className={styles.sourcesIcon}>📄</span>
+        <span className={styles.sourcesLabel}>Sources</span>
+        <span className={styles.sourceCount}>({sources.length})</span>
+      </div>
+
+      {/* List of sources */}
+      <div className={styles.sourcesList}>
+        {sources.map((source, index) => (
+          <div key={`source-${index}`} className={styles.sourceItem}>
+            {/* Document title */}
+            <div className={styles.sourceTitle}>{source.title}</div>
+
+            {/* Location (page number or character offset) */}
+            {source.location && (
+              <div className={styles.sourceLocation}>
+                📍 {source.location}
+              </div>
+            )}
+
+            {/* Text snippet with quote styling */}
+            {source.snippet && (
+              <div className={styles.sourceSnippet}>
+                <span className={styles.quoteIcon}>❝</span>
+                {source.snippet}
+                <span className={styles.quoteIcon}>❞</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default SourcesDisplay;

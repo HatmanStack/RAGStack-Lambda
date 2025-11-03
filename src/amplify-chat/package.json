@@ -1,0 +1,77 @@
+{
+  "name": "@ragstack/amplify-chat",
+  "version": "1.0.0",
+  "description": "Reusable React component for AI chat with source attribution using AWS Amplify AI Kit and Bedrock",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "amplify",
+    "bedrock",
+    "chat",
+    "ai",
+    "react",
+    "component",
+    "rag",
+    "source-attribution",
+    "knowledge-base"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "@aws-amplify/ui-react-ai": ">=1.0.0",
+    "aws-amplify": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-amplify/ui-react-ai": {
+      "optional": false
+    },
+    "aws-amplify": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@aws-amplify/ui-react-ai": "^1.0.0",
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitest/coverage-v8": "^0.34.0",
+    "eslint": "^8.50.0",
+    "happy-dom": "^12.9.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.2.0",
+    "vitest": "^0.34.0"
+  },
+  "dependencies": {
+    "aws-amplify": "^6.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/RAGStack-Lambda.git",
+    "directory": "src/amplify-chat"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/RAGStack-Lambda/issues"
+  },
+  "homepage": "https://github.com/your-org/RAGStack-Lambda/tree/main/src/amplify-chat#readme"
+}

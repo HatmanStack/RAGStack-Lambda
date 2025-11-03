@@ -1,0 +1,16 @@
+src/
+tests/
+vitest.config.ts
+tsconfig.json
+.gitignore
+*.test.ts
+*.test.tsx
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+coverage/
+.nyc_output/
+node_modules/
+*.log
