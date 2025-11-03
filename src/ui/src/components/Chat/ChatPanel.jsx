@@ -25,12 +25,6 @@ export function ChatPanel() {
   const messagesEndRef = useRef(null);
   const client = useMemo(() => generateClient(), []);
 
-  // Debug: Log when component mounts
-  useEffect(() => {
-    console.log('[ChatPanel] Component mounted');
-    console.log('[ChatPanel] Amplify client:', client);
-  }, [client]);
-
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,13 +34,8 @@ export function ChatPanel() {
   const handleSend = async () => {
     const userMessage = inputValue.trim();
 
-    console.log('[ChatPanel] handleSend called');
-    console.log('[ChatPanel] User message:', userMessage);
-    console.log('[ChatPanel] Current sessionId:', sessionId);
-
     // Validate input
     if (!userMessage) {
-      console.log('[ChatPanel] Empty message, returning');
       return;
     }
 
@@ -66,9 +55,6 @@ export function ChatPanel() {
     setError(null);
 
     try {
-      console.log('[ChatPanel] Calling GraphQL API...');
-      console.log('[ChatPanel] Variables:', { query: userMessage, sessionId });
-
       // Call GraphQL API
       const response = await client.graphql({
         query: queryKnowledgeBase,
@@ -78,24 +64,14 @@ export function ChatPanel() {
         }
       });
 
-      console.log('[ChatPanel] Raw GraphQL response:', response);
-
       const data = response.data.queryKnowledgeBase;
-      console.log('[ChatPanel] Extracted data:', data);
 
       // Check for backend error
       if (data.error) {
-        console.error('[ChatPanel] Backend error:', data.error);
         setError(data.error);
         setSessionId(null);  // Reset session on error
         return;
       }
-
-      console.log('[ChatPanel] Answer:', data.answer);
-      console.log('[ChatPanel] Answer length:', data.answer?.length);
-      console.log('[ChatPanel] SessionId:', data.sessionId);
-      console.log('[ChatPanel] Sources:', data.sources);
-      console.log('[ChatPanel] Error field:', data.error);
 
       // Create AI message object
       const aiMessageObj = {
@@ -105,27 +81,14 @@ export function ChatPanel() {
         timestamp: new Date().toISOString()
       };
 
-      console.log('[ChatPanel] AI message object:', aiMessageObj);
-
       // Add AI message and update session
-      setMessages(prev => {
-        const newMessages = [...prev, aiMessageObj];
-        console.log('[ChatPanel] Updated messages:', newMessages);
-        return newMessages;
-      });
+      setMessages(prev => [...prev, aiMessageObj]);
       setSessionId(data.sessionId);
-      console.log('[ChatPanel] Updated sessionId to:', data.sessionId);
 
     } catch (err) {
       console.error('[ChatPanel] Chat error:', err);
-      console.error('[ChatPanel] Error details:', {
-        message: err.message,
-        errors: err.errors,
-        stack: err.stack
-      });
-      setError(`Failed to get response: ${err.message || 'Unknown error'}. Check console for details.`);
+      setError(`Failed to get response: ${err.message || 'Unknown error'}`);
     } finally {
-      console.log('[ChatPanel] Setting isLoading to false');
       setIsLoading(false);
     }
   };

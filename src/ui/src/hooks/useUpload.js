@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import gql from 'graphql-tag';
@@ -18,9 +18,13 @@ const client = generateClient();
 export const useUpload = () => {
   const [uploads, setUploads] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const uploadsRef = useRef([]);
+
+  // Keep ref in sync with state
+  uploadsRef.current = uploads;
 
   const addUpload = useCallback((file) => {
-    const uploadId = Date.now() + Math.random();
+    const uploadId = crypto.randomUUID();
 
     setUploads(prev => [...prev, {
       id: uploadId,
@@ -35,21 +39,14 @@ export const useUpload = () => {
   }, []);
 
   const uploadFile = useCallback(async (uploadId) => {
-    console.log('uploadFile called with ID:', uploadId);
-
-    // Use functional setState to get current uploads without stale closure
-    let upload = null;
-    setUploads(prev => {
-      upload = prev.find(u => u.id === uploadId);
-      return prev; // Don't modify state here
-    });
+    // Use ref to get current uploads without stale closure
+    const upload = uploadsRef.current.find(u => u.id === uploadId);
 
     if (!upload) {
       console.error('Upload not found for ID:', uploadId);
       return;
     }
 
-    console.log('Found upload:', upload);
     setUploading(true);
 
     try {
@@ -59,13 +56,11 @@ export const useUpload = () => {
       ));
 
       // Get presigned URL
-      console.log('Requesting presigned URL for:', upload.file.name);
       const { data } = await client.graphql({
         query: CREATE_UPLOAD_URL,
         variables: { filename: upload.file.name }
       });
 
-      console.log('Received presigned URL response:', data.createUploadUrl);
       const { documentId } = data.createUploadUrl;
 
       // Upload to S3 using Amplify Storage
@@ -82,8 +77,7 @@ export const useUpload = () => {
         }
       });
 
-      const result = await operation.result;
-      console.log('Upload to S3 complete:', result);
+      await operation.result;
 
       // Update status to complete
       setUploads(prev => prev.map(u =>

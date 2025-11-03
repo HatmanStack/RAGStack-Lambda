@@ -19,22 +19,14 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
     e.stopPropagation();
     setDragActive(false);
 
-    console.log('Drop event triggered');
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      console.log('Files dropped:', e.dataTransfer.files.length);
       onFilesSelected(Array.from(e.dataTransfer.files));
-    } else {
-      console.log('No files in drop event');
     }
   }, [onFilesSelected]);
 
   const handleFileInput = useCallback((e) => {
-    console.log('File input change event');
     if (e.target.files && e.target.files.length > 0) {
-      console.log('Files selected via input:', e.target.files.length);
       onFilesSelected(Array.from(e.target.files));
-    } else {
-      console.log('No files selected');
     }
   }, [onFilesSelected]);
 

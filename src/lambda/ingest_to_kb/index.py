@@ -92,7 +92,7 @@ def lambda_handler(event, context):
         # Update document status in DynamoDB to 'completed'
         try:
             tracking_table.update_item(
-                Key={'documentId': document_id},
+                Key={'document_id': document_id},
                 UpdateExpression='SET #status = :status, updatedAt = :updated_at',
                 ExpressionAttributeNames={'#status': 'status'},
                 ExpressionAttributeValues={
@@ -102,9 +102,9 @@ def lambda_handler(event, context):
             )
             logger.info(f"Updated document {document_id} status to 'completed'")
         except ClientError as e:
-            logger.error(f"Failed to update DynamoDB status: {str(e)}")
-            # Don't fail the whole ingestion if status update fails
-            pass
+            logger.error(f"Failed to update DynamoDB status for {document_id}: {str(e)}")
+            # Log the error but don't fail the ingestion - the document was successfully ingested
+            # The status will remain as 'processing' which can be corrected later
 
         return {
             'document_id': document_id,

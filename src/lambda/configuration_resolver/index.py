@@ -160,6 +160,24 @@ def handle_update_configuration(custom_config):
 
         logger.info(f"Updating Custom configuration with keys: {list(custom_config_obj.keys())}")
 
+        # Validate keys against Schema
+        schema_item = get_configuration_item("Schema")
+        if not schema_item:
+            raise ValueError("Schema configuration not found in DynamoDB")
+
+        schema_config = json.loads(schema_item.get("config", "{}"))
+        valid_fields = set(schema_config.get("fields", {}).keys())
+
+        # Check for invalid keys
+        provided_keys = set(custom_config_obj.keys()) - {"Configuration"}  # Exclude partition key
+        invalid_keys = provided_keys - valid_fields
+
+        if invalid_keys:
+            raise ValueError(
+                f"Invalid configuration keys: {', '.join(sorted(invalid_keys))}. "
+                f"Valid keys are: {', '.join(sorted(valid_fields))}"
+            )
+
         # Remove 'Configuration' key to prevent partition key override
         safe_config = {k: v for k, v in custom_config_obj.items() if k != "Configuration"}
 
