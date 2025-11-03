@@ -67,7 +67,7 @@ type UploadUrl {
 # Chat response with session support for conversation continuity
 type ChatResponse {
   answer: String!
-  sessionId: String!
+  sessionId: String
   sources: [Source!]!
   error: String
 }

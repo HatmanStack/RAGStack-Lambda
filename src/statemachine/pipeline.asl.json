@@ -40,21 +40,19 @@
           "Next": "ProcessingFailed"
         }
       ],
-      "Next": "GenerateEmbeddings"
+      "Next": "IngestToKnowledgeBase"
     },
 
-    "GenerateEmbeddings": {
+    "IngestToKnowledgeBase": {
       "Type": "Task",
-      "Resource": "${GenerateEmbeddingsFunctionArn}",
-      "Comment": "Generate text and image embeddings",
-      "TimeoutSeconds": 960,
+      "Resource": "${IngestToKBFunctionArn}",
+      "Comment": "Ingest document directly into Knowledge Base (Bedrock generates embeddings and indexes automatically)",
+      "TimeoutSeconds": 300,
       "Parameters": {
         "document_id.$": "$.document_id",
-        "output_s3_uri.$": "$.processResult.output_s3_uri",
-        "pages.$": "$.processResult.pages",
-        "vector_bucket.$": "$.vector_bucket"
+        "output_s3_uri.$": "$.processResult.output_s3_uri"
       },
-      "ResultPath": "$.embeddingResult",
+      "ResultPath": "$.ingestionResult",
       "Retry": [
         {
           "ErrorEquals": [
@@ -74,16 +72,16 @@
           "Next": "ProcessingFailed"
         }
       ],
-      "Next": "MarkAsIndexed"
+      "Next": "MarkAsCompleted"
     },
 
-    "MarkAsIndexed": {
+    "MarkAsCompleted": {
       "Type": "Pass",
-      "Comment": "Document successfully processed and indexed",
+      "Comment": "Document successfully processed and completed",
       "Parameters": {
         "document_id.$": "$.document_id",
-        "status": "indexed",
-        "message": "Document successfully processed and indexed in Knowledge Base"
+        "status": "completed",
+        "message": "Document successfully processed and ingested into Knowledge Base"
       },
       "End": true
     },

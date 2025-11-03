@@ -60,4 +60,11 @@ const awsConfig = {
   },
 };
 
+// Debug: Log configuration (sanitized)
+console.log('[Config] AWS Configuration loaded:');
+console.log('[Config] Region:', awsConfig.region);
+console.log('[Config] GraphQL Endpoint:', awsConfig.API.GraphQL.endpoint || '(not set)');
+console.log('[Config] User Pool ID:', awsConfig.Auth.Cognito.userPoolId ? `${awsConfig.Auth.Cognito.userPoolId.substring(0, 10)}...` : '(not set)');
+console.log('[Config] Input Bucket:', awsConfig.Storage.S3.bucket || '(not set)');
+
 export default awsConfig;

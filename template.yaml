@@ -29,14 +29,14 @@ Parameters:
 
   BedrockOcrModelId:
     Type: String
-    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Default: meta.llama3-2-90b-instruct-v1:0
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
-      - anthropic.claude-3-5-haiku-20241022-v1:0
-      - anthropic.claude-3-5-sonnet-20241022-v2:0
-      - anthropic.claude-3-haiku-20240307-v1:0
-      - anthropic.claude-3-sonnet-20240229-v1:0
-    ConstraintDescription: Must be a valid Bedrock Claude model ID
+      - meta.llama3-2-90b-instruct-v1:0
+      - meta.llama3-2-11b-instruct-v1:0
+      - us.anthropic.claude-sonnet-4-20250514-v1:0
+      - us.anthropic.claude-haiku-4-5-20251001-v1:0
+    ConstraintDescription: Must be a valid Bedrock vision-capable model ID
 
   UISourceBucket:
     Type: String
@@ -606,52 +606,48 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
-  GenerateEmbeddingsFunction:
+  IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-embed-${DeploymentSuffix}'
-      CodeUri: src/lambda/generate_embeddings/
+      FunctionName: !Sub '${ProjectName}-ingest-${DeploymentSuffix}'
+      CodeUri: src/lambda/ingest_to_kb/
       Handler: index.lambda_handler
-      Description: Generate text and image embeddings
-      Layers:
-        - !Ref RagstackCommonLayer
+      Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
-      Timeout: 900
-      MemorySize: 2048
+      Timeout: 300
+      MemorySize: 256
       Tracing: Active
-      DeadLetterQueue:
-        Type: SQS
-        TargetArn: !GetAtt ProcessingDLQ.Arn
       Environment:
         Variables:
           LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
           TRACKING_TABLE: !Ref TrackingTable
-          METERING_TABLE: !Ref MeteringTable
-          VECTOR_BUCKET: !Ref VectorBucket
-          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref OutputBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref MeteringTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
-              Action: bedrock:InvokeModel
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+                - bedrock:ListDataSources
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
 
   QueryKBFunction:
     Type: AWS::Serverless::Function
@@ -686,8 +682,14 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: bedrock:GetInferenceProfile
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: aws-marketplace:ViewSubscriptions
+              Resource: '*'
 
   ##########################################################################
   # Configuration Resolver Lambda
@@ -761,7 +763,7 @@ Resources:
                   - lambda:InvokeFunction
                 Resource:
                   - !GetAtt ProcessDocumentFunction.Arn
-                  - !GetAtt GenerateEmbeddingsFunction.Arn
+                  - !GetAtt IngestToKBFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -786,7 +788,7 @@ Resources:
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
-        GenerateEmbeddingsFunctionArn: !GetAtt GenerateEmbeddingsFunction.Arn
+        IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
@@ -878,6 +880,17 @@ Resources:
               ArnLike:
                 'aws:SourceArn': !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
       Policies:
+        - PolicyName: S3DataSourceAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${OutputBucket.Arn}'
+                  - !Sub '${OutputBucket.Arn}/*'
         - PolicyName: S3VectorsAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -981,6 +994,7 @@ Resources:
       KnowledgeBaseName: !Sub '${ProjectName}-kb-${DeploymentSuffix}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
+      OutputBucket: !Ref OutputBucket
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
@@ -1383,7 +1397,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "ProcessDocument", "color": "#1f77b4"}],
-                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
                   ["...", {"stat": "Sum", "label": "QueryKB", "color": "#2ca02c"}]
                 ],
                 "period": 300,
@@ -1406,7 +1419,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "ProcessDocument Errors", "color": "#d62728"}],
-                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings Errors", "color": "#ff7f0e"}],
                   ["...", {"stat": "Sum", "label": "QueryKB Errors", "color": "#e377c2"}]
                 ],
                 "period": 300,
@@ -1485,7 +1497,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Duration", {"stat": "Average", "label": "ProcessDocument", "color": "#1f77b4"}],
-                  ["...", {"stat": "Average", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
                   ["...", {"stat": "Average", "label": "QueryKB", "color": "#2ca02c"}]
                 ],
                 "period": 300,
@@ -1521,27 +1532,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ProcessDocumentFunction
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref AlarmTopic
-      OKActions:
-        - !Ref AlarmTopic
-
-  GenerateEmbeddingsErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-GenerateEmbeddings-Errors'
-      AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref GenerateEmbeddingsFunction
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref AlarmTopic
@@ -1709,12 +1699,6 @@ Outputs:
     Value: !GetAtt ProcessDocumentFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-ProcessDocumentFunction'
-
-  GenerateEmbeddingsFunctionArn:
-    Description: Generate embeddings Lambda ARN
-    Value: !GetAtt GenerateEmbeddingsFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-GenerateEmbeddingsFunction'
 
   QueryKBFunctionArn:
     Description: Query Knowledge Base Lambda ARN

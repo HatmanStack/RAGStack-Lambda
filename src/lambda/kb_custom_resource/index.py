@@ -111,10 +111,10 @@ def create_knowledge_base(properties):
         s3vectors_client.create_vector_bucket(vectorBucketName=vector_bucket)
         logger.info(f"S3 Vectors bucket initialized: {vector_bucket}")
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code', '')
+        error_code = e.response.get("Error", {}).get("Code", "")
         error_msg = str(e)
         # Bucket already exists is a non-fatal condition
-        if error_code == 'ConflictException' or 'already exists' in error_msg.lower():
+        if error_code == "ConflictException" or "already exists" in error_msg.lower():
             logger.info(f"S3 Vectors bucket already exists: {vector_bucket}")
         else:
             # All other errors are fatal - re-raise
@@ -190,26 +190,30 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         raise
 
-    # Step 5: Create Data Source for S3 Vector bucket
-    # This allows Bedrock KB to sync vectors from the S3 Vector bucket
+    # Step 5: Create Data Source for S3 Output bucket
+    # This allows Bedrock KB to ingest documents from the output bucket
     project_name = properties.get("ProjectName", "default")
+    output_bucket = properties.get("OutputBucket")
+    if not output_bucket:
+        raise ValueError("OutputBucket property is required")
+
     data_source_name = f"{kb_name}-datasource"
-    logger.info(f"Creating Data Source: {data_source_name}")
+    logger.info(f"Creating Data Source: {data_source_name} for bucket {output_bucket}")
 
     try:
-        # Get the S3 bucket ARN for the vector bucket
+        # Get the S3 bucket ARN for the output bucket
         sts_client = boto3.client("sts")
         account_id = sts_client.get_caller_identity()["Account"]
-        vector_bucket_arn = f"arn:aws:s3:::{vector_bucket}"
+        output_bucket_arn = f"arn:aws:s3:::{output_bucket}"
 
         ds_response = bedrock_agent.create_data_source(
             knowledgeBaseId=kb_id,
             name=data_source_name,
-            description=f"S3 Vector data source for {project_name}",
+            description=f"S3 data source for {project_name} (output bucket)",
             dataSourceConfiguration={
                 "type": "S3",
                 "s3Configuration": {
-                    "bucketArn": vector_bucket_arn,
+                    "bucketArn": output_bucket_arn,
                     "bucketOwnerAccountId": account_id,
                 },
             },
@@ -261,10 +265,7 @@ def delete_knowledge_base(kb_id, project_name="default"):
             for ds in ds_list.get("dataSourceSummaries", []):
                 ds_id = ds["dataSourceId"]
                 logger.info(f"Deleting Data Source: {ds_id}")
-                bedrock_agent.delete_data_source(
-                    knowledgeBaseId=kb_id,
-                    dataSourceId=ds_id
-                )
+                bedrock_agent.delete_data_source(knowledgeBaseId=kb_id, dataSourceId=ds_id)
                 logger.info(f"Deleted Data Source: {ds_id}")
         except Exception as e:
             logger.warning(f"Error deleting Data Sources: {e}")

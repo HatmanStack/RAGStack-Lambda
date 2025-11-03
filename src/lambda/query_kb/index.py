@@ -69,18 +69,24 @@ def extract_sources(citations):
     sources = []
     seen = set()  # Deduplicate sources
 
-    for citation in citations:
+    logger.info(f"Processing {len(citations)} citations")
+    for idx, citation in enumerate(citations):
+        logger.debug(f"Citation {idx}: {citation}")
         for ref in citation.get("retrievedReferences", []):
             # Extract S3 URI
             uri = ref.get("location", {}).get("s3Location", {}).get("uri", "")
+            logger.info(f"Processing reference with URI: {uri}")
             if not uri:
+                logger.warning("No URI found in reference")
                 continue
 
             # Parse S3 URI: s3://bucket/document-id/pages/page-1.json
+            # OR: s3://bucket/document-id/text_embedding.json (vector bucket format)
             try:
                 parts = uri.replace("s3://", "").split("/")
+                logger.info(f"URI parts: {parts}")
                 if len(parts) < 2:
-                    logger.warning(f"Invalid S3 URI format: {uri}")
+                    logger.warning(f"Invalid S3 URI format (too few parts): {uri}")
                     continue
 
                 # Decode document ID (may have URL encoding)
@@ -96,13 +102,14 @@ def extract_sources(citations):
                     except (IndexError, ValueError):
                         logger.debug(f"Could not extract page number from: {page_file}")
 
+                # Extract snippet (first 200 chars)
+                content_text = ref.get("content", {}).get("text", "")
+                snippet = content_text[:200] if content_text else ""
+                logger.info(f"Extracted snippet length: {len(snippet)}, document_id: {document_id}")
+
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"
                 if source_key not in seen:
-                    # Extract snippet (first 200 chars)
-                    content_text = ref.get("content", {}).get("text", "")
-                    snippet = content_text[:200] if content_text else ""
-
                     sources.append(
                         {
                             "documentId": document_id,
@@ -112,9 +119,12 @@ def extract_sources(citations):
                         }
                     )
                     seen.add(source_key)
+                    logger.info(f"Added source: {source_key}")
+                else:
+                    logger.info(f"Skipping duplicate source: {source_key}")
 
             except Exception as e:
-                logger.warning(f"Failed to parse source URI {uri}: {e}")
+                logger.error(f"Failed to parse source URI {uri}: {e}", exc_info=True)
                 continue
 
     logger.info(f"Extracted {len(sources)} unique sources from {len(citations)} citations")
@@ -148,9 +158,23 @@ def lambda_handler(event, context):
     bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
 
-    # Extract inputs
-    query = event.get("query", "")
-    session_id = event.get("sessionId")
+    # Get AWS account ID from context
+    # Extract from knowledge_base_id ARN format or use STS
+    account_id = context.invoked_function_arn.split(":")[4] if context else None
+    if not account_id:
+        # Fallback: try to extract from KB ID if it's an ARN
+        if knowledge_base_id.startswith("arn:"):
+            account_id = knowledge_base_id.split(":")[4]
+        else:
+            # Last resort: use STS to get account ID
+            sts = boto3.client("sts")
+            account_id = sts.get_caller_identity()["Account"]
+
+    # Extract inputs from AppSync event
+    # AppSync sends: {"arguments": {"query": "...", "sessionId": "..."}, ...}
+    arguments = event.get("arguments", event)  # Fallback to event for direct invocation
+    query = arguments.get("query", "")
+    session_id = arguments.get("sessionId")
 
     # Log safe summary (not full event payload to avoid PII/user data leakage)
     safe_summary = {
@@ -166,7 +190,7 @@ def lambda_handler(event, context):
     try:
         # Validate query
         if not query:
-            return {"answer": "", "sessionId": None, "sources": [], "message": "No query provided"}
+            return {"answer": "", "sessionId": None, "sources": [], "error": "No query provided"}
 
         if not isinstance(query, str):
             return {
@@ -185,13 +209,26 @@ def lambda_handler(event, context):
             }
 
         # Build request
+        # Determine ARN type based on model ID format
+        # Inference profiles start with region prefix (e.g., us.amazon.nova-pro-v1:0)
+        # Foundation models don't (e.g., anthropic.claude-3-5-sonnet-20241022-v2:0)
+        if chat_model_id.startswith(("us.", "eu.", "ap-")):
+            # Inference profiles require account ID in ARN
+            model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{chat_model_id}"
+        else:
+            # Foundation models don't use account ID
+            model_arn = f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}"
+
+        logger.info(f"Using model ARN: {model_arn}")
+        logger.info(f"Account ID: {account_id}, Region: {region}")
+
         request = {
             "input": {"text": query},
             "retrieveAndGenerateConfiguration": {
                 "type": "KNOWLEDGE_BASE",
                 "knowledgeBaseConfiguration": {
                     "knowledgeBaseId": knowledge_base_id,
-                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}",
+                    "modelArn": model_arn,
                 },
             },
         }

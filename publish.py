@@ -537,6 +537,7 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
         f"DeploymentSuffix={deployment_suffix}",
         f"ProjectName={project_name}",
         f"AdminEmail={admin_email}",
+        "BedrockOcrModelId=meta.llama3-2-90b-instruct-v1:0",
     ]
 
     # Add UI parameters if building UI
@@ -787,10 +788,10 @@ def seed_configuration_table(stack_name, region):
                     'order': 2,
                     'description': 'Bedrock model for OCR (only used if backend is bedrock)',
                     'enum': [
-                        'anthropic.claude-3-5-haiku-20241022-v1:0',
-                        'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                        'anthropic.claude-3-haiku-20240307-v1:0',
-                        'anthropic.claude-3-sonnet-20240229-v1:0'
+                        'meta.llama3-2-90b-instruct-v1:0',
+                        'meta.llama3-2-11b-instruct-v1:0',
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                     ],
                     'dependsOn': {
                         'field': 'ocr_backend',
@@ -802,13 +803,13 @@ def seed_configuration_table(stack_name, region):
                     'order': 3,
                     'description': 'Bedrock model for Knowledge Base chat queries',
                     'enum': [
-                        'amazon.nova-pro-v1:0',
-                        'amazon.nova-lite-v1:0',
-                        'amazon.nova-micro-v1:0',
-                        'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                        'anthropic.claude-3-5-haiku-20241022-v1:0'
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.amazon.nova-pro-v1:0',
+                        'us.amazon.nova-lite-v1:0',
+                        'us.amazon.nova-micro-v1:0'
                     ],
-                    'default': 'amazon.nova-pro-v1:0'
+                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 }
             }
         }
@@ -818,8 +819,8 @@ def seed_configuration_table(stack_name, region):
     default_item = {
         'Configuration': 'Default',
         'ocr_backend': 'textract',
-        'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
-        'chat_model_id': 'amazon.nova-pro-v1:0'
+        'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
+        'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
     }
 
     try:

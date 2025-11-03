@@ -62,12 +62,16 @@ def mock_bedrock_response():
                 "retrievedReferences": [
                     {
                         "content": {"text": "This document discusses cloud architecture."},
-                        "location": {"s3Location": {"uri": "s3://bucket/doc1.pdf/pages/page-1.json"}},
+                        "location": {
+                            "s3Location": {"uri": "s3://bucket/doc1.pdf/pages/page-1.json"}
+                        },
                         "score": 0.95,
                     },
                     {
                         "content": {"text": "AWS services are covered in detail."},
-                        "location": {"s3Location": {"uri": "s3://bucket/doc2.pdf/pages/page-2.json"}},
+                        "location": {
+                            "s3Location": {"uri": "s3://bucket/doc2.pdf/pages/page-2.json"}
+                        },
                         "score": 0.87,
                     },
                 ]
@@ -103,7 +107,9 @@ def test_lambda_handler_success(
     result = index.lambda_handler(valid_event, lambda_context)
 
     # Verify ChatResponse format
-    assert result["answer"] == "Based on the documents, the main topics are cloud architecture and AWS services."
+    assert result["answer"] == (
+        "Based on the documents, the main topics are cloud architecture and AWS services."
+    )
     assert result["sessionId"] is not None
     assert len(result["sources"]) == 2
     assert result["sources"][0]["documentId"] == "doc1.pdf"
@@ -192,7 +198,11 @@ def test_lambda_handler_ignores_extra_parameters(
 
 @patch.dict(
     "os.environ",
-    {"KNOWLEDGE_BASE_ID": "test-kb-123", "CONFIGURATION_TABLE_NAME": "test-config-table", "AWS_REGION": "us-east-1"},
+    {
+        "KNOWLEDGE_BASE_ID": "test-kb-123",
+        "CONFIGURATION_TABLE_NAME": "test-config-table",
+        "AWS_REGION": "us-east-1",
+    },
 )
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
@@ -452,9 +462,7 @@ def test_lambda_handler_uses_correct_region_in_model_arn(
 )
 @patch("index_query_kb.config_manager")
 @patch("index_query_kb.boto3.client")
-def test_lambda_handler_with_session_id(
-    mock_boto3_client, mock_config_manager, lambda_context
-):
+def test_lambda_handler_with_session_id(mock_boto3_client, mock_config_manager, lambda_context):
     """Test that sessionId is passed to Bedrock for conversation continuity."""
     # Setup config mock
     mock_config_manager.get_parameter.return_value = "us.amazon.nova-pro-v1:0"
