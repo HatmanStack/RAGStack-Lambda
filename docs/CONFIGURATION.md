@@ -6,20 +6,24 @@ This guide covers how to configure and customize RAGStack-Lambda for your use ca
 
 - [Configuration Overview](#configuration-overview)
 - [Runtime Configuration Management](#runtime-configuration-management)
+- [Deployment Configuration](#deployment-configuration)
 - [SAM Configuration](#sam-configuration)
 - [CloudFormation Parameters](#cloudformation-parameters)
-- [Environment-Specific Configuration](#environment-specific-configuration)
+- [Project-Based Configuration](#project-based-configuration)
 - [Lambda Configuration](#lambda-configuration)
 - [OCR Configuration](#ocr-configuration)
 - [Embedding Models](#embedding-models)
 - [UI Configuration](#ui-configuration)
 - [Cost Optimization](#cost-optimization)
+- [Frequently Asked Questions](#frequently-asked-questions)
 
 ---
 
 ## Configuration Overview
 
-RAGStack-Lambda uses multiple configuration layers:
+RAGStack-Lambda uses a simplified configuration system with **only 3 user-configurable settings**. Embedding models are hardcoded to production-ready defaults, eliminating the complexity of runtime embedding configuration.
+
+### Configuration Layers
 
 1. **CLI Parameters** - Deployment-time configuration via `publish.py` arguments
 2. **CloudFormation Parameters** (`template.yaml`) - Infrastructure parameters
@@ -27,11 +31,32 @@ RAGStack-Lambda uses multiple configuration layers:
 4. **UI Configuration** (generated during deployment) - Frontend settings
 5. **Runtime Configuration** (DynamoDB) - User-modifiable settings via Settings UI
 
+### What's Configurable
+
+**User-Configurable (3 settings)**:
+- OCR Backend (Textract or Bedrock)
+- Bedrock OCR Model ID (which Claude model for OCR)
+- Chat Model ID (which model for Knowledge Base queries)
+
+**Hardcoded (not configurable)**:
+- Text embedding model: `amazon.titan-embed-text-v2:0`
+- Image embedding model: `amazon.titan-embed-image-v1`
+
+### Design Rationale
+
+Embedding models are hardcoded because:
+- Changing embedding models requires re-embedding all documents
+- The default Titan models are production-ready for 95% of use cases
+- Simpler configuration reduces risk of accidental changes
+- Lower maintenance burden
+
+See [Embedding Models](#embedding-models) section for details on changing models if needed.
+
 ---
 
 ## Runtime Configuration Management
 
-Starting with the runtime configuration feature, you can modify operational parameters through the Settings UI without redeploying the stack. This includes OCR backends, embedding models, and response models.
+You can modify operational parameters through the Settings UI without redeploying the stack. This includes OCR backends and chat models.
 
 ### Overview
 
@@ -50,7 +75,7 @@ Runtime configuration is stored in a DynamoDB table (`RAGStack-<project>-Configu
 #### Via Settings UI (Recommended)
 
 1. Open WebUI and navigate to **Settings** page
-2. Modify any configuration parameters
+2. Modify any configuration parameters (3 fields available)
 3. Click **Save changes**
 4. Changes take effect **immediately** on next Lambda invocation (no cache)
 
@@ -91,7 +116,7 @@ table.put_item(
         'Configuration': 'Custom',
         'ocr_backend': 'bedrock',
         'bedrock_ocr_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-        'text_embed_model_id': 'cohere.embed-english-v3'
+        'chat_model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0'
     }
 )
 ```
@@ -149,35 +174,18 @@ schema = {
                 "value": "bedrock"
             }
         },
-        "text_embed_model_id": {
-            "type": "string",
-            "enum": [
-                "amazon.titan-embed-text-v1",
-                "amazon.titan-embed-text-v2:0",
-                "cohere.embed-english-v3",
-                "cohere.embed-multilingual-v3"
-            ],
-            "description": "Text Embedding Model",
-            "order": 3
-        },
-        "image_embed_model_id": {
-            "type": "string",
-            "enum": ["amazon.titan-embed-image-v1"],
-            "description": "Image Embedding Model",
-            "order": 4
-        },
-        "response_model_id": {
+        "chat_model_id": {
             "type": "string",
             "enum": [
                 "anthropic.claude-3-5-haiku-20241022-v1:0",
                 "anthropic.claude-3-5-sonnet-20241022-v2:0",
                 "anthropic.claude-3-opus-20240229-v1:0"
             ],
-            "description": "Response Model",
-            "order": 5
+            "description": "Chat Model",
+            "order": 3
         }
     },
-    "required": ["ocr_backend", "text_embed_model_id", "image_embed_model_id", "response_model_id"]
+    "required": ["ocr_backend", "chat_model_id"]
 }
 
 table.put_item(
@@ -192,9 +200,7 @@ default_config = {
     'Configuration': 'Default',
     'ocr_backend': 'textract',
     'bedrock_ocr_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0',
-    'text_embed_model_id': 'amazon.titan-embed-text-v2:0',
-    'image_embed_model_id': 'amazon.titan-embed-image-v1',
-    'response_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
+    'chat_model_id': 'anthropic.claude-3-5-haiku-20241022-v1:0'
 }
 
 table.put_item(Item=default_config)
@@ -205,102 +211,57 @@ print("Configuration seeded successfully")
 ### Configurable Parameters
 
 #### ocr_backend
+
 - **Type**: String
 - **Options**: `textract`, `bedrock`
 - **Default**: `textract`
 - **Purpose**: Choose OCR engine for document text extraction
-- **When to change**: Use Bedrock for complex layouts, multilingual documents
+- **When to change**: Use Bedrock for complex layouts, multilingual documents, or poor-quality scans
+- **Impact**: Changes take effect immediately—no document re-processing required
 
 #### bedrock_ocr_model_id
+
 - **Type**: String
 - **Options**: `claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-opus`
 - **Default**: `claude-3-5-haiku`
 - **Visibility**: Only when `ocr_backend = bedrock`
 - **Purpose**: Select Claude model for Bedrock OCR
 - **When to change**: Use Sonnet/Opus for higher accuracy on complex documents
+- **Impact**: Changes take effect immediately—no document re-processing required
 
-#### text_embed_model_id
-- **Type**: String
-- **Options**: `amazon.titan-embed-text-v1`, `amazon.titan-embed-text-v2:0`, `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`
-- **Default**: `amazon.titan-embed-text-v2:0`
-- **Purpose**: Model for generating text embeddings
-- **When to change**:
-  - Use Cohere Multilingual for non-English documents
-  - Stay within same model family when changing (see KB compatibility notes)
+#### chat_model_id
 
-#### image_embed_model_id
-- **Type**: String
-- **Options**: `amazon.titan-embed-image-v1`
-- **Default**: `amazon.titan-embed-image-v1`
-- **Purpose**: Model for generating image embeddings
-
-#### response_model_id
 - **Type**: String
 - **Options**: `claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-opus`
 - **Default**: `claude-3-5-haiku`
 - **Purpose**: Model for Knowledge Base query responses
 - **When to change**: Use Sonnet/Opus for more detailed, nuanced answers
-
-### Adding New Models to Schema
-
-To add new models (e.g., a new Bedrock embedding model):
-
-1. **Update Schema in `template.yaml`**:
-
-   Locate the Schema definition in template.yaml and add the new model to the appropriate enum:
-
-   ```yaml
-   # Example: Adding a new text embedding model
-   text_embed_model_id:
-     type: string
-     enum:
-       - amazon.titan-embed-text-v1
-       - amazon.titan-embed-text-v2:0
-       - cohere.embed-english-v3
-       - cohere.embed-multilingual-v3
-       - amazon.titan-embed-text-v3  # NEW MODEL
-     description: Text Embedding Model
-     order: 3
-   ```
-
-2. **Redeploy the stack**:
-
-   ```bash
-   python publish.py \
-     --project-name <project-name> \
-     --admin-email <email> \
-     --region <region>
-   ```
-
-3. **Verify in Settings UI**:
-   - Open Settings page
-   - New model should appear in dropdown
-   - Test by selecting and saving
+- **Impact**: Changes take effect immediately on next query
 
 ### Configuration Best Practices
 
 #### For Development/Testing
+
 - Use **Textract** for OCR (faster, cheaper)
 - Use **Haiku** models for responses (faster)
 - Change configurations frequently via Settings UI to experiment
 
 #### For Production
+
 - Use **Textract** for standard documents
 - Use **Bedrock Sonnet OCR** for complex/multilingual documents
-- Use **Titan Text v2** or **Cohere English v3** for embeddings
-- Use **Sonnet** for response model (good balance of speed and quality)
-- Always **re-embed** when changing embedding models
+- Use **Sonnet** for chat model (good balance of speed and quality)
 
 #### Cost Optimization
-- **OCR**: Textract ($1.50/1000 pages) vs. Bedrock ($25-75/1000 pages)
-- **Embeddings**: Minimal cost difference between models
-- **Responses**: Haiku is 10x cheaper than Opus
 
-#### Knowledge Base Compatibility
-- **Stay within model families** when changing embedding models
-- **Safe**: titan-v1 → titan-v2, cohere-english → cohere-multilingual
-- **Unsafe**: titan → cohere (requires KB recreation)
-- See [USER_GUIDE.md - Knowledge Base Compatibility](USER_GUIDE.md#knowledge-base-compatibility)
+- **OCR**: Textract ($1.50/1000 pages) vs. Bedrock ($25-75/1000 pages)
+- **Chat**: Haiku is 10x cheaper than Opus
+
+#### Important Notes
+
+- **No re-embedding needed**: Changing OCR or chat models does NOT require re-processing documents
+- **Immediate effect**: Configuration changes take effect on the next Lambda invocation
+- **No cache**: Configuration is read fresh from DynamoDB on every request
 
 ### Troubleshooting Configuration
 
@@ -321,12 +282,15 @@ aws lambda update-function-configuration \
 **Problem**: Changed configuration in UI but Lambdas still use old values
 
 **Solution**:
+
 1. Verify Custom configuration was saved:
+
    ```bash
    aws dynamodb get-item \
      --table-name RAGStack-<project>-Configuration \
      --key '{"Configuration": {"S": "Custom"}}'
    ```
+
 2. Check Lambda logs for "Effective configuration" log line
 3. Configuration is NOT cached - changes should be immediate
 
@@ -335,6 +299,7 @@ aws lambda update-function-configuration \
 **Problem**: Settings UI shows empty or errors on load
 
 **Solution**: Re-seed configuration:
+
 ```bash
 python publish.py \
   --project-name <project-name> \
@@ -356,6 +321,7 @@ python publish.py \
 ```
 
 **Project Name Rules:**
+
 - Lowercase letters, numbers, and hyphens only
 - Must start with a lowercase letter
 - Length: 2-32 characters
@@ -382,7 +348,7 @@ cached = true
 parallel = true
 ```
 
-**Note:** Unlike previous versions, `samconfig.toml` no longer contains environment-specific configurations. All deployment parameters must be provided on the command line
+**Note:** Unlike previous versions, `samconfig.toml` no longer contains environment-specific configurations. All deployment parameters must be provided on the command line.
 
 ---
 
@@ -403,8 +369,8 @@ These parameters are defined in `template.yaml` and can be overridden during dep
 **Example**:
 
 ```bash
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
-# Creates resources like: RAGStack-<project-name>-InputBucket, RAGStack-<project-name>-ProcessDocument, etc.
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1
+# Creates resources like: RAGStack-myapp-InputBucket, RAGStack-myapp-ProcessDocument, etc.
 ```
 
 ### OcrBackend
@@ -415,25 +381,18 @@ python publish.py --project-name <project-name> --admin-email <email> --region <
 - **Description**: OCR engine to use
 
 **Textract** (Recommended):
+
 - Lower cost ($1.50 per 1000 pages)
 - Faster processing
 - Better table extraction
 - Dedicated OCR service
 
 **Bedrock** (Alternative):
+
 - Higher cost (~$25-75 per 1000 pages)
 - Multimodal understanding
 - Better for complex layouts
 - Uses Claude models
-
-**Configure**:
-
-```toml
-# In samconfig.toml
-parameter_overrides = [
-  "OcrBackend=bedrock"
-]
-```
 
 ### BedrockOcrModelId
 
@@ -453,51 +412,6 @@ parameter_overrides = [
 | Claude 3.5 Haiku | $0.80 | Fast OCR, simple docs |
 | Claude 3.5 Sonnet | $3.00 | Complex layouts, higher accuracy |
 
-**Configure**:
-
-```toml
-parameter_overrides = [
-  "OcrBackend=bedrock",
-  "BedrockOcrModelId=anthropic.claude-3-5-sonnet-20241022-v2:0"
-]
-```
-
-### TextEmbedModelId
-
-- **Type**: String
-- **Default**: `amazon.titan-embed-text-v2:0`
-- **Description**: Model for text embeddings
-- **Allowed Values**:
-  - `amazon.titan-embed-text-v2:0` (recommended - 1024 dimensions)
-  - `amazon.titan-embed-text-v1` (legacy - 512 dimensions)
-
-**Titan v2 advantages**:
-- Higher quality embeddings
-- Better semantic search
-- Support for longer texts (8K tokens vs 512 tokens)
-- Same cost as v1
-
-**Configure**:
-
-```toml
-parameter_overrides = [
-  "TextEmbedModelId=amazon.titan-embed-text-v2:0"
-]
-```
-
-### ImageEmbedModelId
-
-- **Type**: String
-- **Default**: `amazon.titan-embed-image-v1`
-- **Description**: Model for image embeddings
-- **Allowed Values**:
-  - `amazon.titan-embed-image-v1` (only option currently)
-
-Image embeddings enable:
-- Visual similarity search
-- Multimodal retrieval
-- Image-based queries
-
 ### AdminEmail
 
 - **Type**: String
@@ -506,6 +420,7 @@ Image embeddings enable:
 - **Format**: Valid email address
 
 This email receives:
+
 - Temporary password on first deployment
 - Password reset links
 - Administrative notifications
@@ -513,7 +428,7 @@ This email receives:
 **Configure**:
 
 ```bash
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1
 ```
 
 ### AlertEmail
@@ -523,6 +438,7 @@ python publish.py --project-name <project-name> --admin-email <email> --region <
 - **Format**: Valid email address
 
 Receives notifications for:
+
 - Lambda errors exceeding threshold
 - DLQ message accumulation
 - Budget warnings
@@ -531,8 +447,10 @@ Receives notifications for:
 **Configure**:
 
 ```bash
-python publish.py --project-name <project-name> --admin-email <email> --region <region> \
+python publish.py \
+  --project-name myapp \
   --admin-email admin@example.com \
+  --region us-east-1 \
   --alert-email alerts@example.com
 ```
 
@@ -554,6 +472,7 @@ python publish.py \
 ```
 
 Resources created:
+
 - Stack: `RAGStack-myapp-dev`
 - Buckets: `ragstack-myapp-dev-input-<account-id>`, etc.
 - Functions: `RAGStack-myapp-dev-ProcessDocument`, etc.
@@ -570,6 +489,7 @@ python publish.py \
 ```
 
 Resources created:
+
 - Stack: `RAGStack-myapp-prod`
 - Buckets: `ragstack-myapp-prod-input-<account-id>`, etc.
 - Functions: `RAGStack-myapp-prod-ProcessDocument`, etc.
@@ -592,6 +512,7 @@ python publish.py --project-name hr-records --admin-email hr@example.com --regio
 Each project is completely isolated with its own resources.
 
 **Best practices**:
+
 - Use descriptive project names (e.g., `myapp-prod`, not just `prod`)
 - Keep project names consistent across team members
 - Document which project serves which purpose
@@ -725,27 +646,68 @@ response = bedrock.invoke_model(
 
 ## Embedding Models
 
-### Text Embeddings
+### Overview
 
-**Titan Embed Text v2** (recommended):
+Embedding models are **hardcoded** in the Lambda function code and are not user-configurable. This design decision simplifies the system and prevents accidental changes that would require expensive re-embedding of all documents.
+
+### Hardcoded Models
+
+**Text Embeddings**: `amazon.titan-embed-text-v2:0`
+
 - **Dimensions**: 1024
 - **Max input**: 8,192 tokens
 - **Cost**: $0.0002 per 1K tokens
 - **Use case**: Document text embeddings
 
-**Titan Embed Text v1** (legacy):
-- **Dimensions**: 512
-- **Max input**: 512 tokens
-- **Cost**: $0.0002 per 1K tokens
-- **Use case**: Older deployments
+**Image Embeddings**: `amazon.titan-embed-image-v1`
 
-### Image Embeddings
-
-**Titan Embed Image v1**:
 - **Dimensions**: 1024
 - **Max size**: 2048x2048 pixels
 - **Cost**: $0.00006 per image
 - **Use case**: Visual similarity, multimodal search
+
+### Rationale for Hardcoded Models
+
+The default Titan models provide excellent performance for most document processing use cases. The complexity of runtime embedding model configuration (which requires re-embedding all documents when changed) outweighs the flexibility benefit for 95% of deployments.
+
+**Benefits**:
+
+- Simpler configuration system
+- No risk of accidental embedding changes
+- No re-embedding infrastructure needed
+- Lower maintenance burden
+- Clearer user experience
+
+### Changing Embedding Models (Advanced)
+
+If you need different embedding models, you must modify the code and redeploy. This intentional friction prevents accidental changes.
+
+**Steps**:
+
+1. **Edit the Lambda function** (`src/lambda/generate_embeddings/index.py`):
+
+   ```python
+   # Change these constants
+   TEXT_EMBED_MODEL_ID = 'cohere.embed-english-v3'  # Example
+   IMAGE_EMBED_MODEL_ID = 'amazon.titan-embed-image-v1'
+   ```
+
+2. **Redeploy the stack**:
+
+   ```bash
+   python publish.py \
+     --project-name <project-name> \
+     --admin-email <email> \
+     --region <region>
+   ```
+
+3. **Re-process all documents**:
+   - Clear the vector bucket: `aws s3 rm s3://your-vectors-bucket/ --recursive`
+   - Delete and recreate the Knowledge Base data source
+   - Re-upload all documents through the UI
+   - Wait for processing to complete
+
+**Important**: Changing embedding models is expensive and time-consuming. Only do this if absolutely necessary for your use case.
 
 ### Embedding Generation Strategy
 
@@ -812,11 +774,8 @@ export REACT_APP_API_URL="https://xyz.appsync-api.us-east-1.amazonaws.com/graphq
 
 ### Reduce OCR Costs
 
-1. **Use Textract instead of Bedrock**:
-   ```toml
-   parameter_overrides = ["OcrBackend=textract"]
-   ```
-   Saves ~$20-60/month for 1000 documents
+1. **Use Textract instead of Bedrock** (configure via Settings UI):
+   - Saves ~$20-60/month for 1000 documents
 
 2. **Optimize image quality**:
    - Documents are resized to optimal dimensions in `lib/ragstack_common/image.py`
@@ -826,11 +785,13 @@ export REACT_APP_API_URL="https://xyz.appsync-api.us-east-1.amazonaws.com/graphq
 ### Reduce Lambda Costs
 
 1. **Adjust memory** (cost scales with memory):
+
    ```yaml
    MemorySize: 1769  # Sweet spot for CPU/memory ratio
    ```
 
 2. **Reduce timeout** (if documents are small):
+
    ```yaml
    Timeout: 300  # 5 minutes for <10 page docs
    ```
@@ -856,6 +817,30 @@ aws budgets create-budget \
   --account-id 123456789012 \
   --budget file://budget.json
 ```
+
+---
+
+## Frequently Asked Questions
+
+### Q: Why can't I change embedding models in the Settings UI?
+
+**A**: Embedding models are hardcoded to simplify the system and prevent accidental changes. Changing embedding models requires re-embedding all documents, which is expensive and error-prone. For 95% of use cases, the default Titan models are optimal.
+
+### Q: What if I need different embedding models?
+
+**A**: You can modify the constants in `src/lambda/generate_embeddings/index.py` and redeploy. Be prepared to manually re-process all documents. See the [Embedding Models](#changing-embedding-models-advanced) section for details.
+
+### Q: Can I configure embedding models at deployment time?
+
+**A**: No. They're hardcoded in the Lambda function code, not CloudFormation parameters. This is an intentional design decision to prevent accidental changes.
+
+### Q: Do I need to re-process documents when I change OCR or chat models?
+
+**A**: No! Only embedding model changes require re-processing. OCR and chat model changes take effect immediately without any document re-processing.
+
+### Q: How do I add new models to the Settings UI dropdowns?
+
+**A**: Edit the Schema definition in the configuration seeding script (see [Manual Seeding Script](#manual-seeding-script-if-needed)) and redeploy. The new models will appear in the Settings UI dropdowns.
 
 ---
 
