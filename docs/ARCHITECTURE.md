@@ -307,6 +307,44 @@ python publish.py --project-name <project-name> --admin-email <email> --region <
 
 ---
 
+### ADR-008: Hardcode Embedding Models
+
+**Status:** Accepted
+
+**Context:**
+The system originally allowed runtime configuration of embedding models through the Settings UI. When users changed embedding models, the system had to re-process all documents to generate new embeddings. This required:
+- Complex change detection logic
+- Re-embedding job tracking in DynamoDB
+- GraphQL mutations for triggering re-embedding
+- UI components for warning users and showing progress
+- Document count queries
+- Step Functions orchestration for bulk re-processing
+
+**Decision:**
+Remove embedding model configuration entirely. Hardcode embedding models in the `generate_embeddings` Lambda function:
+- Text embeddings: `amazon.titan-embed-text-v2:0`
+- Image embeddings: `amazon.titan-embed-image-v1`
+
+Remove all re-embedding infrastructure, including:
+- `getDocumentCount`, `reEmbedAllDocuments`, `getReEmbedJobStatus` GraphQL operations
+- Re-embedding job tracking in DynamoDB
+- Embedding change detection in Settings UI
+- Re-embedding progress indicators
+
+**Consequences:**
+- ✅ Simpler configuration system (3 fields instead of 5)
+- ✅ No risk of accidental embedding changes
+- ✅ ~500 lines of code removed
+- ✅ No re-embedding infrastructure needed
+- ✅ Clearer user experience
+- ⚠️ Users cannot experiment with different embedding models through UI
+- ⚠️ Changing models requires code changes and redeployment
+
+**Rationale:**
+Default Titan models are production-ready for 95% of use cases. The complexity cost of runtime configurability outweighs the flexibility benefit.
+
+---
+
 ## Architecture Diagram
 
 ```
@@ -538,25 +576,23 @@ def get_effective_config(self):
 |-----------|------|-------------|---------|
 | `getConfiguration` | Query | Returns Schema, Default, Custom configs | `ConfigurationResponse` |
 | `updateConfiguration` | Mutation | Updates Custom configuration | `Boolean` |
-| `getDocumentCount` | Query | Returns count of COMPLETED documents | `Int` |
-| `reEmbedAllDocuments` | Mutation | Triggers re-embedding job | `ReEmbedJobStatus` |
-| `getReEmbedJobStatus` | Query | Returns latest re-embedding job status | `ReEmbedJobStatus` |
 
 **Permissions**:
-- DynamoDB: GetItem, PutItem, UpdateItem, Query on ConfigurationTable
-- DynamoDB: Scan, Query on TrackingTable (for document counts)
-- Step Functions: StartExecution on ProcessingStateMachine (for re-embedding)
+- DynamoDB: GetItem, PutItem, UpdateItem on ConfigurationTable
 
 #### Settings UI Component
 
 **Location**: `src/ui/src/components/Settings/index.jsx`
 
 **Features**:
-1. **Dynamic Form Rendering**: Reads Schema and generates form fields
+1. **Dynamic Form Rendering**: Reads Schema and generates form fields (3 configurable fields)
 2. **Conditional Fields**: `dependsOn` pattern hides/shows fields based on other field values
-3. **Embedding Change Detection**: Detects changes to embedding models, prompts user
-4. **Re-embedding Job UI**: Progress banner with polling (5-second intervals)
-5. **Validation Indicators**: Shows which fields are customized from defaults
+3. **Validation Indicators**: Shows which fields are customized from defaults
+
+**Configurable Fields**:
+- `ocr_backend`: OCR engine selection (Textract or Bedrock)
+- `bedrock_ocr_model_id`: Claude model for Bedrock OCR (conditional on OCR backend)
+- `chat_model_id`: Model for Knowledge Base query responses
 
 **State Management**:
 ```javascript
@@ -564,7 +600,6 @@ const [schema, setSchema] = useState({});           // Schema from DynamoDB
 const [defaultConfig, setDefaultConfig] = useState({}); // Default values
 const [customConfig, setCustomConfig] = useState({});   // Custom overrides
 const [formValues, setFormValues] = useState({});       // Current form state
-const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null); // Job tracking
 ```
 
 **Dynamic Rendering Example**:
@@ -630,28 +665,21 @@ if (property.dependsOn) {
 │ .handleSave()        │
 └──────┬───────────────┘
        │
-       │ 2. Check for embedding changes
-       ▼
-┌──────────────────────┐     Yes    ┌────────────────────┐
-│ Embedding model      ├───────────▶│ Show modal with    │
-│ changed?             │            │ 3 options          │
-└──────┬───────────────┘            └────────────────────┘
-       │ No
-       │ 3. GraphQL mutation
+       │ 2. GraphQL mutation
        ▼
 ┌──────────────────────┐
 │ updateConfiguration  │
 │ mutation             │
 └──────┬───────────────┘
        │
-       │ 4. Call ConfigurationResolver Lambda
+       │ 3. Call ConfigurationResolver Lambda
        ▼
 ┌──────────────────────┐
 │ ConfigurationResolver│
 │ .handle_update()     │
 └──────┬───────────────┘
        │
-       │ 5. Write Custom config to DynamoDB
+       │ 4. Write Custom config to DynamoDB
        ▼
 ┌──────────────────────┐
 │ DynamoDB PutItem     │
@@ -659,73 +687,6 @@ if (property.dependsOn) {
 └──────────────────────┘
 ```
 
-#### Re-embedding Job Flow
-
-```
-┌──────────────┐
-│ User chooses │
-│ "Re-embed    │
-│ all docs"    │
-└──────┬───────┘
-       │
-       │ 1. Save config + trigger reEmbedAllDocuments mutation
-       ▼
-┌──────────────────────┐
-│ ConfigurationResolver│
-│ .handle_re_embed()   │
-└──────┬───────────────┘
-       │
-       │ 2. Query COMPLETED documents from TrackingTable
-       ▼
-┌──────────────────────┐
-│ Query StatusIndex    │
-│ (GSI on TrackingTable)│
-└──────┬───────────────┘
-       │
-       │ 3. Create job tracking item
-       ▼
-┌──────────────────────┐
-│ Put ReEmbedJob#{id}  │
-│ to ConfigurationTable│
-│ status=IN_PROGRESS   │
-└──────┬───────────────┘
-       │
-       │ 4. Start Step Functions execution for each document
-       ▼
-┌──────────────────────┐     For each      ┌────────────────────┐
-│ For each document:   ├─────document──────▶│ Start Step         │
-│ sfn.start_execution()│                    │ Functions          │
-└──────────────────────┘                    │ ProcessingPipeline │
-                                            └────────────────────┘
-                                                     │
-       ┌─────────────────────────────────────────────┘
-       │ 5. Document processing
-       ▼
-┌──────────────────────┐
-│ ProcessDocument      │
-│ (reuses OCR results) │
-└──────┬───────────────┘
-       │
-       │ 6. Generate embeddings with new model
-       ▼
-┌──────────────────────┐
-│ GenerateEmbeddings   │
-│ (checks reEmbedJobId)│
-└──────┬───────────────┘
-       │
-       │ 7. Update job progress
-       ▼
-┌──────────────────────┐
-│ Increment            │
-│ processedDocuments   │
-│ in ReEmbedJob#{id}   │
-└──────────────────────┘
-```
-
-**Job Tracking**:
-- Job item stored with key `ReEmbedJob#{jobId}` in ConfigurationTable
-- Pointer item `ReEmbedJob_Latest` references current job for easy UI access
-- UI polls every 5 seconds via `getReEmbedJobStatus` query
 
 ### Design Decisions
 
