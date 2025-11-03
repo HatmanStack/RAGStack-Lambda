@@ -1945,6 +1945,63 @@ Set up automated tests to run:
 - **Nightly**: Full end-to-end tests with cleanup
 - **Weekly**: Performance benchmarks
 
+## Sample Test Documents
+
+Generate test documents for manual testing:
+
+```bash
+cd tests/sample-documents
+pip install pymupdf Pillow python-docx openpyxl
+python3 generate_samples.py
+```
+
+This creates:
+- `text-native.pdf` - PDF with embedded text
+- `invoice.jpg` - Sample invoice image
+- `document.docx` - Word document
+- `spreadsheet.xlsx` - Excel spreadsheet
+
+For scanned PDFs, convert an image:
+```bash
+# Using ImageMagick
+convert invoice.jpg -quality 100 scanned.pdf
+
+# Using Python
+pip install img2pdf
+img2pdf invoice.jpg -o scanned.pdf
+```
+
+Use these for:
+- Manual UI testing
+- Integration test suite
+- End-to-end validation
+- Performance benchmarking
+
+⚠️ Do not commit sensitive documents. Use only public or synthetic data.
+
+## Integration Testing
+
+Run integration tests against deployed stack:
+
+```bash
+# Prerequisites
+export STACK_NAME=RAGStack-dev
+export INPUT_BUCKET=ragstack-dev-input-xxxxx
+export TRACKING_TABLE=RAGStack-dev-Tracking
+
+# Run tests (requires AWS credentials and deployed stack)
+npm run test:backend:integration
+# or
+pytest tests/integration/ -m integration -v
+```
+
+Tests cover:
+- ✅ Text-native PDF processing
+- ✅ Scanned PDF OCR (Textract)
+- ✅ Image OCR
+- ✅ Embedding generation
+- ✅ Knowledge Base indexing
+
 ## Support
 
 For testing issues:

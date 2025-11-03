@@ -1,1277 +1,137 @@
 # Troubleshooting Guide
 
-This guide covers common issues and their solutions for RAGStack-Lambda.
-
-## Table of Contents
-
-- [Deployment Issues](#deployment-issues)
-- [Document Processing Issues](#document-processing-issues)
-- [Knowledge Base Issues](#knowledge-base-issues)
-- [UI Issues](#ui-issues)
-- [Runtime Configuration Issues](#runtime-configuration-issues)
-- [Performance Issues](#performance-issues)
-- [Authentication Issues](#authentication-issues)
-- [Log Analysis](#log-analysis)
-- [Getting Help](#getting-help)
-
----
+Quick reference for common issues and solutions.
 
 ## Deployment Issues
 
-### CloudFormation Stack Fails to Create
-
-**Symptoms:**
-- Stack creation fails with `ROLLBACK_COMPLETE`
-- Error messages in CloudFormation events
-
-**Common Causes & Solutions:**
-
-#### 1. Bedrock Model Access Not Enabled
-
-**Error:**
-```
-ResourceNotFoundException: Could not resolve the foundation model from model identifier
-```
-
-**Solution:**
-```bash
-# Enable models in AWS Console
-1. Go to AWS Console → Bedrock → Model access
-2. Enable these models:
-   - anthropic.claude-3-5-haiku-20241022-v1:0
-   - amazon.titan-embed-text-v2:0
-   - amazon.titan-embed-image-v1
-3. Wait 5-10 minutes for access to be granted
-4. Retry deployment
-```
-
-#### 2. Invalid Admin Email Format
-
-**Error:**
-```
-Parameter validation failed: Invalid email address
-```
-
-**Solution:**
-```bash
-# Use a valid email format
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email valid@example.com
-```
-
-#### 3. IAM Permissions Insufficient
-
-**Error:**
-```
-User is not authorized to perform: iam:CreateRole
-```
-
-**Solution:**
-- Ensure you have administrator access or equivalent permissions
-- Required permissions:
-  - `iam:*` for creating roles and policies
-  - `cloudformation:*` for stack operations
-  - `lambda:*` for function creation
-  - `s3:*` for bucket operations
-
-#### 4. S3 Bucket Name Already Exists
-
-**Error:**
-```
-Bucket name already exists
-```
-
-**Solution:**
-```bash
-# Change the ProjectName parameter to make bucket names unique
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
-
-# Bucket names include AWS account ID, so this error is rare
-# If it occurs, modify ProjectName in samconfig.toml
-```
-
-### SAM Build Fails
-
-**Symptoms:**
-- `sam build` command fails
-- Missing dependencies error
-
-**Solutions:**
-
-#### 1. Python Version Mismatch
-
-**Error:**
-```
-Python 3.13 or later required
-```
-
-**Solution:**
-```bash
-# Check Python version
-python3.13 --version
-
-# Install Python 3.13 if needed
-# macOS
-brew install python@3.13
-
-# Ubuntu
-sudo apt install python3.13
-
-# Ensure Python 3.12+ is available
-```
-
-#### 2. Docker Not Running
-
-**Error:**
-```
-Cannot connect to Docker daemon
-```
-
-**Solution:**
-```bash
-# Start Docker
-# macOS/Windows
-# Open Docker Desktop
-
-# Linux
-sudo systemctl start docker
-
-# Verify Docker is running
-docker ps
-```
-
-#### 3. Lambda Layer Build Fails
-
-**Error:**
-```
-Error building PyMuPDF layer
-```
-
-**Solution:**
-```bash
-# Rebuild layers manually
-cd layers/pymupdf
-docker run --rm \
-  -v $(pwd):/var/task \
-  public.ecr.aws/sam/build-python3.13 \
-  pip install PyMuPDF==1.23.0 -t python/
-
-# Retry deployment
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
-```
-
----
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Stack creation fails with `ROLLBACK_COMPLETE` | Bedrock models not enabled | Enable models: AWS Console → Bedrock → Model access. Enable Claude 3.5 Haiku, Titan embed models. Wait 5-10 min. |
+| `Invalid email address` error | Bad email format | Use valid email: `python publish.py --admin-email valid@example.com` |
+| `User is not authorized` | Insufficient IAM permissions | Need: `iam:*`, `cloudformation:*`, `lambda:*`, `s3:*` |
+| S3 bucket name exists | Bucket name collision | Change project name: `python publish.py --project-name <unique-name>` |
+| `sam build` fails | Python version mismatch | Check: `python3.13 --version`. Install Python 3.13+ if needed. |
+| Docker connection error | Docker not running | Start Docker: macOS (open Docker Desktop), Linux (`sudo systemctl start docker`) |
+| SAM build timeout | Network or resource issue | `sam build --use-container` |
 
 ## Document Processing Issues
 
-### Documents Stuck in UPLOADED Status
-
-**Symptoms:**
-- Document status never changes from UPLOADED
-- No Step Functions execution started
-
-**Diagnosis:**
-```bash
-# Check EventBridge rules
-aws events list-rules --name-prefix RAGStack
-
-# Check Step Functions state machine
-aws stepfunctions list-executions \
-  --state-machine-arn <ARN> \
-  --status-filter RUNNING
-```
-
-**Solutions:**
-
-#### 1. EventBridge Rule Not Triggering
-
-**Solution:**
-```bash
-# Verify EventBridge is enabled on input bucket
-aws s3api get-bucket-notification-configuration \
-  --bucket ragstack-<project-name>-input-<account-id>
-
-# Should show EventBridgeConfiguration: EventBridgeEnabled: true
-
-# If not, redeploy the stack
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
-```
-
-#### 2. Manual Trigger
-
-**Temporary workaround:**
-```bash
-# Manually start Step Functions execution
-aws stepfunctions start-execution \
-  --state-machine-arn <ARN> \
-  --input '{
-    "bucket": "ragstack-<project-name>-input-<account-id>",
-    "key": "path/to/document.pdf",
-    "document_id": "<document-id>"
-  }'
-```
-
-### Documents Stuck in PROCESSING Status
-
-**Symptoms:**
-- Status changes to PROCESSING but never completes
-- Processing takes >30 minutes
-
-**Diagnosis:**
-```bash
-# Find the Step Functions execution
-STACK_NAME="RAGStack-<project-name>"
-STATE_MACHINE_ARN=$(aws cloudformation describe-stacks \
-  --stack-name $STACK_NAME \
-  --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
-  --output text)
-
-# List recent executions
-aws stepfunctions list-executions \
-  --state-machine-arn $STATE_MACHINE_ARN \
-  --status-filter RUNNING \
-  --max-results 10
-
-# Get execution details
-aws stepfunctions describe-execution \
-  --execution-arn <EXECUTION_ARN>
-
-# View Lambda logs
-aws logs tail /aws/lambda/${STACK_NAME}-ProcessDocument --follow
-```
-
-**Common Causes & Solutions:**
-
-#### 1. Lambda Timeout
-
-**Error in logs:**
-```
-Task timed out after 900.00 seconds
-```
-
-**Solution:**
-- Large documents (>100 pages) may exceed 15-minute timeout
-- Split document into smaller files
-- Or increase Lambda timeout (not recommended beyond 15 min)
-
-#### 2. Textract Throttling
-
-**Error in logs:**
-```
-ProvisionedThroughputExceededException: Rate exceeded
-```
-
-**Solution:**
-```bash
-# Request Textract quota increase
-1. Go to AWS Console → Service Quotas
-2. Search for "Textract"
-3. Request increase for "Concurrent DetectDocumentText requests"
-4. Wait for approval (usually 1-2 business days)
-
-# Temporary workaround: Add retry delay in code
-# Already implemented in lib/ragstack_common/ocr.py
-```
-
-#### 3. Bedrock Throttling
-
-**Error in logs:**
-```
-ThrottlingException: Rate exceeded for model
-```
-
-**Solution:**
-```bash
-# Check Bedrock quotas
-aws service-quotas get-service-quota \
-  --service-code bedrock \
-  --quota-code L-xxxx
-
-# Request quota increase or reduce concurrency
-# Add delays between API calls (already implemented)
-```
-
-#### 4. Out of Memory
-
-**Error in logs:**
-```
-Runtime exited with error: signal: killed
-MemoryError: Cannot allocate memory
-```
-
-**Solution:**
-```yaml
-# Increase Lambda memory in template.yaml
-Globals:
-  Function:
-    MemorySize: 4096  # Increase from 2048
-
-# Redeploy
-python publish.py --project-name <project-name> --admin-email <email> --region <region> --admin-email admin@example.com
-```
-
-### Documents Fail with Error Status
-
-**Symptoms:**
-- Status changes to FAILED
-- Error message in document details
-
-**Diagnosis:**
-```bash
-# Check DynamoDB for error message
-TRACKING_TABLE=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`TrackingTableName`].OutputValue' \
-  --output text)
-
-aws dynamodb get-item \
-  --table-name $TRACKING_TABLE \
-  --key '{"document_id": {"S": "<document-id>"}}'
-
-# Look for error_message field
-```
-
-**Common Errors:**
-
-#### 1. Unsupported File Format
-
-**Error:**
-```
-UnsupportedFileTypeError: File type .exe is not supported
-```
-
-**Solution:**
-- Only upload supported formats: PDF, images (JPG, PNG, TIFF), Office docs (.docx, .xlsx, .pptx), text files
-- Convert file to PDF first if possible
-
-#### 2. Corrupted PDF
-
-**Error:**
-```
-PDFError: Cannot open PDF file
-```
-
-**Solution:**
-- Verify PDF is not corrupted
-- Try opening in Adobe Reader or other PDF viewer
-- Re-create or repair the PDF
-
-#### 3. Text Extraction Failed
-
-**Error:**
-```
-OCRError: Failed to extract text from document
-```
-
-**Solution:**
-- Check document image quality (need 150+ DPI)
-- Verify text is readable in original document
-- Try using Bedrock OCR instead of Textract:
-  ```toml
-  # In samconfig.toml
-  parameter_overrides = ["OcrBackend=bedrock"]
-  ```
-
----
+| Problem | Symptoms | Solution |
+|---------|----------|----------|
+| Documents stuck in UPLOADED | Not processing | Check EventBridge rule exists. Check Lambda permissions. Check CloudWatch logs: `aws logs tail /aws/lambda/RAGStack-<project>-ProcessDocument` |
+| Documents stuck in PROCESSING | Still processing after hours | Lambda timeout (15 min limit). Split document or increase memory. Check Textract concurrency quota. |
+| Documents fail with ERROR | Error in dashboard | Check logs for file format issues. Verify file not corrupted. Some formats need Bedrock OCR. |
+| Slow processing | Takes >30 minutes | Text-native PDFs should be faster (~2-5 min). Image-heavy docs slower. Check CloudWatch for bottlenecks. |
 
 ## Knowledge Base Issues
 
-### Search Returns No Results
-
-**Symptoms:**
-- Documents are INDEXED
-- Search queries return empty results
-
-**Diagnosis:**
-```bash
-# Check if Knowledge Base exists
-aws bedrock-agent list-knowledge-bases
-
-# Check data source sync status
-aws bedrock-agent list-ingestion-jobs \
-  --knowledge-base-id <KB_ID> \
-  --data-source-id <DATA_SOURCE_ID>
-
-# Check vector bucket for embeddings
-VECTOR_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`VectorBucketName`].OutputValue' \
-  --output text)
-
-aws s3 ls s3://$VECTOR_BUCKET/ --recursive
-```
-
-**Solutions:**
-
-#### 1. Knowledge Base Not Created
-
-**Solution:**
-- Follow [Deployment Guide](DEPLOYMENT.md#post-deployment-configuration) to create KB manually
-- Store KB ID and Data Source ID in Parameter Store
-
-#### 2. Data Source Not Synced
-
-**Solution:**
-```bash
-# Manually trigger sync
-aws bedrock-agent start-ingestion-job \
-  --knowledge-base-id <KB_ID> \
-  --data-source-id <DATA_SOURCE_ID>
-
-# Monitor sync status
-aws bedrock-agent list-ingestion-jobs \
-  --knowledge-base-id <KB_ID> \
-  --data-source-id <DATA_SOURCE_ID> \
-  --max-results 5
-```
-
-#### 3. Embeddings Not Generated
-
-**Solution:**
-```bash
-# Check if GenerateEmbeddings Lambda ran
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-<project-name>-GenerateEmbeddings \
-  --filter-pattern "ERROR"
-
-# Check vector bucket
-aws s3 ls s3://$VECTOR_BUCKET/ --recursive
-# Should show files like: <document-id>/embeddings.json
-
-# If missing, manually trigger Step Functions
-```
-
-### Search Results Are Irrelevant
-
-**Symptoms:**
-- Search returns results but they don't match query
-- Low relevance scores (<50%)
-
-**Solutions:**
-
-#### 1. Query Too Vague
-
-**Solution:**
-- Use more specific queries with context
-- Bad: "revenue"
-- Good: "What was the total revenue in Q4 2024?"
-
-#### 2. Wrong Embedding Model
-
-**Solution:**
-```bash
-# Verify Titan Embed Text V2 is being used
-aws bedrock-agent get-knowledge-base --knowledge-base-id <KB_ID>
-
-# Should show: embeddingModelArn: amazon.titan-embed-text-v2:0
-
-# If wrong model, recreate KB with correct model
-```
-
-#### 3. Insufficient Context
-
-**Solution:**
-- Knowledge Base chunking may be too small
-- Recreate KB with larger chunk size:
-  - Current: 300 tokens
-  - Try: 500-1000 tokens
-
----
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Search returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. Manually sync: trigger `IngestToKb` Lambda. |
+| Search results irrelevant | Wrong embeddings or chunking | Check embedding model ID. Try rephrasing query (more specific). Adjust knowledge base chunk size. |
+| "Knowledge Base not found" error | KB ID incorrect or missing | Check SAM outputs for Knowledge Base ID. Set in environment variables. Verify KB in Bedrock console. |
 
 ## UI Issues
 
-### UI Not Loading
-
-**Symptoms:**
-- Blank page or 404 error
-- CloudFront URL returns error
-
-**Diagnosis:**
-```bash
-# Get CloudFront distribution ID
-DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
-  --output text)
-
-# Check distribution status
-aws cloudfront get-distribution --id $DISTRIBUTION_ID
-
-# Check UI bucket
-UI_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`UIBucketName`].OutputValue' \
-  --output text)
-
-aws s3 ls s3://$UI_BUCKET/
-```
-
-**Solutions:**
-
-#### 1. CloudFront Cache Issue
-
-**Solution:**
-```bash
-# Invalidate CloudFront cache
-aws cloudfront create-invalidation \
-  --distribution-id $DISTRIBUTION_ID \
-  --paths "/*"
-
-# Wait 2-3 minutes, then refresh browser
-```
-
-#### 2. UI Not Deployed
-
-**Solution:**
-```bash
-# Redeploy UI
-cd src/ui
-npm install
-npm run build
-
-# Upload to S3
-aws s3 sync build/ s3://$UI_BUCKET/ --delete
-
-# Invalidate cache
-aws cloudfront create-invalidation \
-  --distribution-id $DISTRIBUTION_ID \
-  --paths "/*"
-```
-
-#### 3. Wrong CloudFront URL
-
-**Solution:**
-```bash
-# Get correct URL
-aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`WebUIUrl`].OutputValue' \
-  --output text
-
-# Should be: https://d<random>.cloudfront.net
-```
-
-### Login Fails
-
-**Symptoms:**
-- "Invalid username or password"
-- Email/password don't work
-
-**Solutions:**
-
-#### 1. Temporary Password Expired
-
-**Solution:**
-```bash
-# Reset password via AWS Console
-1. Go to Cognito → User Pools → RAGStack-<project-name>-UserPool
-2. Find your user
-3. Click "Reset password"
-4. Check email for new temporary password
-```
-
-#### 2. User Not Created
-
-**Solution:**
-```bash
-# List Cognito users
-USER_POOL_ID=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
-  --output text)
-
-aws cognito-idp list-users --user-pool-id $USER_POOL_ID
-
-# If user missing, create manually
-aws cognito-idp admin-create-user \
-  --user-pool-id $USER_POOL_ID \
-  --username admin@example.com \
-  --temporary-password TempPass123!
-```
-
-#### 3. Wrong User Pool
-
-**Solution:**
-- Verify you're using the correct environment (dev vs prod)
-- Check deployment outputs for correct User Pool ID
-
-### Upload Fails
-
-**Symptoms:**
-- Upload button doesn't work
-- Upload progress stuck at 0%
-
-**Solutions:**
-
-#### 1. Presigned URL Generation Failed
-
-**Diagnosis:**
-```bash
-# Check AppSync logs
-aws logs tail /aws/lambda/RAGStack-<project-name>-AppSyncResolvers --follow
-```
-
-**Solution:**
-- Verify IAM permissions for S3 bucket
-- Check AppSync API is accessible
-- Try uploading a smaller file first
-
-#### 2. CORS Error
-
-**Error in browser console:**
-```
-Access to XMLHttpRequest has been blocked by CORS policy
-```
-
-**Solution:**
-```bash
-# Verify S3 CORS configuration
-aws s3api get-bucket-cors --bucket ragstack-<project-name>-input-<account-id>
-
-# Should allow CloudFront origin
-# Redeploy if CORS missing
-```
-
----
-
-## Runtime Configuration Issues
-
-### Settings Page Won't Load
-
-**Symptoms:**
-- Settings page shows "Loading configuration..." indefinitely
-- Blank page or error in browser console
-- GraphQL errors in Network tab
-
-**Common Causes & Solutions:**
-
-#### 1. ConfigurationTable Not Seeded
-
-**Diagnosis:**
-```bash
-# Check if ConfigurationTable has Schema and Default items
-aws dynamodb get-item \
-  --table-name RAGStack-<project>-Configuration \
-  --key '{"Configuration": {"S": "Schema"}}'
-
-aws dynamodb get-item \
-  --table-name RAGStack-<project>-Configuration \
-  --key '{"Configuration": {"S": "Default"}}'
-```
-
-**Solution:**
-```bash
-# Re-run publish.py to seed configuration
-python publish.py \
-  --project-name <project-name> \
-  --admin-email <email> \
-  --region <region>
-
-# Verify seeding succeeded
-aws dynamodb scan \
-  --table-name RAGStack-<project>-Configuration \
-  --select COUNT
-# Should return Count >= 2 (Schema + Default)
-```
-
-#### 2. ConfigurationTable Doesn't Exist
-
-**Diagnosis:**
-```bash
-# Verify table exists
-aws dynamodb describe-table \
-  --table-name RAGStack-<project>-Configuration
-```
-
-**Solution:**
-- Redeploy stack (table may have been deleted)
-- Check CloudFormation stack for table resource
-
-#### 3. GraphQL API Errors
-
-**Diagnosis:**
-- Open browser DevTools (F12) → Console tab
-- Look for errors like "Network error" or "Unauthorized"
-
-**Solution:**
-```bash
-# Verify user is authenticated
-# Check Cognito session in Application → Storage → Cookies
-
-# Test GraphQL API directly
-aws appsync list-graphql-apis --region <region>
-
-# Verify ConfigurationResolver Lambda exists
-aws lambda get-function \
-  --function-name RAGStack-<project>-ConfigurationResolver
-```
-
----
-
-### Configuration Changes Not Taking Effect
-
-**Symptoms:**
-- Changed configuration in Settings UI
-- Clicked "Save changes" and saw success message
-- Lambda functions still use old configuration values
-
-**Common Causes & Solutions:**
-
-#### 1. Configuration Not Saved to DynamoDB
-
-**Diagnosis:**
-```bash
-# Check if Custom configuration was saved
-aws dynamodb get-item \
-  --table-name RAGStack-<project>-Configuration \
-  --key '{"Configuration": {"S": "Custom"}}'
-
-# Should show your custom values
-```
-
-**Solution:**
-- Try saving configuration again in UI
-- Check browser Network tab for GraphQL errors
-- Verify ConfigurationResolver Lambda has write permissions:
-  ```bash
-  aws lambda get-function-configuration \
-    --function-name RAGStack-<project>-ConfigurationResolver \
-    --query 'Role'
-
-  # Verify role has dynamodb:PutItem permission
-  ```
-
-#### 2. Lambda Reading Wrong Table
-
-**Diagnosis:**
-```bash
-# Check Lambda environment variable
-aws lambda get-function-configuration \
-  --function-name RAGStack-<project>-ProcessDocument \
-  --query 'Environment.Variables.CONFIGURATION_TABLE_NAME'
-
-# Should match your ConfigurationTable name
-```
-
-**Solution:**
-```bash
-# Update environment variable if incorrect
-aws lambda update-function-configuration \
-  --function-name RAGStack-<project>-ProcessDocument \
-  --environment Variables={CONFIGURATION_TABLE_NAME=RAGStack-<project>-Configuration}
-```
-
-#### 3. Lambda Not Reading Configuration
-
-**Diagnosis:**
-```bash
-# Check Lambda logs for configuration read
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-<project>-ProcessDocument \
-  --filter-pattern "Effective configuration" \
-  --max-items 5
-
-# Should show configuration being read
-```
-
-**Solution:**
-- Verify Lambda uses ConfigurationManager library
-- Check for import errors in Lambda logs
-- Force Lambda cold start by updating function (deploy null change)
-
----
-
-
-### Lambda Fails with Configuration Error
-
-**Symptoms:**
-- Lambda function fails immediately
-- Error in logs: "Configuration table name not provided"
-- All document processing fails
-
-**Common Causes & Solutions:**
-
-#### 1. CONFIGURATION_TABLE_NAME Not Set
-
-**Diagnosis:**
-```bash
-# Check environment variables
-aws lambda get-function-configuration \
-  --function-name RAGStack-<project>-ProcessDocument \
-  --query 'Environment.Variables'
-
-# CONFIGURATION_TABLE_NAME should be present
-```
-
-**Solution:**
-```bash
-# Set environment variable (if missing)
-aws lambda update-function-configuration \
-  --function-name RAGStack-<project>-ProcessDocument \
-  --environment Variables={
-    CONFIGURATION_TABLE_NAME=RAGStack-<project>-Configuration,
-    # ... other environment variables
-  }
-
-# Redeploy if environment variable missing from template
-```
-
-#### 2. IAM Permissions Missing
-
-**Diagnosis:**
-```bash
-# Check Lambda role permissions
-aws lambda get-function-configuration \
-  --function-name RAGStack-<project>-ProcessDocument \
-  --query 'Role' --output text | \
-  xargs -I {} aws iam list-attached-role-policies --role-name $(basename {})
-
-# Should have DynamoDB read permissions
-```
-
-**Solution:**
-```bash
-# Verify role has policy with dynamodb:GetItem permission
-# If missing, add inline policy:
-aws iam put-role-policy \
-  --role-name RAGStack-<project>-ProcessDocumentRole \
-  --policy-name DynamoDBConfigRead \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Action": ["dynamodb:GetItem"],
-      "Resource": "arn:aws:dynamodb:<region>:<account-id>:table/RAGStack-<project>-Configuration"
-    }]
-  }'
-```
-
-#### 3. ConfigurationTable Deleted
-
-**Diagnosis:**
-```bash
-# Verify table exists
-aws dynamodb describe-table \
-  --table-name RAGStack-<project>-Configuration
-```
-
-**Solution:**
-- Table may have been manually deleted
-- Redeploy CloudFormation stack to recreate:
-  ```bash
-  python publish.py \
-    --project-name <project-name> \
-    --admin-email <email> \
-    --region <region>
-  ```
-
----
-
-### Embedding Model Change Breaks Search
-
-**Symptoms:**
-- Changed embedding model in Settings
-- Re-embedded all documents
-- Search queries return no results or incorrect results
-
-**Common Causes & Solutions:**
-
-#### 1. Incompatible Model Families
-
-**Diagnosis:**
-```bash
-# Check current embedding model
-aws dynamodb get-item \
-  --table-name RAGStack-<project>-Configuration \
-  --key '{"Configuration": {"S": "Custom"}}' \
-  --query 'Item.text_embed_model_id.S'
-
-# Check Knowledge Base embedding model
-aws bedrock-agent get-knowledge-base \
-  --knowledge-base-id <kb-id> \
-  --query 'knowledgeBase.embeddingModelConfiguration'
-```
-
-**Problem:**
-- Switched from Titan to Cohere (or vice versa)
-- Different model families produce incompatible embedding formats
-- Knowledge Base expects embeddings in original format
-
-**Solution:**
-1. **Option A: Switch back to original model family**
-   ```bash
-   # Change embedding model back in Settings UI
-   # Or via CLI:
-   aws dynamodb put-item \
-     --table-name RAGStack-<project>-Configuration \
-     --item '{"Configuration": {"S": "Custom"}, "text_embed_model_id": {"S": "amazon.titan-embed-text-v2:0"}}'
-
-   # Re-embed all documents
-   ```
-
-2. **Option B: Create new Knowledge Base**
-   - Go to AWS Console → Bedrock → Knowledge bases → Create
-   - Select new embedding model matching your Settings
-   - Point to same S3 Vector bucket
-   - Update QueryKB Lambda environment variable:
-     ```bash
-     aws lambda update-function-configuration \
-       --function-name RAGStack-<project>-QueryKB \
-       --environment Variables={KNOWLEDGE_BASE_ID=<new-kb-id>}
-     ```
-   - Sync new Knowledge Base
-
-**Prevention:**
-- **Stay within model families**: titan-v1 ↔ titan-v2 is safe
-- **Avoid cross-family changes**: titan ↔ cohere breaks search
-- See [USER_GUIDE.md - Knowledge Base Compatibility](USER_GUIDE.md#knowledge-base-compatibility)
-
-#### 2. Knowledge Base Not Synced
-
-**Diagnosis:**
-```bash
-# Check KB sync status
-aws bedrock-agent get-data-source \
-  --knowledge-base-id <kb-id> \
-  --data-source-id <data-source-id>
-
-# Check last sync time
-```
-
-**Solution:**
-```bash
-# Manually trigger KB sync
-aws bedrock-agent start-ingestion-job \
-  --knowledge-base-id <kb-id> \
-  --data-source-id <data-source-id>
-
-# Wait 2-10 minutes for sync to complete
-# Check sync status in AWS Console
-```
-
----
-
-### Settings UI Shows Incorrect Values
-
-**Symptoms:**
-- Settings page shows wrong default values
-- Dropdowns missing options
-- Fields not appearing/hiding correctly
-
-**Common Causes & Solutions:**
-
-#### 1. Schema Not Updated
-
-**Diagnosis:**
-```bash
-# Check Schema in ConfigurationTable
-aws dynamodb get-item \
-  --table-name RAGStack-<project>-Configuration \
-  --key '{"Configuration": {"S": "Schema"}}' \
-  --query 'Item.Schema'
-
-# Verify enum values match expected models
-```
-
-**Solution:**
-```bash
-# Redeploy to update Schema
-python publish.py \
-  --project-name <project-name> \
-  --admin-email <email> \
-  --region <region>
-
-# Schema is defined in template.yaml and seeded by publish.py
-```
-
-#### 2. Browser Cache Issue
-
-**Diagnosis:**
-- Hard refresh page (Ctrl+Shift+R or Cmd+Shift+R)
-- Check if values update after refresh
-
-**Solution:**
-```bash
-# Clear browser cache
-# Or use incognito/private window
-
-# Invalidate CloudFront cache
-aws cloudfront create-invalidation \
-  --distribution-id <distribution-id> \
-  --paths "/*"
-```
-
-#### 3. GraphQL Schema Out of Sync
-
-**Diagnosis:**
-- Check browser Network tab for GraphQL errors
-- Response may have different format than expected
-
-**Solution:**
-- Redeploy AppSync API
-- Verify schema.graphql matches implementation
-- Check ConfigurationResolver Lambda returns correct format
-
----
-
-## Performance Issues
-
-### Slow Document Processing
-
-**Symptoms:**
-- Documents take >10 minutes to process
-- Processing time varies significantly
-
-**Diagnosis:**
-```bash
-# Check Lambda durations
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/Lambda \
-  --metric-name Duration \
-  --dimensions Name=FunctionName,Value=RAGStack-<project-name>-ProcessDocument \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average,Maximum
-
-# Check Textract API latency
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/Textract \
-  --metric-name ResponseTime \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average
-```
-
-**Solutions:**
-
-#### 1. Cold Start Latency
-
-**Solution:**
-- First invocation after deployment is slower (cold start)
-- Subsequent invocations are faster
-- Consider provisioned concurrency for production (increases cost)
-
-#### 2. Large Documents
-
-**Solution:**
-- Split documents into smaller files
-- Expected: ~2-3 seconds per page for OCR
-- 100-page document = 3-5 minutes minimum
-
-#### 3. Textract Delays
-
-**Solution:**
-```bash
-# Switch to Bedrock OCR for faster results
-# In samconfig.toml
-parameter_overrides = ["OcrBackend=bedrock"]
-
-# Note: Bedrock is more expensive but often faster
-```
-
-### High Costs
-
-**Symptoms:**
-- AWS bill higher than expected
-- Cost per document unexpectedly high
-
-**Diagnosis:**
-```bash
-# Check metering data
-METERING_TABLE=$(aws cloudformation describe-stacks \
-  --stack-name RAGStack-<project-name> \
-  --query 'Stacks[0].Outputs[?OutputKey==`MeteringTableName`].OutputValue' \
-  --output text)
-
-aws dynamodb scan --table-name $METERING_TABLE --limit 10
-
-# Check CloudWatch costs
-aws ce get-cost-and-usage \
-  --time-period Start=2025-01-01,End=2025-01-31 \
-  --granularity MONTHLY \
-  --metrics UnblendedCost \
-  --group-by Type=SERVICE
-```
-
-**Solutions:**
-
-#### 1. Using Bedrock OCR Instead of Textract
-
-**Solution:**
-```bash
-# Switch to Textract (cheaper)
-# In samconfig.toml
-parameter_overrides = ["OcrBackend=textract"]
-
-# Cost savings: ~$20-60/month for 1000 documents
-```
-
-#### 2. Not Detecting Text-Native PDFs
-
-**Solution:**
-- Verify ProcessDocument Lambda is checking for text
-- Should see "Text native: true" in logs
-- If not, update ragstack_common/ocr.py
-
-#### 3. Excessive Lambda Memory
-
-**Solution:**
-```yaml
-# Reduce Lambda memory if possible
-# In template.yaml
-Globals:
-  Function:
-    MemorySize: 1769  # Try lower values
-```
-
----
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| UI not loading | CloudFront cache stale | Invalidate: `aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"` |
+| Blank page after login | Cognito not configured | Check `.env.local` has correct Cognito IDs from SAM outputs. |
+| Upload fails | S3 permissions or bucket missing | Verify input bucket exists. Check Cognito user has S3 put permissions. |
+| API errors in console | GraphQL endpoint wrong | Check `VITE_GRAPHQL_URL` in `.env.local` matches SAM outputs. |
+| Dark mode not working | System preference not detected | Set dark mode in OS settings. Test in browser DevTools. |
 
 ## Authentication Issues
 
-### MFA Not Working
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Login fails | Wrong credentials | Check temporary password email. Use correct format (email not username). |
+| "User does not exist" | Account not created | Sign up first, verify email. Check correct user pool selected. |
+| MFA errors | MFA configured but not set up | Admin sets up MFA in Cognito console or disable if not needed. |
+| Session expires quickly | Token refresh issue | Clear browser cache. Check system clock (must be synchronized). Ensure HTTPS. |
 
-**Symptoms:**
-- MFA code rejected
-- Cannot complete MFA setup
+## Performance Issues
 
-**Solution:**
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Lambda timeout (15 min limit) | Document too large or slow OCR | Use Textract (faster than Bedrock). Split large documents. Increase Lambda memory. |
+| High costs | Bedrock tokens expensive | Use Textract OCR instead of Bedrock. Text-native PDFs skip OCR entirely. |
+| Slow embeddings generation | Rate limiting or large batch | Reduce batch size. Add delay between batches. Check Bedrock quota in Service Quotas. |
+| DynamoDB throttling | High write rate | Change to on-demand billing mode. Increase provisioned capacity. |
+
+## Runtime Configuration Issues
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Config values not updating | Cached in Lambda | Config read on each invocation (no caching). Check DynamoDB table has correct entries. |
+| "Configuration table not found" | Table name wrong | Verify `CONFIGURATION_TABLE_NAME` environment variable. Check table exists in DynamoDB. |
+| Invalid config value | Schema validation failed | Check format matches schema (docs/CONFIGURATION.md). Validate regex patterns. |
+
+## Testing Issues
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Unit tests fail with imports | Library not installed | `npm install` in project root. `npm run test:backend` to verify. |
+| Integration tests fail | Stack not deployed or missing env vars | Export `STACK_NAME`, `INPUT_BUCKET`, `TRACKING_TABLE`. Verify stack exists. |
+| Sample documents missing | Not generated | `cd tests/sample-documents && python3 generate_samples.py` |
+
+## Debugging Tips
+
+**View Lambda Logs**
 ```bash
-# Disable MFA (if needed)
-aws cognito-idp admin-set-user-mfa-preference \
-  --user-pool-id $USER_POOL_ID \
-  --username admin@example.com \
-  --sms-mfa-settings Enabled=false
+# Stream live logs
+aws logs tail /aws/lambda/RAGStack-<project-name>-<function-name> --follow
 
-# Or reset MFA device
-aws cognito-idp admin-reset-user-password \
-  --user-pool-id $USER_POOL_ID \
-  --username admin@example.com
+# View specific execution
+aws logs get-log-events --log-group-name /aws/lambda/RAGStack-<project> \
+  --log-stream-name <stream-name>
 ```
 
-### Session Expired Frequently
-
-**Symptoms:**
-- Logged out after short time
-- Session timeout errors
-
-**Solution:**
-- Sessions last 1 hour by default
-- Sign in again when prompted
-- For longer sessions, modify Cognito token expiry (not recommended)
-
----
-
-## Log Analysis
-
-### Finding Lambda Logs
-
+**Check Step Functions Execution**
 ```bash
-# List all log groups
-aws logs describe-log-groups --log-group-name-prefix /aws/lambda/RAGStack
+# List executions
+aws stepfunctions list-executions --state-machine-arn <ARN>
 
-# Tail logs in real-time
-aws logs tail /aws/lambda/RAGStack-<project-name>-ProcessDocument --follow
+# View execution details
+aws stepfunctions describe-execution --execution-arn <ARN>
 
-# Filter for errors
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-<project-name>-ProcessDocument \
-  --filter-pattern "ERROR" \
-  --start-time $(date -u -d '1 hour ago' +%s)000
-
-# Get specific execution logs
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/RAGStack-<project-name>-ProcessDocument \
-  --filter-pattern "<request-id>"
+# Get full history
+aws stepfunctions get-execution-history --execution-arn <ARN>
 ```
 
-### Understanding Log Patterns
-
-**Normal Processing:**
-```
-START RequestId: abc-123
-INFO: Processing document: document.pdf
-INFO: Document type: PDF
-INFO: Text native: true
-INFO: Extracted 1234 characters
-INFO: Saved to s3://bucket/output/
-END RequestId: abc-123
-REPORT Duration: 2345.67 ms Memory Used: 512 MB
-```
-
-**Error Patterns:**
-```
-ERROR: Failed to extract text
-ERROR: Bedrock throttling exception
-ERROR: Out of memory
-ERROR: Task timed out
-```
-
-### Step Functions Execution History
-
+**Check DynamoDB Data**
 ```bash
-# Get execution history
-aws stepfunctions get-execution-history \
-  --execution-arn <EXECUTION_ARN> \
-  --max-results 100
+# View document status
+aws dynamodb scan --table-name RAGStack-<project>-Documents
 
-# Check for failed states
-aws stepfunctions describe-execution \
-  --execution-arn <EXECUTION_ARN>
+# Check configuration
+aws dynamodb get-item --table-name RAGStack-<project>-Configuration \
+  --key '{"PK": {"S": "Schema"}}'
 ```
 
----
-
-## Getting Help
-
-### Before Asking for Help
-
-1. ✅ Check this troubleshooting guide
-2. ✅ Review CloudWatch logs for errors
-3. ✅ Check DynamoDB tracking table for status
-4. ✅ Verify Step Functions execution history
-5. ✅ Try redeploying the stack
-
-### Information to Include
-
-When opening a GitHub issue, include:
-
-- **Stack name and region**
-- **Error message** (exact text)
-- **CloudWatch logs** (relevant excerpts)
-- **Document details** (file type, size, pages)
-- **Steps to reproduce**
-- **Expected vs actual behavior**
-- **Configuration** (OCR backend, model IDs)
-
-### Useful Commands
-
+**Check Bedrock Knowledge Base**
 ```bash
-# Get stack outputs
-aws cloudformation describe-stacks --stack-name RAGStack-<project-name>
+# List knowledge bases
+aws bedrock-agent list-knowledge-bases
 
-# Get stack events (deployment issues)
-aws cloudformation describe-stack-events --stack-name RAGStack-<project-name> --max-items 20
+# Get KB details
+aws bedrock-agent get-knowledge-base --knowledge-base-id <KB-ID>
 
-# Get Lambda function details
-aws lambda get-function --function-name RAGStack-<project-name>-ProcessDocument
-
-# Get DynamoDB table details
-aws dynamodb describe-table --table-name RAGStack-<project-name>-Tracking
-
-# Get S3 bucket contents
-aws s3 ls s3://ragstack-<project-name>-input-<account-id>/ --recursive
-
-# Get CloudWatch metric data
-aws cloudwatch get-metric-data --cli-input-json file://metrics.json
+# Check data source sync status
+aws bedrock-agent list-data-sources --knowledge-base-id <KB-ID>
 ```
 
----
+## Get Help
 
-## Related Documentation
+1. **Check logs first** - Most issues visible in CloudWatch
+2. **Search this guide** - Use Ctrl+F to search by error message
+3. **Review ARCHITECTURE.md** - Understand system design
+4. **Check DEPLOYMENT.md** - Verify deployment was correct
+5. **Open GitHub issue** - Include logs, AWS region, error message
 
-- **[Deployment Guide](DEPLOYMENT.md)** - Deployment troubleshooting
-- **[Testing Guide](TESTING.md)** - Test troubleshooting
-- **[Architecture Guide](ARCHITECTURE.md)** - Understanding the system
-- **[User Guide](USER_GUIDE.md)** - UI troubleshooting
-- **[Configuration Guide](CONFIGURATION.md)** - Configuration issues
+Common resources:
+- AWS CloudWatch Logs
+- AWS CloudFormation events
+- Step Functions execution history
+- DynamoDB items
+- Bedrock console

@@ -1,553 +1,95 @@
 # Amplify Chat Component
 
-A reusable, embeddable React component for AI chat with source attribution. Built with AWS Amplify AI Kit and Bedrock Knowledge Base.
+A reusable React component for AI chat with source attribution, built with AWS Amplify and Bedrock Knowledge Base.
 
-## Features
-
-✨ **Embeddable** - Use in any React application
-🤖 **AI-Powered** - Integrates with AWS Bedrock and Claude
-📚 **Source Attribution** - Displays document sources for every response
-🎨 **Styled** - Professional styling compatible with Cloudscape Design System
-♿ **Accessible** - WCAG 2.1 AA compliant
-📱 **Responsive** - Works on desktop, tablet, and mobile
-🌙 **Dark Mode** - Supports system dark mode preferences
-✅ **Tested** - Comprehensive component tests included
-
-## Installation
-
-### Prerequisites
-
-- React 18+
-- AWS Amplify (`@aws-amplify/ui-react-ai`)
-- Amplify backend configured with chat route (see Phase-1 setup)
-- Bedrock Knowledge Base created
-
-### Package Installation
+## Quick Start
 
 ```bash
 npm install @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
 ```
 
-Or with yarn:
-
-```bash
-yarn add @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
-```
-
-## Quick Start
-
-### Basic Usage
-
 ```tsx
-import React from 'react';
 import { ChatWithSources } from '@ragstack/amplify-chat';
 import { Authenticator } from '@aws-amplify/ui-react';
-import '@aws-amplify/ui-react/styles.css';
 
 export function App() {
   return (
     <Authenticator>
-      <ChatWithSources />
+      <ChatWithSources conversationId="main" />
     </Authenticator>
   );
 }
 ```
 
-### With Custom Props
+## Full Documentation
 
-```tsx
-<ChatWithSources
-  conversationId="my-chat-session"
-  headerText="Ask a Question"
-  headerSubtitle="About your documents"
-  showSources={true}
-  onSendMessage={(message, conversationId) => {
-    console.log('User sent:', message);
-  }}
-  onResponseReceived={(response) => {
-    console.log('Got response:', response);
-  }}
-/>
-```
+See [docs/AMPLIFY_CHAT.md](../../docs/AMPLIFY_CHAT.md) for:
+- Configuration and props
+- Styling and customization
+- Advanced usage patterns
+- Web Component integration
+- Framework examples (Vue, Angular, Svelte)
+- Performance optimization
+- Troubleshooting
 
-### Without Authentication Wrapper
+## Integration Guide
 
-```tsx
-// If your app already has authentication,
-// use the component directly without Authenticator
+For comprehensive integration instructions with code examples, see:
+**[docs/AMPLIFY_CHAT.md](../../docs/AMPLIFY_CHAT.md#basic-setup)**
 
-export function ChatPage() {
-  return (
-    <div className="chat-container">
-      <ChatWithSources conversationId="app-chat" />
-    </div>
-  );
-}
-```
+## Features
 
-## Web Component Usage
+- ✨ Embeddable in any React app
+- 🤖 AI-powered with Claude
+- 📚 Source attribution
+- 🎨 Cloudscape-compatible styling
+- ♿ WCAG 2.1 AA compliant
+- 📱 Responsive (desktop, tablet, mobile)
+- 🌙 Dark mode support
 
-Use the chat component in **any framework** or vanilla JavaScript with the Web Component API.
+## Prerequisites
 
-### Installation from CDN
+- React 18+
+- AWS Amplify backend with chat configured
+- Bedrock Knowledge Base
+- AWS credentials
 
-```html
-<!-- Include the Web Component bundle -->
-<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
-
-<!-- Use it like any HTML element -->
-<amplify-chat conversation-id="my-chat"></amplify-chat>
-```
-
-### Installation from NPM (with build step)
+## Build from Source
 
 ```bash
-npm install @ragstack/amplify-chat
-```
-
-Then in your app:
-
-```html
-<!-- Vue, Angular, Svelte, or vanilla JS -->
-<script type="module">
-  import { AmplifyChat } from '@ragstack/amplify-chat/wc';
-  // Component is now registered as <amplify-chat>
-</script>
-
-<amplify-chat
-  conversation-id="my-chat"
-  header-text="Ask a Question"
->
-</amplify-chat>
-```
-
-### Web Component Attributes
-
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `conversation-id` | string | `"default"` | Unique conversation ID |
-| `header-text` | string | `"Document Q&A"` | Header title |
-| `header-subtitle` | string | `"Ask questions about your documents"` | Header subtitle |
-| `show-sources` | boolean | `true` | Show/hide sources |
-| `max-width` | string | `"100%"` | Component width |
-
-### Web Component Events
-
-```javascript
-// Listen for messages sent
-document.querySelector('amplify-chat')
-  .addEventListener('amplify-chat:send-message', (e) => {
-    console.log('Message sent:', e.detail.message);
-  });
-
-// Listen for responses received
-document.querySelector('amplify-chat')
-  .addEventListener('amplify-chat:response-received', (e) => {
-    console.log('Response:', e.detail);
-  });
-```
-
-### Examples by Framework
-
-**Vue 3:**
-```vue
-<template>
-  <amplify-chat
-    conversation-id="vue-chat"
-    @amplify-chat:send-message="onMessage"
-  ></amplify-chat>
-</template>
-
-<script setup>
-import { defineElement } from 'vue';
-import '@ragstack/amplify-chat/wc';
-
-function onMessage(e) {
-  console.log('Vue received:', e.detail);
-}
-</script>
-```
-
-**Angular:**
-```typescript
-import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
-import '@ragstack/amplify-chat/wc';
-
-@NgModule({
-  schemas: [CUSTOM_ELEMENTS_SCHEMA],
-})
-export class AppModule {}
-```
-
-```html
-<amplify-chat
-  conversation-id="angular-chat"
-  (amplify-chat:send-message)="onMessage($event)"
-></amplify-chat>
-```
-
-**Svelte:**
-```svelte
-<script>
-  import '@ragstack/amplify-chat/wc';
-
-  function handleMessage(e) {
-    console.log('Svelte received:', e.detail);
-  }
-</script>
-
-<amplify-chat
-  conversation-id="svelte-chat"
-  on:amplify-chat:send-message={handleMessage}
-></amplify-chat>
-```
-
-**Vanilla JavaScript:**
-```html
-<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
-
-<amplify-chat id="my-chat"></amplify-chat>
-
-<script>
-  const chat = document.getElementById('my-chat');
-
-  // Set attributes programmatically
-  chat.setAttribute('conversation-id', 'vanilla-chat');
-
-  // Listen for events
-  chat.addEventListener('amplify-chat:send-message', (e) => {
-    console.log('Message:', e.detail.message);
-  });
-</script>
-```
-
-## Props
-
-### `ChatWithSourcesProps`
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `conversationId` | string | `"default"` | Unique ID for the conversation thread |
-| `headerText` | string | `"Document Q&A"` | Title shown in the chat header |
-| `headerSubtitle` | string | `"Ask questions about your documents"` | Subtitle text |
-| `inputPlaceholder` | string | `"Ask a question..."` | Placeholder for input field |
-| `showSources` | boolean | `true` | Show/hide sources section |
-| `maxWidth` | string | `"100%"` | CSS max-width for the component |
-| `className` | string | - | Custom CSS class for the container |
-| `onSendMessage` | function | - | Callback when user sends a message |
-| `onResponseReceived` | function | - | Callback when AI responds |
-
-### Callback Functions
-
-#### `onSendMessage`
-
-Called when the user sends a message.
-
-```tsx
-onSendMessage={(message: string, conversationId: string) => {
-  console.log(`[${conversationId}] User: ${message}`);
-}}
-```
-
-#### `onResponseReceived`
-
-Called when the AI responds.
-
-```tsx
-onResponseReceived={(response: ChatMessage) => {
-  console.log('AI Response:', response);
-  // response.content - the AI's answer
-  // response.sources - array of cited sources
-}}
+npm install
+npm run build
+npm test
+npm run build:watch  # Development
 ```
 
 ## Types
 
-### `Source`
-
-Represents a document source cited by the AI.
-
-```tsx
-interface Source {
-  title: string;      // Document filename
-  location: string;   // Page number or character offset
-  snippet: string;    // Quote from the document
-}
-```
-
-### `ChatMessage`
-
-Represents a message in the conversation.
-
-```tsx
+```typescript
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
   timestamp: string;
 }
-```
 
-## Styling
-
-### CSS Customization
-
-The component uses CSS modules with design tokens for easy customization.
-
-#### Change Primary Color
-
-```css
-:root {
-  --chat-color-source-accent: #your-color;
-  --chat-color-user-bg: #your-color;
+interface Source {
+  title: string;
+  location: string;
+  snippet: string;
 }
-```
-
-#### Change Font
-
-```css
-:root {
-  --chat-font-family: 'Your Font Family', sans-serif;
-  --chat-font-size-base: 16px;
-}
-```
-
-#### Change Spacing
-
-```css
-:root {
-  --chat-spacing-lg: 20px;
-  --chat-spacing-md: 12px;
-}
-```
-
-See `src/styles/ChatWithSources.module.css` for all available design tokens.
-
-### Styling Without CSS Modules
-
-If your app doesn't use CSS modules, import the component and override styles:
-
-```tsx
-import ChatWithSources from '@ragstack/amplify-chat';
-import styles from '@ragstack/amplify-chat/dist/styles/ChatWithSources.module.css';
-import './overrides.css'; // Your custom styles
-
-// In overrides.css:
-.chatContainer {
-  background: #fff;
-  border-radius: 12px;
-}
-```
-
-## Integration Examples
-
-### In a Multi-Page App
-
-```tsx
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ChatWithSources } from '@ragstack/amplify-chat';
-import { Authenticator } from '@aws-amplify/ui-react';
-
-export function App() {
-  return (
-    <Authenticator>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/chat" element={<ChatWithSources />} />
-          <Route path="/docs" element={<DocumentPage />} />
-        </Routes>
-      </BrowserRouter>
-    </Authenticator>
-  );
-}
-```
-
-### Embedded in a Sidebar
-
-```tsx
-import { ChatWithSources } from '@ragstack/amplify-chat';
-
-export function Dashboard() {
-  return (
-    <div className="dashboard-layout">
-      <main className="dashboard-content">
-        {/* Main content */}
-      </main>
-      <aside className="sidebar">
-        <ChatWithSources maxWidth="400px" />
-      </aside>
-    </div>
-  );
-}
-```
-
-### With Custom Styling
-
-```tsx
-import { ChatWithSources } from '@ragstack/amplify-chat';
-import './custom-chat.css';
-
-export function CustomChat() {
-  return (
-    <ChatWithSources
-      className="branded-chat"
-      headerText="Ask Our AI"
-      headerSubtitle="Powered by your docs"
-    />
-  );
-}
-```
-
-In `custom-chat.css`:
-
-```css
-.branded-chat :root {
-  --chat-color-source-accent: #ff6b35;
-  --chat-font-family: 'Inter', sans-serif;
-}
-
-.branded-chat {
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-```
-
-## Backend Setup (Phase-1)
-
-This component requires a backend configured with Amplify AI Kit. See the main project docs for Phase-1 setup:
-
-1. **Backend Configuration** (`amplify/data/resource.ts`)
-   - Defines conversation route with Claude model
-   - Sets up Bedrock Knowledge Base integration
-   - Configures source extraction
-
-2. **Knowledge Base**
-   - Created by SAM deployment
-   - Contains documents and embeddings
-   - Referenced by Amplify backend via environment variable
-
-3. **Authentication**
-   - Amplify sets up Cognito user pool
-   - Component assumes parent app provides authentication
-   - Authenticator wrapper handles user login
-
-## Testing
-
-### Run Component Tests
-
-```bash
-npm test
-```
-
-### Run Tests in Watch Mode
-
-```bash
-npm test -- --watch
-```
-
-### Generate Coverage Report
-
-```bash
-npm test -- --coverage
 ```
 
 ## Troubleshooting
 
-### "AIConversation component not found"
+Common issues and solutions: [docs/TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md)
 
-Install Amplify UI:
+## Related Documentation
 
-```bash
-npm install @aws-amplify/ui-react-ai
-```
-
-### "Bedrock Knowledge Base not found"
-
-Ensure:
-1. SAM deployment created the Knowledge Base
-2. Amplify backend has `KNOWLEDGE_BASE_ID` environment variable set
-3. Region matches where KB was created
-
-### "User not authenticated"
-
-The component doesn't handle auth. Wrap it in Authenticator:
-
-```tsx
-<Authenticator>
-  <ChatWithSources />
-</Authenticator>
-```
-
-### Dark mode not working
-
-System must have dark mode preference set. Test with:
-
-```bash
-# On macOS
-defaults write -g AppleInterfaceStyle Dark
-
-# On Windows/Linux
-# Use system settings for dark mode
-```
-
-### Styling conflicts
-
-If styles are overridden, check:
-1. CSS specificity - add `!important` if needed
-2. CSS module conflicts - rename classes
-3. Global styles - ensure no conflicting selectors
-
-## Development
-
-### Build from Source
-
-```bash
-cd src/amplify-chat
-npm install
-npm run build
-```
-
-### Run Tests
-
-```bash
-npm test
-```
-
-### Watch Mode (Development)
-
-```bash
-npm run build:watch
-```
-
-## Contributing
-
-1. Create feature branch: `git checkout -b feature/my-feature`
-2. Make changes and add tests
-3. Run tests: `npm test`
-4. Build: `npm run build`
-5. Commit: `git commit -m "feat: describe your change"`
-6. Push: `git push origin feature/my-feature`
-7. Create Pull Request
+- [Component API](../../docs/AMPLIFY_CHAT.md) - Full API reference
+- [Architecture](../../docs/ARCHITECTURE.md) - System design
+- [Development](../../docs/DEVELOPMENT.md) - Development patterns
 
 ## License
 
 MIT
-
-## Support
-
-For issues and questions:
-- Check [GitHub Issues](https://github.com/your-org/RAGStack-Lambda/issues)
-- See main project documentation: [RAGStack-Lambda](https://github.com/your-org/RAGStack-Lambda)
-- Review [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md)
-
-## Changelog
-
-### v1.0.0 (2024-11-03)
-
-- Initial release
-- Embeddable ChatWithSources component
-- Source display with citations
-- Cloudscape-compatible styling
-- Full TypeScript support
-- Comprehensive tests
-- Dark mode support

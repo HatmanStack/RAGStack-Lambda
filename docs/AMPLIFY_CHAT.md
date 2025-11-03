@@ -1,0 +1,290 @@
+# Amplify Chat Component
+
+A reusable React component for AI chat with source attribution. Integrates with AWS Bedrock Knowledge Base.
+
+## Quick Start
+
+### Installation
+
+```bash
+npm install @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
+```
+
+### Basic Usage
+
+```tsx
+import { ChatWithSources } from '@ragstack/amplify-chat';
+import { Authenticator } from '@aws-amplify/ui-react';
+
+export function App() {
+  return (
+    <Authenticator>
+      <ChatWithSources
+        conversationId="main"
+        headerText="Document Q&A"
+      />
+    </Authenticator>
+  );
+}
+```
+
+## Features
+
+- ✨ **Embeddable** - Use in any React app
+- 🤖 **AI-Powered** - Integrates with Bedrock and Claude
+- 📚 **Source Attribution** - Shows document sources
+- 🎨 **Styled** - Compatible with Cloudscape
+- ♿ **Accessible** - WCAG 2.1 AA compliant
+- 📱 **Responsive** - Desktop, tablet, mobile
+- 🌙 **Dark Mode** - System preference support
+- ✅ **Tested** - Comprehensive test suite
+
+## Prerequisites
+
+- React 18+
+- AWS Amplify backend with chat route (from SAM deployment)
+- Bedrock Knowledge Base
+- AWS credentials configured
+
+## Configuration
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `conversationId` | string | `"default"` | Unique conversation ID |
+| `headerText` | string | `"Document Q&A"` | Header title |
+| `headerSubtitle` | string | `""` | Header subtitle |
+| `showSources` | boolean | `true` | Show/hide sources |
+| `maxWidth` | string | `"100%"` | Component width |
+| `onSendMessage` | function | - | Callback when user sends message |
+| `onResponseReceived` | function | - | Callback when AI responds |
+
+### Callbacks
+
+```tsx
+// When user sends a message
+onSendMessage={(message: string, conversationId: string) => {
+  console.log(`${conversationId}: ${message}`);
+}}
+
+// When AI responds
+onResponseReceived={(response: ChatMessage) => {
+  console.log('Response:', response.content);
+  console.log('Sources:', response.sources);
+}}
+```
+
+## Styling
+
+### Design Tokens
+
+Customize appearance with CSS variables:
+
+```css
+:root {
+  --chat-color-user-bg: #your-color;
+  --chat-color-source-accent: #your-color;
+  --chat-font-family: 'Your Font', sans-serif;
+  --chat-spacing-lg: 20px;
+}
+```
+
+### CSS Classes
+
+```tsx
+<ChatWithSources className="branded-chat" />
+```
+
+## Advanced Usage
+
+### Multiple Conversations
+
+```tsx
+<ChatWithSources conversationId="support" headerText="Support" />
+<ChatWithSources conversationId="docs" headerText="Documentation" />
+```
+
+### With State Management (Redux)
+
+```tsx
+import { useDispatch } from 'react-redux';
+
+export function ConnectedChat() {
+  const dispatch = useDispatch();
+
+  return (
+    <ChatWithSources
+      onResponseReceived={(response) => {
+        dispatch(saveConversation({
+          message: response.content,
+          sources: response.sources,
+        }));
+      }}
+    />
+  );
+}
+```
+
+### Modal or Drawer
+
+```tsx
+<Dialog open={isOpen} onOpenChange={onClose}>
+  <ChatWithSources maxWidth="100%" headerText="" />
+</Dialog>
+```
+
+## Web Components
+
+Use the component in any framework via Web Components:
+
+```html
+<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+
+<amplify-chat
+  conversation-id="my-chat"
+  header-text="Ask a Question"
+  show-sources="true"
+></amplify-chat>
+
+<script>
+  document.querySelector('amplify-chat')
+    .addEventListener('amplify-chat:send-message', (e) => {
+      console.log('Message:', e.detail.message);
+    });
+</script>
+```
+
+### Framework Examples
+
+**Vue 3:**
+```vue
+<template>
+  <amplify-chat
+    conversation-id="vue-chat"
+    @amplify-chat:send-message="handleMessage"
+  />
+</template>
+
+<script setup>
+import '@ragstack/amplify-chat/wc';
+</script>
+```
+
+**Angular:**
+```typescript
+import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import '@ragstack/amplify-chat/wc';
+
+@NgModule({ schemas: [CUSTOM_ELEMENTS_SCHEMA] })
+export class AppModule {}
+```
+
+**Svelte:**
+```svelte
+<script>
+  import '@ragstack/amplify-chat/wc';
+</script>
+
+<amplify-chat on:amplify-chat:send-message={handleMessage} />
+```
+
+## Backend Setup
+
+The component requires:
+
+1. **SAM deployment** - Creates Bedrock Knowledge Base
+2. **Amplify backend** - Defines chat route in `amplify/data/resource.ts`
+3. **Knowledge Base ID** - From SAM outputs, set in environment
+4. **Authentication** - Cognito user pool (auto-created by Amplify)
+
+## Performance Optimization
+
+### Memoize Component
+
+```tsx
+import { useMemo } from 'react';
+
+const chatProps = useMemo(() => ({
+  conversationId: 'main',
+}), []);
+
+return <ChatWithSources {...chatProps} />;
+```
+
+### Lazy Load
+
+```tsx
+import { lazy, Suspense } from 'react';
+
+const ChatWithSources = lazy(() =>
+  import('@ragstack/amplify-chat').then(m => ({
+    default: m.ChatWithSources,
+  }))
+);
+
+<Suspense fallback={<Loading />}>
+  <ChatWithSources />
+</Suspense>
+```
+
+## Troubleshooting
+
+**Component doesn't render:**
+- Verify `amplify_outputs.json` exists
+- Check browser console for errors
+- Ensure Authenticator wraps component
+
+**"Knowledge Base not found":**
+- Verify SAM deployment created KB
+- Check `KNOWLEDGE_BASE_ID` environment variable
+- Verify Amplify Lambda has Bedrock permissions
+
+**Styling conflicts:**
+- Check CSS specificity
+- Inspect in DevTools
+- Use `!important` if needed
+
+**Auth errors:**
+- Verify Cognito is set up
+- Check AWS credentials
+- Review IAM policies
+
+## Build from Source
+
+```bash
+cd src/amplify-chat
+npm install
+npm run build
+npm test
+```
+
+## Types
+
+### ChatMessage
+
+```typescript
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: Source[];
+  timestamp: string;
+}
+```
+
+### Source
+
+```typescript
+interface Source {
+  title: string;      // Document filename
+  location: string;   // Page or offset
+  snippet: string;    // Quote
+}
+```
+
+## Related Documentation
+
+- [Architecture](ARCHITECTURE.md) - Optional chat stack details
+- [Deployment](DEPLOYMENT.md) - How to deploy
+- [Development](DEVELOPMENT.md) - Development patterns
+- [Troubleshooting](TROUBLESHOOTING.md) - Common issues
