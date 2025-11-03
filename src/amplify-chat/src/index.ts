@@ -4,11 +4,13 @@
  * A reusable, embeddable React component for AI chat with source attribution.
  * Integrates with AWS Amplify AI Kit and Bedrock Knowledge Base.
  *
+ * Supports both React imports and Web Component usage.
+ *
  * @packageDocumentation
  *
- * @example
+ * @example React Usage
  * ```tsx
- * import { ChatWithSources } from '@your-org/amplify-chat';
+ * import { ChatWithSources } from '@ragstack/amplify-chat';
  *
  * export function MyApp() {
  *   return (
@@ -21,11 +23,20 @@
  *   );
  * }
  * ```
+ *
+ * @example Web Component Usage
+ * ```html
+ * <script src="https://your-cdn.com/amplify-chat.js"></script>
+ * <amplify-chat conversation-id="my-chat"></amplify-chat>
+ * ```
  */
 
-// Export components
+// Export React components
 export { ChatWithSources } from './components/ChatWithSources';
 export { SourcesDisplay } from './components/SourcesDisplay';
+
+// Export Web Component
+export { AmplifyChat } from './components/AmplifyChat.wc';
 
 // Export types
 export type {

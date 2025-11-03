@@ -1,18 +1,70 @@
 # Amplify Chat Component - Integration Guide
 
-A comprehensive guide for integrating the `ChatWithSources` component into your React applications.
+A comprehensive guide for integrating the `ChatWithSources` component into your applications.
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Installation](#installation)
-3. [Basic Setup](#basic-setup)
-4. [Configuration](#configuration)
-5. [Authentication](#authentication)
-6. [Styling](#styling)
-7. [Advanced Usage](#advanced-usage)
-8. [Performance](#performance)
-9. [Troubleshooting](#troubleshooting)
+1. [Distribution Methods](#distribution-methods)
+2. [Prerequisites](#prerequisites)
+3. [Installation](#installation)
+4. [Basic Setup](#basic-setup)
+5. [Configuration](#configuration)
+6. [Authentication](#authentication)
+7. [Styling](#styling)
+8. [Advanced Usage](#advanced-usage)
+9. [Web Component Integration](#web-component-integration)
+10. [Performance](#performance)
+11. [Troubleshooting](#troubleshooting)
+
+## Distribution Methods
+
+The Amplify Chat component can be distributed and used in multiple ways:
+
+### Option 1: NPM Package (Recommended for React apps)
+
+```bash
+npm install @ragstack/amplify-chat
+```
+
+Use in your React app:
+```tsx
+import { ChatWithSources } from '@ragstack/amplify-chat';
+```
+
+### Option 2: CDN (Recommended for multi-framework)
+
+Build and host the UMD bundle on CloudFront:
+
+```html
+<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+<amplify-chat conversation-id="my-chat"></amplify-chat>
+```
+
+Works in:
+- Vue, Angular, Svelte
+- Vanilla JavaScript
+- Web components compatible frameworks
+- Static HTML pages
+
+### Option 3: NPM Web Component Export
+
+For apps that use the NPM package but need Web Component:
+
+```bash
+npm install @ragstack/amplify-chat
+```
+
+Import the Web Component:
+```javascript
+import { AmplifyChat } from '@ragstack/amplify-chat/wc';
+```
+
+Use as a web component:
+```html
+<amplify-chat conversation-id="my-chat"></amplify-chat>
+```
+
+---
 
 ## Prerequisites
 
@@ -460,6 +512,190 @@ export function ChatModal({ isOpen, onClose }: ModalProps) {
   );
 }
 ```
+
+## Web Component Integration
+
+Use the chat component as a Web Component in any framework or vanilla JavaScript.
+
+### Building the UMD Bundle
+
+```bash
+# In src/amplify-chat/
+npm install
+npm run build:wc
+
+# Outputs to:
+# - dist/wc.js (UMD bundle)
+# - dist/wc.esm.js (ES Module)
+```
+
+### CDN Distribution (CloudFront)
+
+The UMD bundle is designed for hosting on CloudFront via your deployment pipeline:
+
+```bash
+# publish.py will handle this in Phase-3
+# For now, manually upload to CloudFront:
+
+aws s3 cp dist/wc.js s3://your-bucket/amplify-chat@1.0.0.js
+aws cloudfront create-invalidation --distribution-id YOUR_ID --paths "/amplify-chat@*"
+```
+
+### Using from CDN
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+</head>
+<body>
+  <amplify-chat
+    conversation-id="my-chat"
+    header-text="Ask a Question"
+    show-sources="true"
+  ></amplify-chat>
+
+  <script>
+    // Listen for events
+    const chat = document.querySelector('amplify-chat');
+
+    chat.addEventListener('amplify-chat:send-message', (e) => {
+      console.log('User sent:', e.detail.message);
+    });
+
+    chat.addEventListener('amplify-chat:response-received', (e) => {
+      console.log('AI responded:', e.detail.content);
+      console.log('Sources:', e.detail.sources);
+    });
+  </script>
+</body>
+</html>
+```
+
+### Web Component in React
+
+If your React app prefers Web Components:
+
+```tsx
+import '@ragstack/amplify-chat/wc';
+
+export function MyApp() {
+  return (
+    <Authenticator>
+      <amplify-chat
+        conversation-id="react-wc"
+        header-text="Web Component in React"
+      />
+    </Authenticator>
+  );
+}
+```
+
+TypeScript support:
+
+```tsx
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'amplify-chat': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          'conversation-id'?: string;
+          'header-text'?: string;
+          'header-subtitle'?: string;
+          'show-sources'?: string | boolean;
+          'max-width'?: string;
+        },
+        HTMLElement
+      >;
+    }
+  }
+}
+```
+
+### Web Component in Vue 3
+
+```vue
+<template>
+  <div>
+    <amplify-chat
+      :conversation-id="chatId"
+      header-text="Vue Web Component"
+      @amplify-chat:send-message="handleMessage"
+      @amplify-chat:response-received="handleResponse"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import '@ragstack/amplify-chat/wc';
+
+const chatId = ref('vue-chat');
+
+function handleMessage(e: CustomEvent) {
+  console.log('Message:', e.detail.message);
+}
+
+function handleResponse(e: CustomEvent) {
+  console.log('Response:', e.detail.content);
+}
+</script>
+```
+
+### Web Component in Angular
+
+```typescript
+import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import '@ragstack/amplify-chat/wc';
+
+@Component({
+  selector: 'app-chat',
+  template: `
+    <amplify-chat
+      [attr.conversation-id]="chatId"
+      (amplify-chat:send-message)="onMessage($event)"
+      (amplify-chat:response-received)="onResponse($event)"
+    ></amplify-chat>
+  `,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+})
+export class ChatComponent {
+  chatId = 'angular-chat';
+
+  onMessage(event: CustomEvent) {
+    console.log('Message:', event.detail.message);
+  }
+
+  onResponse(event: CustomEvent) {
+    console.log('Response:', event.detail.content);
+  }
+}
+```
+
+### Programmatic API
+
+```javascript
+// Get the element
+const chat = document.querySelector('amplify-chat');
+
+// Get conversation ID
+const convId = chat.getConversationId();
+
+// Set conversation ID
+chat.setConversationId('new-conversation');
+
+// Set attributes
+chat.setAttribute('header-text', 'New Title');
+chat.setAttribute('max-width', '600px');
+
+// Listen for events
+chat.addEventListener('amplify-chat:send-message', (e) => {
+  console.log('Message:', e.detail);
+});
+```
+
+---
 
 ## Performance
 

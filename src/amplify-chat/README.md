@@ -85,6 +85,142 @@ export function ChatPage() {
 }
 ```
 
+## Web Component Usage
+
+Use the chat component in **any framework** or vanilla JavaScript with the Web Component API.
+
+### Installation from CDN
+
+```html
+<!-- Include the Web Component bundle -->
+<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+
+<!-- Use it like any HTML element -->
+<amplify-chat conversation-id="my-chat"></amplify-chat>
+```
+
+### Installation from NPM (with build step)
+
+```bash
+npm install @ragstack/amplify-chat
+```
+
+Then in your app:
+
+```html
+<!-- Vue, Angular, Svelte, or vanilla JS -->
+<script type="module">
+  import { AmplifyChat } from '@ragstack/amplify-chat/wc';
+  // Component is now registered as <amplify-chat>
+</script>
+
+<amplify-chat
+  conversation-id="my-chat"
+  header-text="Ask a Question"
+>
+</amplify-chat>
+```
+
+### Web Component Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `conversation-id` | string | `"default"` | Unique conversation ID |
+| `header-text` | string | `"Document Q&A"` | Header title |
+| `header-subtitle` | string | `"Ask questions about your documents"` | Header subtitle |
+| `show-sources` | boolean | `true` | Show/hide sources |
+| `max-width` | string | `"100%"` | Component width |
+
+### Web Component Events
+
+```javascript
+// Listen for messages sent
+document.querySelector('amplify-chat')
+  .addEventListener('amplify-chat:send-message', (e) => {
+    console.log('Message sent:', e.detail.message);
+  });
+
+// Listen for responses received
+document.querySelector('amplify-chat')
+  .addEventListener('amplify-chat:response-received', (e) => {
+    console.log('Response:', e.detail);
+  });
+```
+
+### Examples by Framework
+
+**Vue 3:**
+```vue
+<template>
+  <amplify-chat
+    conversation-id="vue-chat"
+    @amplify-chat:send-message="onMessage"
+  ></amplify-chat>
+</template>
+
+<script setup>
+import { defineElement } from 'vue';
+import '@ragstack/amplify-chat/wc';
+
+function onMessage(e) {
+  console.log('Vue received:', e.detail);
+}
+</script>
+```
+
+**Angular:**
+```typescript
+import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
+import '@ragstack/amplify-chat/wc';
+
+@NgModule({
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+})
+export class AppModule {}
+```
+
+```html
+<amplify-chat
+  conversation-id="angular-chat"
+  (amplify-chat:send-message)="onMessage($event)"
+></amplify-chat>
+```
+
+**Svelte:**
+```svelte
+<script>
+  import '@ragstack/amplify-chat/wc';
+
+  function handleMessage(e) {
+    console.log('Svelte received:', e.detail);
+  }
+</script>
+
+<amplify-chat
+  conversation-id="svelte-chat"
+  on:amplify-chat:send-message={handleMessage}
+></amplify-chat>
+```
+
+**Vanilla JavaScript:**
+```html
+<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+
+<amplify-chat id="my-chat"></amplify-chat>
+
+<script>
+  const chat = document.getElementById('my-chat');
+
+  // Set attributes programmatically
+  chat.setAttribute('conversation-id', 'vanilla-chat');
+
+  // Listen for events
+  chat.addEventListener('amplify-chat:send-message', (e) => {
+    console.log('Message:', e.detail.message);
+  });
+</script>
+```
+
 ## Props
 
 ### `ChatWithSourcesProps`
