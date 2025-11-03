@@ -1,0 +1,361 @@
+/**
+ * ChatWithSources Component Styling
+ *
+ * Provides responsive, embeddable styling for the chat component.
+ * Designed to work standalone or within larger applications.
+ * Compatible with Cloudscape Design System.
+ */
+
+/* ============================================================================
+   DESIGN TOKENS - Based on Cloudscape Design System
+   ============================================================================ */
+
+:root {
+  /* Colors - Cloudscape compatible */
+  --chat-color-bg: #ffffff;
+  --chat-color-bg-secondary: #f5f5f5;
+  --chat-color-text: #1a1a1a;
+  --chat-color-text-secondary: #666666;
+  --chat-color-border: #d5d5d5;
+  --chat-color-border-light: #e3e3e3;
+
+  /* Chat message colors */
+  --chat-color-user-bg: #0972d3;
+  --chat-color-user-text: #ffffff;
+  --chat-color-assistant-bg: #f5f5f5;
+  --chat-color-assistant-text: #1a1a1a;
+
+  /* Source colors */
+  --chat-color-source-bg: #f8f9fa;
+  --chat-color-source-border: #d5d5d5;
+  --chat-color-source-accent: #0972d3;
+
+  /* Spacing - 8px base */
+  --chat-spacing-xs: 4px;
+  --chat-spacing-sm: 8px;
+  --chat-spacing-md: 12px;
+  --chat-spacing-lg: 16px;
+  --chat-spacing-xl: 20px;
+  --chat-spacing-xxl: 24px;
+
+  /* Border radius */
+  --chat-radius-sm: 2px;
+  --chat-radius-md: 4px;
+  --chat-radius-lg: 8px;
+
+  /* Typography */
+  --chat-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  --chat-font-size-xs: 12px;
+  --chat-font-size-sm: 13px;
+  --chat-font-size-base: 14px;
+  --chat-font-size-lg: 16px;
+  --chat-font-size-xl: 18px;
+
+  /* Line heights */
+  --chat-line-height-tight: 1.4;
+  --chat-line-height-normal: 1.5;
+  --chat-line-height-relaxed: 1.6;
+
+  /* Transitions */
+  --chat-transition-fast: 100ms ease-in-out;
+  --chat-transition-normal: 200ms ease-in-out;
+}
+
+/* ============================================================================
+   CONTAINER
+   ============================================================================ */
+
+.chatContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 500px;
+  background-color: var(--chat-color-bg);
+  font-family: var(--chat-font-family);
+  color: var(--chat-color-text);
+  border: 1px solid var(--chat-color-border-light);
+  border-radius: var(--chat-radius-lg);
+  overflow: hidden;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+
+/* ============================================================================
+   HEADER
+   ============================================================================ */
+
+.chatHeader {
+  padding: var(--chat-spacing-xl) var(--chat-spacing-lg);
+  background-color: var(--chat-color-bg);
+  border-bottom: 1px solid var(--chat-color-border-light);
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: var(--chat-font-size-lg);
+  font-weight: 600;
+  color: var(--chat-color-text);
+  line-height: var(--chat-line-height-tight);
+}
+
+.headerSubtitle {
+  margin: var(--chat-spacing-xs) 0 0 0;
+  font-size: var(--chat-font-size-sm);
+  color: var(--chat-color-text-secondary);
+  line-height: var(--chat-line-height-tight);
+}
+
+/* ============================================================================
+   CHAT CONTENT
+   ============================================================================ */
+
+.chatContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--chat-spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--chat-spacing-md);
+  background-color: var(--chat-color-bg);
+}
+
+/* ============================================================================
+   MESSAGES
+   ============================================================================ */
+
+.messageText {
+  margin: 0;
+  font-size: var(--chat-font-size-base);
+  line-height: var(--chat-line-height-normal);
+  color: var(--chat-color-text);
+}
+
+.responseContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chat-spacing-md);
+  animation: fadeIn var(--chat-transition-fast) ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.responseText {
+  margin: 0;
+  font-size: var(--chat-font-size-base);
+  line-height: var(--chat-line-height-normal);
+  color: var(--chat-color-text);
+}
+
+/* ============================================================================
+   SOURCES / CITATIONS
+   ============================================================================ */
+
+.sourcesContainer {
+  margin-top: var(--chat-spacing-lg);
+  padding-top: var(--chat-spacing-lg);
+  border-top: 1px solid var(--chat-color-border);
+}
+
+.sourcesHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  margin-bottom: var(--chat-spacing-md);
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  color: var(--chat-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sourcesIcon {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.sourcesLabel {
+  color: var(--chat-color-text-secondary);
+}
+
+.sourceCount {
+  color: var(--chat-color-source-accent);
+  font-weight: 700;
+}
+
+/* ============================================================================
+   SOURCES LIST
+   ============================================================================ */
+
+.sourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chat-spacing-sm);
+}
+
+.sourceItem {
+  padding: var(--chat-spacing-md);
+  background-color: var(--chat-color-source-bg);
+  border-left: 3px solid var(--chat-color-source-accent);
+  border-radius: var(--chat-radius-md);
+  font-size: var(--chat-font-size-sm);
+  transition: background-color var(--chat-transition-fast);
+}
+
+.sourceItem:hover {
+  background-color: #f0f0f0;
+}
+
+.sourceTitle {
+  font-weight: 600;
+  color: var(--chat-color-text);
+  margin-bottom: var(--chat-spacing-xs);
+  word-break: break-word;
+  font-size: var(--chat-font-size-sm);
+}
+
+.sourceLocation {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text-secondary);
+  margin-bottom: var(--chat-spacing-xs);
+}
+
+.sourceSnippet {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text);
+  font-style: italic;
+  margin-top: var(--chat-spacing-xs);
+  line-height: var(--chat-line-height-normal);
+  padding: var(--chat-spacing-sm);
+  background-color: rgba(9, 114, 211, 0.04);
+  border-radius: var(--chat-radius-sm);
+  word-break: break-word;
+}
+
+.quoteIcon {
+  color: var(--chat-color-source-accent);
+  opacity: 0.4;
+  margin: 0 var(--chat-spacing-xs);
+}
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+
+.chatFooter {
+  padding: var(--chat-spacing-md) var(--chat-spacing-lg);
+  background-color: var(--chat-color-bg-secondary);
+  border-top: 1px solid var(--chat-color-border-light);
+  text-align: center;
+}
+
+.footerText {
+  margin: 0;
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text-secondary);
+}
+
+/* ============================================================================
+   SCROLLBAR STYLING
+   ============================================================================ */
+
+.chatContent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chatContent::-webkit-scrollbar-track {
+  background: var(--chat-color-bg);
+}
+
+.chatContent::-webkit-scrollbar-thumb {
+  background: var(--chat-color-border);
+  border-radius: var(--chat-radius-sm);
+}
+
+.chatContent::-webkit-scrollbar-thumb:hover {
+  background: var(--chat-color-text-secondary);
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .chatContainer {
+    min-height: 400px;
+  }
+
+  .chatHeader {
+    padding: var(--chat-spacing-lg) var(--chat-spacing-md);
+  }
+
+  .headerTitle {
+    font-size: var(--chat-font-size-base);
+  }
+
+  .chatContent {
+    padding: var(--chat-spacing-md);
+  }
+
+  .sourceItem {
+    padding: var(--chat-spacing-sm);
+  }
+
+  .sourcesHeader {
+    font-size: var(--chat-font-size-xs);
+  }
+}
+
+/* ============================================================================
+   DARK MODE SUPPORT (Prefers color scheme)
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --chat-color-bg: #1a1a1a;
+    --chat-color-bg-secondary: #2a2a2a;
+    --chat-color-text: #ffffff;
+    --chat-color-text-secondary: #999999;
+    --chat-color-border: #333333;
+    --chat-color-border-light: #2a2a2a;
+    --chat-color-assistant-bg: #2a2a2a;
+    --chat-color-assistant-text: #ffffff;
+    --chat-color-source-bg: #252525;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================ */
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  .sourceItem {
+    border-left-width: 4px;
+  }
+
+  .chatContainer {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--chat-color-source-accent);
+  outline-offset: 2px;
+}

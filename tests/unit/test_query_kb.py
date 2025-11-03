@@ -141,7 +141,7 @@ def test_lambda_handler_empty_query(mock_boto3_client, mock_config_manager, lamb
     assert result["answer"] == ""
     assert result["sessionId"] is None
     assert result["sources"] == []
-    assert result["message"] == "No query provided"
+    assert result["error"] == "No query provided"
 
     # Verify boto3.client was still called to create bedrock_agent
     # (but retrieve_and_generate not called)
@@ -164,7 +164,7 @@ def test_lambda_handler_no_query_field(mock_boto3_client, lambda_context):
     assert result["answer"] == ""
     assert result["sessionId"] is None
     assert result["sources"] == []
-    assert result["message"] == "No query provided"
+    assert result["error"] == "No query provided"
     mock_bedrock_agent.retrieve.assert_not_called()
 
 

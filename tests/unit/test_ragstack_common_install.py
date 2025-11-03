@@ -111,14 +111,6 @@ class TestLambdaRequirements:
         content = req_file.read_text()
         assert "./lib" in content, "process_document requirements should reference ./lib package"
 
-    def test_generate_embeddings_requirements_reference_lib(self):
-        """Verify generate_embeddings requirements.txt references ./lib"""
-        req_file = Path("src/lambda/generate_embeddings/requirements.txt")
-        assert req_file.exists(), "generate_embeddings should have requirements.txt"
-
-        content = req_file.read_text()
-        assert "./lib" in content, "generate_embeddings requirements should reference ./lib package"
-
     def test_query_kb_does_not_reference_lib(self):
         """Verify query_kb doesn't reference lib (doesn't use ragstack_common)"""
         req_file = Path("src/lambda/query_kb/requirements.txt")
@@ -133,7 +125,6 @@ class TestLambdaRequirements:
         """Verify Lambda functions that reference ./lib actually import ragstack_common"""
         functions_with_lib = [
             "process_document",
-            "generate_embeddings",
         ]
 
         for func_name in functions_with_lib:

@@ -68,6 +68,21 @@ def mock_dynamodb(mock_configuration_table, mock_tracking_table):
         mock_dynamodb_resource.Table.side_effect = table_side_effect
         mock_resource.return_value = mock_dynamodb_resource
 
+        # Set up default return value for configuration table get_item
+        mock_configuration_table.get_item.return_value = {
+            "Item": {
+                "Configuration": "Schema",
+                "config": json.dumps(
+                    {
+                        "fields": {
+                            "ocr_backend": {"type": "string"},
+                            "bedrock_ocr_model_id": {"type": "string"},
+                        }
+                    }
+                ),
+            }
+        }
+
         # Reload the module to pick up mocked boto3
         import importlib
         import importlib.util
@@ -377,9 +392,18 @@ def test_schema_excludes_embedding_model_fields(mock_get_item, sample_schema):
 # Test: handle_update_configuration
 
 
+@patch("index_config_resolver.get_configuration_item")
 @patch("index_config_resolver.configuration_table")
-def test_handle_update_configuration_with_json_string(mock_table):
+def test_handle_update_configuration_with_json_string(mock_table, mock_get_config_item):
     """Test updating configuration with JSON string."""
+    # Mock get_configuration_item to return schema
+    mock_get_config_item.return_value = {
+        "Configuration": "Schema",
+        "config": json.dumps(
+            {"fields": {"ocr_backend": {"type": "string"}, "chat_model_id": {"type": "string"}}}
+        ),
+    }
+
     custom_config = json.dumps({"ocr_backend": "bedrock", "chat_model_id": "amazon.nova-lite-v1:0"})
 
     result = index.handle_update_configuration(custom_config)
@@ -391,9 +415,16 @@ def test_handle_update_configuration_with_json_string(mock_table):
     assert call_args["Item"]["ocr_backend"] == "bedrock"
 
 
+@patch("index_config_resolver.get_configuration_item")
 @patch("index_config_resolver.configuration_table")
-def test_handle_update_configuration_with_dict(mock_table):
+def test_handle_update_configuration_with_dict(mock_table, mock_get_config_item):
     """Test updating configuration with dictionary."""
+    # Mock get_configuration_item to return schema
+    mock_get_config_item.return_value = {
+        "Configuration": "Schema",
+        "config": json.dumps({"fields": {"ocr_backend": {"type": "string"}}}),
+    }
+
     custom_config = {"ocr_backend": "bedrock"}
 
     result = index.handle_update_configuration(custom_config)

@@ -84,7 +84,7 @@ def extract_sources(citations):
             try:
                 parts = uri.replace("s3://", "").split("/")
                 if len(parts) < 2:
-                    logger.warning(f"Invalid S3 URI format (too few parts)")
+                    logger.warning("Invalid S3 URI format (too few parts)")
                     continue
 
                 # Decode document ID (may have URL encoding)
@@ -159,7 +159,7 @@ def lambda_handler(event, context):
     # Extract from knowledge_base_id ARN format or use STS
     account_id = None
     try:
-        if context and hasattr(context, 'invoked_function_arn'):
+        if context and hasattr(context, "invoked_function_arn"):
             arn_parts = context.invoked_function_arn.split(":")
             if len(arn_parts) >= 5:
                 account_id = arn_parts[4]
@@ -183,7 +183,7 @@ def lambda_handler(event, context):
             account_id = sts.get_caller_identity()["Account"]
         except Exception as e:
             logger.error(f"Failed to get account ID from STS: {e}")
-            raise ValueError("Could not determine AWS account ID for ARN construction")
+            raise ValueError("Could not determine AWS account ID for ARN construction") from e
 
     # Extract inputs from AppSync event
     # AppSync sends: {"arguments": {"query": "...", "sessionId": "..."}, ...}
@@ -230,7 +230,8 @@ def lambda_handler(event, context):
         if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")):
             # Inference profiles require account ID in ARN
             if not account_id:
-                raise ValueError(f"Account ID is required for inference profile model {chat_model_id}")
+                msg = f"Account ID is required for inference profile model {chat_model_id}"
+                raise ValueError(msg)
             model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{chat_model_id}"
         else:
             # Foundation models don't use account ID
