@@ -14,11 +14,14 @@ import styles from '../styles/ChatWithSources.module.css';
 /**
  * SourcesDisplay Component
  *
+ * Memoized to prevent unnecessary re-renders when parent component updates
+ * but sources array hasn't changed.
+ *
  * @param sources - Array of sources to display
  * @param className - Optional custom CSS class
  * @returns React component rendering the sources
  */
-export const SourcesDisplay: React.FC<SourcesDisplayProps> = ({
+const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
   sources,
   className,
 }) => {
@@ -64,5 +67,7 @@ export const SourcesDisplay: React.FC<SourcesDisplayProps> = ({
     </div>
   );
 };
+
+export const SourcesDisplay = React.memo(SourcesDisplayComponent);
 
 export default SourcesDisplay;

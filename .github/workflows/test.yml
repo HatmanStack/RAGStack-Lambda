@@ -67,6 +67,8 @@ jobs:
         run: |
           npm install
           cd src/ui && npm install && cd ../..
+          cd src/amplify-chat && npm install && cd ../..
+          cd amplify && npm install && cd ..
 
       # Run tests
       - name: Lint backend (ruff)
@@ -80,6 +82,12 @@ jobs:
 
       - name: Run frontend tests (Vitest)
         run: npm run test:frontend
+
+      - name: Lint Amplify chat package
+        run: cd src/amplify-chat && npm run lint && cd ../..
+
+      - name: Type-check Amplify backend
+        run: cd amplify && npx tsc --noEmit && cd ..
 
       # Optional: Generate coverage reports
       - name: Generate coverage report

@@ -15,8 +15,11 @@ export const data = defineData({
       // Model: us.anthropic.claude-haiku-4-5-20251001-v1:0 (Haiku)
       // This matches the default model in SAM's ConfigurationTable (chat_model_id)
       // When users change the model in Settings UI, the SAM system uses that configuration.
-      // Future enhancement (Phase 2+): Dynamic model selection via custom Lambda handler
-      // that reads from ConfigurationTable and routes to different conversation instances
+      //
+      // TODO: Implement dynamic model selection (GitHub Issue #XXX)
+      // Future enhancement: Read model ID from KNOWLEDGE_BASE_CONFIG or ConfigurationTable
+      // to allow users to switch models without redeployment
+      // See: docs/OPTIMIZATION.md for details on model selection strategy
       model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
 
       // System prompt - tells the model how to behave
