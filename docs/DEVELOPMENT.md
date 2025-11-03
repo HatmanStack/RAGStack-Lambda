@@ -75,10 +75,15 @@ RAGStack-Lambda/
 │   │   └── pipeline.asl.json
 │   ├── api/                    # GraphQL schema
 │   │   └── schema.graphql
-│   └── ui/                     # React application
+│   ├── ui/                     # React web UI
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── vite.config.ts
+│   └── amplify-chat/           # AI chat component (React + Web Component)
 │       ├── src/
 │       ├── package.json
-│       └── vite.config.ts
+│       ├── vite.wc.config.ts   # Web component build
+│       └── README.md
 │
 ├── tests/                      # Test files
 │   ├── unit/                   # Unit tests
@@ -449,7 +454,6 @@ MyFunction:
 
 ## Related Documentation
 
-- [Testing Guide](TESTING.md) - Comprehensive testing documentation
 - [Architecture](ARCHITECTURE.md) - System design and components
 - [Configuration](CONFIGURATION.md) - Runtime configuration options
 - [Deployment](DEPLOYMENT.md) - How to deploy to AWS

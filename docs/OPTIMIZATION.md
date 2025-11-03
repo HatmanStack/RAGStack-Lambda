@@ -25,7 +25,6 @@ Lambda functions are billed based on memory allocation and execution time (GB-se
 From the CloudFormation template:
 
 - **ProcessDocumentFunction**: 3008 MB (max memory for OCR processing)
-- **GenerateEmbeddingsFunction**: 2048 MB
 - **QueryKBFunction**: 512 MB
 - **AppSyncResolverFunction**: 256 MB (via Globals)
 - **KBCustomResourceFunction**: 512 MB
@@ -154,29 +153,9 @@ Or override during deployment:
 sam deploy --parameter-overrides OcrBackend=textract
 ```
 
-### Embedding Model Selection
-
-Current configuration uses cost-effective models:
-
-- **Text embeddings**: `amazon.titan-embed-text-v2:0` - $0.0001 per 1000 tokens
-- **Image embeddings**: `amazon.titan-embed-image-v1` - $0.06 per 1000 images
-
-**Already optimized** - these are the most cost-effective embedding models available.
-
 ### Batch Processing Optimization
 
-The `GenerateEmbeddingsFunction` processes embeddings in batches to avoid rate limits:
-
-```python
-# Current configuration in generate_embeddings Lambda
-BATCH_SIZE = 20  # Process 20 pages at a time
-DELAY_BETWEEN_BATCHES = 2  # seconds
-```
-
-**Optimization tips:**
-- Increase batch size if not hitting rate limits
-- Reduce delay between batches (monitor for throttling)
-- Use CloudWatch metrics to find optimal settings
+Embeddings are handled automatically by Bedrock Knowledge Base API (no manual optimization needed).
 
 ---
 
@@ -188,11 +167,10 @@ Lifecycle policies automatically transition or delete objects to reduce storage 
 
 | Bucket | Lifecycle Policy | Rationale |
 |--------|------------------|-----------|
-| **InputBucket** | No expiration (Phase 7 config) | Keep source documents indefinitely |
-| **OutputBucket** | No expiration (Phase 7 config) | Keep processed results indefinitely |
-| **WorkingBucket** | Delete after 7 days | Temporary files only |
+| **InputBucket** | No expiration | Source documents |
+| **OutputBucket** | No expiration | Extracted text |
 | **VectorBucket** | No expiration | Vector embeddings for KB |
-| **CloudTrailBucket** | Delete after 90 days | Audit logs retention |
+| **UIBucket** | No expiration | React UI assets |
 
 ### Customizing Retention Periods
 
@@ -269,22 +247,7 @@ ttl = int((datetime.now() + timedelta(days=90)).timestamp())
 
 ## Step Functions Optimization
 
-Step Functions charges per state transition ($0.025 per 1000 transitions).
-
-### Current Pipeline
-
-The `ProcessingPipeline` state machine has:
-- 2 Lambda task states (ProcessDocument, GenerateEmbeddings)
-- Error handling with retry logic
-- Minimal state transitions
-
-**Already optimized** - Using direct Lambda integrations without intermediate states.
-
-### Optimization Tips
-
-1. **Avoid unnecessary states**: Combine logic in Lambda when possible
-2. **Use Express Workflows** for high-volume, short-duration workflows (not applicable here)
-3. **Batch processing**: Process multiple documents in one execution if feasible
+Step Functions workflow is managed by Bedrock Knowledge Base ingestion. No manual optimization needed.
 
 ---
 
@@ -295,13 +258,6 @@ CloudWatch charges for:
 - Log storage: $0.03 per GB/month
 - Metrics: First 10,000 free, then $0.30 per metric
 - Dashboards: $3 per dashboard per month
-
-### Current Configuration
-
-Phase 7 added:
-- 1 CloudWatch Dashboard ($3/month)
-- 5 CloudWatch Alarms (free within limits)
-- CloudTrail logs with 90-day retention
 
 ### Log Retention Optimization
 
@@ -347,12 +303,7 @@ Run monthly to review costs:
 
 ### Budget Alerts
 
-Phase 7 configured a budget with:
-- **Limit**: $100/month (placeholder)
-- **Alert at**: 80% ($80)
-- **Forecast alert**: 100% ($100)
-
-**Update budget** to your actual expected costs:
+Set up AWS Budgets to monitor costs:
 
 ```yaml
 MonthlyBudget:
@@ -397,14 +348,12 @@ Assuming 1000 documents/month, 5 pages average:
 | Service | Usage | Cost |
 |---------|-------|------|
 | **Textract** | 5000 pages × $0.0015 | $7.50 |
-| **Bedrock Embeddings** | 10,000 tokens × $0.0001/1000 | $1.00 |
+| **Bedrock KB** | Embeddings (API-managed) | $1.00 |
 | **Lambda** | 2000 invocations, 512MB avg, 5s avg | $0.40 |
-| **S3** | 5 buckets, 10GB storage | $0.23 |
+| **S3** | 4 buckets, 10GB storage | $0.23 |
 | **DynamoDB** | 2000 writes, 5000 reads | $2.63 |
-| **Step Functions** | 1000 executions, 2 transitions | $0.05 |
-| **CloudWatch** | 1 dashboard, 1GB logs | $3.50 |
-| **CloudTrail** | 1GB logs | $0.50 |
-| **Total** | | **~$15.81/month** |
+| **CloudWatch** | 1GB logs | $2.00 |
+| **Total** | | **~$13.76/month** |
 
 **With Bedrock OCR instead of Textract:**
 - Bedrock OCR: 5000 pages × $0.005 = $25.00
@@ -443,6 +392,6 @@ For predictable, high-volume workloads:
 
 - **CloudWatch Dashboard**: Check metrics at AWS Console → CloudWatch → Dashboards → RAGStack-Monitor
 - **Cost anomalies**: Review AWS Cost Explorer for unexpected spikes
-- **Performance issues**: See `docs/TESTING.md` for troubleshooting
+- **Performance issues**: See TROUBLESHOOTING.md
 
 For architectural optimization, see `docs/ARCHITECTURE.md`.

@@ -13,8 +13,9 @@ Serverless document processing with AI chat. Upload documents, extract text with
 ## Quick Start
 
 ### Prerequisites
-- AWS Account with Bedrock models enabled
+- AWS Account with admin access
 - Python 3.13+, Node.js 24+, AWS CLI, SAM CLI, Docker
+- **For chat (optional):** Amplify CLI
 
 ### Deploy
 

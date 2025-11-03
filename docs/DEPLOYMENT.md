@@ -5,10 +5,7 @@
 - AWS Account with admin access
 - AWS CLI configured: `aws sts get-caller-identity`
 - Python 3.13+, Node.js 24+, SAM CLI, Docker
-- Bedrock models enabled in AWS Console → Bedrock → Model access:
-  - `anthropic.claude-3-5-haiku-20241022-v1:0`
-  - `amazon.titan-embed-text-v2:0`
-  - `amazon.titan-embed-image-v1`
+- **For chat (optional):** Amplify CLI (`npm install -g @aws-amplify/cli`)
 
 ## Deploy
 
@@ -23,7 +20,7 @@ python publish.py \
   --region us-east-1 \
   --deploy-chat
 
-# Search only
+# Without chat
 python publish.py \
   --project-name myapp \
   --admin-email admin@example.com \
@@ -31,7 +28,7 @@ python publish.py \
 ```
 
 **Flags:**
-- `--deploy-chat`: Deploy AI chat with web component
+- `--deploy-chat`: Deploy AI chat with web component (requires Amplify CLI)
 - `--chat-only`: Update chat only (after SAM deployed)
 - `--skip-ui`: Skip UI rebuild
 
@@ -70,13 +67,16 @@ aws bedrock-agent delete-knowledge-base --knowledge-base-id <KB-ID>
 
 # Delete stack
 aws cloudformation delete-stack --stack-name RAGStack-myapp
+
+# Delete Amplify app (if chat deployed)
+amplify delete
 ```
 
 ## Troubleshooting
 
 **"Resource already exists"** → Change project name
 
-**"Model not enabled"** → Enable Bedrock models in console, wait 5-10 min
+**"Amplify CLI not found"** → Install: `npm install -g @aws-amplify/cli`
 
 **"Insufficient permissions"** → Need admin IAM access
 
