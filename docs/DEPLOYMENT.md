@@ -53,6 +53,16 @@ cd src/ui && npm install && cd ../..
 
 ### Step 2: Deploy Stack
 
+**With Chat (Recommended):**
+```bash
+python publish.py \
+  --project-name myapp \
+  --admin-email admin@example.com \
+  --region us-east-1 \
+  --deploy-chat
+```
+
+**Search Only:**
 ```bash
 python publish.py \
   --project-name myapp \
@@ -64,6 +74,8 @@ python publish.py \
 - `--project-name`: lowercase, alphanumeric + hyphens, 2-32 chars (used for all resource names)
 - `--admin-email`: valid email (receives temporary password)
 - `--region`: AWS region (us-east-1, us-west-2, eu-west-1, etc.)
+- `--deploy-chat` (optional): deploy AI chat component with web component support
+- `--chat-only` (optional): update only chat (after SAM deployed)
 - `--skip-ui` (optional): skip UI build if only updating backend
 
 **What happens:**

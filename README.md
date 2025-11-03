@@ -1,164 +1,244 @@
 # RAGStack-Lambda
 
-Serverless document processing pipeline on AWS. Upload documents (PDF, images, Office), extract text with OCR, generate embeddings, and query using Amazon Bedrock Knowledge Base.
+Serverless document processing pipeline with AI-powered chat. Upload documents, extract text with OCR, and query using Amazon Bedrock Knowledge Base.
 
-**Features**: Multi-format OCR • Dual backends (Textract/Bedrock) • Semantic search • Cost-effective S3 vector storage • React WebUI • One-click deployment
+## Features
+
+- 🔍 **Document Search** - Upload PDFs, images, Office docs → searchable knowledge base
+- 💬 **AI Chat** - Conversational interface with source attribution (optional)
+- 🌐 **Web Component** - Drop-in chat for any framework (Vue, Angular, Svelte, vanilla JS)
+- 🚀 **One-Click Deploy** - Complete infrastructure via `publish.py`
+- 💰 **Cost-Effective** - S3 vector storage (~$7-18/month for 1000 docs)
 
 ## Quick Start
 
 ### Prerequisites
-- AWS Account with Bedrock access (models enabled in AWS Console)
-- Python 3.13+, Node.js 24+
-- AWS CLI, SAM CLI, Docker
+- AWS Account with Bedrock models enabled (AWS Console → Bedrock → Model access)
+- Python 3.13+, Node.js 24+, AWS CLI, SAM CLI, Docker
 
-### Deploy (5-minute setup)
+### Deploy with Chat (Recommended)
 
 ```bash
 git clone https://github.com/your-org/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
+# Deploy document search + AI chat
+python publish.py \
+  --project-name my-docs \
+  --admin-email admin@example.com \
+  --region us-east-1 \
+  --deploy-chat
+```
+
+**Outputs:**
+- Web UI URL (CloudFront)
+- Chat Component URL (for web component integration)
+- GraphQL API endpoint
+- Bedrock Knowledge Base ID
+
+### Deploy Search Only
+
+```bash
+# Just document search (no chat)
 python publish.py \
   --project-name my-docs \
   --admin-email admin@example.com \
   --region us-east-1
 ```
 
-The deployment:
-1. ✅ Validates prerequisites
-2. ✅ Builds and deploys Lambda functions
-3. ✅ Deploys infrastructure (CloudFormation/SAM)
-4. ✅ Builds and deploys React UI (CodeBuild)
-5. ✅ Outputs CloudFront URL + temp credentials
+## Web Component Integration
 
-See [Deployment Guide](docs/DEPLOYMENT.md) for detailed steps.
+Use the AI chat in **any web application** (no React needed):
 
-### Enable Bedrock Models
+```html
+<!-- Include the web component -->
+<script src="https://your-cdn-url/amplify-chat.js"></script>
 
-Before deploying, enable these models in AWS Console > Bedrock > Model access:
-- `anthropic.claude-3-5-haiku-20241022-v1:0` (OCR)
-- `amazon.titan-embed-text-v2:0` (Text embeddings)
-- `amazon.titan-embed-image-v1` (Image embeddings)
+<!-- Add chat to your page -->
+<amplify-chat
+  conversation-id="my-app"
+  header-text="Ask About Documents"
+  show-sources="true"
+></amplify-chat>
 
-## What It Does
+<script>
+  // Listen for events
+  document.querySelector('amplify-chat')
+    .addEventListener('amplify-chat:send-message', (e) => {
+      console.log('User asked:', e.detail.message);
+    });
+</script>
+```
+
+### Framework Examples
+
+**Vue 3:**
+```vue
+<template>
+  <amplify-chat conversation-id="vue-app" />
+</template>
+
+<script setup>
+import '@ragstack/amplify-chat/wc';
+</script>
+```
+
+**Angular:**
+```typescript
+import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import '@ragstack/amplify-chat/wc';
+
+@Component({
+  template: '<amplify-chat conversation-id="angular-app"></amplify-chat>',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA]
+})
+```
+
+**Svelte:**
+```svelte
+<script>
+  import '@ragstack/amplify-chat/wc';
+</script>
+
+<amplify-chat conversation-id="svelte-app" />
+```
+
+**React:**
+```tsx
+import { ChatWithSources } from '@ragstack/amplify-chat';
+
+<ChatWithSources conversationId="react-app" />
+```
+
+See [Chat Component Guide](docs/AMPLIFY_CHAT.md) for full API.
+
+## Architecture
 
 ```
-Upload Document → Process (OCR) → Generate Embeddings → Bedrock KB
-                                                          ↓
-                    Search Interface (React UI) ←→ Query Bedrock KB
+Document Upload → OCR (Textract/Bedrock) → Embeddings → Bedrock KB
+                                                             ↓
+   Web UI (React) ←─────────→ GraphQL API ←────────→ Query/Search
+                                                             ↓
+   Web Component (Any Framework) ←──────────────→ AI Chat with Sources
 ```
 
-- **Upload page**: Drag-drop PDF, images, Office docs, text
-- **Dashboard**: Monitor processing status
-- **Search page**: Query documents, get results with sources
+**Stack:**
+- **Core (SAM)**: Lambda, Step Functions, S3, DynamoDB, AppSync, Bedrock
+- **Chat (Amplify)**: Optional conversational interface, web component
+- **Frontend**: React UI + Web Component for multi-framework support
 
 ## Cost Estimate
 
-For ~1000 documents/month (5 pages each):
+~1000 documents/month (5 pages each):
 
 | Service | Cost |
 |---------|------|
-| Textract + Embeddings | ~$5-15 |
-| S3 + Lambda + DynamoDB | ~$2 |
-| CloudFront + Bedrock | ~$0.5 |
+| OCR (Textract) + Embeddings | $5-15 |
+| S3 + Lambda + DynamoDB | $2 |
+| Bedrock (chat queries) | $0.50 |
 | **Total** | **~$7-18/month** |
 
-(Using Bedrock OCR instead: ~$25-75/month)
+## Deployment Options
+
+```bash
+# Full stack (search + chat)
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --deploy-chat
+
+# Search only
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1
+
+# Update chat only (after SAM deployed)
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --chat-only
+
+# Backend only (skip UI rebuild)
+python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --skip-ui
+```
 
 ## Documentation
 
-**Getting Started:**
-- [Deployment Guide](docs/DEPLOYMENT.md) - Step-by-step deployment
-- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
-- [User Guide](docs/USER_GUIDE.md) - How to use the web UI
+### Quick Start
+- [Deployment Guide](docs/DEPLOYMENT.md) - Step-by-step with chat setup
+- [User Guide](docs/USER_GUIDE.md) - Using the web UI
 
-**Development:**
-- [Development Guide](docs/DEVELOPMENT.md) - Local setup, testing, linting
-- [Configuration Guide](docs/CONFIGURATION.md) - Runtime configuration options
-- [Testing Guide](docs/TESTING.md) - Test structure and running tests
+### Integration
+- [Chat Component](docs/AMPLIFY_CHAT.md) - Web component API, framework examples
+- [UI Component](docs/UI.md) - React web UI customization
 
-**Operations & Troubleshooting:**
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [Optimization Guide](docs/OPTIMIZATION.md) - Performance tuning
+### Development
+- [Development Guide](docs/DEVELOPMENT.md) - Local setup, testing
+- [Configuration](docs/CONFIGURATION.md) - Runtime settings
+- [Testing](docs/TESTING.md) - Test structure
+
+### Operations
+- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
+- [Optimization](docs/OPTIMIZATION.md) - Performance tuning
 
 ## Local Development
 
 ```bash
-# Install and test locally (no AWS deployment needed)
+# Install and test locally (no AWS needed)
 npm install
-npm test              # Run all tests (~3s)
+npm test              # All tests (~3s)
 npm run lint          # Lint all code
-npm run test:all      # Lint + test (recommended pre-commit)
+npm run test:all      # Lint + test
 
-# Available commands
-npm run test:backend          # Python tests only
-npm run test:frontend         # React tests only
-npm run test:coverage         # Coverage reports
-npm run lint:backend          # Python linting
-npm run lint:frontend         # React linting
+# Build web component
+cd src/amplify-chat
+npm install
+npm run build        # Builds dist/wc.js
 ```
+
+## What You Get
+
+After deployment:
+
+1. **Search UI** - React app for document upload and search (CloudFront URL)
+2. **AI Chat** - Conversational interface with source citations (web component)
+3. **GraphQL API** - AppSync endpoint for custom integrations
+4. **Knowledge Base** - Bedrock KB with your documents indexed
+
+## Key Features
+
+- **Multi-Format OCR** - PDF (text/scanned), images, Office docs, text files
+- **Dual OCR Backends** - Textract (cost-effective) or Bedrock (multimodal)
+- **Semantic Search** - Vector similarity search via Bedrock
+- **Chat with Sources** - AI responses include document citations
+- **Web Component** - Framework-agnostic integration
+- **Real-Time Updates** - Dashboard shows processing status
+- **Runtime Config** - Change OCR/models without redeployment
 
 ## Project Structure
 
 ```
 RAGStack-Lambda/
 ├── src/
-│   ├── lambda/                 # Lambda functions
-│   │   ├── process_document/   # OCR extraction
-│   │   ├── generate_embeddings/# Embedding generation
-│   │   ├── query_kb/           # Knowledge Base queries
-│   │   ├── appsync_resolvers/  # GraphQL API handlers
-│   │   ├── configuration_resolver/  # Settings API
-│   │   ├── ingest_to_kb/       # Vector indexing
-│   │   ├── kb_custom_resource/ # CloudFormation resource
-│   │   └── start_codebuild/    # UI build trigger
-│   ├── statemachine/           # Step Functions workflow
-│   ├── api/                    # GraphQL schema
-│   └── ui/                     # React web UI
-├── lib/ragstack_common/        # Shared Python library
-├── tests/                      # Unit & integration tests
-├── template.yaml               # CloudFormation/SAM template
-├── publish.py                  # Deployment script
-└── docs/                       # Documentation
-```
-
-## Architecture Highlights
-
-- **Serverless**: No servers to manage, auto-scaling
-- **Cost-effective**: S3-based vector storage (~$1/month vs $50+/month for OpenSearch)
-- **Flexible OCR**: Choose Textract (cost) or Bedrock (multimodal)
-- **GraphQL API**: AppSync with Cognito auth
-- **Real-time UI**: React with AWS Amplify, Cloudscape Design System
-- **Runtime config**: DynamoDB-backed settings, no code redeploy needed
-
-## Deployment Parameters
-
-```bash
-python publish.py \
-  --project-name <name>    # lowercase alphanumeric + hyphens, 2-32 chars
-  --admin-email <email>    # for Cognito + alerts
-  --region <region>        # AWS region (e.g., us-east-1)
-  --skip-ui               # (optional) skip UI build
+│   ├── lambda/          # Lambda functions (OCR, embeddings, query, config)
+│   ├── statemachine/    # Step Functions workflow
+│   ├── api/             # GraphQL schema
+│   ├── ui/              # React web UI
+│   └── amplify-chat/    # Chat component (React + Web Component)
+├── lib/ragstack_common/ # Shared Python library
+├── tests/               # Unit & integration tests
+├── template.yaml        # CloudFormation/SAM
+├── publish.py           # Deployment automation
+└── docs/                # Documentation
 ```
 
 ## Security
 
-- ✅ Encryption at rest (S3 SSE, DynamoDB encryption)
-- ✅ Encryption in transit (HTTPS/TLS)
-- ✅ Least-privilege IAM policies
+- ✅ HTTPS/TLS everywhere
+- ✅ S3 SSE, DynamoDB encryption
 - ✅ Cognito authentication + optional MFA
+- ✅ Least-privilege IAM policies
 - ✅ Public S3 access blocked
-- ✅ CloudFront HTTPS-only
 
 ## Support
 
-- Check [Troubleshooting](docs/TROUBLESHOOTING.md) for common issues
-- Review [Development Guide](docs/DEVELOPMENT.md) for development problems
-- Open a GitHub issue with error details
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- [GitHub Issues](https://github.com/your-org/RAGStack-Lambda/issues)
+- Check CloudWatch logs for errors
 
 ## License
 
 MIT
-
-## Contributing
-
-Pull requests welcome! Please open an issue first to discuss proposed changes.

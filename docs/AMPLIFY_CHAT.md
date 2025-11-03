@@ -1,16 +1,40 @@
 # Amplify Chat Component
 
-A reusable React component for AI chat with source attribution. Integrates with AWS Bedrock Knowledge Base.
+AI chat with source attribution for **any web framework**. Integrates with AWS Bedrock Knowledge Base.
 
-## Quick Start
+## Quick Start - Web Component (Any Framework)
 
-### Installation
+Use the chat in Vue, Angular, Svelte, or vanilla JavaScript:
+
+```html
+<!-- Include the web component (from CDN after deployment) -->
+<script src="https://your-cdn-url/amplify-chat.js"></script>
+
+<!-- Add chat to your page -->
+<amplify-chat
+  conversation-id="my-app"
+  header-text="Ask About Documents"
+  show-sources="true"
+></amplify-chat>
+
+<script>
+  // Listen for events
+  document.querySelector('amplify-chat')
+    .addEventListener('amplify-chat:send-message', (e) => {
+      console.log('User asked:', e.detail.message);
+    });
+</script>
+```
+
+**Get CDN URL:** Deployment outputs this URL after running `publish.py --deploy-chat`
+
+## Quick Start - React Component
+
+For React applications:
 
 ```bash
 npm install @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
 ```
-
-### Basic Usage
 
 ```tsx
 import { ChatWithSources } from '@ragstack/amplify-chat';
