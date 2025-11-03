@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: RAGStack-Lambda - OCR to Bedrock Knowledge Base Pipeline
+Description: OCR to Bedrock Knowledge Base Pipeline
 
 Parameters:
   DeploymentSuffix:
@@ -29,31 +29,14 @@ Parameters:
 
   BedrockOcrModelId:
     Type: String
-    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Default: meta.llama3-2-90b-instruct-v1:0
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
-      - anthropic.claude-3-5-haiku-20241022-v1:0
-      - anthropic.claude-3-5-sonnet-20241022-v2:0
-      - anthropic.claude-3-haiku-20240307-v1:0
-      - anthropic.claude-3-sonnet-20240229-v1:0
-    ConstraintDescription: Must be a valid Bedrock Claude model ID
-
-  TextEmbedModelId:
-    Type: String
-    Default: amazon.titan-embed-text-v2:0
-    Description: Bedrock model ID for text embeddings
-    AllowedValues:
-      - amazon.titan-embed-text-v2:0
-      - amazon.titan-embed-text-v1
-    ConstraintDescription: Must be a valid Bedrock Titan text embedding model ID
-
-  ImageEmbedModelId:
-    Type: String
-    Default: amazon.titan-embed-image-v1
-    Description: Bedrock model ID for image embeddings
-    AllowedValues:
-      - amazon.titan-embed-image-v1
-    ConstraintDescription: Must be a valid Bedrock Titan image embedding model ID
+      - meta.llama3-2-90b-instruct-v1:0
+      - meta.llama3-2-11b-instruct-v1:0
+      - us.anthropic.claude-sonnet-4-20250514-v1:0
+      - us.anthropic.claude-haiku-4-5-20251001-v1:0
+    ConstraintDescription: Must be a valid Bedrock vision-capable model ID
 
   UISourceBucket:
     Type: String
@@ -113,6 +96,20 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - PUT
+              - POST
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - 'http://localhost:5173'
+              - 'http://localhost:3000'
+              - !Sub 'https://${CloudFrontDistribution.DomainName}'
+            MaxAge: 3000
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -288,7 +285,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       Name: !Sub '${AWS::StackName}-webui-build-${DeploymentSuffix}'
-      Description: !Sub 'Web UI build for RAGStack-Lambda stack - ${AWS::StackName}'
+      Description: !Sub 'Web UI build for ${AWS::StackName}'
       ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
       EncryptionKey: alias/aws/s3
       Artifacts:
@@ -546,11 +543,13 @@ Resources:
   RagstackCommonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub 'RAGStack-${ProjectName}-Common'
-      Description: Shared utilities for RAGStack Lambda functions
+      LayerName: !Sub '${ProjectName}-Common'
+      Description: Shared utilities for Lambda functions
       ContentUri: lib/
       CompatibleRuntimes:
         - python3.13
+    Metadata:
+      BuildMethod: python3.13
 
   # =========================================================================
   # Lambda Functions
@@ -607,54 +606,48 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
-  GenerateEmbeddingsFunction:
+  IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-embed-${DeploymentSuffix}'
-      CodeUri: src/lambda/generate_embeddings/
+      FunctionName: !Sub '${ProjectName}-ingest-${DeploymentSuffix}'
+      CodeUri: src/lambda/ingest_to_kb/
       Handler: index.lambda_handler
-      Description: Generate text and image embeddings
-      Layers:
-        - !Ref RagstackCommonLayer
+      Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
-      Timeout: 900
-      MemorySize: 2048
+      Timeout: 300
+      MemorySize: 256
       Tracing: Active
-      DeadLetterQueue:
-        Type: SQS
-        TargetArn: !GetAtt ProcessingDLQ.Arn
       Environment:
         Variables:
           LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
           TRACKING_TABLE: !Ref TrackingTable
-          METERING_TABLE: !Ref MeteringTable
-          VECTOR_BUCKET: !Ref VectorBucket
-          TEXT_EMBED_MODEL: !Ref TextEmbedModelId
-          IMAGE_EMBED_MODEL: !Ref ImageEmbedModelId
-          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref OutputBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref MeteringTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
-              Action: bedrock:InvokeModel
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+                - bedrock:ListDataSources
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
 
   QueryKBFunction:
     Type: AWS::Serverless::Function
@@ -689,8 +682,14 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: bedrock:GetInferenceProfile
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: aws-marketplace:ViewSubscriptions
+              Resource: '*'
 
   ##########################################################################
   # Configuration Resolver Lambda
@@ -764,7 +763,7 @@ Resources:
                   - lambda:InvokeFunction
                 Resource:
                   - !GetAtt ProcessDocumentFunction.Arn
-                  - !GetAtt GenerateEmbeddingsFunction.Arn
+                  - !GetAtt IngestToKBFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -785,11 +784,11 @@ Resources:
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-ProcessingPipeline'
+      Name: !Sub '${ProjectName}-ProcessingPipeline'
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
-        GenerateEmbeddingsFunctionArn: !GetAtt GenerateEmbeddingsFunction.Arn
+        IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
@@ -811,7 +810,7 @@ Resources:
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-S3UploadTrigger'
+      Name: !Sub '${ProjectName}-S3UploadTrigger'
       Description: Trigger processing pipeline on S3 upload
       EventPattern:
         source:
@@ -881,6 +880,17 @@ Resources:
               ArnLike:
                 'aws:SourceArn': !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
       Policies:
+        - PolicyName: S3DataSourceAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${OutputBucket.Arn}'
+                  - !Sub '${OutputBucket.Arn}/*'
         - PolicyName: S3VectorsAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -912,7 +922,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
 
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
@@ -984,7 +994,8 @@ Resources:
       KnowledgeBaseName: !Sub '${ProjectName}-kb-${DeploymentSuffix}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
-      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${TextEmbedModelId}'
+      OutputBucket: !Ref OutputBucket
+      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
@@ -996,7 +1007,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub 'RAGStack-${ProjectName}-Users'
+      UserPoolName: !Sub '${ProjectName}-Users'
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -1023,7 +1034,7 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub 'RAGStack-${ProjectName}-WebClient'
+      ClientName: !Sub '${ProjectName}-WebClient'
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -1041,7 +1052,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub 'RAGStack${ProjectName}Identity'
+      IdentityPoolName: !Sub '${ProjectName}Identity'
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -1107,7 +1118,7 @@ Resources:
   GraphQLApi:
     Type: AWS::AppSync::GraphQLApi
     Properties:
-      Name: !Sub 'RAGStack-${ProjectName}-API'
+      Name: !Sub '${ProjectName}-API'
       AuthenticationType: AMAZON_COGNITO_USER_POOLS
       UserPoolConfig:
         UserPoolId: !Ref UserPool
@@ -1340,33 +1351,6 @@ Resources:
       FieldName: updateConfiguration
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
-  GetDocumentCountResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getDocumentCount
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
-  GetReEmbedJobStatusResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getReEmbedJobStatus
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
-  ReEmbedAllDocumentsResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Mutation
-      FieldName: reEmbedAllDocuments
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
   # =========================================================================
   # Dead Letter Queue for Error Handling
   # =========================================================================
@@ -1374,7 +1358,7 @@ Resources:
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub 'RAGStack-${ProjectName}-Processing-DLQ'
+      QueueName: !Sub '${ProjectName}-Processing-DLQ'
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
@@ -1386,8 +1370,8 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'RAGStack-${ProjectName}-Alarms'
-      DisplayName: !Sub 'RAGStack-${ProjectName} CloudWatch Alarms'
+      TopicName: !Sub '${ProjectName}-Alarms'
+      DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
         - Endpoint: !Ref AdminEmail
@@ -1400,7 +1384,7 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'RAGStack-${ProjectName}-Monitor'
+      DashboardName: !Sub '${ProjectName}-Monitor'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1413,7 +1397,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "ProcessDocument", "color": "#1f77b4"}],
-                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
                   ["...", {"stat": "Sum", "label": "QueryKB", "color": "#2ca02c"}]
                 ],
                 "period": 300,
@@ -1436,7 +1419,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "ProcessDocument Errors", "color": "#d62728"}],
-                  ["...", {"stat": "Sum", "label": "GenerateEmbeddings Errors", "color": "#ff7f0e"}],
                   ["...", {"stat": "Sum", "label": "QueryKB Errors", "color": "#e377c2"}]
                 ],
                 "period": 300,
@@ -1515,7 +1497,6 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/Lambda", "Duration", {"stat": "Average", "label": "ProcessDocument", "color": "#1f77b4"}],
-                  ["...", {"stat": "Average", "label": "GenerateEmbeddings", "color": "#ff7f0e"}],
                   ["...", {"stat": "Average", "label": "QueryKB", "color": "#2ca02c"}]
                 ],
                 "period": 300,
@@ -1539,7 +1520,7 @@ Resources:
   ProcessDocumentErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Errors'
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Errors'
       AlarmDescription: Alert when ProcessDocument Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1557,31 +1538,10 @@ Resources:
       OKActions:
         - !Ref AlarmTopic
 
-  GenerateEmbeddingsErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-GenerateEmbeddings-Errors'
-      AlarmDescription: Alert when GenerateEmbeddings Lambda has errors
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref GenerateEmbeddingsFunction
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref AlarmTopic
-      OKActions:
-        - !Ref AlarmTopic
-
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-DLQ-Messages'
+      AlarmName: !Sub '${ProjectName}-DLQ-Messages'
       AlarmDescription: Alert when messages appear in DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -1602,7 +1562,7 @@ Resources:
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-StepFunctions-Failures'
+      AlarmName: !Sub '${ProjectName}-StepFunctions-Failures'
       AlarmDescription: Alert when Step Functions executions fail
       MetricName: ExecutionsFailed
       Namespace: AWS/States
@@ -1623,7 +1583,7 @@ Resources:
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'RAGStack-${ProjectName}-ProcessDocument-Throttles'
+      AlarmName: !Sub '${ProjectName}-ProcessDocument-Throttles'
       AlarmDescription: Alert when ProcessDocument Lambda is throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -1649,7 +1609,7 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: !Sub 'RAGStack-${ProjectName}-Monthly-Budget'
+        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
         BudgetLimit:
           Amount: 100
           Unit: USD
@@ -1739,12 +1699,6 @@ Outputs:
     Value: !GetAtt ProcessDocumentFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-ProcessDocumentFunction'
-
-  GenerateEmbeddingsFunctionArn:
-    Description: Generate embeddings Lambda ARN
-    Value: !GetAtt GenerateEmbeddingsFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-GenerateEmbeddingsFunction'
 
   QueryKBFunctionArn:
     Description: Query Knowledge Base Lambda ARN

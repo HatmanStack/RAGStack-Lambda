@@ -8,15 +8,11 @@ import {
   Select,
   Button,
   Alert,
-  Modal,
   Box,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
-import { getDocumentCount } from '../../graphql/queries/getDocumentCount';
-import { getReEmbedJobStatus } from '../../graphql/queries/getReEmbedJobStatus';
-import { reEmbedAllDocuments } from '../../graphql/mutations/reEmbedAllDocuments';
 
 export function Settings() {
   // State for loading and errors
@@ -30,14 +26,6 @@ export function Settings() {
   const [defaultConfig, setDefaultConfig] = useState({});
   const [customConfig, setCustomConfig] = useState({});
   const [formValues, setFormValues] = useState({});
-
-  // State for embedding change detection
-  const [showEmbeddingModal, setShowEmbeddingModal] = useState(false);
-  const [pendingEmbeddingChanges, setPendingEmbeddingChanges] = useState(null);
-  const [documentCount, setDocumentCount] = useState(0);
-
-  // State for re-embedding job
-  const [reEmbedJobStatus, setReEmbedJobStatus] = useState(null);
 
   // Memoize the client to prevent recreation on every render
   const client = React.useMemo(() => generateClient(), []);
@@ -71,70 +59,14 @@ export function Settings() {
     }
   }, [client]);
 
-  const checkDocumentCount = async () => {
-    try {
-      const response = await client.graphql({ query: getDocumentCount });
-      const count = response.data.getDocumentCount;
-      setDocumentCount(count);
-      return count;
-    } catch (err) {
-      console.error('Error checking document count:', err);
-      return 0;
-    }
-  };
-
-  const checkReEmbedJobStatus = useCallback(async () => {
-    try {
-      const response = await client.graphql({ query: getReEmbedJobStatus });
-      const status = response.data.getReEmbedJobStatus;
-      setReEmbedJobStatus(status);
-    } catch (err) {
-      console.error('Error checking re-embed job status:', err);
-    }
-  }, [client]);
-
   // Load configuration on mount
   useEffect(() => {
     loadConfiguration();
-    checkReEmbedJobStatus(); // Check for existing job on mount
-  }, [loadConfiguration, checkReEmbedJobStatus]);
-
-  // Poll job status when a job is in progress
-  useEffect(() => {
-    if (reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS') {
-      const interval = setInterval(() => {
-        checkReEmbedJobStatus();
-      }, 5000); // Poll every 5 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [reEmbedJobStatus, checkReEmbedJobStatus]);
+  }, [loadConfiguration]);
 
   const handleSave = async () => {
     try {
-      // Get previous effective configuration (Custom overrides Default)
-      const previousEffective = { ...defaultConfig, ...customConfig };
-
-      // Check if embedding models changed from previous effective values
-      const embeddingFieldsChanged =
-        formValues.text_embed_model_id !== previousEffective.text_embed_model_id ||
-        formValues.image_embed_model_id !== previousEffective.image_embed_model_id;
-
-      if (embeddingFieldsChanged) {
-        // Check if documents exist
-        const count = await checkDocumentCount();
-
-        if (count > 0) {
-          // Show modal for user decision
-          setPendingEmbeddingChanges(formValues);
-          setShowEmbeddingModal(true);
-          return; // Don't save yet
-        }
-      }
-
-      // No embedding changes or no documents, save directly
       await saveConfiguration(formValues);
-
     } catch (err) {
       console.error('Error in handleSave:', err);
       setError('Failed to save configuration. Please try again.');
@@ -184,38 +116,6 @@ export function Settings() {
     setFormValues(currentValues);
     setSuccess(false);
     setError(null);
-  };
-
-  const handleEmbeddingModalChoice = async (choice) => {
-    setShowEmbeddingModal(false);
-
-    if (choice === 'cancel') {
-      // Revert embedding field changes
-      setPendingEmbeddingChanges(null);
-      return;
-    }
-
-    if (choice === 'continue') {
-      // Save with mixed embeddings
-      await saveConfiguration(pendingEmbeddingChanges);
-      setPendingEmbeddingChanges(null);
-    }
-
-    if (choice === 're-embed') {
-      // Save config and trigger re-embedding job
-      await saveConfiguration(pendingEmbeddingChanges);
-      setPendingEmbeddingChanges(null);
-
-      // Trigger re-embedding job
-      try {
-        const response = await client.graphql({ query: reEmbedAllDocuments });
-        const jobStatus = response.data.reEmbedAllDocuments;
-        setReEmbedJobStatus(jobStatus);
-      } catch (err) {
-        console.error('Error starting re-embed job:', err);
-        setError('Failed to start re-embedding job');
-      }
-    }
   };
 
   const renderField = (key, property) => {
@@ -282,26 +182,6 @@ export function Settings() {
         </Alert>
       )}
 
-      {/* Re-embedding job progress banner */}
-      {reEmbedJobStatus && reEmbedJobStatus.status === 'IN_PROGRESS' && (
-        <Alert type="info" dismissible={false}>
-          Re-embedding documents: {reEmbedJobStatus.processedDocuments} / {reEmbedJobStatus.totalDocuments} completed
-          {' '}({reEmbedJobStatus.totalDocuments > 0
-            ? Math.round((reEmbedJobStatus.processedDocuments / reEmbedJobStatus.totalDocuments) * 100)
-            : 0}%)
-        </Alert>
-      )}
-
-      {reEmbedJobStatus && reEmbedJobStatus.status === 'COMPLETED' && (
-        <Alert
-          type="success"
-          dismissible
-          onDismiss={() => setReEmbedJobStatus(null)}
-        >
-          Re-embedding completed! All {reEmbedJobStatus.totalDocuments} documents have been processed.
-        </Alert>
-      )}
-
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
         <Form
           actions={
@@ -327,52 +207,6 @@ export function Settings() {
           </SpaceBetween>
         </Form>
       </Container>
-
-      {/* Embedding Change Modal */}
-      <Modal
-        visible={showEmbeddingModal}
-        onDismiss={() => handleEmbeddingModalChoice('cancel')}
-        header="Embedding Model Change Detected"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => handleEmbeddingModalChoice('cancel')}>
-                Cancel
-              </Button>
-              <Button variant="normal" onClick={() => handleEmbeddingModalChoice('continue')}>
-                Continue with mixed embeddings
-              </Button>
-              <Button variant="primary" onClick={() => handleEmbeddingModalChoice('re-embed')}>
-                Re-embed all documents
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <Box>
-            You have changed the embedding model, and you have <strong>{documentCount} documents</strong> already processed with the previous model.
-          </Box>
-          <Box>
-            <strong>Options:</strong>
-          </Box>
-          <Box>
-            <ul>
-              <li>
-                <strong>Continue with mixed embeddings:</strong> New documents will use the new model.
-                Existing documents keep their current embeddings. Search quality may be inconsistent.
-              </li>
-              <li>
-                <strong>Re-embed all documents:</strong> Regenerate embeddings for all documents using
-                the new model. This ensures consistency but takes time (estimated: {Math.ceil(documentCount / 10)} minutes).
-              </li>
-              <li>
-                <strong>Cancel:</strong> Don't change the embedding model.
-              </li>
-            </ul>
-          </Box>
-        </SpaceBetween>
-      </Modal>
     </SpaceBetween>
   );
 }

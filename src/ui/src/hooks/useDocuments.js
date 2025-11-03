@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 
@@ -48,6 +48,14 @@ export const useDocuments = () => {
   const [error, setError] = useState(null);
   const [nextToken, setNextToken] = useState(null);
 
+  // Use ref to track the current nextToken without causing re-renders
+  const nextTokenRef = useRef(null);
+
+  // Update ref whenever nextToken changes
+  useEffect(() => {
+    nextTokenRef.current = nextToken;
+  }, [nextToken]);
+
   const fetchDocuments = useCallback(async (reset = false) => {
     setLoading(true);
     setError(null);
@@ -57,7 +65,7 @@ export const useDocuments = () => {
         query: LIST_DOCUMENTS,
         variables: {
           limit: 50,
-          nextToken: reset ? null : nextToken
+          nextToken: reset ? null : nextTokenRef.current
         }
       });
 
@@ -72,7 +80,7 @@ export const useDocuments = () => {
     } finally {
       setLoading(false);
     }
-  }, [nextToken]);
+  }, []); // Empty deps - uses ref for nextToken
 
   const refreshDocuments = useCallback(() => {
     fetchDocuments(true);
@@ -93,15 +101,17 @@ export const useDocuments = () => {
   }, []);
 
   useEffect(() => {
+    // Initial fetch on mount
     fetchDocuments(true);
 
     // Poll for updates every 30 seconds
     const interval = setInterval(() => {
-      refreshDocuments();
+      fetchDocuments(true);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchDocuments, refreshDocuments]);
+    // Empty deps - only run once on mount, functions are stable
+  }, []);
 
   return {
     documents,

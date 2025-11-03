@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import gql from 'graphql-tag';
@@ -18,9 +18,13 @@ const client = generateClient();
 export const useUpload = () => {
   const [uploads, setUploads] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const uploadsRef = useRef([]);
+
+  // Keep ref in sync with state
+  uploadsRef.current = uploads;
 
   const addUpload = useCallback((file) => {
-    const uploadId = Date.now() + Math.random();
+    const uploadId = crypto.randomUUID();
 
     setUploads(prev => [...prev, {
       id: uploadId,
@@ -35,8 +39,13 @@ export const useUpload = () => {
   }, []);
 
   const uploadFile = useCallback(async (uploadId) => {
-    const upload = uploads.find(u => u.id === uploadId);
-    if (!upload) return;
+    // Use ref to get current uploads without stale closure
+    const upload = uploadsRef.current.find(u => u.id === uploadId);
+
+    if (!upload) {
+      console.error('Upload not found for ID:', uploadId);
+      return;
+    }
 
     setUploading(true);
 
@@ -87,7 +96,7 @@ export const useUpload = () => {
     } finally {
       setUploading(false);
     }
-  }, [uploads]);
+  }, []); // Empty dependency array - no stale closures!
 
   const removeUpload = useCallback((uploadId) => {
     setUploads(prev => prev.filter(u => u.id !== uploadId));

@@ -86,8 +86,8 @@ export function ChatPanel() {
       setSessionId(data.sessionId);
 
     } catch (err) {
-      console.error('Chat error:', err);
-      setError('Failed to get response. Please try again.');
+      console.error('[ChatPanel] Chat error:', err);
+      setError(`Failed to get response: ${err.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }

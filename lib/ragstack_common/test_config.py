@@ -52,10 +52,15 @@ def sample_schema():
                     "enum": ["textract", "bedrock"],
                     "description": "OCR backend",
                 },
-                "text_embed_model_id": {
+                "bedrock_ocr_model_id": {
                     "type": "string",
-                    "enum": ["amazon.titan-embed-text-v2:0"],
-                    "description": "Text embedding model",
+                    "enum": ["anthropic.claude-3-5-haiku-20241022-v1:0"],
+                    "description": "Bedrock OCR model",
+                },
+                "chat_model_id": {
+                    "type": "string",
+                    "enum": ["amazon.nova-pro-v1:0"],
+                    "description": "Chat model",
                 },
             }
         },
@@ -69,8 +74,6 @@ def sample_default_config():
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "text_embed_model_id": "amazon.titan-embed-text-v2:0",
-        "image_embed_model_id": "amazon.titan-embed-image-v1",
         "chat_model_id": "amazon.nova-pro-v1:0",
     }
 
@@ -81,7 +84,7 @@ def sample_custom_config():
     return {
         "Configuration": "Custom",
         "ocr_backend": "bedrock",
-        "text_embed_model_id": "cohere.embed-english-v3",
+        "chat_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     }
 
 
@@ -169,9 +172,9 @@ def test_get_effective_config_with_custom_override(
 
     # Custom should override Default
     assert result["ocr_backend"] == "bedrock"  # From Custom
-    assert result["text_embed_model_id"] == "cohere.embed-english-v3"  # From Custom
-    assert result["image_embed_model_id"] == "amazon.titan-embed-image-v1"  # From Default
-    assert result["chat_model_id"] == "amazon.nova-pro-v1:0"  # From Default
+    assert result["chat_model_id"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"  # From Custom
+    # From Default
+    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     # Configuration key should be removed
     assert "Configuration" not in result
@@ -239,7 +242,7 @@ def test_get_parameter_none_default(config_manager):
 
 def test_update_custom_config_success(config_manager):
     """Test updating custom configuration."""
-    new_config = {"ocr_backend": "bedrock", "text_embed_model_id": "cohere.embed-multilingual-v3"}
+    new_config = {"ocr_backend": "bedrock", "chat_model_id": "amazon.nova-lite-v1:0"}
 
     config_manager.update_custom_config(new_config)
 
@@ -247,7 +250,7 @@ def test_update_custom_config_success(config_manager):
         Item={
             "Configuration": "Custom",
             "ocr_backend": "bedrock",
-            "text_embed_model_id": "cohere.embed-multilingual-v3",
+            "chat_model_id": "amazon.nova-lite-v1:0",
         }
     )
 
@@ -315,20 +318,18 @@ def test_remove_partition_key_empty_dict():
 
 
 def test_get_effective_config_with_new_fields(config_manager):
-    """Test that new OCR and chat fields are correctly merged."""
+    """Test that OCR and chat fields are correctly merged."""
     default_config = {
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
         "chat_model_id": "amazon.nova-pro-v1:0",
-        "text_embed_model_id": "amazon.titan-embed-text-v2:0",
-        "image_embed_model_id": "amazon.titan-embed-image-v1"
     }
 
     custom_config = {
         "Configuration": "Custom",
         "ocr_backend": "bedrock",  # Override
-        "chat_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0"  # Override
+        "chat_model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",  # Override
     }
 
     def mock_get_item(Key):
@@ -345,22 +346,17 @@ def test_get_effective_config_with_new_fields(config_manager):
     # Assert Custom values override Default
     assert result["ocr_backend"] == "bedrock"  # Custom override
     assert result["chat_model_id"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"  # Custom override
-    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"  # Default (no override)
-
-    # Assert existing fields preserved
-    assert result["text_embed_model_id"] == "amazon.titan-embed-text-v2:0"
-    assert result["image_embed_model_id"] == "amazon.titan-embed-image-v1"
+    # Default (no override)
+    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
 
 
 def test_get_effective_config_defaults_only_new_fields(config_manager):
-    """Test that Default values are used when no Custom overrides exist for new fields."""
+    """Test that Default values are used when no Custom overrides exist."""
     default_config = {
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
         "chat_model_id": "amazon.nova-pro-v1:0",
-        "text_embed_model_id": "amazon.titan-embed-text-v2:0",
-        "image_embed_model_id": "amazon.titan-embed-image-v1"
     }
 
     def mock_get_item(Key):
@@ -376,5 +372,3 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
     assert result["ocr_backend"] == "textract"
     assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
     assert result["chat_model_id"] == "amazon.nova-pro-v1:0"
-    assert result["text_embed_model_id"] == "amazon.titan-embed-text-v2:0"
-    assert result["image_embed_model_id"] == "amazon.titan-embed-image-v1"

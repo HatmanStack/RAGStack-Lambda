@@ -12,12 +12,6 @@ type Query {
 
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
-
-  # Get document count for embedding change detection
-  getDocumentCount: Int
-
-  # Get re-embedding job status
-  getReEmbedJobStatus: ReEmbedJobStatus
 }
 
 type Mutation {
@@ -29,9 +23,6 @@ type Mutation {
 
   # Update custom configuration
   updateConfiguration(customConfig: AWSJSON!): Boolean
-
-  # Trigger re-embedding of all documents
-  reEmbedAllDocuments: ReEmbedJobStatus
 }
 
 # Document type
@@ -76,7 +67,7 @@ type UploadUrl {
 # Chat response with session support for conversation continuity
 type ChatResponse {
   answer: String!
-  sessionId: String!
+  sessionId: String
   sources: [Source!]!
   error: String
 }
@@ -98,28 +89,16 @@ type Source {
 # - order: Display order in UI (lower numbers first)
 # - dependsOn: Optional conditional rendering {field, value}
 #
-# New configuration fields added in Phase 1:
+# Configurable fields:
 # 1. ocr_backend: Choose between "textract" or "bedrock" for OCR processing
 # 2. bedrock_ocr_model_id: Claude model selection for Bedrock OCR (conditional on ocr_backend="bedrock")
 # 3. chat_model_id: Model selection for Knowledge Base chat queries (Nova/Claude options)
 #
-# Existing fields:
-# 4. text_embed_model_id: Text embedding model (Titan)
-# 5. image_embed_model_id: Image embedding model (Titan)
+# Note: Embedding models are hardcoded to Titan defaults and not user-configurable.
 type ConfigurationResponse @aws_cognito_user_pools {
   Schema: AWSJSON
   Default: AWSJSON
   Custom: AWSJSON
-}
-
-# Re-embedding job status
-type ReEmbedJobStatus @aws_cognito_user_pools {
-  jobId: ID
-  status: String
-  totalDocuments: Int
-  processedDocuments: Int
-  startTime: AWSDateTime
-  completionTime: AWSDateTime
 }
 
 schema {

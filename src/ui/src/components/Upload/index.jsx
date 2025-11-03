@@ -18,7 +18,9 @@ export const Upload = () => {
     files.forEach(file => {
       const uploadId = addUpload(file);
       // Auto-start upload
-      setTimeout(() => uploadFile(uploadId), 100);
+      setTimeout(() => {
+        uploadFile(uploadId);
+      }, 100);
     });
   }, [addUpload, uploadFile]);
 

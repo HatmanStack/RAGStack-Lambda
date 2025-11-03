@@ -1,5 +1,5 @@
 """
-OCR module for RAGStack-Lambda.
+OCR module for document pipeline.
 
 Provides OCR capabilities using:
 - AWS Textract for traditional OCR

@@ -3,16 +3,11 @@
 This Lambda function handles GraphQL queries and mutations for configuration management:
 - getConfiguration: Returns Schema, Default, and Custom configurations
 - updateConfiguration: Updates Custom configuration
-- getDocumentCount: Returns count of COMPLETED documents
-- (reEmbedAllDocuments implemented in Phase 5)
 """
 
 import json
 import logging
 import os
-import re
-import uuid
-from datetime import datetime
 from decimal import Decimal
 
 import boto3
@@ -25,25 +20,19 @@ logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 # Initialize boto3 clients (lazy initialization for testing)
 dynamodb = None
 configuration_table = None
-tracking_table = None
 
 
 def _initialize_tables():
     """Initialize DynamoDB tables (called on first use)."""
-    global dynamodb, configuration_table, tracking_table
+    global dynamodb, configuration_table
     if dynamodb is None:
         # Defensive env var checks with clear error messages
         config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
         if not config_table_name:
             raise ValueError("Missing required environment variable: CONFIGURATION_TABLE_NAME")
 
-        tracking_table_name = os.environ.get("TRACKING_TABLE")
-        if not tracking_table_name:
-            raise ValueError("Missing required environment variable: TRACKING_TABLE")
-
         dynamodb = boto3.resource("dynamodb")
         configuration_table = dynamodb.Table(config_table_name)
-        tracking_table = dynamodb.Table(tracking_table_name)
 
 
 def lambda_handler(event, context):
@@ -60,7 +49,7 @@ def lambda_handler(event, context):
     Event structure:
         {
             'info': {
-                'fieldName': 'getConfiguration' | 'updateConfiguration' | 'getDocumentCount'
+                'fieldName': 'getConfiguration' | 'updateConfiguration'
             },
             'arguments': {
                 'customConfig': {...}  # For updateConfiguration
@@ -88,15 +77,6 @@ def lambda_handler(event, context):
         if operation == "updateConfiguration":
             custom_config = event["arguments"].get("customConfig")
             return handle_update_configuration(custom_config)
-
-        if operation == "getDocumentCount":
-            return handle_get_document_count()
-
-        if operation == "reEmbedAllDocuments":
-            return handle_re_embed_all_documents()
-
-        if operation == "getReEmbedJobStatus":
-            return handle_get_re_embed_job_status()
 
         raise ValueError(f"Unsupported operation: {operation}")
 
@@ -129,18 +109,21 @@ def handle_get_configuration():
         custom_item = get_configuration_item("Custom")
         custom_config = remove_partition_key(custom_item) if custom_item else {}
 
-        # Decimal-safe JSON serialization for DynamoDB items
-        def decimal_default(obj):
+        # Convert Decimals to native Python types for JSON serialization
+        def convert_decimals(obj):
+            if isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [convert_decimals(item) for item in obj]
             if isinstance(obj, Decimal):
                 return int(obj) if obj % 1 == 0 else float(obj)
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+            return obj
 
+        # Return raw dicts - AppSync will handle AWSJSON serialization
         result = {
-            "Schema": json.dumps(
-                schema_config, default=decimal_default
-            ),  # AppSync expects JSON string
-            "Default": json.dumps(default_config, default=decimal_default),
-            "Custom": json.dumps(custom_config, default=decimal_default),
+            "Schema": convert_decimals(schema_config),
+            "Default": convert_decimals(default_config),
+            "Custom": convert_decimals(custom_config),
         }
 
         logger.info("Returning configuration to client")
@@ -177,6 +160,24 @@ def handle_update_configuration(custom_config):
 
         logger.info(f"Updating Custom configuration with keys: {list(custom_config_obj.keys())}")
 
+        # Validate keys against Schema
+        schema_item = get_configuration_item("Schema")
+        if not schema_item:
+            raise ValueError("Schema configuration not found in DynamoDB")
+
+        schema_config = json.loads(schema_item.get("config", "{}"))
+        valid_fields = set(schema_config.get("fields", {}).keys())
+
+        # Check for invalid keys
+        provided_keys = set(custom_config_obj.keys()) - {"Configuration"}  # Exclude partition key
+        invalid_keys = provided_keys - valid_fields
+
+        if invalid_keys:
+            raise ValueError(
+                f"Invalid configuration keys: {', '.join(sorted(invalid_keys))}. "
+                f"Valid keys are: {', '.join(sorted(valid_fields))}"
+            )
+
         # Remove 'Configuration' key to prevent partition key override
         safe_config = {k: v for k, v in custom_config_obj.items() if k != "Configuration"}
 
@@ -196,56 +197,6 @@ def handle_update_configuration(custom_config):
 
     except Exception:
         logger.exception("Error in updateConfiguration")
-        raise
-
-
-def handle_get_document_count():
-    """
-    Handle getDocumentCount query.
-
-    Returns count of documents with status='COMPLETED' for embedding change detection.
-
-    Returns:
-        Integer count of COMPLETED documents
-    """
-    try:
-        # Scan tracking table for COMPLETED status with pagination
-        # Note: In production with large datasets, consider using a GSI or cached count
-        count = 0
-        scan_kwargs = {
-            "FilterExpression": "#status = :status",
-            "ExpressionAttributeNames": {"#status": "status"},
-            "ExpressionAttributeValues": {":status": "COMPLETED"},
-            "Select": "COUNT",
-        }
-
-        # Paginate through all results
-        while True:
-            response = tracking_table.scan(**scan_kwargs)
-            count += response.get("Count", 0)
-
-            # Check if there are more pages
-            last_key = response.get("LastEvaluatedKey")
-            if not last_key:
-                break
-
-            # Set up for next page
-            scan_kwargs["ExclusiveStartKey"] = last_key
-
-        logger.info(f"Found {count} COMPLETED documents (paginated scan)")
-
-        return count
-
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        logger.exception(f"DynamoDB error counting documents ({error_code})")
-
-        # Only return 0 for non-critical errors (ResourceNotFoundException, etc.)
-        # Raise for critical errors (AccessDeniedException, etc.)
-        if error_code in ["ResourceNotFoundException", "ValidationException"]:
-            logger.warning(f"Non-critical error, returning 0: {error_code}")
-            return 0
-        # Re-raise for critical errors so UI knows something is wrong
         raise
 
 
@@ -284,213 +235,3 @@ def remove_partition_key(item):
     item_copy = dict(item)
     item_copy.pop("Configuration", None)
     return item_copy
-
-
-def handle_re_embed_all_documents():
-    """
-    Handle reEmbedAllDocuments mutation.
-
-    Creates a re-embedding job and triggers Step Functions for all COMPLETED documents.
-
-    Returns:
-        ReEmbedJobStatus object
-    """
-    try:
-        # Generate job ID
-        job_id = str(uuid.uuid4())
-        start_time = datetime.utcnow().isoformat() + "Z"
-
-        # Query all COMPLETED documents
-        logger.info("Querying COMPLETED documents for re-embedding")
-        documents = query_completed_documents()
-        total_documents = len(documents)
-
-        logger.info(f"Found {total_documents} documents to re-embed")
-
-        if total_documents == 0:
-            return {
-                "jobId": job_id,
-                "status": "COMPLETED",
-                "totalDocuments": 0,
-                "processedDocuments": 0,
-                "startTime": start_time,
-                "completionTime": start_time,
-            }
-
-        # Create job tracking item with unique partition key
-        job_key = f"ReEmbedJob#{job_id}"
-        configuration_table.put_item(
-            Item={
-                "Configuration": job_key,  # Unique key per job
-                "jobId": job_id,
-                "status": "IN_PROGRESS",
-                "totalDocuments": total_documents,
-                "processedDocuments": 0,
-                "startTime": start_time,
-                "completionTime": None,
-            }
-        )
-
-        # Also update a "latest job pointer" for easy UI access
-        configuration_table.put_item(
-            Item={"Configuration": "ReEmbedJob_Latest", "jobId": job_id, "jobKey": job_key}
-        )
-
-        # Trigger Step Functions for each document
-        # SCALABILITY NOTE: For large document sets (>1000), this synchronous loop
-        # may timeout. Consider using SQS + Lambda consumer pattern for production.
-        sfn_client = boto3.client("stepfunctions")
-        state_machine_arn = os.environ.get("STATE_MACHINE_ARN")
-        if not state_machine_arn:
-            raise ValueError("Missing required environment variable: STATE_MACHINE_ARN")
-
-        # Limit to N documents per job to prevent Lambda timeout (configurable via env var)
-        MAX_DOCUMENTS_PER_JOB = int(os.environ.get("REEMBED_MAX_DOCS", "500"))
-        if total_documents > MAX_DOCUMENTS_PER_JOB:
-            logger.warning(
-                f"Document count ({total_documents}) exceeds limit ({MAX_DOCUMENTS_PER_JOB}). "
-                f"Processing first {MAX_DOCUMENTS_PER_JOB} only."
-            )
-            documents = documents[:MAX_DOCUMENTS_PER_JOB]
-            total_documents = MAX_DOCUMENTS_PER_JOB
-
-        for doc in documents:
-            # Sanitize execution name: only alphanumeric, hyphen, underscore; max 80 chars
-            raw_name = f"reembed-{doc['document_id']}-{job_id[:8]}"
-            execution_name = re.sub(r"[^a-zA-Z0-9_-]", "-", raw_name)[:80]
-
-            try:
-                sfn_client.start_execution(
-                    stateMachineArn=state_machine_arn,
-                    name=execution_name,
-                    input=json.dumps(
-                        {
-                            "documentId": doc["document_id"],
-                            "bucket": doc["input_bucket"],
-                            "key": doc["input_key"],
-                            "reEmbedJobId": job_id,  # Pass job ID for tracking
-                        }
-                    ),
-                )
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                if error_code == "ExecutionAlreadyExists":
-                    logger.warning(f"Execution already exists: {execution_name}")
-                    continue
-                logger.exception(f"Failed to start execution for {doc.get('document_id')}")
-                # Continue with remaining documents rather than failing entire job
-                continue
-
-        logger.info(f"Started re-embedding job {job_id} for {total_documents} documents")
-
-        return {
-            "jobId": job_id,
-            "status": "IN_PROGRESS",
-            "totalDocuments": total_documents,
-            "processedDocuments": 0,
-            "startTime": start_time,
-            "completionTime": None,
-        }
-
-    except Exception:
-        logger.exception("Error in reEmbedAllDocuments")
-        raise
-
-
-def query_completed_documents():
-    """
-    Query all documents with status='COMPLETED' using GSI.
-
-    IMPORTANT: This requires a GSI on TrackingTable called 'StatusIndex'
-    with status as the partition key. See Phase 1 for GSI setup.
-
-    Returns:
-        List of document items
-    """
-    documents = []
-
-    try:
-        # Query using GSI (much faster than scan for large tables)
-        response = tracking_table.query(
-            IndexName="StatusIndex",
-            KeyConditionExpression="#status = :status",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={":status": "COMPLETED"},
-        )
-
-        documents.extend(response.get("Items", []))
-
-        # Handle pagination
-        while "LastEvaluatedKey" in response:
-            response = tracking_table.query(
-                IndexName="StatusIndex",
-                KeyConditionExpression="#status = :status",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={":status": "COMPLETED"},
-                ExclusiveStartKey=response["LastEvaluatedKey"],
-            )
-            documents.extend(response.get("Items", []))
-
-        return documents
-
-    except ClientError as e:
-        # If GSI doesn't exist, fall back to scan (less efficient)
-        logger.warning(f"GSI query failed, falling back to scan: {e}")
-
-        response = tracking_table.scan(
-            FilterExpression="#status = :status",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={":status": "COMPLETED"},
-        )
-
-        documents.extend(response.get("Items", []))
-
-        while "LastEvaluatedKey" in response:
-            response = tracking_table.scan(
-                FilterExpression="#status = :status",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={":status": "COMPLETED"},
-                ExclusiveStartKey=response["LastEvaluatedKey"],
-            )
-            documents.extend(response.get("Items", []))
-
-        return documents
-
-
-def handle_get_re_embed_job_status():
-    """
-    Handle getReEmbedJobStatus query.
-
-    Returns latest re-embedding job status.
-    """
-    try:
-        # Get latest job pointer
-        response = configuration_table.get_item(Key={"Configuration": "ReEmbedJob_Latest"})
-        pointer = response.get("Item")
-
-        if not pointer:
-            return None
-
-        # Get actual job item using the job key
-        job_key = pointer.get("jobKey")
-        if not job_key:
-            return None
-
-        response = configuration_table.get_item(Key={"Configuration": job_key})
-        item = response.get("Item")
-
-        if not item:
-            return None
-
-        return {
-            "jobId": item.get("jobId"),
-            "status": item.get("status"),
-            "totalDocuments": item.get("totalDocuments"),
-            "processedDocuments": item.get("processedDocuments"),
-            "startTime": item.get("startTime"),
-            "completionTime": item.get("completionTime"),
-        }
-
-    except ClientError:
-        logger.exception("Error getting re-embed job status")
-        return None

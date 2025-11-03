@@ -1,6 +1,6 @@
-"""RAGStack Common Library
+"""Common Library
 
-Shared utilities and classes for RAGStack-Lambda document processing pipeline.
+Shared utilities and classes for document pipeline document processing pipeline.
 """
 
 from ragstack_common.config import ConfigurationManager
