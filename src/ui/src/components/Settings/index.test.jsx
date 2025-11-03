@@ -215,12 +215,6 @@ describe('Settings Component', () => {
     });
   });
 
-  // Note: Full interaction testing with Cloudscape Select components is complex.
-  // The re-embedding modal trigger logic has been verified through code inspection:
-  // - Settings/index.jsx:119-121 only checks text_embed_model_id and image_embed_model_id
-  // - Changes to ocr_backend, bedrock_ocr_model_id, and chat_model_id do NOT trigger the modal
-  // - This behavior is tested manually in Task 2.3
-
   it.skip('shows customized indicator for fields with custom values', async () => {
     const customWithChanges = {
       ocr_backend: 'bedrock'
