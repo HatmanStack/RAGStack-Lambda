@@ -1314,16 +1314,24 @@ AWS_REGION={region}
     log_success(f"Amplify environment written to {env_file}")
 
 
-def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id):
+def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name):
     """
-    Deploy Amplify chat backend with web component CDN.
+    Deploy Amplify chat backend via CodeBuild with web component CDN.
 
-    This function:
+    This function implements Phase 2 of the Amplify deployment migration:
     1. Packages web component source to S3
     2. Generates amplify/data/config.ts with KB ID, table name, User Pool, source location
-    3. Deploys Amplify stack (GraphQL API, Lambda, CDN)
-    4. Triggers CodeBuild to build and deploy web component
-    5. Returns CDN URL for embedding
+    3. Triggers CodeBuild to deploy Amplify stack via CDK (not direct ampx)
+    4. Waits for CodeBuild completion
+    5. Retrieves Amplify stack outputs
+    6. Triggers web component build
+    7. Returns CDN URL for embedding
+
+    Deployment sequence:
+    - SAM stack (already deployed)
+    - CodeBuild triggers → npx cdk deploy --all (in amplify/)
+    - Amplify stacks created with auto-generated names
+    - Web component built and deployed to CDN
 
     Args:
         project_name: Project name for stack naming
@@ -1333,14 +1341,16 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         config_table_name: DynamoDB ConfigurationTable name (from SAM stack)
         user_pool_id: Cognito User Pool ID (from SAM stack)
         user_pool_client_id: Cognito User Pool Client ID (from SAM stack)
+        sam_stack_name: SAM CloudFormation stack name (to get CodeBuild project)
 
     Returns:
         str: CDN URL for web component (https://d123.cloudfront.net/amplify-chat.js)
 
     Raises:
-        subprocess.CalledProcessError: If deployment fails
+        RuntimeError: If CodeBuild deployment fails
         FileNotFoundError: If amplify/ directory not found
-        IOError: If packaging or CodeBuild trigger fails
+        IOError: If packaging or output retrieval fails
+        TimeoutError: If CodeBuild exceeds timeout
     """
     log_info("Deploying Amplify chat backend...")
 
@@ -1379,55 +1389,40 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_error(f"Failed to generate Amplify configuration: {e}")
         raise IOError(f"Config generation failed: {e}") from e
 
-    # Step 3: Deploy Amplify stack
-    log_info("Deploying Amplify stack (GraphQL API, Lambda, Cognito, CDN)...")
-    log_info("This may take 10-15 minutes...")
+    # Step 3: Deploy Amplify stack via CodeBuild
+    log_info("Deploying Amplify stack via CodeBuild (GraphQL API, Lambda, CDN)...")
+    log_info("This will take approximately 10-15 minutes...")
     try:
-        # Set environment variables for Amplify deployment
-        # These are used by backend.ts to construct exact IAM resource ARNs
-        deploy_env = os.environ.copy()
-        deploy_env.update({
-            'KNOWLEDGE_BASE_ID': kb_id,
-            'AWS_REGION': region,
-            'CONFIGURATION_TABLE_NAME': config_table_name,
-            'WEB_COMPONENT_SOURCE_BUCKET': artifact_bucket,
-            'WEB_COMPONENT_SOURCE_KEY': chat_source_key,
-            'USER_POOL_ID': user_pool_id,
-            'USER_POOL_CLIENT_ID': user_pool_client_id,
-        })
+        # Get CodeBuild project name from SAM stack
+        log_info("Retrieving CodeBuild project name from SAM stack...")
+        codebuild_project = get_codebuild_project_name(sam_stack_name, region)
 
-        # Step 3: Deploy Amplify backend
-        log_info("Deploying Amplify backend...")
-        log_info("Note: Using Amplify sandbox for deployment. For production CI/CD, consider using ampx pipeline-deploy")
+        # Prepare environment variables for CodeBuild
+        log_info("Preparing environment variables for CodeBuild...")
+        env_overrides = [
+            {'name': 'PROJECT_NAME', 'value': project_name, 'type': 'PLAINTEXT'},
+            {'name': 'AWS_REGION', 'value': region, 'type': 'PLAINTEXT'},
+            {'name': 'USER_POOL_ID', 'value': user_pool_id, 'type': 'PLAINTEXT'},
+            {'name': 'USER_POOL_CLIENT_ID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
+            {'name': 'KNOWLEDGE_BASE_ID', 'value': kb_id, 'type': 'PLAINTEXT'},
+            {'name': 'CONFIGURATION_TABLE_NAME', 'value': config_table_name, 'type': 'PLAINTEXT'},
+            {'name': 'WEB_COMPONENT_SOURCE_BUCKET', 'value': artifact_bucket, 'type': 'PLAINTEXT'},
+            {'name': 'WEB_COMPONENT_SOURCE_KEY', 'value': chat_source_key, 'type': 'PLAINTEXT'},
+        ]
 
-        amplify_dir = Path.cwd() / 'amplify'
+        # Trigger CodeBuild deployment
+        build_id = trigger_codebuild(codebuild_project, env_overrides, region)
 
-        # Install dependencies if needed
-        if not (amplify_dir / 'node_modules').exists():
-            log_info("Installing Amplify dependencies...")
-            subprocess.run(['npm', 'install'], cwd=str(amplify_dir), check=True)
+        # Wait for CodeBuild to complete (with timeout)
+        wait_for_codebuild(build_id, region, timeout_minutes=30)
 
-        # Deploy using Amplify sandbox (runs once and exits)
-        # NOTE: ampx must run from project root, not from amplify/ directory
-        result = subprocess.run(
-            ['npx', 'ampx', 'sandbox', '--once'],
-            cwd=str(Path.cwd()),  # Run from project root
-            env=deploy_env,
-            check=False,  # Don't fail immediately, we want to capture output
-            capture_output=True,
-            text=True
-        )
+        log_success("Amplify stack deployed successfully via CodeBuild")
 
-        log_info(f"Amplify sandbox output:\n{result.stdout}")
-        if result.stderr:
-            log_warning(f"Amplify sandbox stderr:\n{result.stderr}")
-
-        if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
-
-        log_success("Amplify stack deployed successfully")
-    except subprocess.CalledProcessError as e:
-        log_error(f"Amplify deployment failed: {e}")
+    except (TimeoutError, RuntimeError) as e:
+        log_error(f"Amplify deployment via CodeBuild failed: {e}")
+        log_warning("SAM stack deployed successfully, but Amplify deployment failed")
+        log_warning(f"You can retry by running: python publish.py --project-name {project_name} --admin-email <email> --region {region} --deploy-chat")
+        log_warning(f"Or trigger CodeBuild manually: aws codebuild start-build --project-name {codebuild_project}")
         raise
 
     # Step 4: Get Amplify stack outputs
@@ -1760,7 +1755,25 @@ Examples:
         help="Deploy Amplify chat backend only (assumes SAM core already deployed)"
     )
 
+    parser.add_argument(
+        "--cleanup-amplify",
+        action="store_true",
+        help="Remove Amplify stacks for the specified project (leaves SAM stack intact)"
+    )
+
     args = parser.parse_args()
+
+    # Handle cleanup mode
+    if args.cleanup_amplify:
+        if not args.project_name:
+            log_error("--project-name is required for --cleanup-amplify")
+            sys.exit(1)
+        if not args.region:
+            log_error("--region is required for --cleanup-amplify")
+            sys.exit(1)
+
+        cleanup_failed_amplify_stacks(args.project_name, args.region)
+        sys.exit(0)
 
     try:
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
@@ -1853,7 +1866,8 @@ Examples:
                     artifact_bucket,
                     config_table_name,
                     user_pool_id,
-                    user_pool_client_id
+                    user_pool_client_id,
+                    stack_name  # SAM stack name for CodeBuild project lookup
                 )
 
                 # Update chat_deployed flag and CDN URL
@@ -1980,7 +1994,8 @@ Examples:
                     artifact_bucket,
                     config_table_name,
                     user_pool_id,
-                    user_pool_client_id
+                    user_pool_client_id,
+                    stack_name  # SAM stack name for CodeBuild project lookup
                 )
 
                 # Update configuration with CDN URL now that deployment succeeded
