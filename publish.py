@@ -1442,10 +1442,12 @@ Examples:
             try:
                 kb_id = extract_knowledge_base_id(stack_name, args.region)
 
-                # Get ConfigurationTable name and artifact bucket from SAM outputs
+                # Get ConfigurationTable name, artifact bucket, and User Pool from SAM outputs
                 sam_outputs = get_stack_outputs(stack_name, args.region)
                 config_table_name = sam_outputs.get('ConfigurationTableName')
                 artifact_bucket = sam_outputs.get('ArtifactBucketName')
+                user_pool_id = sam_outputs.get('UserPoolId')
+                user_pool_client_id = sam_outputs.get('UserPoolClientId')
 
                 if not config_table_name:
                     log_error("ConfigurationTableName not found in SAM stack outputs")
@@ -1455,9 +1457,14 @@ Examples:
                     log_error("ArtifactBucketName not found in SAM stack outputs")
                     sys.exit(1)
 
+                if not user_pool_id or not user_pool_client_id:
+                    log_error("UserPoolId or UserPoolClientId not found in SAM stack outputs")
+                    sys.exit(1)
+
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
                 log_info(f"Artifact Bucket: {artifact_bucket}")
+                log_info(f"User Pool ID: {user_pool_id}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -1470,7 +1477,9 @@ Examples:
                     args.region,
                     kb_id,
                     artifact_bucket,
-                    config_table_name
+                    config_table_name,
+                    user_pool_id,
+                    user_pool_client_id
                 )
 
                 # Update chat_deployed flag and CDN URL
@@ -1557,15 +1566,21 @@ Examples:
             try:
                 kb_id = extract_knowledge_base_id(stack_name, args.region)
 
-                # Get ConfigurationTable name from SAM outputs
+                # Get ConfigurationTable name and User Pool from SAM outputs
                 sam_outputs = get_stack_outputs(stack_name, args.region)
                 config_table_name = sam_outputs.get('ConfigurationTableName')
+                user_pool_id = sam_outputs.get('UserPoolId')
+                user_pool_client_id = sam_outputs.get('UserPoolClientId')
 
                 if not config_table_name:
                     raise ValueError("ConfigurationTableName not found in SAM stack outputs")
 
+                if not user_pool_id or not user_pool_client_id:
+                    raise ValueError("UserPoolId or UserPoolClientId not found in SAM stack outputs")
+
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
+                log_info(f"User Pool ID: {user_pool_id}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -1584,7 +1599,9 @@ Examples:
                     args.region,
                     kb_id,
                     artifact_bucket,
-                    config_table_name
+                    config_table_name,
+                    user_pool_id,
+                    user_pool_client_id
                 )
 
                 # Update configuration with CDN URL now that deployment succeeded
