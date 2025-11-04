@@ -653,6 +653,86 @@ def package_ui_source(bucket_name, region):
         raise IOError(f"Unexpected error packaging UI source: {e}") from e
 
 
+def package_amplify_chat_source(bucket_name, region):
+    """
+    Package web component source code as zip and upload to S3.
+
+    Creates a zip file of src/amplify-chat/ (excluding node_modules and dist),
+    uploads it to the provided S3 bucket, and returns the S3 key for CodeBuild.
+
+    Args:
+        bucket_name: S3 bucket name to upload to
+        region: AWS region for bucket operations
+
+    Returns:
+        str: S3 key of uploaded web component source zip
+
+    Raises:
+        FileNotFoundError: If src/amplify-chat/ doesn't exist
+        IOError: If packaging or upload fails
+    """
+    import zipfile
+    import tempfile
+    import time
+    from pathlib import Path
+
+    log_info("Packaging web component source...")
+
+    chat_dir = Path('src/amplify-chat')
+    if not chat_dir.exists():
+        raise FileNotFoundError(f"Web component directory not found: {chat_dir}")
+
+    # Create temporary zip file
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+        zip_path = tmp_file.name
+
+    try:
+        # Create zip file, excluding node_modules and dist
+        log_info("Creating web component source zip file...")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in chat_dir.rglob('*'):
+                if file_path.is_file():
+                    # Skip node_modules and dist directories
+                    if 'node_modules' in file_path.parts or 'dist' in file_path.parts:
+                        continue
+
+                    # Store as web-component/* (CodeBuild expects this structure)
+                    arcname = Path('web-component') / file_path.relative_to(chat_dir)
+                    zipf.write(file_path, arcname)
+
+        log_success(f"Web component source packaged: {zip_path}")
+
+        # Upload to S3
+        s3_client = boto3.client('s3', region_name=region)
+
+        # Upload with timestamp-based key
+        timestamp = int(time.time())
+        key = f'web-component-source-{timestamp}.zip'
+
+        log_info(f"Uploading to s3://{bucket_name}/{key}...")
+        try:
+            s3_client.upload_file(zip_path, bucket_name, key)
+            log_success("Web component source uploaded to S3")
+        except ClientError as e:
+            raise IOError(f"Failed to upload web component source to S3: {e}") from e
+
+        # Clean up temporary file
+        os.remove(zip_path)
+
+        return key
+
+    except (FileNotFoundError, IOError):
+        # Re-raise expected exceptions
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise
+    except Exception as e:
+        # Clean up temporary file on unexpected error
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise IOError(f"Unexpected error packaging web component source: {e}") from e
+
+
 def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
@@ -853,13 +933,14 @@ def amplify_deploy(project_name, region):
         raise
 
 
-def seed_configuration_table(stack_name, region):
+def seed_configuration_table(stack_name, region, chat_deployed=False):
     """
     Seed ConfigurationTable with Schema and Default configurations.
 
     Args:
         stack_name: CloudFormation stack name
         region: AWS region
+        chat_deployed: Whether Amplify chat is deployed (default False)
     """
     print(f"\n{Colors.HEADER}=== Seeding Configuration Table ==={Colors.ENDC}")
 
@@ -928,6 +1009,67 @@ def seed_configuration_table(stack_name, region):
                         'us.amazon.nova-micro-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                },
+                'chat_require_auth': {
+                    'type': 'boolean',
+                    'order': 4,
+                    'description': 'Require authentication for chat access',
+                    'default': False
+                },
+                'chat_primary_model': {
+                    'type': 'string',
+                    'order': 5,
+                    'description': 'Primary Bedrock model for chat (before quota limits)',
+                    'enum': [
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-pro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
+                    ],
+                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                },
+                'chat_fallback_model': {
+                    'type': 'string',
+                    'order': 6,
+                    'description': 'Fallback model when quotas exceeded',
+                    'enum': [
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-micro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
+                    ],
+                    'default': 'us.amazon.nova-micro-v1:0'
+                },
+                'chat_global_quota_daily': {
+                    'type': 'number',
+                    'order': 7,
+                    'description': 'Max messages per day (all users combined) on primary model',
+                    'default': 10000
+                },
+                'chat_per_user_quota_daily': {
+                    'type': 'number',
+                    'order': 8,
+                    'description': 'Max messages per user per day on primary model',
+                    'default': 100
+                },
+                'chat_theme_preset': {
+                    'type': 'string',
+                    'order': 9,
+                    'description': 'UI theme preset',
+                    'enum': ['light', 'dark', 'brand'],
+                    'default': 'light'
+                },
+                'chat_theme_overrides': {
+                    'type': 'object',
+                    'order': 10,
+                    'description': 'Custom theme overrides (optional)',
+                    'properties': {
+                        'primaryColor': {'type': 'string'},
+                        'fontFamily': {'type': 'string'},
+                        'spacing': {
+                            'type': 'string',
+                            'enum': ['compact', 'comfortable', 'spacious']
+                        }
+                    }
                 }
             }
         }
@@ -936,9 +1078,17 @@ def seed_configuration_table(stack_name, region):
     # Define Default configuration
     default_item = {
         'Configuration': 'Default',
+        'chat_deployed': chat_deployed,
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
-        'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+        'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+        'chat_require_auth': False,
+        'chat_primary_model': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+        'chat_fallback_model': 'us.amazon.nova-micro-v1:0',
+        'chat_global_quota_daily': 10000,
+        'chat_per_user_quota_daily': 100,
+        'chat_theme_preset': 'light',
+        'chat_theme_overrides': {}
     }
 
     try:
