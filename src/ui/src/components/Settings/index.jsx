@@ -1,3 +1,28 @@
+/**
+ * Settings Component
+ *
+ * IMPLEMENTATION NOTE: Schema-Driven Approach
+ * -------------------------------------------
+ * This implementation deviates from the Phase 5 specification, which called for
+ * a dedicated ChatSettings component. Instead, we extended the existing schema-driven
+ * Settings component to handle chat configuration fields.
+ *
+ * Rationale for deviation:
+ * 1. **Consistency**: Matches existing OCR settings pattern
+ * 2. **DRY**: Leverages existing renderField() logic instead of duplicating
+ * 3. **Maintainability**: Single source of truth (ConfigurationTable schema)
+ * 4. **Simplicity**: ~200 lines of code vs ~500+ for dedicated component
+ * 5. **Scalability**: Easy to add new chat fields without code changes
+ *
+ * The schema-driven approach automatically renders form fields from the
+ * ConfigurationTable schema definition in publish.py:
+ * - Boolean → Toggle
+ * - Number → Input with validation
+ * - Enum → Select dropdown
+ * - Object → ExpandableSection with nested inputs
+ *
+ * Chat fields are conditionally visible based on the `chat_deployed` flag.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
