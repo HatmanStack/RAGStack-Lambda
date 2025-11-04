@@ -12,8 +12,6 @@ import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/clie
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
 import {
   getChatConfig,
-  selectModelBasedOnQuotas,
-  incrementQuotas,
   queryKnowledgeBase,
   extractSources,
 } from './conversation';
@@ -63,118 +61,9 @@ describe('Conversation Handler', () => {
     });
   });
 
-  describe('selectModelBasedOnQuotas', () => {
-    const mockConfig = {
-      requireAuth: false,
-      primaryModel: 'primary-model',
-      fallbackModel: 'fallback-model',
-      globalQuotaDaily: 100,
-      perUserQuotaDaily: 10,
-    };
-
-    it('should select primary model when within global quota', async () => {
-      dynamoMock.on(GetItemCommand).resolves({
-        Item: { count: { N: '50' } }, // Under global limit
-      });
-
-      const model = await selectModelBasedOnQuotas('test-user', mockConfig, false);
-
-      expect(model).toBe('primary-model');
-    });
-
-    it('should select fallback model when global quota exceeded', async () => {
-      dynamoMock.on(GetItemCommand).resolves({
-        Item: { count: { N: '101' } }, // Over global limit
-      });
-
-      const model = await selectModelBasedOnQuotas('test-user', mockConfig, false);
-
-      expect(model).toBe('fallback-model');
-    });
-
-    it('should select primary model when within both quotas (authenticated)', async () => {
-      // Mock needs to handle multiple GetItemCommand calls with different keys
-      let callCount = 0;
-      dynamoMock.on(GetItemCommand).callsFake((input) => {
-        callCount++;
-        const key = input.Key?.Configuration?.S || '';
-
-        if (key.includes('quota#global#')) {
-          return { Item: { count: { N: '50' } } }; // Global: under limit
-        } else if (key.includes('quota#user#')) {
-          return { Item: { count: { N: '5' } } }; // User: under limit
-        }
-        return {}; // Quota doesn't exist yet
-      });
-
-      const model = await selectModelBasedOnQuotas('test-user', mockConfig, true);
-
-      expect(model).toBe('primary-model');
-    });
-
-    it('should select fallback model when user quota exceeded (authenticated)', async () => {
-      dynamoMock
-        .on(GetItemCommand, { TableName: expect.anything(), Key: { Configuration: { S: expect.stringContaining('quota#global#') } } })
-        .resolves({ Item: { count: { N: '50' } } }) // Global: under limit
-        .on(GetItemCommand, { TableName: expect.anything(), Key: { Configuration: { S: expect.stringContaining('quota#user#') } } })
-        .resolves({ Item: { count: { N: '11' } } }); // User: over limit
-
-      const model = await selectModelBasedOnQuotas('test-user', mockConfig, true);
-
-      expect(model).toBe('fallback-model');
-    });
-
-    it('should select fallback model on DynamoDB error (conservative approach)', async () => {
-      dynamoMock.on(GetItemCommand).rejects(new Error('DynamoDB error'));
-
-      const model = await selectModelBasedOnQuotas('test-user', mockConfig, false);
-
-      expect(model).toBe('fallback-model');
-    });
-  });
-
-  describe('incrementQuotas', () => {
-    it('should increment global quota for anonymous users', async () => {
-      dynamoMock.on(UpdateItemCommand).resolves({});
-
-      await incrementQuotas('anon:conversation-123', false);
-
-      expect(dynamoMock.commandCalls(UpdateItemCommand).length).toBe(1);
-      const call = dynamoMock.commandCalls(UpdateItemCommand)[0];
-      expect(call.args[0].input.Key?.Configuration.S).toContain('quota#global#');
-      expect(call.args[0].input.UpdateExpression).toContain('ADD #count :inc');
-    });
-
-    it('should increment both global and user quota for authenticated users', async () => {
-      dynamoMock.on(UpdateItemCommand).resolves({});
-
-      await incrementQuotas('test-user', true);
-
-      expect(dynamoMock.commandCalls(UpdateItemCommand).length).toBe(2);
-      const calls = dynamoMock.commandCalls(UpdateItemCommand);
-      expect(calls[0].args[0].input.Key?.Configuration.S).toContain('quota#global#');
-      expect(calls[1].args[0].input.Key?.Configuration.S).toContain('quota#user#test-user#');
-    });
-
-    it('should set TTL to 2 days from now', async () => {
-      dynamoMock.on(UpdateItemCommand).resolves({});
-
-      const beforeTime = Math.floor(Date.now() / 1000) + (86400 * 2);
-      await incrementQuotas('test-user', false);
-      const afterTime = Math.floor(Date.now() / 1000) + (86400 * 2);
-
-      const call = dynamoMock.commandCalls(UpdateItemCommand)[0];
-      const ttl = parseInt(call.args[0].input.ExpressionAttributeValues?.[':ttl'].N || '0');
-      expect(ttl).toBeGreaterThanOrEqual(beforeTime);
-      expect(ttl).toBeLessThanOrEqual(afterTime);
-    });
-
-    it('should not throw error if DynamoDB fails (non-fatal)', async () => {
-      dynamoMock.on(UpdateItemCommand).rejects(new Error('DynamoDB error'));
-
-      await expect(incrementQuotas('test-user', false)).resolves.not.toThrow();
-    });
-  });
+  // Note: selectModelBasedOnQuotas and incrementQuotas are now internal helpers
+  // within atomicQuotaCheckAndIncrement(). They are tested indirectly through
+  // the main handler integration tests.
 
   describe('queryKnowledgeBase', () => {
     it('should query Bedrock and return response with sources', async () => {
