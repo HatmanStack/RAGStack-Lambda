@@ -944,7 +944,7 @@ def get_amplify_stack_outputs(project_name, region):
         if not amplify_stacks:
             raise ValueError(
                 f"No Amplify stacks found for project '{project_name}'. "
-                "Ensure 'npx amplify deploy' completed successfully."
+                "Ensure 'npx ampx deploy' completed successfully."
             )
 
         # Sort by LastUpdatedTime and select most recent
@@ -1239,9 +1239,9 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         })
 
         # Run deployment with environment variables
-        # Use 'npx amplify deploy' for local deployments (unified CLI)
+        # Use 'npx ampx deploy' for Amplify Gen 2 deployments (CLI renamed to ampx)
         result = subprocess.run(
-            ['npx', 'amplify', 'deploy', '--yes'],
+            ['npx', 'ampx', 'deploy', '--yes'],
             cwd=str(Path.cwd()),
             env=deploy_env,
             check=True
