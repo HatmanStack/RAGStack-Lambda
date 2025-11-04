@@ -2,7 +2,7 @@
  * Tests for AmplifyChat web component.
  */
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import '../src/components/AmplifyChat.wc';
+import '../../../amplify-chat/src/components/AmplifyChat.wc';
 
 describe('AmplifyChat Web Component', () => {
   beforeAll(() => {
