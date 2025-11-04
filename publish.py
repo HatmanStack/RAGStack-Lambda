@@ -789,24 +789,37 @@ def get_amplify_stack_outputs(project_name, region):
                         # Check tags for project identifier
                         tags = {tag['Key']: tag['Value'] for tag in stack_info.get('Tags', [])}
 
-                        # Check if project_name is in tags or stack description
-                        # Amplify may not set project-specific tags, so also check outputs
+                        # Multi-method matching to identify correct stack for this project
+                        # Critical for multi-project environments where multiple Amplify stacks exist
                         is_match = False
 
-                        # Method 1: Check tags
+                        # Method 1: Check custom project tag (if we set it)
                         if 'project' in tags and tags['project'] == project_name:
                             is_match = True
 
-                        # Method 2: Check if BuildProjectName output contains project name
-                        # (our CodeBuild project naming includes stack name)
-                        if not is_match:
+                        # Method 2: Check Amplify's default user:Application tag
+                        # Amplify Gen 2 sets this to the app name, which often matches project
+                        if not is_match and 'user:Application' in tags:
+                            if tags['user:Application'] == project_name:
+                                is_match = True
+
+                        # Method 3: Check if stack name contains project name
+                        # Amplify stacks follow pattern: amplify-{appId}-{branch}-{hash}
+                        # The appId may be derived from or include the project name
+                        if not is_match and project_name.lower() in stack['StackName'].lower():
+                            is_match = True
+
+                        # Method 4: Verify stack has expected outputs (as final check)
+                        # Only accept if we've matched by tag/name AND stack has our outputs
+                        if is_match:
                             outputs = stack_info.get('Outputs', [])
-                            for output in outputs:
-                                if output['OutputKey'] == 'BuildProjectName':
-                                    # BuildProjectName includes stack name which may correlate
-                                    # For now, accept any stack with our expected outputs
-                                    is_match = True
-                                    break
+                            has_required_output = any(
+                                output['OutputKey'] == 'BuildProjectName'
+                                for output in outputs
+                            )
+                            if not has_required_output:
+                                # Matched by name/tag but missing expected outputs - not our stack
+                                is_match = False
 
                         if is_match:
                             amplify_stacks.append({
