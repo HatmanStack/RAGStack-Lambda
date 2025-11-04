@@ -929,15 +929,16 @@ def extract_knowledge_base_id(stack_name, region):
     return kb_id
 
 
-def write_amplify_config(kb_id, region, config_table_name, source_bucket, source_key):
+def write_amplify_config(kb_id, region, config_table_name, source_bucket, source_key, user_pool_id, user_pool_client_id):
     """
     Generate TypeScript config file for Amplify backend.
 
     Creates amplify/data/config.ts with Knowledge Base ID, region,
-    ConfigurationTable name, and web component source location.
+    ConfigurationTable name, User Pool details, and web component source location.
 
     This config is imported by data/resource.ts and used by:
     - Conversation route (queries KB, reads config)
+    - Lambda Authorizer (validates JWT tokens)
     - CodeBuild (downloads source from S3)
 
     Args:
@@ -946,6 +947,8 @@ def write_amplify_config(kb_id, region, config_table_name, source_bucket, source
         config_table_name: DynamoDB ConfigurationTable name
         source_bucket: S3 bucket containing web component source
         source_key: S3 key of web component source zip
+        user_pool_id: Cognito User Pool ID (from SAM stack)
+        user_pool_client_id: Cognito User Pool Client ID (from SAM stack)
 
     Raises:
         IOError: If config file creation fails
@@ -970,6 +973,11 @@ export const KNOWLEDGE_BASE_CONFIG = {{
   // ConfigurationTable name for runtime config reading
   // Amplify Lambda reads chat settings from this table
   configurationTableName: "{config_table_name}",
+
+  // Cognito User Pool (from SAM stack)
+  // Used by Lambda Authorizer for JWT validation when requireAuth is enabled
+  userPoolId: "{user_pool_id}",
+  userPoolClientId: "{user_pool_client_id}",
 
   // Web component source location (for CodeBuild)
   // CodeBuild downloads and extracts this zip to build the component
@@ -1007,14 +1015,14 @@ AWS_REGION={region}
     log_success(f"Amplify environment written to {env_file}")
 
 
-def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name):
+def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id):
     """
     Deploy Amplify chat backend with web component CDN.
 
     This function:
     1. Packages web component source to S3
-    2. Generates amplify/data/config.ts with KB ID, table name, source location
-    3. Deploys Amplify stack (GraphQL API, Lambda, Cognito, CDN)
+    2. Generates amplify/data/config.ts with KB ID, table name, User Pool, source location
+    3. Deploys Amplify stack (GraphQL API, Lambda, CDN)
     4. Triggers CodeBuild to build and deploy web component
     5. Returns CDN URL for embedding
 
@@ -1024,6 +1032,8 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         kb_id: Bedrock Knowledge Base ID (from SAM stack)
         artifact_bucket: S3 bucket for web component source
         config_table_name: DynamoDB ConfigurationTable name (from SAM stack)
+        user_pool_id: Cognito User Pool ID (from SAM stack)
+        user_pool_client_id: Cognito User Pool Client ID (from SAM stack)
 
     Returns:
         str: CDN URL for web component (https://d123.cloudfront.net/amplify-chat.js)
@@ -1060,7 +1070,9 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             region,
             config_table_name,
             artifact_bucket,
-            chat_source_key
+            chat_source_key,
+            user_pool_id,
+            user_pool_client_id
         )
         write_amplify_env(kb_id, region)  # Also write .env.amplify
         log_success("Amplify configuration generated")
