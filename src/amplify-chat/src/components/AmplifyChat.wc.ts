@@ -16,6 +16,10 @@
  * - header-subtitle: Custom subtitle (default: "Ask questions about your documents")
  * - show-sources: Show/hide sources (default: "true")
  * - max-width: Component max-width (default: "100%")
+ * - user-id: User ID for authenticated mode (optional)
+ * - user-token: Authentication token for authenticated mode (optional)
+ * - theme-preset: Theme preset - light, dark, or brand (default: "light")
+ * - theme-overrides: JSON string with theme overrides (optional)
  *
  * Events:
  * - amplify-chat:send-message: Fired when user sends a message
@@ -46,6 +50,10 @@ class AmplifyChat extends HTMLElement {
       'header-subtitle',
       'show-sources',
       'max-width',
+      'user-id',
+      'user-token',
+      'theme-preset',
+      'theme-overrides',
     ];
   }
 
@@ -90,6 +98,21 @@ class AmplifyChat extends HTMLElement {
   }
 
   /**
+   * Get theme overrides from JSON attribute
+   */
+  private getThemeOverrides(): ChatWithSourcesProps['themeOverrides'] {
+    const overridesStr = super.getAttribute('theme-overrides');
+    if (!overridesStr) return undefined;
+
+    try {
+      return JSON.parse(overridesStr);
+    } catch {
+      console.warn('Invalid theme-overrides JSON');
+      return undefined;
+    }
+  }
+
+  /**
    * Render the React component into this element
    */
   private render(): void {
@@ -114,6 +137,10 @@ class AmplifyChat extends HTMLElement {
       ),
       showSources: this.getBooleanAttribute('show-sources', true),
       maxWidth: this.getAttribute('max-width', '100%'),
+      userId: super.getAttribute('user-id') || null,
+      userToken: super.getAttribute('user-token') || null,
+      themePreset: (super.getAttribute('theme-preset') || 'light') as 'light' | 'dark' | 'brand',
+      themeOverrides: this.getThemeOverrides(),
       onSendMessage: (message: string, conversationId: string) => {
         this.dispatchEvent(
           new CustomEvent('amplify-chat:send-message', {
