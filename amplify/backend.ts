@@ -52,29 +52,18 @@ console.log(`Deploying Amplify backend for project: ${projectName}`);
 
 // Note: Amplify Gen 2 stack names are auto-generated and read-only
 // Stack naming will use Amplify's default pattern
-// Phase 2 will need to adapt to discover stacks by tag or pattern
+// Phase 2 will need to adapt to discover stacks by pattern matching
 
 // Add tags for resource management and discovery
+// Only tagging CDN stack as auth/data stacks are managed internally by Amplify
 Tags.of(cdnStack).add('Project', projectName);
 Tags.of(cdnStack).add('ManagedBy', 'CDK-Amplify');
 Tags.of(cdnStack).add('DeployedBy', 'CodeBuild');
 Tags.of(cdnStack).add('AmplifyStackType', 'cdn');
 
-// Tag auth and data stacks if accessible
-try {
-  const authStack = backend.auth.resources.userPool.stack;
-  const dataStack = backend.data.resources.cfnGraphqlApi.stack;
-
-  Tags.of(authStack).add('Project', projectName);
-  Tags.of(authStack).add('ManagedBy', 'CDK-Amplify');
-  Tags.of(authStack).add('AmplifyStackType', 'auth');
-
-  Tags.of(dataStack).add('Project', projectName);
-  Tags.of(dataStack).add('ManagedBy', 'CDK-Amplify');
-  Tags.of(dataStack).add('AmplifyStackType', 'data');
-} catch (error) {
-  console.warn('Could not tag auth/data stacks, they may use default Amplify structure');
-}
+// Auth and data stacks use Amplify's auto-generated names
+// Pattern: amplify-{backend-id}-{resource-type}-{hash}
+// Phase 2 will discover them by name pattern: amplify-*-{auth|data}-*
 
 // S3 bucket for web component assets
 const assetBucket = new Bucket(cdnStack, 'WebComponentAssets', {
@@ -201,40 +190,9 @@ new CfnOutput(cdnStack, 'DistributionId', {
   exportName: `${cdnStack.stackName}-DistributionId`,
 });
 
-// Grant conversation Lambda access to ConfigurationTable and Bedrock
-const conversationFunction = data.resources.functions['conversation'];
+// Note: Conversation Lambda permissions should be granted via Amplify data resource
+// or through the defineFunction configuration in data/resource.ts
+// Direct access to data.resources.functions is not exposed in the public API
 
-if (conversationFunction) {
-  // Grant access to ConfigurationTable using exact ARN
-  // Table name comes from SAM stack and is passed via environment variable
-  const configTableName = process.env.CONFIGURATION_TABLE_NAME || 'RAGStack-*-ConfigurationTable-*';
-  const configTableArn = `arn:aws:dynamodb:${cdnStack.region}:${cdnStack.account}:table/${configTableName}`;
-
-  conversationFunction.addToRolePolicy(
-    new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: [
-        'dynamodb:GetItem',
-        'dynamodb:Query',
-        'dynamodb:UpdateItem',
-      ],
-      resources: [configTableArn],
-    })
-  );
-
-  console.log(`Granted conversation Lambda access to ConfigurationTable: ${configTableArn}`);
-
-  // Grant access to Bedrock Agent Runtime
-  conversationFunction.addToRolePolicy(
-    new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: [
-        'bedrock:InvokeModel',
-        'bedrock:RetrieveAndGenerate',
-      ],
-      resources: ['*'], // Bedrock doesn't support resource-level permissions
-    })
-  );
-
-  console.log('Granted conversation Lambda access to Bedrock');
-}
+// Configuration table access and Bedrock permissions should be added to:
+// amplify/data/functions/conversation.ts via defineFunction({ ... }) configuration
