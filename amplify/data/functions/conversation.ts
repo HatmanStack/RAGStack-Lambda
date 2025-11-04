@@ -78,11 +78,11 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       });
     }
 
-    // Step 3: Select model based on quotas
+    // Step 3: Atomically check and increment quotas
     // Use authenticated userId if available, otherwise fallback to requested userId or anonymous
     const trackingId = authenticatedUserId || userId || `anon:${conversationId}`;
     const isAuthenticated = !!authenticatedUserId;
-    const selectedModel = await selectModelBasedOnQuotas(trackingId, config, isAuthenticated);
+    const selectedModel = await atomicQuotaCheckAndIncrement(trackingId, config, isAuthenticated);
 
     console.log('Selected model:', selectedModel);
 
@@ -94,11 +94,6 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       KNOWLEDGE_BASE_CONFIG.knowledgeBaseId,
       KNOWLEDGE_BASE_CONFIG.region
     );
-
-    // Step 5: Increment quotas (only if using primary model)
-    if (selectedModel === config.primaryModel) {
-      await incrementQuotas(trackingId, !!userId);
-    }
 
     // Step 6: Return response
     console.log('Conversation response:', {
@@ -166,129 +161,123 @@ export async function getChatConfig(): Promise<ChatConfig> {
 }
 
 /**
- * Select model based on quota status
+ * Atomically check quotas and increment if within limits
  *
- * Checks global and per-user quotas. If either exceeded, returns fallback model.
- * Otherwise returns primary model.
+ * Uses conditional DynamoDB writes to prevent race conditions.
+ * If quota is exceeded, returns fallback model.
+ * If within quota, increments atomically and returns primary model.
+ *
+ * This fixes the race condition where multiple concurrent requests could
+ * bypass quota limits by reading stale values before incrementing.
  *
  * Quota keys in DynamoDB:
  * - Global: quota#global#{YYYY-MM-DD}
  * - Per-user: quota#user#{userId}#{YYYY-MM-DD}
  */
-export async function selectModelBasedOnQuotas(
+export async function atomicQuotaCheckAndIncrement(
   trackingId: string,
   config: ChatConfig,
   isAuthenticated: boolean
 ): Promise<string> {
   const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
-  try {
-    // Check global quota
-    const globalKey = `quota#global#${today}`;
-    const globalQuota = await dynamodb.send(
-      new GetItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
-        Key: { Configuration: { S: globalKey } },
-      })
-    );
-
-    const globalCount = parseInt(globalQuota.Item?.count?.N ?? '0');
-
-    console.log(`Global quota: ${globalCount}/${config.globalQuotaDaily}`);
-
-    if (globalCount >= config.globalQuotaDaily) {
-      console.log('Global quota exceeded, using fallback model');
-      return config.fallbackModel;
-    }
-
-    // Check per-user quota (if authenticated)
-    if (isAuthenticated) {
-      const userKey = `quota#user#${trackingId}#${today}`;
-      const userQuota = await dynamodb.send(
-        new GetItemCommand({
-          TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
-          Key: { Configuration: { S: userKey } },
-        })
-      );
-
-      const userCount = parseInt(userQuota.Item?.count?.N ?? '0');
-
-      console.log(`User quota for ${trackingId}: ${userCount}/${config.perUserQuotaDaily}`);
-
-      if (userCount >= config.perUserQuotaDaily) {
-        console.log('User quota exceeded, using fallback model');
-        return config.fallbackModel;
-      }
-    }
-
-    // Within quotas - use primary model
-    return config.primaryModel;
-
-  } catch (error) {
-    console.error('Error checking quotas:', error);
-    // On error, default to fallback model (conservative approach)
-    return config.fallbackModel;
-  }
-}
-
-/**
- * Increment usage quotas
- *
- * Increments both global and (if authenticated) per-user quota counters.
- * Only called when primary model is used (don't count fallback usage).
- */
-export async function incrementQuotas(trackingId: string, isAuthenticated: boolean): Promise<void> {
-  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
-  const today = new Date().toISOString().split('T')[0];
   const ttl = Math.floor(Date.now() / 1000) + (86400 * 2); // 2 days from now
 
   try {
-    // Increment global counter
+    // Try to atomically increment global quota with condition
     const globalKey = `quota#global#${today}`;
-    await dynamodb.send(
-      new UpdateItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
-        Key: { Configuration: { S: globalKey } },
-        UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
-        ExpressionAttributeNames: {
-          '#count': 'count',
-          '#ttl': 'ttl',
-        },
-        ExpressionAttributeValues: {
-          ':inc': { N: '1' },
-          ':ttl': { N: ttl.toString() },
-        },
-      })
-    );
 
-    console.log('Global quota incremented');
-
-    // Increment per-user counter (if authenticated)
-    if (isAuthenticated) {
-      const userKey = `quota#user#${trackingId}#${today}`;
-      await dynamodb.send(
+    try {
+      const globalResult = await dynamodb.send(
         new UpdateItemCommand({
           TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
-          Key: { Configuration: { S: userKey } },
+          Key: { Configuration: { S: globalKey } },
           UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
+          ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
           ExpressionAttributeNames: {
             '#count': 'count',
             '#ttl': 'ttl',
           },
           ExpressionAttributeValues: {
             ':inc': { N: '1' },
+            ':limit': { N: config.globalQuotaDaily.toString() },
             ':ttl': { N: ttl.toString() },
           },
+          ReturnValues: 'ALL_NEW',
         })
       );
 
-      console.log(`User quota incremented for ${trackingId}`);
+      const newGlobalCount = parseInt(globalResult.Attributes?.count?.N ?? '0');
+      console.log(`Global quota incremented: ${newGlobalCount}/${config.globalQuotaDaily}`);
+
+    } catch (error: any) {
+      // ConditionalCheckFailedException means quota exceeded
+      if (error.name === 'ConditionalCheckFailedException') {
+        console.log('Global quota exceeded, using fallback model');
+        return config.fallbackModel;
+      }
+      throw error; // Re-throw other errors
     }
 
+    // Try to atomically increment per-user quota (if authenticated)
+    if (isAuthenticated) {
+      const userKey = `quota#user#${trackingId}#${today}`;
+
+      try {
+        const userResult = await dynamodb.send(
+          new UpdateItemCommand({
+            TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+            Key: { Configuration: { S: userKey } },
+            UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
+            ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
+            ExpressionAttributeNames: {
+              '#count': 'count',
+              '#ttl': 'ttl',
+            },
+            ExpressionAttributeValues: {
+              ':inc': { N: '1' },
+              ':limit': { N: config.perUserQuotaDaily.toString() },
+              ':ttl': { N: ttl.toString() },
+            },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+
+        const newUserCount = parseInt(userResult.Attributes?.count?.N ?? '0');
+        console.log(`User quota incremented for ${trackingId}: ${newUserCount}/${config.perUserQuotaDaily}`);
+
+      } catch (error: any) {
+        // ConditionalCheckFailedException means quota exceeded
+        if (error.name === 'ConditionalCheckFailedException') {
+          // Need to decrement global quota since user quota failed
+          await dynamodb.send(
+            new UpdateItemCommand({
+              TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+              Key: { Configuration: { S: globalKey } },
+              UpdateExpression: 'ADD #count :dec',
+              ExpressionAttributeNames: {
+                '#count': 'count',
+              },
+              ExpressionAttributeValues: {
+                ':dec': { N: '-1' },
+              },
+            })
+          );
+
+          console.log('User quota exceeded, using fallback model (global quota rolled back)');
+          return config.fallbackModel;
+        }
+        throw error; // Re-throw other errors
+      }
+    }
+
+    // Both quotas incremented successfully - use primary model
+    return config.primaryModel;
+
   } catch (error) {
-    console.error('Error incrementing quotas:', error);
-    // Non-fatal - allow conversation to continue even if quota tracking fails
+    console.error('Error in atomic quota check:', error);
+    // On error, default to fallback model (conservative approach)
+    return config.fallbackModel;
   }
 }
 
