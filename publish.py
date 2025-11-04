@@ -1146,9 +1146,42 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_info("Check CloudWatch Logs for build progress:")
         log_info(f"  https://console.aws.amazon.com/codesuite/codebuild/projects/{build_project}/build/{build_id}")
 
-        # Don't wait for build to complete (can take 5-10 minutes)
-        # User can monitor in CloudWatch
-        log_success("Web component build triggered (running asynchronously)")
+        # Poll build status for up to 2 minutes
+        # If still running after timeout, continue without blocking deployment
+        log_info("Checking build status (2 minute timeout)...")
+        import time
+        timeout_seconds = 120
+        poll_interval = 10
+        elapsed = 0
+
+        while elapsed < timeout_seconds:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+            build_status_response = codebuild.batch_get_builds(ids=[build_id])
+            if build_status_response['builds']:
+                status = build_status_response['builds'][0]['buildStatus']
+
+                if status == 'SUCCEEDED':
+                    log_success(f"Web component build completed successfully ({elapsed}s)")
+                    break
+                elif status in ['FAILED', 'FAULT', 'TIMED_OUT', 'STOPPED']:
+                    log_error(f"Web component build failed with status: {status}")
+                    log_warning("RECOVERY OPTIONS:")
+                    log_warning(f"  1. Check build logs: https://console.aws.amazon.com/codesuite/codebuild/projects/{build_project}/build/{build_id}")
+                    log_warning(f"  2. Manually trigger build: aws codebuild start-build --project-name {build_project}")
+                    log_warning(f"  3. Redeploy with --chat-only flag")
+                    break
+                elif status == 'IN_PROGRESS':
+                    log_info(f"Build still in progress... ({elapsed}s elapsed)")
+                else:
+                    log_warning(f"Unexpected build status: {status}")
+
+        # If timeout reached and still running
+        if elapsed >= timeout_seconds:
+            log_warning("Build status check timed out after 2 minutes")
+            log_warning("Build is still running in the background")
+            log_warning(f"Monitor progress: https://console.aws.amazon.com/codesuite/codebuild/projects/{build_project}/build/{build_id}")
 
     except Exception as e:
         log_error(f"Failed to trigger CodeBuild: {e}")
