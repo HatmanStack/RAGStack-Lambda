@@ -792,6 +792,202 @@ git commit -m "feat(component): implement ChatWithSources React component
 
 ---
 
+## Task 5b: Add Theme Support
+
+### Goal
+
+Implement theme application logic to use chat_theme_preset and chat_theme_overrides from configuration (Phase 0 ADR-9).
+
+### Files to Create
+
+- `src/amplify-chat/src/hooks/useTheme.ts`
+- `src/amplify-chat/src/styles/themes.ts`
+
+### Background
+
+Phase 1 stores theme settings in ConfigurationTable, Phase 5 provides UI to change them, but Phase 2 needs to actually apply the theme. We'll fetch theme config from backend and apply CSS variables.
+
+### Instructions
+
+1. **Create theme definitions:**
+
+Create `src/styles/themes.ts`:
+
+```typescript
+/**
+ * Theme presets and CSS variable mapping
+ */
+
+export const THEME_PRESETS = {
+  light: {
+    '--chat-bg-primary': '#ffffff',
+    '--chat-bg-secondary': '#f5f5f5',
+    '--chat-color-primary': '#0073bb',
+    '--chat-color-text': '#16191f',
+    '--chat-color-border': '#e0e0e0',
+  },
+  dark: {
+    '--chat-bg-primary': '#16191f',
+    '--chat-bg-secondary': '#232f3e',
+    '--chat-color-primary': '#539fe5',
+    '--chat-color-text': '#ffffff',
+    '--chat-color-border': '#414d5c',
+  },
+  brand: {
+    '--chat-bg-primary': '#ffffff',
+    '--chat-bg-secondary': '#f0f8ff',
+    '--chat-color-primary': '#ff9900',
+    '--chat-color-text': '#16191f',
+    '--chat-color-border': '#ffd280',
+  },
+} as const;
+
+export type ThemePreset = keyof typeof THEME_PRESETS;
+
+export interface ThemeOverrides {
+  primaryColor?: string;
+  fontFamily?: string;
+  spacing?: 'compact' | 'comfortable' | 'spacious';
+}
+
+/**
+ * Apply theme to document root
+ */
+export function applyTheme(preset: ThemePreset = 'light', overrides?: ThemeOverrides) {
+  const root = document.documentElement;
+
+  // Apply preset
+  const presetVars = THEME_PRESETS[preset] || THEME_PRESETS.light;
+  Object.entries(presetVars).forEach(([key, value]) => {
+    root.style.setProperty(key, value);
+  });
+
+  // Apply overrides
+  if (overrides?.primaryColor) {
+    root.style.setProperty('--chat-color-primary', overrides.primaryColor);
+  }
+
+  if (overrides?.fontFamily) {
+    root.style.setProperty('--chat-font-family', overrides.fontFamily);
+  }
+
+  if (overrides?.spacing) {
+    const spacingMap = {
+      compact: '0.5rem',
+      comfortable: '1rem',
+      spacious: '1.5rem',
+    };
+    root.style.setProperty('--chat-spacing', spacingMap[overrides.spacing]);
+  }
+}
+```
+
+2. **Update ChatWithSources to apply theme:**
+
+In `src/components/ChatWithSources.tsx`, add theme application on mount:
+
+```typescript
+import { applyTheme } from '../styles/themes';
+import type { ThemePreset, ThemeOverrides } from '../styles/themes';
+
+export function ChatWithSources({
+  conversationId = 'default',
+  // ... other props
+  themePreset = 'light',
+  themeOverrides,
+}: ChatWithSourcesProps & { themePreset?: ThemePreset; themeOverrides?: ThemeOverrides }) {
+  // Apply theme on mount
+  React.useEffect(() => {
+    applyTheme(themePreset, themeOverrides);
+  }, [themePreset, themeOverrides]);
+
+  // ... rest of component
+}
+```
+
+3. **Update ChatWithSourcesProps type:**
+
+In `src/types/index.ts`, add theme props:
+
+```typescript
+export interface ChatWithSourcesProps {
+  // ... existing props
+  /** Theme preset (from configuration) */
+  themePreset?: 'light' | 'dark' | 'brand';
+  /** Theme overrides (from configuration) */
+  themeOverrides?: {
+    primaryColor?: string;
+    fontFamily?: string;
+    spacing?: 'compact' | 'comfortable' | 'spacious';
+  };
+}
+```
+
+4. **Update web component to pass theme:**
+
+In `src/components/AmplifyChat.wc.ts`, add theme attributes:
+
+```typescript
+static get observedAttributes(): string[] {
+  return [
+    'conversation-id',
+    // ... existing
+    'theme-preset',  // NEW
+    'theme-overrides',  // NEW (JSON string)
+  ];
+}
+
+private render(): void {
+  // ... existing code
+
+  const props: ChatWithSourcesProps = {
+    // ... existing props
+    themePreset: this.getAttribute('theme-preset', 'light') as ThemePreset,
+    themeOverrides: this.getThemeOverrides(),
+  };
+
+  this.root.render(React.createElement(ChatWithSources, props));
+}
+
+private getThemeOverrides(): ThemeOverrides | undefined {
+  const overridesStr = this.getAttribute('theme-overrides');
+  if (!overridesStr) return undefined;
+
+  try {
+    return JSON.parse(overridesStr);
+  } catch {
+    console.warn('Invalid theme-overrides JSON');
+    return undefined;
+  }
+}
+```
+
+**Note:** In production, theme would come from backend config query. For now, we allow passing via attributes for testing.
+
+### Verification Checklist
+
+- [ ] Theme presets defined (light, dark, brand)
+- [ ] applyTheme function sets CSS variables
+- [ ] ChatWithSources applies theme on mount
+- [ ] Web component accepts theme-preset attribute
+- [ ] Theme overrides support primaryColor, fontFamily, spacing
+- [ ] CSS variables used in component styles
+
+### Commit
+
+```bash
+git add src/amplify-chat/src/styles/ src/amplify-chat/src/components/ src/amplify-chat/src/types/
+git commit -m "feat(component): add theme support with presets and overrides
+
+- Define light, dark, brand theme presets
+- Implement applyTheme to set CSS variables
+- Add theme props to ChatWithSources
+- Support theme-preset and theme-overrides attributes in web component
+- Enable runtime theme customization from configuration"
+```
+
+---
+
 ## Task 6: Create Web Component Wrapper
 
 ### Goal
@@ -1101,8 +1297,9 @@ Since `amplify_outputs.json` doesn't exist yet, create a mock for testing:
 ```bash
 cd src/amplify-chat
 
-# Create mock amplify_outputs.json
-cat > ../../amplify_outputs.json <<EOF
+# Create mock amplify_outputs.json in temp directory
+TEMP_CONFIG=$(mktemp)
+cat > $TEMP_CONFIG <<EOF
 {
   "data": {
     "url": "https://mock.appsync-api.us-east-1.amazonaws.com/graphql"
@@ -1115,7 +1312,11 @@ cat > ../../amplify_outputs.json <<EOF
 }
 EOF
 
-# Run build
+# Symlink to expected location (or copy)
+ln -sf $TEMP_CONFIG ../../amplify_outputs.json
+
+# Run build (with automatic cleanup on exit)
+trap "rm -f ../../amplify_outputs.json $TEMP_CONFIG" EXIT
 npm run build
 
 # Verify outputs
@@ -1125,8 +1326,7 @@ ls -lh dist/
 # Check bundle size (should be ~300KB gzipped)
 gzip -c dist/wc.js | wc -c
 
-# Clean up mock
-rm ../../amplify_outputs.json
+# Cleanup happens automatically via trap
 ```
 
 ### Verify Package Structure

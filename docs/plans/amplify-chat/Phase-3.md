@@ -169,13 +169,14 @@ We'll add a new stack with CDN resources, following Amplify Gen 2 patterns for c
    );
 
    // Grant access to source bucket (artifacts uploaded by publish.py)
+   // Use specific bucket from config to avoid cross-project access
    buildProject.addToRolePolicy(
      new PolicyStatement({
        effect: Effect.ALLOW,
        actions: ['s3:GetObject', 's3:ListBucket'],
        resources: [
-         'arn:aws:s3:::ragstack-*-artifacts-*',
-         'arn:aws:s3:::ragstack-*-artifacts-*/*',
+         `arn:aws:s3:::${KNOWLEDGE_BASE_CONFIG.webComponentSourceBucket}`,
+         `arn:aws:s3:::${KNOWLEDGE_BASE_CONFIG.webComponentSourceBucket}/*`,
        ],
      })
    );
@@ -545,6 +546,7 @@ We need to:
 
        # Step 5: Trigger CodeBuild to build and deploy web component
        log_info("Triggering web component build and deployment...")
+       build_id = None
        try:
            codebuild = boto3.client('codebuild', region_name=region)
 
@@ -567,10 +569,15 @@ We need to:
        except Exception as e:
            log_error(f"Failed to trigger CodeBuild: {e}")
            log_warning("Amplify stack deployed, but web component build failed")
-           log_warning("Manually trigger build in CodeBuild console")
+           log_warning("RECOVERY OPTIONS:")
+           log_warning(f"  1. Manually trigger build in CodeBuild console: {build_project}")
+           log_warning(f"  2. Run: aws codebuild start-build --project-name {build_project}")
+           log_warning(f"  3. Redeploy with --chat-only flag to retry")
+           # Don't raise - stack is deployed successfully, just build failed
 
-       # Step 6: Return CDN URL
+       # Step 6: Return CDN URL (even if build failed - it can be triggered manually)
        log_success(f"Amplify deployment complete! CDN URL: {cdn_url}")
+       log_warning("Note: Web component may not be available at CDN URL until CodeBuild completes")
        return cdn_url
    ```
 
@@ -654,21 +661,24 @@ Amplify Gen 2 creates a stack named `amplify-{appId}-{branchName}-{hash}`. We ne
                ]
            )
 
-           # Find Amplify stack (starts with "amplify-")
+           # Find Amplify stacks with timestamps (collect from list_stacks)
            amplify_stacks = []
            for page in stack_iterator:
                for stack in page['StackSummaries']:
                    if stack['StackName'].startswith('amplify-'):
-                       amplify_stacks.append(stack['StackName'])
+                       amplify_stacks.append({
+                           'StackName': stack['StackName'],
+                           'LastUpdatedTime': stack.get('LastUpdatedTime', stack['CreationTime'])
+                       })
 
            if not amplify_stacks:
                raise ValueError(
                    "No Amplify stacks found. Ensure 'npx ampx deploy' completed successfully."
                )
 
-           # Use the most recently updated stack
-           amplify_stacks.sort(key=lambda s: cf_client.describe_stacks(StackName=s)['Stacks'][0]['LastUpdatedTime'], reverse=True)
-           stack_name = amplify_stacks[0]
+           # Sort by LastUpdatedTime (already have it from list_stacks)
+           amplify_stacks.sort(key=lambda s: s['LastUpdatedTime'], reverse=True)
+           stack_name = amplify_stacks[0]['StackName']
 
            log_info(f"Found Amplify stack: {stack_name}")
 
@@ -803,6 +813,11 @@ We need to:
    To:
    ```python
    try:
+       # Set chat_deployed=True BEFORE Amplify deploy to avoid race condition
+       # If deploy fails, flag is set but no harm (chat won't work, but UI shows it)
+       log_info("Marking chat as deployed in configuration...")
+       seed_configuration_table(stack_name, args.region, chat_deployed=True)
+
        cdn_url = amplify_deploy(
            args.project_name,
            args.region,
@@ -810,10 +825,6 @@ We need to:
            artifact_bucket,
            config_table_name
        )
-
-       # Update ConfigurationTable to set chat_deployed=True
-       log_info("Updating configuration to mark chat as deployed...")
-       seed_configuration_table(stack_name, args.region, chat_deployed=True)
 
        log_success("Amplify chat backend deployed successfully!")
        log_success(f"Chat CDN URL: {cdn_url}")
@@ -824,6 +835,9 @@ We need to:
    except Exception as e:
        log_error(f"Amplify deployment failed: {e}")
        log_warning("SAM core is deployed, but chat backend deployment failed")
+       log_warning("Note: chat_deployed flag was set but deployment failed")
+       log_warning("  Admins may see chat settings UI, but functionality won't work")
+       log_warning("  To fix: Retry deployment or manually set chat_deployed=false in DynamoDB")
        sys.exit(1)
    ```
 

@@ -453,20 +453,49 @@ We need to:
 
 5. **Handle CDN URL retrieval:**
 
-   If there's no API endpoint for Amplify outputs, hard-code it for now:
+   **Option A (Recommended): Pass via environment variable during UI build**
 
+   In `publish.py`, after retrieving Amplify outputs, write to UI env file:
+
+   ```python
+   # In configure_ui() or similar function
+   if chat_deployed:
+       amplify_outputs = get_amplify_stack_outputs(project_name, region)
+       cdn_url = amplify_outputs.get('WebComponentCDN', '')
+
+       # Append to .env.production
+       env_file = Path("src/ui/.env.production")
+       existing_content = env_file.read_text() if env_file.exists() else ''
+       env_file.write_text(existing_content + f'\nREACT_APP_CHAT_CDN_URL={cdn_url}\n')
+   ```
+
+   Then in React:
    ```tsx
    useEffect(() => {
      if (config?.chat_deployed) {
-       // Placeholder: In production, fetch from API
-       // For now, read from environment or config
        const url = process.env.REACT_APP_CHAT_CDN_URL || null;
        setCdnUrl(url);
      }
    }, [config?.chat_deployed]);
    ```
 
-   **Note:** Phase 3's deployment should have outputted this. You may need to add it to the UI's environment variables during build.
+   **Option B: Store in ConfigurationTable**
+
+   Add `chat_cdn_url` field to ConfigurationTable during deployment:
+   ```python
+   # In amplify_deploy(), after getting cdn_url:
+   dynamodb = boto3.resource('dynamodb', region_name=region)
+   table = dynamodb.Table(config_table_name)
+   table.update_item(
+       Key={'Configuration': 'Default'},
+       UpdateExpression='SET chat_cdn_url = :url',
+       ExpressionAttributeValues={':url': cdn_url}
+   )
+   ```
+
+   Then fetch via GraphQL in Settings page alongside other config.
+
+   **Implementation Choice:** Use Option A (environment variable) for simplicity. CDN URL rarely changes after deployment.
 
 ### Verification Checklist
 

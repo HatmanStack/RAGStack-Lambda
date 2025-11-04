@@ -223,8 +223,32 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       throw new Error('Authentication required. Please provide userId and userToken.');
     }
 
-    // TODO: If config.requireAuth, validate userToken (implement in production)
-    // For now, we trust the token if provided
+    // AUTHENTICATION LIMITATION:
+    // This implementation checks token PRESENCE but does NOT validate token authenticity.
+    // Security model: "Trust but track" - we trust parent app's auth, track usage per userId.
+    //
+    // Production implementation options:
+    // A) JWT Validation: Verify token signature if parent app uses JWT
+    //    import { CognitoJwtVerifier } from 'aws-jwt-verify';
+    //    const verifier = CognitoJwtVerifier.create({ userPoolId: '...' });
+    //    await verifier.verify(userToken); // Throws if invalid
+    //
+    // B) API Key Validation: Check against allowlist in ConfigurationTable
+    //    const validTokens = await getValidApiKeys();
+    //    if (!validTokens.includes(userToken)) throw new Error('Invalid API key');
+    //
+    // C) OAuth Token Introspection: Call parent app's auth service
+    //    const response = await fetch('https://auth-service/introspect', {
+    //      headers: { Authorization: `Bearer ${userToken}` }
+    //    });
+    //    if (!response.ok) throw new Error('Invalid token');
+    //
+    // Current approach is suitable for:
+    // - Trusted environments where parent app controls embedding
+    // - Usage tracking without strict security (anonymous + optional userId)
+    // - Cost control via quotas (primary security mechanism)
+    //
+    // For production with strict auth requirements, implement option A, B, or C above.
 
     // Step 3: Select model based on quotas
     const trackingId = userId || `anon:${conversationId}`;
