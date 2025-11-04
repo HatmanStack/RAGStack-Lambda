@@ -35,24 +35,32 @@ export interface ThemeOverrides {
 }
 
 /**
- * Apply theme to document root
+ * Apply theme to target element (or document root if not specified)
+ *
+ * @param preset - Theme preset to apply
+ * @param overrides - Optional theme overrides
+ * @param target - Element to apply theme to (defaults to document.documentElement)
  */
-export function applyTheme(preset: ThemePreset = 'light', overrides?: ThemeOverrides) {
-  const root = document.documentElement;
+export function applyTheme(
+  preset: ThemePreset = 'light',
+  overrides?: ThemeOverrides,
+  target?: HTMLElement | Element
+) {
+  const root = target || document.documentElement;
 
   // Apply preset
   const presetVars = THEME_PRESETS[preset] || THEME_PRESETS.light;
   Object.entries(presetVars).forEach(([key, value]) => {
-    root.style.setProperty(key, value);
+    (root as HTMLElement).style.setProperty(key, value);
   });
 
   // Apply overrides
   if (overrides?.primaryColor) {
-    root.style.setProperty('--chat-color-primary', overrides.primaryColor);
+    (root as HTMLElement).style.setProperty('--chat-color-primary', overrides.primaryColor);
   }
 
   if (overrides?.fontFamily) {
-    root.style.setProperty('--chat-font-family', overrides.fontFamily);
+    (root as HTMLElement).style.setProperty('--chat-font-family', overrides.fontFamily);
   }
 
   if (overrides?.spacing) {
@@ -61,6 +69,6 @@ export function applyTheme(preset: ThemePreset = 'light', overrides?: ThemeOverr
       comfortable: '1rem',
       spacious: '1.5rem',
     };
-    root.style.setProperty('--chat-spacing', spacingMap[overrides.spacing]);
+    (root as HTMLElement).style.setProperty('--chat-spacing', spacingMap[overrides.spacing]);
   }
 }

@@ -20,7 +20,7 @@
  * ```
  */
 
-import React, { useCallback, useMemo, useEffect } from 'react';
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { AIConversation } from '@aws-amplify/ui-react-ai';
 import { SourcesDisplay } from './SourcesDisplay';
 import { ChatWithSourcesProps, Source } from '../types';
@@ -83,9 +83,19 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   themePreset = 'light',
   themeOverrides,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Apply theme on mount and when theme changes
+  // Scope theme to this component instance to prevent conflicts
   useEffect(() => {
-    applyTheme(themePreset as ThemePreset, themeOverrides as ThemeOverrides);
+    if (!containerRef.current) {
+      return;
+    }
+    applyTheme(
+      themePreset as ThemePreset,
+      themeOverrides as ThemeOverrides,
+      containerRef.current
+    );
   }, [themePreset, themeOverrides]);
   // Memoize callbacks to prevent unnecessary re-renders
   const handleSendMessage = useCallback(
@@ -122,6 +132,7 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`${styles.chatContainer} ${className || ''}`}
       style={containerStyle}
     >
