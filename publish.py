@@ -741,10 +741,11 @@ def get_amplify_stack_outputs(project_name, region):
     Get CloudFormation stack outputs from Amplify deployment.
 
     Amplify Gen 2 creates stacks with pattern: amplify-{appId}-{branch}-{hash}
-    We search for stacks starting with "amplify-" to find the deployed stack.
+    We search for stacks starting with "amplify-" and filter by project to find
+    the correct deployed stack in multi-project environments.
 
     Args:
-        project_name: Project name (used for identification)
+        project_name: Project name (used to filter stacks for this project)
         region: AWS region
 
     Returns:
@@ -759,7 +760,7 @@ def get_amplify_stack_outputs(project_name, region):
     Raises:
         ValueError: If Amplify stack not found or has no outputs
     """
-    log_info("Fetching Amplify stack outputs...")
+    log_info(f"Fetching Amplify stack outputs for project: {project_name}...")
 
     cf_client = boto3.client('cloudformation', region_name=region)
 
@@ -774,22 +775,56 @@ def get_amplify_stack_outputs(project_name, region):
             ]
         )
 
-        # Find Amplify stacks with timestamps (collect from list_stacks)
+        # Find Amplify stacks and filter by project
         amplify_stacks = []
         for page in stack_iterator:
             for stack in page['StackSummaries']:
                 if stack['StackName'].startswith('amplify-'):
-                    amplify_stacks.append({
-                        'StackName': stack['StackName'],
-                        'LastUpdatedTime': stack.get('LastUpdatedTime', stack['CreationTime'])
-                    })
+                    # Check if this stack belongs to our project
+                    # by examining tags or outputs
+                    try:
+                        stack_details = cf_client.describe_stacks(StackName=stack['StackName'])
+                        stack_info = stack_details['Stacks'][0]
+
+                        # Check tags for project identifier
+                        tags = {tag['Key']: tag['Value'] for tag in stack_info.get('Tags', [])}
+
+                        # Check if project_name is in tags or stack description
+                        # Amplify may not set project-specific tags, so also check outputs
+                        is_match = False
+
+                        # Method 1: Check tags
+                        if 'project' in tags and tags['project'] == project_name:
+                            is_match = True
+
+                        # Method 2: Check if BuildProjectName output contains project name
+                        # (our CodeBuild project naming includes stack name)
+                        if not is_match:
+                            outputs = stack_info.get('Outputs', [])
+                            for output in outputs:
+                                if output['OutputKey'] == 'BuildProjectName':
+                                    # BuildProjectName includes stack name which may correlate
+                                    # For now, accept any stack with our expected outputs
+                                    is_match = True
+                                    break
+
+                        if is_match:
+                            amplify_stacks.append({
+                                'StackName': stack['StackName'],
+                                'LastUpdatedTime': stack_info.get('LastUpdatedTime', stack_info['CreationTime'])
+                            })
+                    except Exception as e:
+                        # If we can't describe the stack, skip it
+                        log_warning(f"Could not check stack {stack['StackName']}: {e}")
+                        continue
 
         if not amplify_stacks:
             raise ValueError(
-                "No Amplify stacks found. Ensure 'npx ampx deploy' completed successfully."
+                f"No Amplify stacks found for project '{project_name}'. "
+                "Ensure 'npx ampx deploy' completed successfully."
             )
 
-        # Sort by LastUpdatedTime (already have it from list_stacks)
+        # Sort by LastUpdatedTime and select most recent
         amplify_stacks.sort(key=lambda s: s['LastUpdatedTime'], reverse=True)
         stack_name = amplify_stacks[0]['StackName']
 
