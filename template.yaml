@@ -1669,6 +1669,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-UIBucket'
 
   ArtifactBucketName:
+    Condition: BuildUI
     Description: S3 bucket for deployment artifacts (UI source, web component source)
     Value: !Ref UISourceBucket
     Export:
