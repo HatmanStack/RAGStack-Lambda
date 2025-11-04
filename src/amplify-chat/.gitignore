@@ -8,6 +8,9 @@ pnpm-lock.yaml
 dist/
 build/
 
+# Generated config
+src/amplify-config.generated.ts
+
 # IDE
 .vscode/
 .idea/

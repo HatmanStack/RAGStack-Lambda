@@ -13,6 +13,12 @@
  * ```
  */
 
+import { Amplify } from 'aws-amplify';
+import { AMPLIFY_OUTPUTS } from './amplify-config.generated';
+
+// Configure Amplify with bundled config (zero-config embedding)
+Amplify.configure(AMPLIFY_OUTPUTS);
+
 // Export the Web Component
 export { AmplifyChat } from './components/AmplifyChat.wc';
 
