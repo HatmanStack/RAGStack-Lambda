@@ -573,6 +573,83 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     return stack_name
 
 
+def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive_prefix, s3_key_prefix):
+    """
+    Shared implementation for packaging source code and uploading to S3.
+
+    Args:
+        source_dir: Path to source directory to package
+        bucket_name: S3 bucket name to upload to
+        region: AWS region for bucket operations
+        exclude_dirs: List of directory names to exclude from zip
+        archive_prefix: Path prefix inside zip archive (e.g., 'ui' or 'web-component')
+        s3_key_prefix: Prefix for S3 key (e.g., 'ui-source' or 'web-component-source')
+
+    Returns:
+        str: S3 key of uploaded source zip
+
+    Raises:
+        FileNotFoundError: If source directory doesn't exist
+        IOError: If packaging or upload fails
+    """
+    import zipfile
+    import tempfile
+    import time
+    from pathlib import Path
+
+    source_path = Path(source_dir)
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source directory not found: {source_path}")
+
+    # Create temporary zip file
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+        zip_path = tmp_file.name
+
+    try:
+        # Create zip file with exclusions
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in source_path.rglob('*'):
+                if file_path.is_file():
+                    # Skip excluded directories
+                    if any(excluded in file_path.parts for excluded in exclude_dirs):
+                        continue
+
+                    # Store with specified archive prefix
+                    if archive_prefix:
+                        arcname = Path(archive_prefix) / file_path.relative_to(source_path)
+                    else:
+                        # Include parent directory in zip (e.g., src/ui becomes ui/*)
+                        arcname = file_path.relative_to(source_path.parent)
+                    zipf.write(file_path, arcname)
+
+        # Upload to S3
+        s3_client = boto3.client('s3', region_name=region)
+        timestamp = int(time.time())
+        key = f'{s3_key_prefix}-{timestamp}.zip'
+
+        log_info(f"Uploading to s3://{bucket_name}/{key}...")
+        try:
+            s3_client.upload_file(zip_path, bucket_name, key)
+        except ClientError as e:
+            raise IOError(f"Failed to upload source to S3: {e}") from e
+
+        # Clean up temporary file
+        os.remove(zip_path)
+
+        return key
+
+    except (FileNotFoundError, IOError):
+        # Re-raise expected exceptions
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise
+    except Exception as e:
+        # Clean up temporary file on unexpected error
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise IOError(f"Unexpected error packaging source: {e}") from e
+
+
 def package_ui_source(bucket_name, region):
     """
     Package UI source code as zip and upload to S3.
@@ -591,66 +668,19 @@ def package_ui_source(bucket_name, region):
         FileNotFoundError: If UI source directory doesn't exist
         IOError: If packaging or upload fails
     """
-    import zipfile
-    import tempfile
-    import time
-    from pathlib import Path
-
     log_info("Packaging UI source code...")
 
-    ui_dir = Path('src/ui')
-    if not ui_dir.exists():
-        raise FileNotFoundError(f"UI directory not found: {ui_dir}")
+    key = _package_source_to_s3(
+        source_dir='src/ui',
+        bucket_name=bucket_name,
+        region=region,
+        exclude_dirs=['node_modules', 'build'],
+        archive_prefix=None,  # Keep original structure (ui/* in zip)
+        s3_key_prefix='ui-source'
+    )
 
-    # Create temporary zip file
-    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
-        zip_path = tmp_file.name
-
-    try:
-        # Create zip file, excluding node_modules and build
-        log_info("Creating UI source zip file...")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_path in ui_dir.rglob('*'):
-                if file_path.is_file():
-                    # Skip node_modules and build directories
-                    if 'node_modules' in file_path.parts or 'build' in file_path.parts:
-                        continue
-
-                    # Store relative to src/ (include 'ui' folder in zip)
-                    arcname = file_path.relative_to(ui_dir.parent)
-                    zipf.write(file_path, arcname)
-
-        log_success(f"UI source packaged: {zip_path}")
-
-        # Upload to S3
-        s3_client = boto3.client('s3', region_name=region)
-
-        # Upload with timestamp-based key
-        timestamp = int(time.time())
-        key = f'ui-source-{timestamp}.zip'
-
-        log_info(f"Uploading to s3://{bucket_name}/{key}...")
-        try:
-            s3_client.upload_file(zip_path, bucket_name, key)
-            log_success("UI source uploaded to S3")
-        except ClientError as e:
-            raise IOError(f"Failed to upload UI source to S3: {e}") from e
-
-        # Clean up temporary file
-        os.remove(zip_path)
-
-        return key
-
-    except (FileNotFoundError, IOError):
-        # Re-raise expected exceptions
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        raise
-    except Exception as e:
-        # Clean up temporary file on unexpected error
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        raise IOError(f"Unexpected error packaging UI source: {e}") from e
+    log_success("UI source uploaded to S3")
+    return key
 
 
 def package_amplify_chat_source(bucket_name, region):
@@ -671,66 +701,19 @@ def package_amplify_chat_source(bucket_name, region):
         FileNotFoundError: If src/amplify-chat/ doesn't exist
         IOError: If packaging or upload fails
     """
-    import zipfile
-    import tempfile
-    import time
-    from pathlib import Path
-
     log_info("Packaging web component source...")
 
-    chat_dir = Path('src/amplify-chat')
-    if not chat_dir.exists():
-        raise FileNotFoundError(f"Web component directory not found: {chat_dir}")
+    key = _package_source_to_s3(
+        source_dir='src/amplify-chat',
+        bucket_name=bucket_name,
+        region=region,
+        exclude_dirs=['node_modules', 'dist'],
+        archive_prefix='web-component',  # CodeBuild expects web-component/* structure
+        s3_key_prefix='web-component-source'
+    )
 
-    # Create temporary zip file
-    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
-        zip_path = tmp_file.name
-
-    try:
-        # Create zip file, excluding node_modules and dist
-        log_info("Creating web component source zip file...")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_path in chat_dir.rglob('*'):
-                if file_path.is_file():
-                    # Skip node_modules and dist directories
-                    if 'node_modules' in file_path.parts or 'dist' in file_path.parts:
-                        continue
-
-                    # Store as web-component/* (CodeBuild expects this structure)
-                    arcname = Path('web-component') / file_path.relative_to(chat_dir)
-                    zipf.write(file_path, arcname)
-
-        log_success(f"Web component source packaged: {zip_path}")
-
-        # Upload to S3
-        s3_client = boto3.client('s3', region_name=region)
-
-        # Upload with timestamp-based key
-        timestamp = int(time.time())
-        key = f'web-component-source-{timestamp}.zip'
-
-        log_info(f"Uploading to s3://{bucket_name}/{key}...")
-        try:
-            s3_client.upload_file(zip_path, bucket_name, key)
-            log_success("Web component source uploaded to S3")
-        except ClientError as e:
-            raise IOError(f"Failed to upload web component source to S3: {e}") from e
-
-        # Clean up temporary file
-        os.remove(zip_path)
-
-        return key
-
-    except (FileNotFoundError, IOError):
-        # Re-raise expected exceptions
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        raise
-    except Exception as e:
-        # Clean up temporary file on unexpected error
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        raise IOError(f"Unexpected error packaging web component source: {e}") from e
+    log_success("Web component source uploaded to S3")
+    return key
 
 
 def get_stack_outputs(stack_name, region="us-east-1"):
