@@ -106,7 +106,21 @@ def main():
         if not run_command(['npm', 'install'], cwd='src/ui'):
             log_error("npm install failed in src/ui")
             sys.exit(1)
-        log_success("UI dependencies installed\n")
+        log_success("UI dependencies installed")
+
+        # Install AmplifyChat dependencies (src/amplify-chat)
+        log_info("Installing AmplifyChat Node dependencies...")
+        if not run_command(['npm', 'install'], cwd='src/amplify-chat'):
+            log_error("npm install failed in src/amplify-chat")
+            sys.exit(1)
+        log_success("AmplifyChat dependencies installed")
+
+        # Install Amplify dependencies (amplify)
+        log_info("Installing Amplify Node dependencies...")
+        if not run_command(['npm', 'install'], cwd='amplify'):
+            log_error("npm install failed in amplify")
+            sys.exit(1)
+        log_success("Amplify dependencies installed\n")
 
         # Run all tests (lint + test)
         log_info("Running tests and linting...")
