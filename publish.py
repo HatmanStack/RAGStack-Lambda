@@ -1133,7 +1133,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
     return cdn_url
 
 
-def seed_configuration_table(stack_name, region, chat_deployed=False):
+def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_url=''):
     """
     Seed ConfigurationTable with Schema and Default configurations.
 
@@ -1141,6 +1141,7 @@ def seed_configuration_table(stack_name, region, chat_deployed=False):
         stack_name: CloudFormation stack name
         region: AWS region
         chat_deployed: Whether Amplify chat is deployed (default False)
+        chat_cdn_url: CDN URL for web component (default '')
     """
     print(f"\n{Colors.HEADER}=== Seeding Configuration Table ==={Colors.ENDC}")
 
@@ -1270,6 +1271,12 @@ def seed_configuration_table(stack_name, region, chat_deployed=False):
                             'enum': ['compact', 'comfortable', 'spacious']
                         }
                     }
+                },
+                'chat_cdn_url': {
+                    'type': 'string',
+                    'order': 11,
+                    'description': 'Web component CDN URL (read-only)',
+                    'readOnly': True
                 }
             }
         }
@@ -1279,6 +1286,7 @@ def seed_configuration_table(stack_name, region, chat_deployed=False):
     default_item = {
         'Configuration': 'Default',
         'chat_deployed': chat_deployed,
+        'chat_cdn_url': chat_cdn_url,
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
         'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -1453,8 +1461,8 @@ Examples:
                     config_table_name
                 )
 
-                # Update chat_deployed flag
-                seed_configuration_table(stack_name, args.region, chat_deployed=True)
+                # Update chat_deployed flag and CDN URL
+                seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
 
                 log_success(f"Chat CDN URL: {cdn_url}")
             except Exception as e:
@@ -1566,6 +1574,10 @@ Examples:
                     artifact_bucket,
                     config_table_name
                 )
+
+                # Update configuration with CDN URL now that deployment succeeded
+                log_info("Updating configuration with CDN URL...")
+                seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
 
                 log_success("Amplify chat backend deployed successfully!")
                 log_success(f"Chat CDN URL: {cdn_url}")

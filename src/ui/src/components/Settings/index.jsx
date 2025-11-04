@@ -12,6 +12,7 @@ import {
   Toggle,
   Input,
   ExpandableSection,
+  CopyToClipboard,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
@@ -144,6 +145,32 @@ export function Settings() {
     // Hide chat fields if chat is not deployed
     if (key.startsWith('chat_') && key !== 'chat_model_id' && !formValues.chat_deployed) {
       return null;
+    }
+
+    // Special handling for chat_cdn_url - display with embed code
+    if (key === 'chat_cdn_url' && value) {
+      return (
+        <Alert type="success" header="Web Component Embed Code">
+          <SpaceBetween size="s">
+            <Box variant="p">
+              Copy and paste this code into any HTML page to add the chat component:
+            </Box>
+            <Box>
+              <code style={{ display: 'block', whiteSpace: 'pre-wrap', padding: '12px', background: '#f4f4f4', borderRadius: '4px' }}>
+                {`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+              </code>
+            </Box>
+            <CopyToClipboard
+              copyText={`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+              copyButtonText="Copy Embed Code"
+              copySuccessText="Copied!"
+            />
+            <Box variant="small" color="text-body-secondary">
+              CDN URL: {value}
+            </Box>
+          </SpaceBetween>
+        </Alert>
+      );
     }
 
     // Handle conditional visibility (dependsOn)
