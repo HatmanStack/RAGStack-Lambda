@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from .models import Document, Status
+from ragstack_common.models import Document, Status
 
 
 def test_document_creation():

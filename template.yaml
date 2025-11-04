@@ -73,7 +73,6 @@ Resources:
 
   InputBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       BucketName: !Sub '${ProjectName}-input-${DeploymentSuffix}'
       BucketEncryption:
@@ -118,7 +117,6 @@ Resources:
 
   OutputBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       BucketName: !Sub '${ProjectName}-output-${DeploymentSuffix}'
       BucketEncryption:
@@ -156,7 +154,6 @@ Resources:
 
   WorkingBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       BucketName: !Sub '${ProjectName}-working-${DeploymentSuffix}'
       BucketEncryption:
@@ -183,7 +180,6 @@ Resources:
 
   VectorBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       BucketName: !Sub '${ProjectName}-vectors-${DeploymentSuffix}'
       BucketEncryption:
@@ -282,7 +278,6 @@ Resources:
   UICodeBuildProject:
     Type: AWS::CodeBuild::Project
     Condition: BuildUI
-    DeletionPolicy: Retain
     Properties:
       Name: !Sub '${AWS::StackName}-webui-build-${DeploymentSuffix}'
       Description: !Sub 'Web UI build for ${AWS::StackName}'
@@ -340,7 +335,6 @@ Resources:
 
   UIBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       BucketName: !Sub '${ProjectName}-ui-${DeploymentSuffix}'
       BucketEncryption:
@@ -439,7 +433,6 @@ Resources:
 
   TrackingTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       TableName: !Sub '${ProjectName}-tracking-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -482,7 +475,6 @@ Resources:
 
   MeteringTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: RetainExceptOnCreate
     Properties:
       TableName: !Sub '${ProjectName}-metering-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -515,8 +507,6 @@ Resources:
 
   ConfigurationTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub '${ProjectName}-config-${DeploymentSuffix}'
       BillingMode: PAY_PER_REQUEST

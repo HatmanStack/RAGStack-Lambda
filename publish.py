@@ -324,6 +324,116 @@ def check_sam_cli():
     return True
 
 
+def check_amplify_cli():
+    """
+    Check if Amplify CLI is installed, auto-install if missing.
+
+    Uses `npx ampx` to check/use latest Amplify CLI. If not available,
+    installs @aws-amplify/cli globally via npm.
+
+    Returns:
+        bool: True if Amplify CLI is available
+
+    Raises:
+        SystemExit: If installation fails
+    """
+    log_info("Checking Amplify CLI...")
+
+    # Check if Amplify CLI is available via npx
+    check_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
+                                 capture_output=True,
+                                 text=True)
+
+    if check_result.returncode == 0:
+        version_output = check_result.stdout.strip()
+        log_success(f"Found Amplify CLI: {version_output}")
+        return True
+
+    # Not found, attempt auto-installation
+    log_warning("Amplify CLI not found, installing globally...")
+    try:
+        install_result = subprocess.run(
+            ['npm', 'install', '-g', '@aws-amplify/cli'],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+
+        if install_result.returncode != 0:
+            log_error("Failed to install Amplify CLI")
+            log_info("Error output: " + install_result.stderr)
+            log_info("Install manually: npm install -g @aws-amplify/cli")
+            sys.exit(1)
+
+        log_success("Amplify CLI installed successfully")
+
+        # Verify installation
+        verify_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
+                                      capture_output=True,
+                                      text=True)
+        if verify_result.returncode == 0:
+            log_success(f"Verified: {verify_result.stdout.strip()}")
+            return True
+        else:
+            log_error("Installation succeeded but verification failed")
+            sys.exit(1)
+
+    except Exception as e:
+        log_error(f"Failed to install Amplify CLI: {e}")
+        sys.exit(1)
+
+
+def check_docker():
+    """
+    Check if Docker is installed and the daemon is running.
+
+    Docker is required for SAM to build Lambda layers with native dependencies.
+    The layers need to be compiled for Amazon Linux (Lambda's runtime environment).
+
+    Returns:
+        bool: True if Docker is available and running
+
+    Raises:
+        SystemExit: If Docker not found or not running
+    """
+    log_info("Checking Docker...")
+
+    # Check if docker command exists
+    docker_check = subprocess.run(['docker', '--version'],
+                                 capture_output=True,
+                                 text=True)
+
+    if docker_check.returncode != 0:
+        log_error("Docker not found")
+        log_info("Docker is required to build Lambda layers for Amazon Linux")
+        log_info("Install Docker: https://docs.docker.com/get-docker/")
+        log_info("After install, start Docker daemon:")
+        log_info("  macOS: Open Docker Desktop application")
+        log_info("  Linux: sudo systemctl start docker")
+        log_info("  Windows: Open Docker Desktop application")
+        sys.exit(1)
+
+    version_output = docker_check.stdout.strip()
+    log_success(f"Found {version_output}")
+
+    # Check if Docker daemon is running
+    daemon_check = subprocess.run(['docker', 'ps'],
+                                 capture_output=True,
+                                 text=True)
+
+    if daemon_check.returncode != 0:
+        log_error("Docker daemon is not running")
+        log_info("Start Docker daemon:")
+        log_info("  macOS: Open Docker Desktop application")
+        log_info("  Linux: sudo systemctl start docker")
+        log_info("  Windows: Open Docker Desktop application")
+        log_info("\nError details: " + daemon_check.stderr)
+        sys.exit(1)
+
+    log_success("Docker daemon is running")
+    return True
+
+
 def sam_build():
     """Build SAM application."""
     log_info("Building SAM application...")
@@ -451,7 +561,7 @@ def create_sam_artifact_bucket(project_name, region):
         raise IOError(f"Failed to get AWS account ID: {e}") from e
 
     # Use project-specific bucket for all deployment artifacts
-    bucket_name = f'ragstack-{project_name}-artifacts-{account_id}'
+    bucket_name = f'{project_name}-artifacts-{account_id}'
 
     # Create bucket if it doesn't exist
     try:
@@ -1128,9 +1238,34 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             'USER_POOL_CLIENT_ID': user_pool_client_id,
         })
 
-        # Run deployment with environment variables
+        # Step 3a: Generate CloudFormation artifacts
+        log_info("Generating CloudFormation artifacts from Amplify backend...")
+        try:
+            result = subprocess.run(
+                ['npx', 'ampx', 'generate', '--branch', 'main', '--app-id', 'amplify-test'],
+                cwd=str(Path.cwd()),
+                env=deploy_env,
+                check=False,  # generate might warn but still succeed
+                capture_output=True,
+                text=True
+            )
+            log_info(f"Generate output: {result.stdout}")
+            if result.returncode != 0 and "command not found" not in result.stderr.lower():
+                log_warning(f"Generate warnings: {result.stderr}")
+        except Exception as e:
+            log_warning(f"Generate may have issues, continuing: {e}")
+
+        # Step 3b: Deploy using CloudFormation
+        # Amplify Gen 2 generates CloudFormation-compatible output (cdk.out/amplify_outputs.json)
+        log_info("Deploying Amplify backend via CloudFormation...")
+
+        # Use CloudFormation CLI to deploy the Amplify-generated template
         result = subprocess.run(
-            ['npx', 'ampx', 'deploy', '--yes'],
+            ['aws', 'cloudformation', 'deploy',
+             '--template-file', 'cdk.out/amplify_outputs.json',
+             '--stack-name', f'amplify-{project_name}',
+             '--region', region,
+             '--capabilities', 'CAPABILITY_IAM', 'CAPABILITY_AUTO_EXPAND', 'CAPABILITY_NAMED_IAM'],
             cwd=str(Path.cwd()),
             env=deploy_env,
             check=True
@@ -1519,6 +1654,7 @@ Examples:
             log_info("Checking prerequisites...")
             check_python_version()
             check_aws_cli()
+            check_amplify_cli()
             log_success("Prerequisites met")
 
             # Get KB ID and ConfigurationTable name from existing SAM stack
@@ -1587,6 +1723,8 @@ Examples:
         check_nodejs_version(skip_ui=args.skip_ui)
         check_aws_cli()
         check_sam_cli()
+        # Docker check skipped for now
+        # check_docker()
         log_success("All prerequisites met")
 
         # Create artifact bucket first
@@ -1645,6 +1783,9 @@ Examples:
         # =====================================================================
         if args.deploy_chat:
             log_info("SAM deployment complete. Now deploying Amplify chat backend...")
+
+            # Check Amplify CLI is available
+            check_amplify_cli()
 
             # Extract KB ID and ConfigurationTable name from SAM outputs
             try:

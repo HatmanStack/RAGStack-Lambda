@@ -1,6 +1,6 @@
 import fitz  # PyMuPDF
 
-from .ocr import OcrService
+from ragstack_common.ocr import OcrService
 
 
 def test_is_text_native_pdf():

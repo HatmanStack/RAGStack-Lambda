@@ -2,7 +2,7 @@ import io
 
 from PIL import Image
 
-from .image import prepare_bedrock_image_attachment, resize_image
+from ragstack_common.image import prepare_bedrock_image_attachment, resize_image
 
 
 def test_resize_image():

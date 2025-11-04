@@ -5,9 +5,9 @@ Serverless document processing with AI chat. Upload documents, extract text with
 
 ## Features
 
-- 📄 Document processing (PDF, images, Office docs)
-- 💬 AI chat with source attribution
-- 🌐 Web component for any framework (Vue, Angular, Svelte)
+- 📄 Document processing & vectorization (PDF, images, Office docs) → stored in managed knowledge base
+- 💬 AI chat with retrieval-augmented context and source attribution
+- 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
 - 💰 $7-18/month (1000 docs)
 
@@ -15,14 +15,21 @@ Serverless document processing with AI chat. Upload documents, extract text with
 
 ### Prerequisites
 - AWS Account with admin access
-- Python 3.13+, Node.js 24+, AWS CLI, SAM CLI, Docker
-- **For chat (optional):** Amplify CLI
+- Python 3.13+, Node.js 24+
+- AWS CLI, SAM CLI (configured and running)
+- **Docker** (required for Lambda layer builds)
+- **For chat (optional):** Amplify CLI (auto-installed if missing)
 
 ### Deploy
 
 ```bash
 git clone https://github.com/your-org/RAGStack-Lambda.git
 cd RAGStack-Lambda
+
+# Create virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
 # With chat (recommended)
 python publish.py \
@@ -36,7 +43,7 @@ python publish.py \
 
 ## Web Component Integration
 
-Use AI chat in **any web application**:
+Use AI chat in **any web application** (React, Vue, Angular, Svelte, etc.):
 
 ```html
 <script src="https://your-cdn-url/amplify-chat.js"></script>
@@ -47,42 +54,7 @@ Use AI chat in **any web application**:
 ></amplify-chat>
 ```
 
-**Frameworks:**
-
-```vue
-<!-- Vue 3 -->
-<template>
-  <amplify-chat conversation-id="vue-app" />
-</template>
-<script setup>
-import '@ragstack/amplify-chat/wc';
-</script>
-```
-
-```typescript
-// Angular
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import '@ragstack/amplify-chat/wc';
-
-@Component({
-  template: '<amplify-chat conversation-id="angular-app"></amplify-chat>',
-  schemas: [CUSTOM_ELEMENTS_SCHEMA]
-})
-```
-
-```svelte
-<!-- Svelte -->
-<script>
-  import '@ragstack/amplify-chat/wc';
-</script>
-<amplify-chat conversation-id="svelte-app" />
-```
-
-```tsx
-// React
-import { ChatWithSources } from '@ragstack/amplify-chat';
-<ChatWithSources conversationId="react-app" />
-```
+Load the CDN script once, then use `<amplify-chat>` in any framework. Styling and configuration are centrally managed through the web UI—apply changes across all deployments instantly.
 
 ## Architecture
 
@@ -106,10 +78,16 @@ Upload → OCR → Embeddings → Bedrock KB
 
 ## Local Development
 
+Setup (one time):
 ```bash
-npm install
-npm test         # All tests
-npm run lint     # Lint code
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Run tests:
+```bash
+python test.py
 ```
 
 ## Deployment Options

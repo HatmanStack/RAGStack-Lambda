@@ -4,8 +4,9 @@
 
 - AWS Account with admin access
 - AWS CLI configured: `aws sts get-caller-identity`
-- Python 3.13+, Node.js 24+, SAM CLI, Docker
-- **For chat (optional):** Amplify CLI (`npm install -g @aws-amplify/cli`)
+- Python 3.13+, Node.js 24+, SAM CLI
+- **Docker** (required to build Lambda layers)
+- **For chat (optional):** Amplify CLI (auto-installed if missing)
 
 ## Deploy
 
@@ -76,7 +77,9 @@ amplify delete
 
 **"Resource already exists"** → Change project name
 
-**"Amplify CLI not found"** → Install: `npm install -g @aws-amplify/cli`
+**"Docker not found"** → Ensure Docker is installed and running
+
+**"Amplify CLI installation failed"** → Ensure npm/Node.js is installed and npm can write to global package directory
 
 **"Insufficient permissions"** → Need admin IAM access
 

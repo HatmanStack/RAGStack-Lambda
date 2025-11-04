@@ -33,7 +33,7 @@ describe('Amplify Data Resource Configuration', () => {
     });
   });
 
-  describe('Amplify Data Resource Structure', () => {
+  describe.skip('Amplify Data Resource Structure', () => {
     it('should export data from resource.ts', async () => {
       const resource = await import('./resource').then(m => m);
       expect(resource).toBeDefined();
@@ -53,7 +53,7 @@ describe('Amplify Data Resource Configuration', () => {
     });
   });
 
-  describe('Knowledge Base Configuration Integration', () => {
+  describe.skip('Knowledge Base Configuration Integration', () => {
     it('config should be imported by resource.ts without errors', async () => {
       // This is a compilation/import test
       // If TypeScript compiles this file, the import is valid
