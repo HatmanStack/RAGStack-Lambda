@@ -167,17 +167,225 @@ async function getChatConfig(): Promise<ChatConfig> {
   }
 }
 
-// Additional functions will be implemented in Task 3
-async function selectModelBasedOnQuotas(trackingId: string, config: ChatConfig, isAuthenticated: boolean): Promise<string> {
-  // TODO: Implement in Task 3
-  return config.primaryModel;
+/**
+ * Select model based on quota status
+ *
+ * Checks global and per-user quotas. If either exceeded, returns fallback model.
+ * Otherwise returns primary model.
+ *
+ * Quota keys in DynamoDB:
+ * - Global: quota#global#{YYYY-MM-DD}
+ * - Per-user: quota#user#{userId}#{YYYY-MM-DD}
+ */
+async function selectModelBasedOnQuotas(
+  trackingId: string,
+  config: ChatConfig,
+  isAuthenticated: boolean
+): Promise<string> {
+  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+  try {
+    // Check global quota
+    const globalKey = `quota#global#${today}`;
+    const globalQuota = await dynamodb.send(
+      new GetItemCommand({
+        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        Key: { Configuration: { S: globalKey } },
+      })
+    );
+
+    const globalCount = parseInt(globalQuota.Item?.count?.N ?? '0');
+
+    console.log(`Global quota: ${globalCount}/${config.globalQuotaDaily}`);
+
+    if (globalCount >= config.globalQuotaDaily) {
+      console.log('Global quota exceeded, using fallback model');
+      return config.fallbackModel;
+    }
+
+    // Check per-user quota (if authenticated)
+    if (isAuthenticated) {
+      const userKey = `quota#user#${trackingId}#${today}`;
+      const userQuota = await dynamodb.send(
+        new GetItemCommand({
+          TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+          Key: { Configuration: { S: userKey } },
+        })
+      );
+
+      const userCount = parseInt(userQuota.Item?.count?.N ?? '0');
+
+      console.log(`User quota for ${trackingId}: ${userCount}/${config.perUserQuotaDaily}`);
+
+      if (userCount >= config.perUserQuotaDaily) {
+        console.log('User quota exceeded, using fallback model');
+        return config.fallbackModel;
+      }
+    }
+
+    // Within quotas - use primary model
+    return config.primaryModel;
+
+  } catch (error) {
+    console.error('Error checking quotas:', error);
+    // On error, default to fallback model (conservative approach)
+    return config.fallbackModel;
+  }
 }
 
-async function queryKnowledgeBase(message: string, conversationId: string, model: string, kbId: string, region: string): Promise<any> {
-  // TODO: Implement in Task 3
-  return { content: 'TODO', sources: [], modelUsed: model };
-}
-
+/**
+ * Increment usage quotas
+ *
+ * Increments both global and (if authenticated) per-user quota counters.
+ * Only called when primary model is used (don't count fallback usage).
+ */
 async function incrementQuotas(trackingId: string, isAuthenticated: boolean): Promise<void> {
-  // TODO: Implement in Task 3
+  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const today = new Date().toISOString().split('T')[0];
+  const ttl = Math.floor(Date.now() / 1000) + (86400 * 2); // 2 days from now
+
+  try {
+    // Increment global counter
+    const globalKey = `quota#global#${today}`;
+    await dynamodb.send(
+      new UpdateItemCommand({
+        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        Key: { Configuration: { S: globalKey } },
+        UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
+        ExpressionAttributeNames: {
+          '#count': 'count',
+          '#ttl': 'ttl',
+        },
+        ExpressionAttributeValues: {
+          ':inc': { N: '1' },
+          ':ttl': { N: ttl.toString() },
+        },
+      })
+    );
+
+    console.log('Global quota incremented');
+
+    // Increment per-user counter (if authenticated)
+    if (isAuthenticated) {
+      const userKey = `quota#user#${trackingId}#${today}`;
+      await dynamodb.send(
+        new UpdateItemCommand({
+          TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+          Key: { Configuration: { S: userKey } },
+          UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
+          ExpressionAttributeNames: {
+            '#count': 'count',
+            '#ttl': 'ttl',
+          },
+          ExpressionAttributeValues: {
+            ':inc': { N: '1' },
+            ':ttl': { N: ttl.toString() },
+          },
+        })
+      );
+
+      console.log(`User quota incremented for ${trackingId}`);
+    }
+
+  } catch (error) {
+    console.error('Error incrementing quotas:', error);
+    // Non-fatal - allow conversation to continue even if quota tracking fails
+  }
+}
+
+/**
+ * Query Bedrock Knowledge Base and extract sources
+ */
+async function queryKnowledgeBase(
+  message: string,
+  conversationId: string,
+  modelArn: string,
+  kbId: string,
+  region: string
+): Promise<{ content: string; sources: any[]; modelUsed: string }> {
+  const bedrock = new BedrockAgentRuntimeClient({ region });
+
+  console.log('Querying Knowledge Base:', {
+    kbId,
+    model: modelArn,
+    conversationId,
+  });
+
+  try {
+    const response = await bedrock.send(
+      new RetrieveAndGenerateCommand({
+        input: { text: message },
+        retrieveAndGenerateConfiguration: {
+          type: 'KNOWLEDGE_BASE',
+          knowledgeBaseConfiguration: {
+            knowledgeBaseId: kbId,
+            modelArn: modelArn,
+          },
+        },
+        sessionId: conversationId,
+      })
+    );
+
+    // Extract content
+    const content = response.output?.text || 'No response generated';
+
+    // Extract and format sources
+    const sources = extractSources(response.citations || []);
+
+    console.log('KB query successful:', {
+      contentLength: content.length,
+      sourcesCount: sources.length,
+    });
+
+    return {
+      content,
+      sources,
+      modelUsed: modelArn,
+    };
+
+  } catch (error) {
+    console.error('Bedrock query error:', error);
+    throw new Error(`Knowledge Base query failed: ${error}`);
+  }
+}
+
+/**
+ * Extract sources from Bedrock citations
+ *
+ * Converts Bedrock citation format to our Source type.
+ */
+function extractSources(citations: any[]): any[] {
+  const sources: any[] = [];
+
+  for (const citation of citations) {
+    if (!citation.retrievedReferences) continue;
+
+    for (const ref of citation.retrievedReferences) {
+      // Extract document title from S3 URI
+      const s3Uri = ref.location?.s3Location?.uri;
+      const title = s3Uri ? s3Uri.split('/').pop() || 'Unknown Document' : 'Unknown Document';
+
+      // Extract location (page number or metadata)
+      const location = ref.metadata?.['x-amz-bedrock-kb-chunk-id'] || 'Page unknown';
+
+      // Extract snippet
+      const snippet = ref.content?.text || '';
+
+      if (snippet) {
+        sources.push({
+          title,
+          location,
+          snippet: snippet.substring(0, 200), // Limit snippet length
+        });
+      }
+    }
+  }
+
+  // Remove duplicates based on snippet
+  const uniqueSources = sources.filter((source, index, self) =>
+    index === self.findIndex((s) => s.snippet === source.snippet)
+  );
+
+  return uniqueSources;
 }
