@@ -842,16 +842,23 @@ def extract_knowledge_base_id(stack_name, region):
     return kb_id
 
 
-def write_amplify_config(kb_id, region):
+def write_amplify_config(kb_id, region, config_table_name, source_bucket, source_key):
     """
     Generate TypeScript config file for Amplify backend.
 
-    Creates amplify/data/config.ts with Knowledge Base ID and region.
-    This config is imported by the data/resource.ts and used by the conversation route.
+    Creates amplify/data/config.ts with Knowledge Base ID, region,
+    ConfigurationTable name, and web component source location.
+
+    This config is imported by data/resource.ts and used by:
+    - Conversation route (queries KB, reads config)
+    - CodeBuild (downloads source from S3)
 
     Args:
         kb_id: Bedrock Knowledge Base ID
         region: AWS region
+        config_table_name: DynamoDB ConfigurationTable name
+        source_bucket: S3 bucket containing web component source
+        source_key: S3 key of web component source zip
 
     Raises:
         IOError: If config file creation fails
@@ -872,6 +879,15 @@ export const KNOWLEDGE_BASE_CONFIG = {{
 
   // AWS Region where Bedrock Knowledge Base is deployed
   region: "{region}",
+
+  // ConfigurationTable name for runtime config reading
+  // Amplify Lambda reads chat settings from this table
+  configurationTableName: "{config_table_name}",
+
+  // Web component source location (for CodeBuild)
+  // CodeBuild downloads and extracts this zip to build the component
+  webComponentSourceBucket: "{source_bucket}",
+  webComponentSourceKey: "{source_key}",
 }} as const;
 
 // Type-safe export for use in resource.ts
