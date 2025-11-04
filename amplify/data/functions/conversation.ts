@@ -121,7 +121,7 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
 /**
  * Get chat configuration from ConfigurationTable with caching
  */
-async function getChatConfig(): Promise<ChatConfig> {
+export async function getChatConfig(): Promise<ChatConfig> {
   // Return cached config if still valid
   const now = Date.now();
   if (cachedConfig && (now - cacheTime < CACHE_TTL_MS)) {
@@ -177,7 +177,7 @@ async function getChatConfig(): Promise<ChatConfig> {
  * - Global: quota#global#{YYYY-MM-DD}
  * - Per-user: quota#user#{userId}#{YYYY-MM-DD}
  */
-async function selectModelBasedOnQuotas(
+export async function selectModelBasedOnQuotas(
   trackingId: string,
   config: ChatConfig,
   isAuthenticated: boolean
@@ -240,7 +240,7 @@ async function selectModelBasedOnQuotas(
  * Increments both global and (if authenticated) per-user quota counters.
  * Only called when primary model is used (don't count fallback usage).
  */
-async function incrementQuotas(trackingId: string, isAuthenticated: boolean): Promise<void> {
+export async function incrementQuotas(trackingId: string, isAuthenticated: boolean): Promise<void> {
   const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
   const today = new Date().toISOString().split('T')[0];
   const ttl = Math.floor(Date.now() / 1000) + (86400 * 2); // 2 days from now
@@ -297,7 +297,7 @@ async function incrementQuotas(trackingId: string, isAuthenticated: boolean): Pr
 /**
  * Query Bedrock Knowledge Base and extract sources
  */
-async function queryKnowledgeBase(
+export async function queryKnowledgeBase(
   message: string,
   conversationId: string,
   modelArn: string,
@@ -355,7 +355,7 @@ async function queryKnowledgeBase(
  *
  * Converts Bedrock citation format to our Source type.
  */
-function extractSources(citations: any[]): any[] {
+export function extractSources(citations: any[]): any[] {
   const sources: any[] = [];
 
   for (const citation of citations) {
