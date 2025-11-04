@@ -1,5 +1,6 @@
 # RAGStack-Lambda
 
+##   🚧🚧 Active Development 🚧🚧
 Serverless document processing with AI chat. Upload documents, extract text with OCR, query using Amazon Bedrock.
 
 ## Features
