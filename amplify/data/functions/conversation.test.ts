@@ -28,14 +28,7 @@ describe('Conversation Handler', () => {
   });
 
   describe('getChatConfig', () => {
-    // Note: These tests may use cached config from previous test runs
-    // In a real scenario, cache would expire after 60 seconds
-    // For deterministic tests, we rely on fresh module imports
-
     it('should read and parse config from DynamoDB', async () => {
-      // Clear cache by waiting for it to expire (simulated)
-      const { getChatConfig: freshGetChatConfig } = await import('./conversation');
-
       dynamoMock.on(GetItemCommand).resolves({
         Item: {
           chat_require_auth: { BOOL: false },
@@ -56,30 +49,17 @@ describe('Conversation Handler', () => {
     });
 
     it('should use default values for missing config fields', async () => {
-      const { getChatConfig: freshGetChatConfig } = await import('./conversation');
-
       dynamoMock.on(GetItemCommand).resolves({
         Item: {}, // Empty config but item exists
       });
 
-      const config = await freshGetChatConfig();
+      const config = await getChatConfig();
 
       expect(config.requireAuth).toBe(false);
       expect(config.primaryModel).toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
       expect(config.fallbackModel).toBe('us.amazon.nova-micro-v1:0');
       expect(config.globalQuotaDaily).toBe(10000);
       expect(config.perUserQuotaDaily).toBe(100);
-    });
-
-    it('should throw error when config item not found', async () => {
-      dynamoMock.on(GetItemCommand).resolves({
-        // DynamoDB returns empty result when item not found
-      });
-
-      // Note: This test may pass or fail depending on cache state.
-      // In production, missing config would throw after cache expires.
-      // Skipping this test as it's difficult to test cache invalidation reliably.
-      expect(true).toBe(true);
     });
   });
 
