@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import boto3
@@ -381,6 +382,175 @@ def check_amplify_cli():
     except Exception as e:
         log_error(f"Failed to install Amplify CLI: {e}")
         sys.exit(1)
+
+
+def get_codebuild_project_name(stack_name, region):
+    """
+    Get CodeBuild project name from SAM stack outputs.
+
+    Args:
+        stack_name: CloudFormation stack name
+        region: AWS region
+
+    Returns:
+        str: CodeBuild project name
+
+    Raises:
+        ValueError: If output not found in stack
+    """
+    cf = boto3.client('cloudformation', region_name=region)
+
+    response = cf.describe_stacks(StackName=stack_name)
+    stack = response['Stacks'][0]
+    outputs = {o['OutputKey']: o['OutputValue'] for o in stack.get('Outputs', [])}
+
+    project_name = outputs.get('AmplifyDeployProjectName')
+    if not project_name:
+        raise ValueError("AmplifyDeployProjectName output not found in SAM stack")
+
+    return project_name
+
+
+def trigger_codebuild(project_name, environment_overrides, region):
+    """
+    Trigger CodeBuild project with environment variable overrides.
+
+    Args:
+        project_name: CodeBuild project name
+        environment_overrides: List of env var dicts to override
+        region: AWS region
+
+    Returns:
+        str: Build ID
+
+    Raises:
+        ClientError: If CodeBuild API call fails
+    """
+    codebuild = boto3.client('codebuild', region_name=region)
+
+    log_info(f"Starting CodeBuild project: {project_name}")
+
+    response = codebuild.start_build(
+        projectName=project_name,
+        environmentVariablesOverride=environment_overrides
+    )
+
+    build_id = response['build']['id']
+
+    log_success(f"Build started: {build_id}")
+    return build_id
+
+
+def wait_for_codebuild(build_id, region, timeout_minutes=30):
+    """
+    Wait for CodeBuild to complete, polling status.
+
+    Args:
+        build_id: CodeBuild build ID
+        region: AWS region
+        timeout_minutes: Max time to wait (default 30)
+
+    Returns:
+        str: Final build status (SUCCEEDED, FAILED, etc.)
+
+    Raises:
+        TimeoutError: If build exceeds timeout
+        RuntimeError: If build fails
+    """
+    codebuild = boto3.client('codebuild', region_name=region)
+
+    start_time = time.time()
+    timeout_seconds = timeout_minutes * 60
+    poll_interval = 30  # Check every 30 seconds
+
+    log_info(f"Waiting for build to complete (timeout: {timeout_minutes}min)...")
+
+    while True:
+        response = codebuild.batch_get_builds(ids=[build_id])
+        build = response['builds'][0]
+        status = build['buildStatus']
+
+        if status in ['SUCCEEDED', 'FAILED', 'STOPPED', 'FAULT', 'TIMED_OUT']:
+            if status == 'SUCCEEDED':
+                log_success("Build completed successfully")
+                return status
+            else:
+                # Get logs for debugging
+                log_group = build.get('logs', {}).get('groupName')
+                log_stream = build.get('logs', {}).get('streamName')
+                log_error(f"Build failed with status: {status}")
+                if log_group and log_stream:
+                    log_info(f"Logs: {log_group}/{log_stream}")
+                raise RuntimeError(f"CodeBuild failed: {status}")
+
+        # Check timeout
+        elapsed = time.time() - start_time
+        if elapsed > timeout_seconds:
+            raise TimeoutError(f"Build exceeded {timeout_minutes} minute timeout")
+
+        # Progress indicator
+        minutes_elapsed = int(elapsed / 60)
+        log_info(f"Build in progress... ({minutes_elapsed}min elapsed, status: {status})")
+
+        time.sleep(poll_interval)
+
+
+def cleanup_failed_amplify_stacks(project_name, region):
+    """
+    Clean up Amplify stacks after failed deployment.
+
+    Use this when Amplify deployment fails and you need to start fresh.
+    SAM stack is NOT affected.
+
+    Args:
+        project_name: Project identifier
+        region: AWS region
+
+    Returns:
+        None
+    """
+    cf_client = boto3.client('cloudformation', region_name=region)
+
+    stack_pattern = f"amplify-{project_name}-*"
+    log_warning(f"Cleaning up Amplify stacks matching: {stack_pattern}")
+
+    # Find all matching stacks
+    paginator = cf_client.get_paginator('list_stacks')
+    stacks_to_delete = []
+
+    for page in paginator.paginate(
+        StackStatusFilter=['CREATE_COMPLETE', 'CREATE_FAILED', 'UPDATE_COMPLETE',
+                          'UPDATE_FAILED', 'ROLLBACK_COMPLETE']
+    ):
+        for stack in page['StackSummaries']:
+            if stack['StackName'].startswith(f"amplify-{project_name}-") or \
+               stack['StackName'].startswith("amplify-") and project_name in stack['StackName']:
+                stacks_to_delete.append(stack['StackName'])
+
+    if not stacks_to_delete:
+        log_info("No Amplify stacks found to clean up")
+        return
+
+    log_warning(f"Found {len(stacks_to_delete)} stack(s) to delete:")
+    for stack_name in stacks_to_delete:
+        log_warning(f"  - {stack_name}")
+
+    # Confirm before deletion
+    confirm = input("Delete these stacks? (yes/no): ")
+    if confirm.lower() != 'yes':
+        log_info("Cleanup cancelled")
+        return
+
+    # Delete stacks
+    for stack_name in stacks_to_delete:
+        try:
+            log_info(f"Deleting {stack_name}...")
+            cf_client.delete_stack(StackName=stack_name)
+        except Exception as e:
+            log_error(f"Failed to delete {stack_name}: {e}")
+
+    log_success(f"Cleanup initiated for {len(stacks_to_delete)} stack(s)")
+    log_info("Monitor deletion in CloudFormation console")
 
 
 def check_docker():
@@ -850,16 +1020,25 @@ def get_amplify_stack_outputs(project_name, region):
     """
     Get CloudFormation stack outputs from Amplify deployment.
 
-    Amplify Gen 2 creates stacks with pattern: amplify-{appId}-{branch}-{hash}
-    We search for stacks starting with "amplify-" and filter by project to find
-    the correct deployed stack in multi-project environments.
+    Amplify Gen 2 creates stacks with auto-generated names following pattern:
+    amplify-{backend-id}-{resource-type}-{hash}
+
+    Example stack names:
+    - amplify-ragstack-abc123-auth-xyz789
+    - amplify-ragstack-abc123-data-def456
+    - amplify-ragstack-abc123-sandbox-123abc (CDN stack)
+
+    Discovers stacks by:
+    1. Name pattern matching: amplify-*-(auth|data|sandbox)-*
+    2. Tag verification: Project={project_name}
+    3. Name prefix matching: amplify-{project_name}*
 
     Args:
         project_name: Project name (used to filter stacks for this project)
         region: AWS region
 
     Returns:
-        dict: Stack outputs as key-value pairs
+        dict: Combined stack outputs as key-value pairs
             {
                 'WebComponentCDN': 'https://d123.cloudfront.net/amplify-chat.js',
                 'AssetBucketName': 'amplify-stack-assets-xyz',
@@ -868,105 +1047,84 @@ def get_amplify_stack_outputs(project_name, region):
             }
 
     Raises:
-        ValueError: If Amplify stack not found or has no outputs
+        ValueError: If Amplify stacks not found or have no outputs
     """
-    log_info(f"Fetching Amplify stack outputs for project: {project_name}...")
+    log_info(f"Discovering Amplify stacks by name pattern...")
 
     cf_client = boto3.client('cloudformation', region_name=region)
 
     try:
-        # List all stacks (active only)
+        # Discover stacks by name pattern (Amplify Gen 2 doesn't allow custom stack names)
+        existing_stacks = []
         paginator = cf_client.get_paginator('list_stacks')
-        stack_iterator = paginator.paginate(
-            StackStatusFilter=[
-                'CREATE_COMPLETE',
-                'UPDATE_COMPLETE',
-                'UPDATE_ROLLBACK_COMPLETE'
-            ]
-        )
 
-        # Find Amplify stacks and filter by project
-        amplify_stacks = []
-        for page in stack_iterator:
+        for page in paginator.paginate(
+            StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE']
+        ):
             for stack in page['StackSummaries']:
-                if stack['StackName'].startswith('amplify-'):
-                    # Check if this stack belongs to our project
-                    # by examining tags or outputs
+                stack_name = stack['StackName']
+
+                # Match Amplify Gen 2 stack name pattern
+                if stack_name.startswith('amplify-') and any(
+                    resource_type in stack_name
+                    for resource_type in ['-auth-', '-data-', '-sandbox-']
+                ):
+                    # Get stack details to verify ownership
                     try:
-                        stack_details = cf_client.describe_stacks(StackName=stack['StackName'])
+                        stack_details = cf_client.describe_stacks(StackName=stack_name)
                         stack_info = stack_details['Stacks'][0]
+                        tags = {tag['Key']: tag['Value']
+                                for tag in stack_info.get('Tags', [])}
 
-                        # Check tags for project identifier
-                        tags = {tag['Key']: tag['Value'] for tag in stack_info.get('Tags', [])}
+                        # Verify this is our project
+                        # CDN stack has Project tag, auth/data might not
+                        if tags.get('Project') == project_name or \
+                           stack_name.startswith(f'amplify-{project_name}'):
+                            existing_stacks.append(stack_name)
+                            log_info(f"  Found: {stack_name}")
 
-                        # Multi-method matching to identify correct stack for this project
-                        # Critical for multi-project environments where multiple Amplify stacks exist
-                        is_match = False
-
-                        # Method 1: Check custom project tag (if we set it)
-                        if 'project' in tags and tags['project'] == project_name:
-                            is_match = True
-
-                        # Method 2: Check Amplify's default user:Application tag
-                        # Amplify Gen 2 sets this to the app name, which often matches project
-                        if not is_match and 'user:Application' in tags:
-                            if tags['user:Application'] == project_name:
-                                is_match = True
-
-                        # Method 3: Check if stack name contains project name
-                        # Amplify stacks follow pattern: amplify-{appId}-{branch}-{hash}
-                        # The appId may be derived from or include the project name
-                        if not is_match and project_name.lower() in stack['StackName'].lower():
-                            is_match = True
-
-                        # Method 4: Verify stack has expected outputs (as final check)
-                        # Only accept if we've matched by tag/name AND stack has our outputs
-                        if is_match:
-                            outputs = stack_info.get('Outputs', [])
-                            has_required_output = any(
-                                output['OutputKey'] == 'BuildProjectName'
-                                for output in outputs
-                            )
-                            if not has_required_output:
-                                # Matched by name/tag but missing expected outputs - not our stack
-                                is_match = False
-
-                        if is_match:
-                            amplify_stacks.append({
-                                'StackName': stack['StackName'],
-                                'LastUpdatedTime': stack_info.get('LastUpdatedTime', stack_info['CreationTime'])
-                            })
                     except Exception as e:
-                        # If we can't describe the stack, skip it
-                        log_warning(f"Could not check stack {stack['StackName']}: {e}")
+                        log_warning(f"Could not check stack {stack_name}: {e}")
                         continue
 
-        if not amplify_stacks:
+        # VALIDATION: Verify at least one stack exists
+        if not existing_stacks:
             raise ValueError(
-                f"No Amplify stacks found for project '{project_name}'. "
-                "Ensure 'npx ampx deploy' completed successfully."
+                f"No Amplify stacks found matching pattern 'amplify-*-(auth|data|sandbox)-*' "
+                f"with Project={project_name}. "
+                "Verify Amplify deployment completed successfully via CodeBuild."
             )
 
-        # Sort by LastUpdatedTime and select most recent
-        amplify_stacks.sort(key=lambda s: s['LastUpdatedTime'], reverse=True)
-        stack_name = amplify_stacks[0]['StackName']
+        log_success(f"Found {len(existing_stacks)} Amplify stack(s)")
 
-        log_info(f"Found Amplify stack: {stack_name}")
+        # Collect outputs from all stacks
+        all_outputs = {}
 
-        # Get stack outputs
-        response = cf_client.describe_stacks(StackName=stack_name)
-        outputs = response['Stacks'][0].get('Outputs', [])
+        for stack_name in existing_stacks:
+            response = cf_client.describe_stacks(StackName=stack_name)
+            stack = response['Stacks'][0]
 
-        if not outputs:
-            raise ValueError(f"Amplify stack '{stack_name}' has no outputs")
+            # Verify stack is in healthy state
+            stack_status = stack['StackStatus']
+            if stack_status not in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
+                log_warning(f"Stack {stack_name} is in state {stack_status}, outputs may be incomplete")
 
-        # Convert to dict
-        output_dict = {}
-        for item in outputs:
-            output_dict[item['OutputKey']] = item['OutputValue']
+            # Extract outputs
+            for output in stack.get('Outputs', []):
+                key = output['OutputKey']
+                value = output['OutputValue']
+                all_outputs[key] = value
+                log_info(f"  {key}: {value}")
 
-        log_success(f"Retrieved {len(output_dict)} outputs from Amplify stack")
-        return output_dict
+        # Ensure we have critical outputs
+        required_outputs = ['WebComponentCDN', 'BuildProjectName']
+        missing = [k for k in required_outputs if k not in all_outputs]
+
+        if missing:
+            raise ValueError(f"Missing required outputs: {missing}")
+
+        log_success(f"Retrieved {len(all_outputs)} outputs from Amplify stacks")
+        return all_outputs
 
     except Exception as e:
         log_error(f"Failed to get Amplify stack outputs: {e}")
@@ -1238,38 +1396,34 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             'USER_POOL_CLIENT_ID': user_pool_client_id,
         })
 
-        # Step 3a: Generate CloudFormation artifacts
-        log_info("Generating CloudFormation artifacts from Amplify backend...")
-        try:
-            result = subprocess.run(
-                ['npx', 'ampx', 'generate', '--branch', 'main', '--app-id', 'amplify-test'],
-                cwd=str(Path.cwd()),
-                env=deploy_env,
-                check=False,  # generate might warn but still succeed
-                capture_output=True,
-                text=True
-            )
-            log_info(f"Generate output: {result.stdout}")
-            if result.returncode != 0 and "command not found" not in result.stderr.lower():
-                log_warning(f"Generate warnings: {result.stderr}")
-        except Exception as e:
-            log_warning(f"Generate may have issues, continuing: {e}")
+        # Step 3: Deploy Amplify backend
+        log_info("Deploying Amplify backend...")
+        log_info("Note: Using Amplify sandbox for deployment. For production CI/CD, consider using ampx pipeline-deploy")
 
-        # Step 3b: Deploy using CloudFormation
-        # Amplify Gen 2 generates CloudFormation-compatible output (cdk.out/amplify_outputs.json)
-        log_info("Deploying Amplify backend via CloudFormation...")
+        amplify_dir = Path.cwd() / 'amplify'
 
-        # Use CloudFormation CLI to deploy the Amplify-generated template
+        # Install dependencies if needed
+        if not (amplify_dir / 'node_modules').exists():
+            log_info("Installing Amplify dependencies...")
+            subprocess.run(['npm', 'install'], cwd=str(amplify_dir), check=True)
+
+        # Deploy using Amplify sandbox (runs once and exits)
+        # NOTE: ampx must run from project root, not from amplify/ directory
         result = subprocess.run(
-            ['aws', 'cloudformation', 'deploy',
-             '--template-file', 'cdk.out/amplify_outputs.json',
-             '--stack-name', f'amplify-{project_name}',
-             '--region', region,
-             '--capabilities', 'CAPABILITY_IAM', 'CAPABILITY_AUTO_EXPAND', 'CAPABILITY_NAMED_IAM'],
-            cwd=str(Path.cwd()),
+            ['npx', 'ampx', 'sandbox', '--once'],
+            cwd=str(Path.cwd()),  # Run from project root
             env=deploy_env,
-            check=True
+            check=False,  # Don't fail immediately, we want to capture output
+            capture_output=True,
+            text=True
         )
+
+        log_info(f"Amplify sandbox output:\n{result.stdout}")
+        if result.stderr:
+            log_warning(f"Amplify sandbox stderr:\n{result.stderr}")
+
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
 
         log_success("Amplify stack deployed successfully")
     except subprocess.CalledProcessError as e:
