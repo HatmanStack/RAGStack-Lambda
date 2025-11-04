@@ -8,15 +8,15 @@
  *
  * Usage: node scripts/inject-amplify-config.js
  *
- * Reads: ../../amplify_outputs.json (from Amplify deployment)
+ * Reads: ../../../amplify_outputs.json (from repo root)
  * Writes: src/amplify-config.generated.ts (imported by src/wc.ts)
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Paths relative to src/amplify-chat/
-const AMPLIFY_OUTPUTS_PATH = path.join(__dirname, '../../amplify_outputs.json');
+// Paths relative to src/amplify-chat/scripts/
+const AMPLIFY_OUTPUTS_PATH = path.join(__dirname, '../../../amplify_outputs.json');
 const GENERATED_CONFIG_PATH = path.join(__dirname, '../src/amplify-config.generated.ts');
 
 function main() {
