@@ -30,10 +30,7 @@
     "build:wc": "node scripts/inject-amplify-config.js && vite build --config vite.wc.config.ts",
     "build:watch": "tsc --watch",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
-    "test": "vitest",
-    "test:watch": "vitest --watch",
-    "test:coverage": "vitest --coverage"
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "keywords": [
     "amplify",

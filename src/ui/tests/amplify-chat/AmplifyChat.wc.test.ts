@@ -86,30 +86,32 @@ describe('AmplifyChat Web Component', () => {
     document.body.removeChild(el);
   });
 
-  it('dispatches custom events with correct structure', (done) => {
-    const el = document.createElement('amplify-chat');
-    document.body.appendChild(el);
+  it('dispatches custom events with correct structure', () => {
+    return new Promise<void>((resolve) => {
+      const el = document.createElement('amplify-chat');
+      document.body.appendChild(el);
 
-    // Listen for the send-message event
-    el.addEventListener('amplify-chat:send-message', ((event: CustomEvent) => {
-      expect(event.detail).toBeDefined();
-      expect(event.detail.message).toBeDefined();
-      expect(event.detail.conversationId).toBeDefined();
-      expect(event.bubbles).toBe(true);
-      expect(event.composed).toBe(true);
+      // Listen for the send-message event
+      el.addEventListener('amplify-chat:send-message', ((event: CustomEvent) => {
+        expect(event.detail).toBeDefined();
+        expect(event.detail.message).toBeDefined();
+        expect(event.detail.conversationId).toBeDefined();
+        expect(event.bubbles).toBe(true);
+        expect(event.composed).toBe(true);
 
-      document.body.removeChild(el);
-      done();
-    }) as EventListener);
+        document.body.removeChild(el);
+        resolve();
+      }) as EventListener);
 
-    // Manually trigger the event (simulating the component's behavior)
-    el.dispatchEvent(
-      new CustomEvent('amplify-chat:send-message', {
-        detail: { message: 'test', conversationId: 'default' },
-        bubbles: true,
-        composed: true,
-      })
-    );
+      // Manually trigger the event (simulating the component's behavior)
+      el.dispatchEvent(
+        new CustomEvent('amplify-chat:send-message', {
+          detail: { message: 'test', conversationId: 'default' },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    });
   });
 
   it('handles missing attributes with defaults', () => {

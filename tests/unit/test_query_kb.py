@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from botocore.exceptions import ClientError
 
 # Set required environment variables BEFORE importing the module
 os.environ["KNOWLEDGE_BASE_ID"] = "test-kb-id-12345"
@@ -20,6 +19,15 @@ os.environ["REGION"] = "us-east-1"
 mock_config = MagicMock()
 sys.modules["ragstack_common"] = MagicMock()
 sys.modules["ragstack_common.config"] = mock_config
+
+# Ensure botocore is not mocked when loading the handler
+# This prevents issues with exception handling
+if "botocore" in sys.modules and isinstance(sys.modules["botocore"], MagicMock):
+    del sys.modules["botocore"]
+if "botocore.exceptions" in sys.modules and isinstance(
+    sys.modules["botocore.exceptions"], MagicMock
+):
+    del sys.modules["botocore.exceptions"]
 
 # Use importlib to load the Lambda function with a unique module name
 # This avoids sys.modules['index'] caching issues when multiple tests load different index.py files
@@ -274,12 +282,16 @@ def test_lambda_handler_bedrock_error(
     mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
 
     # Mock Bedrock error
-    error = ClientError(
-        {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
-        "retrieve_and_generate",
-    )
-    mock_bedrock_agent = mock_boto3_client.return_value
-    mock_bedrock_agent.retrieve_and_generate.side_effect = error
+    # Use index.ClientError to ensure we're using the same one the handler uses
+    def raise_bedrock_error(**kw):
+        raise index.ClientError(
+            {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
+            "retrieve_and_generate",
+        )
+
+    mock_bedrock_agent = Mock()
+    mock_boto3_client.return_value = mock_bedrock_agent
+    mock_bedrock_agent.retrieve_and_generate.side_effect = raise_bedrock_error
 
     # Execute - handler catches exceptions and returns error dict
     result = index.lambda_handler(valid_event, lambda_context)
@@ -551,13 +563,16 @@ def test_lambda_handler_session_expiration_error(
     mock_config_manager.get_parameter.return_value = "us.amazon.nova-pro-v1:0"
 
     # Bedrock returns validation error for expired session
-    error = ClientError(
-        {"Error": {"Code": "ValidationException", "Message": "Invalid session ID"}},
-        "retrieve_and_generate",
-    )
+    # Use index.ClientError to ensure we're using the same one the handler uses
+    def raise_session_error(**kw):
+        raise index.ClientError(
+            {"Error": {"Code": "ValidationException", "Message": "Invalid session ID"}},
+            "retrieve_and_generate",
+        )
+
     mock_bedrock_agent = Mock()
     mock_boto3_client.return_value = mock_bedrock_agent
-    mock_bedrock_agent.retrieve_and_generate.side_effect = error
+    mock_bedrock_agent.retrieve_and_generate.side_effect = raise_session_error
 
     # Event with expired sessionId
     event = {"query": "Test", "sessionId": "expired-session"}

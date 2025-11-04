@@ -30,7 +30,15 @@ class TestWriteAmplifyConfig:
 
                 os.chdir(tmpdir)
 
-                write_amplify_config("test-kb-12345", "us-east-1")
+                write_amplify_config(
+                    "test-kb-12345",
+                    "us-east-1",
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 # Verify file exists
                 config_file = config_dir / "config.ts"
@@ -62,7 +70,15 @@ class TestWriteAmplifyConfig:
                 os.chdir(tmpdir)
 
                 kb_id = "ABC123DEF456"
-                write_amplify_config(kb_id, "us-west-2")
+                write_amplify_config(
+                    kb_id,
+                    "us-west-2",
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 config_file = config_dir / "config.ts"
                 content = config_file.read_text()
@@ -89,7 +105,15 @@ class TestWriteAmplifyConfig:
                 os.chdir(tmpdir)
 
                 region = "eu-west-1"
-                write_amplify_config("test-kb-id", region)
+                write_amplify_config(
+                    "test-kb-id",
+                    region,
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 config_file = config_dir / "config.ts"
                 content = config_file.read_text()
@@ -115,7 +139,15 @@ class TestWriteAmplifyConfig:
 
                 os.chdir(tmpdir)
 
-                write_amplify_config("test-kb-id", "us-east-1")
+                write_amplify_config(
+                    "test-kb-id",
+                    "us-east-1",
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 config_file = config_dir / "config.ts"
                 content = config_file.read_text()
@@ -231,7 +263,15 @@ class TestPublishPyIntegration:
                 kb_id = extract_knowledge_base_id("RAGStack-test", "us-east-1")
                 assert kb_id == "test-kb-id-123"
 
-                write_amplify_config(kb_id, "us-east-1")
+                write_amplify_config(
+                    kb_id,
+                    "us-east-1",
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 # Verify config was created
                 config_file = config_dir / "config.ts"
@@ -261,7 +301,15 @@ class TestConfigFileTypes:
 
                 os.chdir(tmpdir)
 
-                write_amplify_config("kb-id", "us-east-1")
+                write_amplify_config(
+                    "kb-id",
+                    "us-east-1",
+                    "test-config-table",
+                    "test-bucket",
+                    "test-key",
+                    "test-pool-id",
+                    "test-client-id",
+                )
 
                 config_file = config_dir / "config.ts"
                 content = config_file.read_text()

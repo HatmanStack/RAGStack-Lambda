@@ -1,4 +1,4 @@
-from .storage import parse_s3_uri
+from ragstack_common.storage import parse_s3_uri
 
 
 def test_parse_s3_uri():

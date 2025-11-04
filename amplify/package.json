@@ -1,5 +1,10 @@
 {
   "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
+  },
   "dependencies": {
     "aws-jwt-verify": "^4.0.1"
   },
@@ -8,8 +13,10 @@
     "@aws-sdk/client-bedrock-agent-runtime": "^3.922.0",
     "@aws-sdk/client-dynamodb": "^3.922.0",
     "@types/node": "^24.10.0",
+    "@vitest/coverage-v8": "^4.0.6",
     "aws-cdk-lib": "^2.221.1",
     "aws-sdk-client-mock": "^4.1.0",
+    "happy-dom": "^20.0.10",
     "typescript": "^5.9.3",
     "vitest": "^4.0.6"
   }

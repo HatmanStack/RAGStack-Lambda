@@ -117,7 +117,7 @@ buildProject.addToRolePolicy(
 // Grant access to source bucket (artifacts uploaded by publish.py)
 // Use exact bucket ARN from environment variable set by publish.py
 // This follows principle of least privilege instead of wildcard patterns
-const sourceBucketName = process.env.WEB_COMPONENT_SOURCE_BUCKET || 'ragstack-*-artifacts-*';
+const sourceBucketName = process.env.WEB_COMPONENT_SOURCE_BUCKET || '*-artifacts-*';
 buildProject.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,

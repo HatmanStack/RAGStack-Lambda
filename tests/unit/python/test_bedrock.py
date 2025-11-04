@@ -1,4 +1,4 @@
-from .bedrock import BedrockClient
+from ragstack_common.bedrock import BedrockClient
 
 
 def test_backoff_calculation():

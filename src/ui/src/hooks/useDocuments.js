@@ -110,8 +110,7 @@ export const useDocuments = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-    // Empty deps - only run once on mount, functions are stable
-  }, []);
+  }, [fetchDocuments]);
 
   return {
     documents,

@@ -1,15 +1,17 @@
 /**
  * Tests for config injection script.
  */
-const { describe, it, beforeEach, afterEach } = require('node:test');
-const assert = require('node:assert');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('inject-amplify-config', () => {
-  const testOutputsPath = path.join(__dirname, '../../../amplify_outputs.json');
-  const generatedConfigPath = path.join(__dirname, '../src/amplify-config.generated.ts');
+  const testOutputsPath = path.join(__dirname, '../../../../../amplify_outputs.json');
+  const generatedConfigPath = path.join(__dirname, '../../../amplify-chat/src/amplify-config.generated.ts');
 
   beforeEach(() => {
     // Clean up before each test
@@ -38,25 +40,25 @@ describe('inject-amplify-config', () => {
 
     // Run script
     execSync('node scripts/inject-amplify-config.js', {
-      cwd: path.join(__dirname, '..'),
+      cwd: path.join(__dirname, '../../../amplify-chat'),
       stdio: 'inherit'
     });
 
     // Verify generated file
-    assert.ok(fs.existsSync(generatedConfigPath), 'Config file should be generated');
+    expect(fs.existsSync(generatedConfigPath)).toBe(true);
 
     const content = fs.readFileSync(generatedConfigPath, 'utf-8');
-    assert.ok(content.includes('AMPLIFY_OUTPUTS'), 'Should export AMPLIFY_OUTPUTS');
-    assert.ok(content.includes('test.appsync-api'), 'Should include API URL');
+    expect(content).toContain('AMPLIFY_OUTPUTS');
+    expect(content).toContain('test.appsync-api');
   });
 
   it('should fail if amplify_outputs.json missing', () => {
-    assert.throws(() => {
+    expect(() => {
       execSync('node scripts/inject-amplify-config.js', {
-        cwd: path.join(__dirname, '..'),
+        cwd: path.join(__dirname, '../../../amplify-chat'),
         stdio: 'pipe'
       });
-    }, 'Should throw error when amplify_outputs.json missing');
+    }).toThrow();
   });
 
   it('should generate valid TypeScript with correct structure', () => {
@@ -73,15 +75,15 @@ describe('inject-amplify-config', () => {
 
     // Run script
     execSync('node scripts/inject-amplify-config.js', {
-      cwd: path.join(__dirname, '..'),
+      cwd: path.join(__dirname, '../../../amplify-chat'),
       stdio: 'inherit'
     });
 
     // Verify generated file structure
     const content = fs.readFileSync(generatedConfigPath, 'utf-8');
-    assert.ok(content.includes('export const AMPLIFY_OUTPUTS'), 'Should export constant');
-    assert.ok(content.includes('as const'), 'Should have as const assertion');
-    assert.ok(content.includes('Auto-generated'), 'Should have auto-generated comment');
-    assert.ok(content.includes('DO NOT EDIT MANUALLY'), 'Should have warning comment');
+    expect(content).toContain('export const AMPLIFY_OUTPUTS');
+    expect(content).toContain('as const');
+    expect(content).toContain('Auto-generated');
+    expect(content).toContain('DO NOT EDIT MANUALLY');
   });
 });

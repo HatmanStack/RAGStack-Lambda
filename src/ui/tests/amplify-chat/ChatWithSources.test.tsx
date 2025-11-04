@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ChatWithSources } from '../src/components/ChatWithSources';
+import { ChatWithSources } from '../../amplify-chat/src/components/ChatWithSources';
 
 // Mock Amplify components
 vi.mock('@aws-amplify/ui-react-ai', () => ({

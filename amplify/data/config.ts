@@ -27,7 +27,7 @@ export const KNOWLEDGE_BASE_CONFIG = {
 
   // Web component source location (for CodeBuild)
   // CodeBuild downloads and extracts this zip to build the component
-  webComponentSourceBucket: process.env.WEB_COMPONENT_SOURCE_BUCKET || "ragstack-placeholder-artifacts",
+  webComponentSourceBucket: process.env.WEB_COMPONENT_SOURCE_BUCKET || "placeholder-artifacts",
   webComponentSourceKey: process.env.WEB_COMPONENT_SOURCE_KEY || "placeholder.zip",
 } as const;
 

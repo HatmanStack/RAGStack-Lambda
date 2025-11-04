@@ -4,8 +4,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { SourcesDisplay } from '../src/components/SourcesDisplay';
-import { Source } from '../src/types';
+import { SourcesDisplay } from '../../amplify-chat/src/components/SourcesDisplay';
+import { Source } from '../../amplify-chat/src/types';
 
 describe('SourcesDisplay Component', () => {
   it('renders nothing when sources array is empty', () => {
