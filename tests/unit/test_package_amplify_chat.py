@@ -1,9 +1,9 @@
 """Tests for web component source packaging."""
-import sys
 import os
+import sys
 import zipfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Mock boto3 and botocore in sys.modules before importing publish

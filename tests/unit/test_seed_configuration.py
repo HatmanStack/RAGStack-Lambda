@@ -1,6 +1,5 @@
 """Tests for ConfigurationTable seeding with chat fields."""
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
 
 # Mock boto3 and botocore in sys.modules before importing publish
