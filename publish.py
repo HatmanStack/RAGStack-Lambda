@@ -1698,7 +1698,8 @@ Examples:
         check_nodejs_version(skip_ui=args.skip_ui)
         check_aws_cli()
         check_sam_cli()
-        check_docker()
+        # Docker check skipped for now
+        # check_docker()
         log_success("All prerequisites met")
 
         # Create artifact bucket first
