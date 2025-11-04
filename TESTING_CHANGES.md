@@ -1,66 +1,97 @@
-# Testing Changes & Consolidation Workflow
+# Testing Architecture: Separated Package-Level Tests
 
 ## Overview
 
-This document explains the testing reorganization efforts to consolidate scattered test files across the RAGStack-Lambda repository into unified test suites organized by backend (Python/pytest) and frontend (JavaScript/vitest).
+This document explains the testing architecture for RAGStack-Lambda. Tests are organized by package, with each package maintaining its own test runner and configuration. This preserves package boundaries and ensures proper module resolution.
 
-## Problem Statement
+## Architecture Principle: Respect Package Boundaries
 
-Tests were previously scattered in multiple locations:
-- **Python tests**: `lib/ragstack_common/test_*.py` + `tests/unit/` (duplicate/inconsistent locations)
-- **Frontend tests**: `src/ui/tests/`, `src/amplify-chat/tests/`, `amplify/data/*.test.ts` (separate configs)
-- **Vitest versions**: Different versions across packages (0.34.0 vs 4.0.5)
-- **No clear structure**: amplify backend tests had no test runner configured
+Each package has its own test environment because:
+- **tsconfig.json differs** - Each package defines its own path aliases and compiler options
+- **package.json differs** - Each package has different dependencies and dev dependencies
+- **Module resolution differs** - Cross-package imports can fail without complex configuration
+- **Test environment differs** - Different test frameworks and setup requirements
 
-## Solution: Three-Layer Test Architecture
+Attempting to consolidate tests across packages breaks module resolution and test isolation.
+
+## Three-Layer Test Architecture
 
 ### Layer 1: Backend Tests (Python/pytest)
 
 **Location**: `tests/unit/python/`
 
 **Contents**:
-- Moved 6 utility tests from `lib/ragstack_common/test_*.py`
-- Existing Lambda function tests in `tests/unit/`
+- 6 utility tests moved from `lib/ragstack_common/test_*.py`
+- Lambda function tests
 - Integration tests in `tests/integration/`
 
 **Running tests**:
 ```bash
-npm run test:backend          # Run all unit tests (excludes integration)
-npm run test:backend:integration  # Run integration tests
+npm run test:backend          # Unit tests (excludes integration)
+npm run test:backend:integration  # Integration tests
 npm run test:backend:coverage     # With coverage report
 ```
 
-**Key files**:
-- `pytest.ini` - Pytest configuration
-- `pyproject.toml` - Ruff linting rules for tests
+**Why separate**: Python tests need pytest, not vitest. Completely different test runner.
 
-### Layer 2: Frontend Tests (JavaScript/vitest)
+---
 
-**Location**: `src/ui/` (unified test runner)
+### Layer 2: AmplifyChat Component Tests
+
+**Location**: `src/amplify-chat/tests/`
+
+**Package**: `@ragstack/amplify-chat` (published NPM package)
 
 **Contents**:
-- **Original UI tests**: `src/ui/src/**/*.test.tsx`
-- **Amplify Chat tests**: `src/ui/tests/amplify-chat/` (moved from `src/amplify-chat/tests/`)
-- Unified vitest config discovers both test directories
+- `tests/types.test.ts` - Type definitions
+- `tests/AmplifyChat.wc.test.ts` - Web component tests
+- Vitest v0.34.0 configuration
+- Local test setup with jest-dom matchers
 
 **Running tests**:
 ```bash
-npm run test:frontend        # Run all frontend tests (ui + amplify-chat)
-cd src/ui && npm test        # Or run directly in src/ui
+npm run test:amplify-chat     # Root script
+cd src/amplify-chat && npm test  # Or run directly
 ```
 
-**Why consolidated?**
-- AmplifyChat is a web component used within the UI app, not a separate published package
-- Single vitest environment improves consistency (vitest 4.0.5)
-- Unified setup/fixtures configuration
-- Simpler CI/CD pipeline
+**Why separate**:
+- AmplifyChat is a published NPM package with its own module boundaries
+- Uses older vitest v0.34.0 (different from UI package)
+- Has its own tsconfig with specific path aliases
+- Must run in its own vitest environment for proper module resolution
 
 **Key files**:
-- `src/ui/vitest.config.js` - Discovers both `src/**/*.test.*` and `tests/**/*.test.*`
-- `src/ui/tests/setup.ts` - Shared test setup (includes jest-dom matchers)
-- `src/amplify-chat/package.json` - Test scripts removed (now in parent ui)
+- `src/amplify-chat/vitest.config.ts` - Package-level config
+- `src/amplify-chat/package.json` - Test scripts and dependencies
+- `src/amplify-chat/tsconfig.json` - Path aliases for this package
 
-### Layer 3: Backend Config Tests (JavaScript/vitest)
+---
+
+### Layer 3: UI Package Tests
+
+**Location**: `src/ui/tests/` and `src/ui/src/**/*.test.tsx`
+
+**Package**: Standalone UI application
+
+**Contents**:
+- Original UI component tests (`src/ui/src/**/*.test.tsx`)
+- Shared test setup and fixtures
+- Vitest v4.0.5 configuration
+
+**Running tests**:
+```bash
+npm run test:frontend        # Root script
+cd src/ui && npm test        # Or run directly
+```
+
+**Key files**:
+- `src/ui/vitest.config.js` - Only discovers UI tests, not amplify-chat tests
+- `src/ui/tests/setup.ts` - Shared test setup (jest-dom matchers)
+- `src/ui/package.json` - Test scripts and v4.0.5 vitest
+
+---
+
+### Layer 4: Amplify Backend Config Tests
 
 **Location**: `amplify/`
 
@@ -71,93 +102,78 @@ cd src/ui && npm test        # Or run directly in src/ui
 **Running tests**:
 ```bash
 npm run test:amplify         # Root script
-cd amplify && npm test       # Or run directly in amplify/
+cd amplify && npm test       # Or run directly
 ```
 
 **Key files**:
-- `amplify/vitest.config.js` - New config (added v0.1)
-- `amplify/package.json` - Test scripts added
+- `amplify/vitest.config.js` - Package-level config
+- `amplify/package.json` - Test scripts
+
+---
 
 ## Root Package.json Scripts
 
 ```json
 {
-  "test:backend": "pytest tests/unit/python/",
-  "test:frontend": "cd src/ui && npm test",
-  "test:amplify": "cd amplify && npm test",
+  "test:backend": "uv run pytest tests/unit/python/ -m 'not integration'",
+  "test:backend:integration": "uv run pytest -m integration",
+  "test:backend:coverage": "uv run pytest tests/unit/python/ -m 'not integration' --cov=lib --cov=src/lambda --cov-report=html --cov-report=term --cov-report=xml",
+  "test:frontend": "cd src/ui && npm test -- --run",
+  "test:amplify-chat": "cd src/amplify-chat && npm test -- --run",
+  "test:amplify": "cd amplify && npm test -- --run",
   "test": "npm run test:backend && npm run test:frontend",
-  "test:all": "npm run lint && npm run test && npm run test:amplify"
+  "test:all": "npm run lint && npm run test && npm run test:amplify-chat && npm run test:amplify"
 }
 ```
 
-## File Changes Summary
+---
 
-### Deleted
-- `src/amplify-chat/tests/` (moved to `src/ui/tests/amplify-chat/`)
-- `src/amplify-chat/vitest.config.ts` (not needed)
-- `lib/ragstack_common/test_*.py` (moved to `tests/unit/python/`)
-- All `__pycache__/` directories
+## Why Not Consolidate Frontend Tests?
 
-### Created
-- `src/ui/tests/amplify-chat/` (new location)
-- `src/ui/tests/setup.ts` (shared jest-dom setup)
-- `tests/unit/python/` directory with 6 moved tests
-- `amplify/vitest.config.js` (new)
+**Attempted**: Moving AmplifyChat tests into src/ui/tests/ with a unified vitest config
 
-### Modified
-- `src/ui/vitest.config.js` - Added test discovery for `tests/**/*.test.*`
-- `amplify/package.json` - Added test scripts
-- `src/amplify-chat/package.json` - Removed test scripts
-- `package.json` - Updated test paths, removed old `test:amplify-chat`
+**Problem**: Module resolution failures
+- AmplifyChat package has `vitest v0.34.0`, UI has `v4.0.5` (incompatible versions)
+- AmplifyChat's tsconfig defines different path aliases than UI's tsconfig
+- vitest can't resolve `src/amplify-chat/src/components/` from `src/ui/vitest.config.js`
+- Cross-package imports break without manual configuration
 
-## Path Fixes in Moved Tests
+**Solution**: Keep each package's tests in its own environment
+- AmplifyChat tests run with AmplifyChat's vitest and tsconfig
+- UI tests run with UI's vitest and tsconfig
+- Each has proper module resolution for its own dependencies
+- Root-level scripts still provide unified test execution
 
-### `src/ui/tests/amplify-chat/inject-config.test.js`
-
-When tests moved from `src/amplify-chat/tests/` to `src/ui/tests/amplify-chat/`, relative paths needed updating:
-
-```javascript
-// OLD (when in src/amplify-chat/tests/):
-const testOutputsPath = path.join(__dirname, '../../../amplify_outputs.json');
-const generatedConfigPath = path.join(__dirname, '../src/amplify-config.generated.ts');
-
-// NEW (in src/ui/tests/amplify-chat/):
-const testOutputsPath = path.join(__dirname, '../../../../../amplify_outputs.json');
-const generatedConfigPath = path.join(__dirname, '../../../amplify-chat/src/amplify-config.generated.ts');
-
-// Also updated execSync cwd paths:
-cwd: path.join(__dirname, '../../../amplify-chat')
-```
+---
 
 ## Running All Tests
 
 ```bash
-# Run everything
+# Run everything (backend + frontend + amplify-chat + amplify)
 npm run test:all
 
-# Or individually:
+# Or selectively:
 npm run test:backend
 npm run test:frontend
+npm run test:amplify-chat
 npm run test:amplify
 ```
 
-## Benefits
+---
 
-✓ **Single source of truth** for each test type
-✓ **Consistent vitest versions** across frontend packages (4.0.5)
-✓ **Simplified CI/CD** - clear test entry points
-✓ **Better organization** - tests grouped by type (backend/frontend)
-✓ **Easier debugging** - unified configs for each layer
-✓ **Cleaner git history** - fewer scattered test directories
+## Benefits of Separated Architecture
+
+✓ **Proper module resolution** - Each package tests itself correctly
+✓ **Package isolation** - Tests don't interfere across package boundaries
+✓ **Independent configuration** - Each package has correct tsconfig and dependencies
+✓ **Clear structure** - Each package owns its tests
+✓ **Maintained vitest versions** - No version conflicts (0.34.0 vs 4.0.5)
+✓ **Unified execution** - Root scripts still run all tests together
+✓ **Publishable packages** - AmplifyChat package includes its own test suite
+
+---
 
 ## Known Issues
 
-- `inject-config.test.js` tests still have path resolution issues (need proper mock of amplify_outputs.json location)
-- Some tests may need further investigation if they fail
-
-## Next Steps
-
-1. Fix remaining path issues in amplify-chat tests
-2. Run full test suite to ensure all tests pass
-3. Document test patterns and best practices
-4. Consider adding pre-commit hooks for test validation
+- AmplifyChat tests may fail if path resolution isn't correct
+- Cross-package test imports not supported (by design)

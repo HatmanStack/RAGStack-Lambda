@@ -2,7 +2,7 @@
  * Type tests to ensure interfaces are correctly defined.
  */
 import { describe, it, expect } from 'vitest';
-import type { Source, ChatMessage, ChatWithSourcesProps } from '../../amplify-chat/src/types';
+import type { Source, ChatMessage, ChatWithSourcesProps } from '../src/types';
 
 describe('Type definitions', () => {
   it('Source interface is correctly defined', () => {
