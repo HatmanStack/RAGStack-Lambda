@@ -1668,6 +1668,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-UIBucket'
 
+  ArtifactBucketName:
+    Description: S3 bucket for deployment artifacts (UI source, web component source)
+    Value: !Ref UISourceBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactBucket'
+
   # DynamoDB Tables
   TrackingTableName:
     Description: DynamoDB table for document tracking
