@@ -115,17 +115,16 @@ buildProject.addToRolePolicy(
 );
 
 // Grant access to source bucket (artifacts uploaded by publish.py)
-// Use wildcard pattern because:
-// 1. Bucket name generated at runtime by publish.py
-// 2. config.ts needs to compile before knowing actual bucket name
-// 3. Pattern matches: ragstack-{project}-artifacts-{accountId}
+// Use exact bucket ARN from environment variable set by publish.py
+// This follows principle of least privilege instead of wildcard patterns
+const sourceBucketName = process.env.WEB_COMPONENT_SOURCE_BUCKET || 'ragstack-*-artifacts-*';
 buildProject.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ['s3:GetObject', 's3:ListBucket'],
     resources: [
-      'arn:aws:s3:::ragstack-*-artifacts-*',
-      'arn:aws:s3:::ragstack-*-artifacts-*/*',
+      `arn:aws:s3:::${sourceBucketName}`,
+      `arn:aws:s3:::${sourceBucketName}/*`,
     ],
   })
 );
@@ -159,7 +158,11 @@ new CfnOutput(cdnStack, 'DistributionId', {
 const conversationFunction = data.resources.functions['conversation'];
 
 if (conversationFunction) {
-  // Grant access to ConfigurationTable
+  // Grant access to ConfigurationTable using exact ARN
+  // Table name comes from SAM stack and is passed via environment variable
+  const configTableName = process.env.CONFIGURATION_TABLE_NAME || 'RAGStack-*-ConfigurationTable-*';
+  const configTableArn = `arn:aws:dynamodb:${cdnStack.region}:${cdnStack.account}:table/${configTableName}`;
+
   conversationFunction.addToRolePolicy(
     new PolicyStatement({
       effect: Effect.ALLOW,
@@ -168,13 +171,11 @@ if (conversationFunction) {
         'dynamodb:Query',
         'dynamodb:UpdateItem',
       ],
-      resources: [
-        `arn:aws:dynamodb:${cdnStack.region}:${cdnStack.account}:table/RAGStack-*-ConfigurationTable-*`,
-      ],
+      resources: [configTableArn],
     })
   );
 
-  console.log('Granted conversation Lambda access to ConfigurationTable');
+  console.log(`Granted conversation Lambda access to ConfigurationTable: ${configTableArn}`);
 
   // Grant access to Bedrock Agent Runtime
   conversationFunction.addToRolePolicy(

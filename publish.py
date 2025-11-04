@@ -1084,7 +1084,27 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
     log_info("Deploying Amplify stack (GraphQL API, Lambda, Cognito, CDN)...")
     log_info("This may take 10-15 minutes...")
     try:
-        run_command(['npx', 'ampx', 'deploy', '--yes'], cwd=str(Path.cwd()))
+        # Set environment variables for Amplify deployment
+        # These are used by backend.ts to construct exact IAM resource ARNs
+        deploy_env = os.environ.copy()
+        deploy_env.update({
+            'KNOWLEDGE_BASE_ID': kb_id,
+            'AWS_REGION': region,
+            'CONFIGURATION_TABLE_NAME': config_table_name,
+            'WEB_COMPONENT_SOURCE_BUCKET': artifact_bucket,
+            'WEB_COMPONENT_SOURCE_KEY': chat_source_key,
+            'USER_POOL_ID': user_pool_id,
+            'USER_POOL_CLIENT_ID': user_pool_client_id,
+        })
+
+        # Run deployment with environment variables
+        result = subprocess.run(
+            ['npx', 'ampx', 'deploy', '--yes'],
+            cwd=str(Path.cwd()),
+            env=deploy_env,
+            check=True
+        )
+
         log_success("Amplify stack deployed successfully")
     except subprocess.CalledProcessError as e:
         log_error(f"Amplify deployment failed: {e}")
