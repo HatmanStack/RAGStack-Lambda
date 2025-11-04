@@ -17,8 +17,6 @@ import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import {
-  isValidHexColor,
-  isValidFontFamily,
   validateThemeOverrides,
   validateQuota,
 } from '../../utils/validation';
