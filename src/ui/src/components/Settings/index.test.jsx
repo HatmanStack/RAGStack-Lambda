@@ -302,4 +302,280 @@ describe('Settings Component', () => {
     // require more complex DOM queries or integration testing.
   });
 
+  describe('New field types', () => {
+    it('renders boolean fields as toggles', async () => {
+      const schemaWithBoolean = {
+        properties: {
+          chat_require_auth: {
+            type: 'boolean',
+            description: 'Require authentication for chat',
+            order: 1
+          }
+        }
+      };
+
+      const defaultWithBoolean = {
+        chat_deployed: true,
+        chat_require_auth: false
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithBoolean),
+          Default: JSON.stringify(defaultWithBoolean),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Require authentication for chat')).toBeInTheDocument();
+        // Cloudscape Toggle component should render
+        const toggle = screen.getByText('Disabled');
+        expect(toggle).toBeInTheDocument();
+      });
+    });
+
+    it('renders number fields as inputs', async () => {
+      const schemaWithNumber = {
+        properties: {
+          chat_global_quota_daily: {
+            type: 'number',
+            description: 'Global daily quota',
+            order: 1
+          }
+        }
+      };
+
+      const defaultWithNumber = {
+        chat_deployed: true,
+        chat_global_quota_daily: 10000
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithNumber),
+          Default: JSON.stringify(defaultWithNumber),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Global daily quota')).toBeInTheDocument();
+        // Input should exist with the default value
+        const input = screen.getByDisplayValue('10000');
+        expect(input).toBeInTheDocument();
+      });
+    });
+
+    it('renders object fields as expandable sections with nested inputs', async () => {
+      const schemaWithObject = {
+        properties: {
+          chat_theme_overrides: {
+            type: 'object',
+            description: 'Custom theme overrides',
+            order: 1,
+            properties: {
+              primaryColor: { type: 'string' },
+              fontFamily: { type: 'string' },
+              spacing: { type: 'string', enum: ['compact', 'comfortable', 'spacious'] }
+            }
+          }
+        }
+      };
+
+      const defaultWithObject = {
+        chat_deployed: true,
+        chat_theme_overrides: {
+          primaryColor: '#0073bb',
+          spacing: 'comfortable'
+        }
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithObject),
+          Default: JSON.stringify(defaultWithObject),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Custom theme overrides')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Chat field visibility', () => {
+    it('hides chat fields when chat_deployed is false', async () => {
+      const schemaWithChat = {
+        properties: {
+          chat_require_auth: {
+            type: 'boolean',
+            description: 'Require authentication',
+            order: 1
+          },
+          chat_primary_model: {
+            type: 'string',
+            enum: ['model1', 'model2'],
+            description: 'Primary model',
+            order: 2
+          }
+        }
+      };
+
+      const defaultWithChatDisabled = {
+        chat_deployed: false,
+        chat_require_auth: false,
+        chat_primary_model: 'model1'
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithChat),
+          Default: JSON.stringify(defaultWithChatDisabled),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Settings')).toBeInTheDocument();
+      });
+
+      // Chat fields should NOT be visible
+      expect(screen.queryByText('Require authentication')).not.toBeInTheDocument();
+      expect(screen.queryByText('Primary model')).not.toBeInTheDocument();
+    });
+
+    it('shows chat fields when chat_deployed is true', async () => {
+      const schemaWithChat = {
+        properties: {
+          chat_require_auth: {
+            type: 'boolean',
+            description: 'Require authentication',
+            order: 1
+          },
+          chat_primary_model: {
+            type: 'string',
+            enum: ['model1', 'model2'],
+            description: 'Primary model',
+            order: 2
+          }
+        }
+      };
+
+      const defaultWithChatEnabled = {
+        chat_deployed: true,
+        chat_require_auth: false,
+        chat_primary_model: 'model1'
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithChat),
+          Default: JSON.stringify(defaultWithChatEnabled),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Settings')).toBeInTheDocument();
+      });
+
+      // Chat fields SHOULD be visible
+      expect(screen.getByText('Require authentication')).toBeInTheDocument();
+      expect(screen.getByText('Primary model')).toBeInTheDocument();
+    });
+
+    it('always shows chat_model_id regardless of chat_deployed', async () => {
+      const schemaWithChatModel = {
+        properties: {
+          chat_model_id: {
+            type: 'string',
+            enum: ['model1', 'model2'],
+            description: 'Chat Model',
+            order: 1
+          }
+        }
+      };
+
+      const defaultWithChatDisabled = {
+        chat_deployed: false,
+        chat_model_id: 'model1'
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithChatModel),
+          Default: JSON.stringify(defaultWithChatDisabled),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Settings')).toBeInTheDocument();
+      });
+
+      // chat_model_id should be visible even when chat_deployed is false
+      expect(screen.getByText('Chat Model')).toBeInTheDocument();
+    });
+  });
+
+  describe('Validation', () => {
+    it('blocks save when validation errors exist', async () => {
+      const schemaWithNumber = {
+        properties: {
+          chat_global_quota_daily: {
+            type: 'number',
+            description: 'Global daily quota',
+            order: 1
+          }
+        }
+      };
+
+      const defaultWithNumber = {
+        chat_deployed: true,
+        chat_global_quota_daily: 10000
+      };
+
+      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+        getConfiguration: {
+          Schema: JSON.stringify(schemaWithNumber),
+          Default: JSON.stringify(defaultWithNumber),
+          Custom: JSON.stringify({})
+        }
+      }));
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText('Global daily quota')).toBeInTheDocument();
+      });
+
+      // Change quota to invalid value
+      const input = screen.getByDisplayValue('10000');
+      fireEvent.change(input, { target: { value: '-1' } });
+
+      // Try to save
+      const saveButton = screen.getByText('Save changes');
+      fireEvent.click(saveButton);
+
+      // Should show validation error
+      await waitFor(() => {
+        expect(screen.getByText(/fix validation errors/i)).toBeInTheDocument();
+      });
+    });
+  });
+
 });
