@@ -1238,10 +1238,34 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             'USER_POOL_CLIENT_ID': user_pool_client_id,
         })
 
-        # Run deployment with environment variables
-        # Use 'npx ampx deploy' for Amplify Gen 2 deployments (CLI renamed to ampx)
+        # Step 3a: Generate CloudFormation artifacts
+        log_info("Generating CloudFormation artifacts from Amplify backend...")
+        try:
+            result = subprocess.run(
+                ['npx', 'ampx', 'generate', '--branch', 'main', '--app-id', 'amplify-test'],
+                cwd=str(Path.cwd()),
+                env=deploy_env,
+                check=False,  # generate might warn but still succeed
+                capture_output=True,
+                text=True
+            )
+            log_info(f"Generate output: {result.stdout}")
+            if result.returncode != 0 and "command not found" not in result.stderr.lower():
+                log_warning(f"Generate warnings: {result.stderr}")
+        except Exception as e:
+            log_warning(f"Generate may have issues, continuing: {e}")
+
+        # Step 3b: Deploy using CloudFormation
+        # Amplify Gen 2 generates CloudFormation-compatible output (cdk.out/amplify_outputs.json)
+        log_info("Deploying Amplify backend via CloudFormation...")
+
+        # Use CloudFormation CLI to deploy the Amplify-generated template
         result = subprocess.run(
-            ['npx', 'ampx', 'deploy', '--yes'],
+            ['aws', 'cloudformation', 'deploy',
+             '--template-file', 'cdk.out/amplify_outputs.json',
+             '--stack-name', f'amplify-{project_name}',
+             '--region', region,
+             '--capabilities', 'CAPABILITY_IAM', 'CAPABILITY_AUTO_EXPAND', 'CAPABILITY_NAMED_IAM'],
             cwd=str(Path.cwd()),
             env=deploy_env,
             check=True
