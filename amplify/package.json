@@ -1,5 +1,8 @@
 {
   "type": "module",
+  "dependencies": {
+    "aws-jwt-verify": "^4.0.1"
+  },
   "devDependencies": {
     "@aws-amplify/backend": "^1.17.0",
     "@aws-sdk/client-bedrock-agent-runtime": "^3.922.0",

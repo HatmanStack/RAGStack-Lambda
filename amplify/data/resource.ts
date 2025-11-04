@@ -1,5 +1,12 @@
 import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/backend';
 
+// Define Lambda authorizer function
+const authorizerFunction = defineFunction({
+  entry: './functions/authorizer.ts',
+  timeoutSeconds: 30,
+  name: 'chat-authorizer',
+});
+
 const schema = a.schema({
   // Custom types for conversation
   Source: a.customType({
@@ -24,7 +31,10 @@ const schema = a.schema({
       userToken: a.string(),
     })
     .returns(a.ref('ConversationResponse'))
-    .authorization((allow) => [allow.publicApiKey()])
+    .authorization((allow) => [
+      allow.authenticated(),  // Requires Lambda authorizer
+      allow.guest(),          // Allow unauthenticated for anonymous mode
+    ])
     .handler(
       a.handler.function(defineFunction({
         entry: './functions/conversation.ts',
@@ -38,7 +48,11 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'apiKey',
+    defaultAuthorizationMode: 'lambda',
+    lambdaAuthorizationMode: {
+      function: authorizerFunction,
+      timeToLiveInSeconds: 300,
+    },
   },
 });
 

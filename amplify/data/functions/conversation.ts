@@ -40,9 +40,16 @@ interface ChatConfig {
 export const handler: Schema['conversation']['functionHandler'] = async (event) => {
   const { message, conversationId, userId, userToken } = event.arguments;
 
+  // Get authenticated user context from Lambda Authorizer (if auth enabled)
+  const authContext = (event as any).identity?.resolverContext;
+  const authenticatedUserId = authContext?.userId;
+  const username = authContext?.username;
+
   console.log('Conversation request:', {
     conversationId,
-    userId: userId || 'anonymous',
+    requestedUserId: userId || 'anonymous',
+    authenticatedUserId: authenticatedUserId || 'none',
+    username: username || 'anonymous',
     messageLength: message?.length || 0,
   });
 
@@ -51,40 +58,31 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
     const config = await getChatConfig();
 
     // Step 2: Validate authentication if required
-    if (config.requireAuth && (!userId || !userToken)) {
-      throw new Error('Authentication required. Please provide userId and userToken.');
+    // Note: Lambda Authorizer has already validated the JWT token
+    // We just check if auth is required and if we have an authenticated user
+    if (config.requireAuth) {
+      if (!authenticatedUserId) {
+        throw new Error(
+          'Authentication required. Please provide a valid authentication token in the Authorization header.'
+        );
+      }
+
+      // Verify userId from arguments matches authenticated user (if provided)
+      if (userId && userId !== authenticatedUserId) {
+        throw new Error('User ID mismatch. Provided userId does not match authenticated user.');
+      }
+
+      console.log('User authenticated via Lambda Authorizer:', {
+        userId: authenticatedUserId,
+        username,
+      });
     }
 
-    // AUTHENTICATION LIMITATION:
-    // This implementation checks token PRESENCE but does NOT validate token authenticity.
-    // Security model: "Trust but track" - we trust parent app's auth, track usage per userId.
-    //
-    // Production implementation options:
-    // A) JWT Validation: Verify token signature if parent app uses JWT
-    //    import { CognitoJwtVerifier } from 'aws-jwt-verify';
-    //    const verifier = CognitoJwtVerifier.create({ userPoolId: '...' });
-    //    await verifier.verify(userToken); // Throws if invalid
-    //
-    // B) API Key Validation: Check against allowlist in ConfigurationTable
-    //    const validTokens = await getValidApiKeys();
-    //    if (!validTokens.includes(userToken)) throw new Error('Invalid API key');
-    //
-    // C) OAuth Token Introspection: Call parent app's auth service
-    //    const response = await fetch('https://auth-service/introspect', {
-    //      headers: { Authorization: `Bearer ${userToken}` }
-    //    });
-    //    if (!response.ok) throw new Error('Invalid token');
-    //
-    // Current approach is suitable for:
-    // - Trusted environments where parent app controls embedding
-    // - Usage tracking without strict security (anonymous + optional userId)
-    // - Cost control via quotas (primary security mechanism)
-    //
-    // For production with strict auth requirements, implement option A, B, or C above.
-
     // Step 3: Select model based on quotas
-    const trackingId = userId || `anon:${conversationId}`;
-    const selectedModel = await selectModelBasedOnQuotas(trackingId, config, !!userId);
+    // Use authenticated userId if available, otherwise fallback to requested userId or anonymous
+    const trackingId = authenticatedUserId || userId || `anon:${conversationId}`;
+    const isAuthenticated = !!authenticatedUserId;
+    const selectedModel = await selectModelBasedOnQuotas(trackingId, config, isAuthenticated);
 
     console.log('Selected model:', selectedModel);
 

@@ -26,6 +26,19 @@ export const KNOWLEDGE_BASE_CONFIG = {
   // AWS Region where Bedrock Knowledge Base is deployed
   // Usually: us-east-1, us-west-2, etc.
   region: process.env.AWS_REGION || "us-east-1",
+
+  // ConfigurationTable name (from SAM stack)
+  // Used for reading chat configuration at runtime
+  configurationTableName: process.env.CONFIGURATION_TABLE_NAME || "YOUR_CONFIG_TABLE_NAME_HERE",
+
+  // Cognito User Pool (from SAM stack)
+  // Used for authentication when requireAuth is enabled
+  userPoolId: process.env.USER_POOL_ID || "YOUR_USER_POOL_ID_HERE",
+  userPoolClientId: process.env.USER_POOL_CLIENT_ID || "YOUR_USER_POOL_CLIENT_ID_HERE",
+
+  // Web component source location (for CodeBuild)
+  webComponentSourceBucket: process.env.SOURCE_BUCKET || "YOUR_SOURCE_BUCKET_HERE",
+  webComponentSourceKey: process.env.SOURCE_KEY || "YOUR_SOURCE_KEY_HERE",
 } as const;
 
 // Type-safe export for use in resource.ts
