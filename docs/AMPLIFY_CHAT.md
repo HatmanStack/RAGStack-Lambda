@@ -217,10 +217,10 @@ export class AppModule {}
 
 The component requires:
 
-1. **SAM deployment** - Creates Bedrock Knowledge Base
-2. **Amplify backend** - Defines chat route in `amplify/data/resource.ts`
+1. **SAM deployment** - Creates Bedrock Knowledge Base and Cognito User Pool
+2. **Amplify backend** - Defines chat route with Lambda Authorizer for JWT validation
 3. **Knowledge Base ID** - From SAM outputs, set in environment
-4. **Authentication** - Cognito user pool (auto-created by Amplify)
+4. **Authentication** - Cognito user pool from SAM stack (shared with admin UI)
 
 ## Performance Optimization
 
