@@ -753,6 +753,85 @@ def get_stack_outputs(stack_name, region="us-east-1"):
         return {}
 
 
+def get_amplify_stack_outputs(project_name, region):
+    """
+    Get CloudFormation stack outputs from Amplify deployment.
+
+    Amplify Gen 2 creates stacks with pattern: amplify-{appId}-{branch}-{hash}
+    We search for stacks starting with "amplify-" to find the deployed stack.
+
+    Args:
+        project_name: Project name (used for identification)
+        region: AWS region
+
+    Returns:
+        dict: Stack outputs as key-value pairs
+            {
+                'WebComponentCDN': 'https://d123.cloudfront.net/amplify-chat.js',
+                'AssetBucketName': 'amplify-stack-assets-xyz',
+                'BuildProjectName': 'amplify-stack-build',
+                'DistributionId': 'E1234567890ABC'
+            }
+
+    Raises:
+        ValueError: If Amplify stack not found or has no outputs
+    """
+    log_info("Fetching Amplify stack outputs...")
+
+    cf_client = boto3.client('cloudformation', region_name=region)
+
+    try:
+        # List all stacks (active only)
+        paginator = cf_client.get_paginator('list_stacks')
+        stack_iterator = paginator.paginate(
+            StackStatusFilter=[
+                'CREATE_COMPLETE',
+                'UPDATE_COMPLETE',
+                'UPDATE_ROLLBACK_COMPLETE'
+            ]
+        )
+
+        # Find Amplify stacks with timestamps (collect from list_stacks)
+        amplify_stacks = []
+        for page in stack_iterator:
+            for stack in page['StackSummaries']:
+                if stack['StackName'].startswith('amplify-'):
+                    amplify_stacks.append({
+                        'StackName': stack['StackName'],
+                        'LastUpdatedTime': stack.get('LastUpdatedTime', stack['CreationTime'])
+                    })
+
+        if not amplify_stacks:
+            raise ValueError(
+                "No Amplify stacks found. Ensure 'npx ampx deploy' completed successfully."
+            )
+
+        # Sort by LastUpdatedTime (already have it from list_stacks)
+        amplify_stacks.sort(key=lambda s: s['LastUpdatedTime'], reverse=True)
+        stack_name = amplify_stacks[0]['StackName']
+
+        log_info(f"Found Amplify stack: {stack_name}")
+
+        # Get stack outputs
+        response = cf_client.describe_stacks(StackName=stack_name)
+        outputs = response['Stacks'][0].get('Outputs', [])
+
+        if not outputs:
+            raise ValueError(f"Amplify stack '{stack_name}' has no outputs")
+
+        # Convert to dict
+        output_dict = {}
+        for item in outputs:
+            output_dict[item['OutputKey']] = item['OutputValue']
+
+        log_success(f"Retrieved {len(output_dict)} outputs from Amplify stack")
+        return output_dict
+
+    except Exception as e:
+        log_error(f"Failed to get Amplify stack outputs: {e}")
+        raise ValueError(f"Could not retrieve Amplify outputs: {e}") from e
+
+
 def configure_ui(stack_name, region="us-east-1"):
     """Configure UI with stack outputs."""
     log_info("Configuring UI...")
@@ -920,16 +999,31 @@ AWS_REGION={region}
     log_success(f"Amplify environment written to {env_file}")
 
 
-def amplify_deploy(project_name, region):
+def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name):
     """
-    Deploy Amplify chat backend.
+    Deploy Amplify chat backend with web component CDN.
+
+    This function:
+    1. Packages web component source to S3
+    2. Generates amplify/data/config.ts with KB ID, table name, source location
+    3. Deploys Amplify stack (GraphQL API, Lambda, Cognito, CDN)
+    4. Triggers CodeBuild to build and deploy web component
+    5. Returns CDN URL for embedding
 
     Args:
         project_name: Project name for stack naming
         region: AWS region
+        kb_id: Bedrock Knowledge Base ID (from SAM stack)
+        artifact_bucket: S3 bucket for web component source
+        config_table_name: DynamoDB ConfigurationTable name (from SAM stack)
+
+    Returns:
+        str: CDN URL for web component (https://d123.cloudfront.net/amplify-chat.js)
 
     Raises:
         subprocess.CalledProcessError: If deployment fails
+        FileNotFoundError: If amplify/ directory not found
+        IOError: If packaging or CodeBuild trigger fails
     """
     log_info("Deploying Amplify chat backend...")
 
@@ -937,16 +1031,98 @@ def amplify_deploy(project_name, region):
     amplify_dir = Path('amplify')
     if not amplify_dir.exists():
         raise FileNotFoundError(
-            "Amplify project not found. Run Phase-1 setup first."
+            "Amplify project not found at amplify/. "
+            "Ensure you're in the correct directory."
         )
 
-    # Deploy Amplify backend
+    # Step 1: Package web component source
+    log_info("Packaging web component source...")
+    try:
+        chat_source_key = package_amplify_chat_source(artifact_bucket, region)
+        log_success(f"Web component source uploaded: s3://{artifact_bucket}/{chat_source_key}")
+    except (FileNotFoundError, IOError) as e:
+        log_error(f"Failed to package web component: {e}")
+        raise
+
+    # Step 2: Generate amplify/data/config.ts with all parameters
+    log_info("Generating Amplify backend configuration...")
+    try:
+        write_amplify_config(
+            kb_id,
+            region,
+            config_table_name,
+            artifact_bucket,
+            chat_source_key
+        )
+        write_amplify_env(kb_id, region)  # Also write .env.amplify
+        log_success("Amplify configuration generated")
+    except Exception as e:
+        log_error(f"Failed to generate Amplify configuration: {e}")
+        raise IOError(f"Config generation failed: {e}") from e
+
+    # Step 3: Deploy Amplify stack
+    log_info("Deploying Amplify stack (GraphQL API, Lambda, Cognito, CDN)...")
+    log_info("This may take 10-15 minutes...")
     try:
         run_command(['npx', 'ampx', 'deploy', '--yes'], cwd=str(Path.cwd()))
-        log_success("Amplify chat backend deployed successfully")
+        log_success("Amplify stack deployed successfully")
     except subprocess.CalledProcessError as e:
         log_error(f"Amplify deployment failed: {e}")
         raise
+
+    # Step 4: Get Amplify stack outputs
+    log_info("Retrieving Amplify stack outputs...")
+    try:
+        outputs = get_amplify_stack_outputs(project_name, region)
+        cdn_url = outputs.get('WebComponentCDN')
+        build_project = outputs.get('BuildProjectName')
+
+        if not cdn_url or not build_project:
+            log_error("Missing required outputs from Amplify stack")
+            log_error(f"Outputs: {outputs}")
+            raise ValueError("Amplify stack outputs incomplete")
+
+        log_info(f"CDN URL: {cdn_url}")
+        log_info(f"Build Project: {build_project}")
+    except Exception as e:
+        log_error(f"Failed to retrieve Amplify outputs: {e}")
+        raise IOError(f"Output retrieval failed: {e}") from e
+
+    # Step 5: Trigger CodeBuild to build and deploy web component
+    log_info("Triggering web component build and deployment...")
+    build_id = None
+    try:
+        codebuild = boto3.client('codebuild', region_name=region)
+
+        # Trigger build with source location
+        build_response = codebuild.start_build(
+            projectName=build_project,
+            sourceLocationOverride=f'{artifact_bucket}/{chat_source_key}',
+            sourceTypeOverride='S3',
+        )
+
+        build_id = build_response['build']['id']
+        log_info(f"Build started: {build_id}")
+        log_info("Check CloudWatch Logs for build progress:")
+        log_info(f"  https://console.aws.amazon.com/codesuite/codebuild/projects/{build_project}/build/{build_id}")
+
+        # Don't wait for build to complete (can take 5-10 minutes)
+        # User can monitor in CloudWatch
+        log_success("Web component build triggered (running asynchronously)")
+
+    except Exception as e:
+        log_error(f"Failed to trigger CodeBuild: {e}")
+        log_warning("Amplify stack deployed, but web component build failed")
+        log_warning("RECOVERY OPTIONS:")
+        log_warning(f"  1. Manually trigger build in CodeBuild console: {build_project}")
+        log_warning(f"  2. Run: aws codebuild start-build --project-name {build_project}")
+        log_warning(f"  3. Redeploy with --chat-only flag to retry")
+        # Don't raise - stack is deployed successfully, just build failed
+
+    # Step 6: Return CDN URL (even if build failed - it can be triggered manually)
+    log_success(f"Amplify deployment complete! CDN URL: {cdn_url}")
+    log_warning("Note: Web component may not be available at CDN URL until CodeBuild completes")
+    return cdn_url
 
 
 def seed_configuration_table(stack_name, region, chat_deployed=False):
