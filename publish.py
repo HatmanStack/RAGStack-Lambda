@@ -885,6 +885,14 @@ def print_outputs(outputs, project_name, region):
     if 'GraphQLApiUrl' in outputs:
         print(f"{Colors.OKGREEN}GraphQL API:{Colors.ENDC} {outputs['GraphQLApiUrl']}")
 
+    # Print Chat CDN URL if available
+    if 'ChatCDN' in outputs:
+        print(f"\n{Colors.OKGREEN}Chat Component:{Colors.ENDC}")
+        print(f"CDN URL: {outputs['ChatCDN']}")
+        print(f"\nEmbed on your website:")
+        print(f'<script src="{outputs["ChatCDN"]}"></script>')
+        print(f'<amplify-chat conversation-id="my-site"></amplify-chat>')
+
     if outputs.get('UserPoolId'):
         print(f"\n{Colors.OKGREEN}Next Steps:{Colors.ENDC}")
         print(f"1. Check your email for temporary password")
@@ -1409,25 +1417,46 @@ Examples:
             check_aws_cli()
             log_success("Prerequisites met")
 
-            # Get KB ID from existing SAM stack
+            # Get KB ID and ConfigurationTable name from existing SAM stack
             stack_name = f"RAGStack-{args.project_name}"
             try:
                 kb_id = extract_knowledge_base_id(stack_name, args.region)
+
+                # Get ConfigurationTable name and artifact bucket from SAM outputs
+                sam_outputs = get_stack_outputs(stack_name, args.region)
+                config_table_name = sam_outputs.get('ConfigurationTableName')
+                artifact_bucket = sam_outputs.get('ArtifactBucketName')
+
+                if not config_table_name:
+                    log_error("ConfigurationTableName not found in SAM stack outputs")
+                    sys.exit(1)
+
+                if not artifact_bucket:
+                    log_error("ArtifactBucketName not found in SAM stack outputs")
+                    sys.exit(1)
+
+                log_info(f"Knowledge Base ID: {kb_id}")
+                log_info(f"Configuration Table: {config_table_name}")
+                log_info(f"Artifact Bucket: {artifact_bucket}")
+
             except ValueError as e:
                 log_error(str(e))
                 sys.exit(1)
 
-            # Generate Amplify config
-            try:
-                write_amplify_config(kb_id, args.region)
-                write_amplify_env(kb_id, args.region)  # Also write env for local development
-            except Exception as e:
-                log_error(f"Failed to generate Amplify configuration: {e}")
-                sys.exit(1)
-
             # Deploy Amplify
             try:
-                amplify_deploy(args.project_name, args.region)
+                cdn_url = amplify_deploy(
+                    args.project_name,
+                    args.region,
+                    kb_id,
+                    artifact_bucket,
+                    config_table_name
+                )
+
+                # Update chat_deployed flag
+                seed_configuration_table(stack_name, args.region, chat_deployed=True)
+
+                log_success(f"Chat CDN URL: {cdn_url}")
             except Exception as e:
                 log_error(f"Amplify deployment failed: {e}")
                 sys.exit(1)
@@ -1504,30 +1533,52 @@ Examples:
         if args.deploy_chat:
             log_info("SAM deployment complete. Now deploying Amplify chat backend...")
 
-            # Extract KB ID from SAM outputs
+            # Extract KB ID and ConfigurationTable name from SAM outputs
             try:
                 kb_id = extract_knowledge_base_id(stack_name, args.region)
+
+                # Get ConfigurationTable name from SAM outputs
+                sam_outputs = get_stack_outputs(stack_name, args.region)
+                config_table_name = sam_outputs.get('ConfigurationTableName')
+
+                if not config_table_name:
+                    raise ValueError("ConfigurationTableName not found in SAM stack outputs")
+
+                log_info(f"Knowledge Base ID: {kb_id}")
+                log_info(f"Configuration Table: {config_table_name}")
+
             except ValueError as e:
                 log_error(str(e))
-                log_warning("Chat deployment skipped due to KB ID not found")
-                sys.exit(0)
-
-            # Generate Amplify config
-            try:
-                write_amplify_config(kb_id, args.region)
-                write_amplify_env(kb_id, args.region)  # Also write env for local development
-            except Exception as e:
-                log_error(f"Failed to generate Amplify configuration: {e}")
-                log_warning("Chat deployment skipped")
+                log_warning("Chat deployment skipped due to missing SAM outputs")
                 sys.exit(0)
 
             # Deploy Amplify
             try:
-                amplify_deploy(args.project_name, args.region)
+                # Set chat_deployed=True BEFORE Amplify deploy to avoid race condition
+                # If deploy fails, flag is set but no harm (chat won't work, but UI shows it)
+                log_info("Marking chat as deployed in configuration...")
+                seed_configuration_table(stack_name, args.region, chat_deployed=True)
+
+                cdn_url = amplify_deploy(
+                    args.project_name,
+                    args.region,
+                    kb_id,
+                    artifact_bucket,
+                    config_table_name
+                )
+
                 log_success("Amplify chat backend deployed successfully!")
+                log_success(f"Chat CDN URL: {cdn_url}")
+
+                # Add CDN URL to outputs for final display
+                outputs['ChatCDN'] = cdn_url
+
             except Exception as e:
                 log_error(f"Amplify deployment failed: {e}")
                 log_warning("SAM core is deployed, but chat backend deployment failed")
+                log_warning("Note: chat_deployed flag was set but deployment failed")
+                log_warning("  Admins may see chat settings UI, but functionality won't work")
+                log_warning("  To fix: Retry deployment or manually set chat_deployed=false in DynamoDB")
                 sys.exit(1)
 
         log_success("Deployment complete!")
