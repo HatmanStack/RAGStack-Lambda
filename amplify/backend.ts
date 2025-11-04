@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { Stack, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, CfnOutput, Duration, RemovalPolicy, Tags } from 'aws-cdk-lib';
 import { Bucket, BlockPublicAccess } from 'aws-cdk-lib/aws-s3';
 import {
   Distribution,
@@ -19,6 +19,14 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 
 /**
+ * Get CDK context (passed from CodeBuild via --context flags)
+ * Falls back to environment variables if context not set
+ */
+const getContext = (scope: Stack, key: string, defaultValue?: string): string => {
+  return scope.node.tryGetContext(key) || process.env[key.toUpperCase()] || defaultValue || '';
+};
+
+/**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
  */
 export const backend = defineBackend({
@@ -28,6 +36,45 @@ export const backend = defineBackend({
 
 // Create custom stack for web component CDN
 const cdnStack = backend.createStack('web-component-cdn');
+
+// Read deployment configuration from context
+const projectName = getContext(cdnStack, 'projectName', 'ragstack');
+const region = getContext(cdnStack, 'region', cdnStack.region);
+const userPoolId = getContext(cdnStack, 'userPoolId', '');
+const userPoolClientId = getContext(cdnStack, 'userPoolClientId', '');
+
+// Validate required values
+if (!userPoolId || !userPoolClientId) {
+  throw new Error('USER_POOL_ID and USER_POOL_CLIENT_ID must be provided via context or environment');
+}
+
+console.log(`Deploying Amplify backend for project: ${projectName}`);
+
+// Note: Amplify Gen 2 stack names are auto-generated and read-only
+// Stack naming will use Amplify's default pattern
+// Phase 2 will need to adapt to discover stacks by tag or pattern
+
+// Add tags for resource management and discovery
+Tags.of(cdnStack).add('Project', projectName);
+Tags.of(cdnStack).add('ManagedBy', 'CDK-Amplify');
+Tags.of(cdnStack).add('DeployedBy', 'CodeBuild');
+Tags.of(cdnStack).add('AmplifyStackType', 'cdn');
+
+// Tag auth and data stacks if accessible
+try {
+  const authStack = backend.auth.resources.userPool.stack;
+  const dataStack = backend.data.resources.cfnGraphqlApi.stack;
+
+  Tags.of(authStack).add('Project', projectName);
+  Tags.of(authStack).add('ManagedBy', 'CDK-Amplify');
+  Tags.of(authStack).add('AmplifyStackType', 'auth');
+
+  Tags.of(dataStack).add('Project', projectName);
+  Tags.of(dataStack).add('ManagedBy', 'CDK-Amplify');
+  Tags.of(dataStack).add('AmplifyStackType', 'data');
+} catch (error) {
+  console.warn('Could not tag auth/data stacks, they may use default Amplify structure');
+}
 
 // S3 bucket for web component assets
 const assetBucket = new Bucket(cdnStack, 'WebComponentAssets', {
@@ -68,14 +115,14 @@ const buildProject = new Project(cdnStack, 'WebComponentBuild', {
         },
         commands: [
           'echo "Installing dependencies..."',
-          'cd web-component',
+          'cd src/amplify-chat',
           'npm ci',
         ],
       },
       build: {
         commands: [
           'echo "Building web component..."',
-          'npm run build',
+          'npm run build:wc',
           'ls -lh dist/',
         ],
       },
