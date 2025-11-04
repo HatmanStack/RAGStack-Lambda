@@ -154,3 +154,39 @@ new CfnOutput(cdnStack, 'DistributionId', {
   description: 'CloudFront distribution ID',
   exportName: `${cdnStack.stackName}-DistributionId`,
 });
+
+// Grant conversation Lambda access to ConfigurationTable and Bedrock
+const conversationFunction = data.resources.functions['conversation'];
+
+if (conversationFunction) {
+  // Grant access to ConfigurationTable
+  conversationFunction.addToRolePolicy(
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:Query',
+        'dynamodb:UpdateItem',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${cdnStack.region}:${cdnStack.account}:table/RAGStack-*-ConfigurationTable-*`,
+      ],
+    })
+  );
+
+  console.log('Granted conversation Lambda access to ConfigurationTable');
+
+  // Grant access to Bedrock Agent Runtime
+  conversationFunction.addToRolePolicy(
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: [
+        'bedrock:InvokeModel',
+        'bedrock:RetrieveAndGenerate',
+      ],
+      resources: ['*'], // Bedrock doesn't support resource-level permissions
+    })
+  );
+
+  console.log('Granted conversation Lambda access to Bedrock');
+}
