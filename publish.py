@@ -1102,10 +1102,10 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
     try:
         codebuild = boto3.client('codebuild', region_name=region)
 
-        # Trigger build with source location
+        # Trigger build with source location (S3 format: s3://bucket/key)
         build_response = codebuild.start_build(
             projectName=build_project,
-            sourceLocationOverride=f'{artifact_bucket}/{chat_source_key}',
+            sourceLocationOverride=f's3://{artifact_bucket}/{chat_source_key}',
             sourceTypeOverride='S3',
         )
 

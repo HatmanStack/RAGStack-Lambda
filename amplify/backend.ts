@@ -17,7 +17,6 @@ import {
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { KNOWLEDGE_BASE_CONFIG } from './data/config';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -116,14 +115,17 @@ buildProject.addToRolePolicy(
 );
 
 // Grant access to source bucket (artifacts uploaded by publish.py)
-// Use specific bucket from config to avoid cross-project access
+// Use wildcard pattern because:
+// 1. Bucket name generated at runtime by publish.py
+// 2. config.ts needs to compile before knowing actual bucket name
+// 3. Pattern matches: ragstack-{project}-artifacts-{accountId}
 buildProject.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ['s3:GetObject', 's3:ListBucket'],
     resources: [
-      `arn:aws:s3:::${KNOWLEDGE_BASE_CONFIG.webComponentSourceBucket}`,
-      `arn:aws:s3:::${KNOWLEDGE_BASE_CONFIG.webComponentSourceBucket}/*`,
+      'arn:aws:s3:::ragstack-*-artifacts-*',
+      'arn:aws:s3:::ragstack-*-artifacts-*/*',
     ],
   })
 );
