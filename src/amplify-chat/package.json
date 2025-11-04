@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "tsc && npm run build:wc",
-    "build:wc": "vite build --config vite.wc.config.ts",
+    "build:wc": "node scripts/inject-amplify-config.js && vite build --config vite.wc.config.ts",
     "build:watch": "tsc --watch",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
@@ -65,7 +65,7 @@
   "devDependencies": {
     "@aws-amplify/ui-react-ai": "^1.0.0",
     "@testing-library/jest-dom": "^6.1.0",
-    "@testing-library/react": "^14.0.0",
+    "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

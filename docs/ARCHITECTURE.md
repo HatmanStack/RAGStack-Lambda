@@ -70,6 +70,7 @@ See [AMPLIFY_CHAT.md](AMPLIFY_CHAT.md)
 - HTTPS/TLS everywhere
 - S3 SSE, DynamoDB encryption
 - Cognito auth + optional MFA
+- Lambda Authorizer validates JWT tokens for chat API
 - Least-privilege IAM
 - Public S3 blocked
 

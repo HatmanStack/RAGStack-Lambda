@@ -59,11 +59,20 @@ Quick reference for common issues and solutions.
 | Slow embeddings generation | Rate limiting or large batch | Reduce batch size. Add delay between batches. Check Bedrock quota in Service Quotas. |
 | DynamoDB throttling | High write rate | Change to on-demand billing mode. Increase provisioned capacity. |
 
+## Amplify Chat Performance
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| First chat response slow (500ms-2s) | Lambda cold start | **Expected behavior** for serverless. Subsequent requests ~200-500ms. Keep Lambda warm with scheduled pings if critical. |
+| Quota limits not enforced immediately | Race condition on high concurrency | Atomic quota checking prevents most races. Some overflow (<1%) possible under extreme load. Increase quotas or rate limit API Gateway. |
+| Chat responses timeout | Bedrock query taking too long | Check Knowledge Base has indexed documents. Verify network connectivity to Bedrock. Increase Lambda timeout if needed. |
+| Config changes not applied | Config cached for 60 seconds | **Expected behavior**. Wait 60 seconds for cache to expire. Restart Lambda to force refresh: redeploy or trigger cold start. |
+
 ## Runtime Configuration Issues
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Config values not updating | Cached in Lambda | Config read on each invocation (no caching). Check DynamoDB table has correct entries. |
+| Config values not updating | Cached in Lambda | Config cached 60s (Amplify chat). Wait or force cold start. Check DynamoDB table has correct entries. |
 | "Configuration table not found" | Table name wrong | Verify `CONFIGURATION_TABLE_NAME` environment variable. Check table exists in DynamoDB. |
 | Invalid config value | Schema validation failed | Check format matches schema (docs/CONFIGURATION.md). Validate regex patterns. |
 

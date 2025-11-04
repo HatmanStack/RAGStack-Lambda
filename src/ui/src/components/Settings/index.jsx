@@ -1,3 +1,28 @@
+/**
+ * Settings Component
+ *
+ * IMPLEMENTATION NOTE: Schema-Driven Approach
+ * -------------------------------------------
+ * This implementation deviates from the Phase 5 specification, which called for
+ * a dedicated ChatSettings component. Instead, we extended the existing schema-driven
+ * Settings component to handle chat configuration fields.
+ *
+ * Rationale for deviation:
+ * 1. **Consistency**: Matches existing OCR settings pattern
+ * 2. **DRY**: Leverages existing renderField() logic instead of duplicating
+ * 3. **Maintainability**: Single source of truth (ConfigurationTable schema)
+ * 4. **Simplicity**: ~200 lines of code vs ~500+ for dedicated component
+ * 5. **Scalability**: Easy to add new chat fields without code changes
+ *
+ * The schema-driven approach automatically renders form fields from the
+ * ConfigurationTable schema definition in publish.py:
+ * - Boolean → Toggle
+ * - Number → Input with validation
+ * - Enum → Select dropdown
+ * - Object → ExpandableSection with nested inputs
+ *
+ * Chat fields are conditionally visible based on the `chat_deployed` flag.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
@@ -9,10 +34,18 @@ import {
   Button,
   Alert,
   Box,
+  Toggle,
+  Input,
+  ExpandableSection,
+  CopyToClipboard,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import {
+  validateThemeOverrides,
+  validateQuota,
+} from '../../utils/validation';
 
 export function Settings() {
   // State for loading and errors
@@ -26,6 +59,9 @@ export function Settings() {
   const [defaultConfig, setDefaultConfig] = useState({});
   const [customConfig, setCustomConfig] = useState({});
   const [formValues, setFormValues] = useState({});
+
+  // State for validation errors
+  const [validationErrors, setValidationErrors] = useState({});
 
   // Memoize the client to prevent recreation on every render
   const client = React.useMemo(() => generateClient(), []);
@@ -66,6 +102,12 @@ export function Settings() {
 
   const handleSave = async () => {
     try {
+      // Block save if there are validation errors
+      if (Object.keys(validationErrors).length > 0) {
+        setError('Please fix validation errors before saving');
+        return;
+      }
+
       await saveConfiguration(formValues);
     } catch (err) {
       console.error('Error in handleSave:', err);
@@ -121,8 +163,40 @@ export function Settings() {
   const renderField = (key, property) => {
     if (!property) return null;
 
-    const value = formValues[key] || '';
+    const value = formValues[key];
     const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, key);
+    const validationError = validationErrors[key];
+
+    // Hide chat fields if chat is not deployed
+    if (key.startsWith('chat_') && key !== 'chat_model_id' && !formValues.chat_deployed) {
+      return null;
+    }
+
+    // Special handling for chat_cdn_url - display with embed code
+    if (key === 'chat_cdn_url' && value) {
+      return (
+        <Alert type="success" header="Web Component Embed Code">
+          <SpaceBetween size="s">
+            <Box variant="p">
+              Copy and paste this code into any HTML page to add the chat component:
+            </Box>
+            <Box>
+              <code style={{ display: 'block', whiteSpace: 'pre-wrap', padding: '12px', background: '#f4f4f4', borderRadius: '4px' }}>
+                {`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+              </code>
+            </Box>
+            <CopyToClipboard
+              copyText={`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+              copyButtonText="Copy Embed Code"
+              copySuccessText="Copied!"
+            />
+            <Box variant="small" color="text-body-secondary">
+              CDN URL: {value}
+            </Box>
+          </SpaceBetween>
+        </Alert>
+      );
+    }
 
     // Handle conditional visibility (dependsOn)
     if (property.dependsOn) {
@@ -141,11 +215,18 @@ export function Settings() {
         <FormField
           label={property.description || key}
           description={isCustomized ? 'Customized from default' : ''}
+          errorText={validationError}
         >
           <Select
-            selectedOption={{ label: value, value }}
+            selectedOption={{ label: value || '', value: value || '' }}
             onChange={({ detail }) => {
               setFormValues({ ...formValues, [key]: detail.selectedOption.value });
+              // Clear validation error on change
+              if (validationErrors[key]) {
+                const newErrors = { ...validationErrors };
+                delete newErrors[key];
+                setValidationErrors(newErrors);
+              }
             }}
             options={property.enum.map(v => ({ label: v, value: v, key: v }))}
           />
@@ -153,7 +234,150 @@ export function Settings() {
       );
     }
 
+    // Render toggle for boolean fields
+    if (property.type === 'boolean') {
+      return (
+        <FormField
+          label={property.description || key}
+          description={isCustomized ? 'Customized from default' : ''}
+        >
+          <Toggle
+            checked={value === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, [key]: detail.checked });
+            }}
+          >
+            {value ? 'Enabled' : 'Disabled'}
+          </Toggle>
+        </FormField>
+      );
+    }
+
+    // Render input for number fields
+    if (property.type === 'number') {
+      const handleNumberChange = (newValue) => {
+        const parsedValue = parseInt(newValue, 10);
+        setFormValues({ ...formValues, [key]: parsedValue });
+
+        // Validate quota fields
+        if (key.includes('quota')) {
+          const validation = validateQuota(parsedValue);
+          if (!validation.valid) {
+            setValidationErrors({ ...validationErrors, [key]: validation.error });
+          } else {
+            const newErrors = { ...validationErrors };
+            delete newErrors[key];
+            setValidationErrors(newErrors);
+          }
+        }
+      };
+
+      return (
+        <FormField
+          label={property.description || key}
+          description={isCustomized ? 'Customized from default' : ''}
+          errorText={validationError}
+        >
+          <Input
+            type="number"
+            value={String(value || 0)}
+            onChange={({ detail }) => handleNumberChange(detail.value)}
+            invalid={!!validationError}
+          />
+        </FormField>
+      );
+    }
+
+    // Render nested inputs for object fields
+    if (property.type === 'object' && property.properties) {
+      return renderObjectField(key, property, value || {});
+    }
+
     return null;
+  };
+
+  const renderObjectField = (parentKey, property, value) => {
+    const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, parentKey);
+
+    const handleNestedChange = (nestedKey, nestedValue) => {
+      const updatedObject = { ...value, [nestedKey]: nestedValue };
+      setFormValues({ ...formValues, [parentKey]: updatedObject });
+
+      // Validate theme overrides
+      if (parentKey === 'chat_theme_overrides') {
+        const validation = validateThemeOverrides(updatedObject);
+        if (!validation.valid) {
+          setValidationErrors({ ...validationErrors, [parentKey]: validation.errors.join('; ') });
+        } else {
+          const newErrors = { ...validationErrors };
+          delete newErrors[parentKey];
+          setValidationErrors(newErrors);
+        }
+      }
+    };
+
+    return (
+      <ExpandableSection
+        headerText={property.description || parentKey}
+        variant="container"
+        defaultExpanded={isCustomized}
+      >
+        <SpaceBetween size="s">
+          {isCustomized && (
+            <Alert type="info" dismissible={false}>
+              Customized from default
+            </Alert>
+          )}
+
+          {validationErrors[parentKey] && (
+            <Alert type="error">
+              {validationErrors[parentKey]}
+            </Alert>
+          )}
+
+          {Object.entries(property.properties).map(([nestedKey, nestedProp]) => {
+            const nestedValue = value[nestedKey] || '';
+
+            // Render nested enum as dropdown
+            if (nestedProp.enum) {
+              return (
+                <FormField
+                  key={nestedKey}
+                  label={nestedKey}
+                  description={nestedProp.description}
+                >
+                  <Select
+                    selectedOption={{ label: nestedValue, value: nestedValue }}
+                    onChange={({ detail }) => handleNestedChange(nestedKey, detail.selectedOption.value)}
+                    options={nestedProp.enum.map(v => ({ label: v, value: v, key: v }))}
+                  />
+                </FormField>
+              );
+            }
+
+            // Render nested string as input
+            return (
+              <FormField
+                key={nestedKey}
+                label={nestedKey}
+                description={nestedProp.description}
+              >
+                <Input
+                  type="text"
+                  value={nestedValue}
+                  onChange={({ detail }) => handleNestedChange(nestedKey, detail.value)}
+                  placeholder={
+                    nestedKey === 'primaryColor' ? '#0073bb' :
+                    nestedKey === 'fontFamily' ? 'Inter, system-ui, sans-serif' :
+                    ''
+                  }
+                />
+              </FormField>
+            );
+          })}
+        </SpaceBetween>
+      </ExpandableSection>
+    );
   };
 
   if (loading) {

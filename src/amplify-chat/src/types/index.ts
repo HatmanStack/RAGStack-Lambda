@@ -19,6 +19,8 @@ export interface ChatMessage {
   content: string;
   sources?: Source[];
   timestamp: string;
+  /** Model used to generate response (for quota tracking) */
+  modelUsed?: string;
 }
 
 /**
@@ -79,6 +81,33 @@ export interface ChatWithSourcesProps {
    * @default "100%"
    */
   maxWidth?: string;
+
+  /**
+   * User ID for authenticated mode (optional)
+   * Phase 4 will use this for auth
+   */
+  userId?: string | null;
+
+  /**
+   * Authentication token for authenticated mode (optional)
+   * Phase 4 will use this for auth
+   */
+  userToken?: string | null;
+
+  /**
+   * Theme preset (from configuration)
+   * @default "light"
+   */
+  themePreset?: 'light' | 'dark' | 'brand';
+
+  /**
+   * Theme overrides (from configuration)
+   */
+  themeOverrides?: {
+    primaryColor?: string;
+    fontFamily?: string;
+    spacing?: 'compact' | 'comfortable' | 'spacious';
+  };
 }
 
 /**

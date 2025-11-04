@@ -20,10 +20,11 @@
  * ```
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { AIConversation } from '@aws-amplify/ui-react-ai';
 import { SourcesDisplay } from './SourcesDisplay';
 import { ChatWithSourcesProps, Source } from '../types';
+import { applyTheme, type ThemePreset, type ThemeOverrides } from '../styles/themes';
 import styles from '../styles/ChatWithSources.module.css';
 
 /**
@@ -77,7 +78,25 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   onResponseReceived,
   showSources = true,
   maxWidth = '100%',
+  userId = null,
+  userToken = null,
+  themePreset = 'light',
+  themeOverrides,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Apply theme on mount and when theme changes
+  // Scope theme to this component instance to prevent conflicts
+  useEffect(() => {
+    if (!containerRef.current) {
+      return;
+    }
+    applyTheme(
+      themePreset as ThemePreset,
+      themeOverrides as ThemeOverrides,
+      containerRef.current
+    );
+  }, [themePreset, themeOverrides]);
   // Memoize callbacks to prevent unnecessary re-renders
   const handleSendMessage = useCallback(
     (message: string) => {
@@ -97,6 +116,7 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
           content: response.message || response.content || '',
           sources: response.sources || [],
           timestamp: new Date().toISOString(),
+          modelUsed: response.modelUsed,
         };
         onResponseReceived(chatMessage);
       }
@@ -112,6 +132,7 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`${styles.chatContainer} ${className || ''}`}
       style={containerStyle}
     >
@@ -127,6 +148,10 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
       <div className={styles.chatContent}>
         <AIConversation
           conversationId={conversationId}
+          context={{
+            userId: userId || undefined,
+            userToken: userToken || undefined,
+          }}
           responseComponent={showSources ? ResponseComponent : undefined}
           messages={{
             userRole: 'user',

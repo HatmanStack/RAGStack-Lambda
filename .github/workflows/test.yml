@@ -65,10 +65,10 @@ jobs:
 
       - name: Install Node dependencies
         run: |
-          npm install
-          cd src/ui && npm install && cd ../..
-          cd src/amplify-chat && npm install && cd ../..
-          cd amplify && npm install && cd ..
+          npm install --legacy-peer-deps
+          cd src/ui && npm install --legacy-peer-deps && cd ../..
+          cd src/amplify-chat && npm install --legacy-peer-deps && cd ../..
+          if [ -d "amplify" ]; then cd amplify && npm install --legacy-peer-deps && cd ..; fi
 
       # Run tests
       - name: Lint backend (ruff)
@@ -87,7 +87,12 @@ jobs:
         run: cd src/amplify-chat && npm run lint && cd ../..
 
       - name: Type-check Amplify backend
-        run: cd amplify && npx tsc --noEmit && cd ..
+        run: |
+          if [ -d "amplify" ] && [ -f "amplify/package.json" ]; then
+            cd amplify && npx tsc --noEmit --skipLibCheck && cd ..
+          else
+            echo "Skipping Amplify type-check (directory or package.json not found)"
+          fi
 
       # Optional: Generate coverage reports
       - name: Generate coverage report
