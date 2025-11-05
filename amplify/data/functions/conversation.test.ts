@@ -77,7 +77,7 @@ describe('Conversation Handler', () => {
           {
             retrievedReferences: [
               {
-                location: { s3Location: { uri: 's3://bucket/doc.pdf' } },
+                location: { type: 'S3', s3Location: { uri: 's3://bucket/doc.pdf' } },
                 content: { text: 'Sample content' },
                 metadata: { 'x-amz-bedrock-kb-chunk-id': 'chunk-1' },
               },

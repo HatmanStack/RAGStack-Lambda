@@ -13,6 +13,7 @@ Quick reference for common issues and solutions.
 | `sam build` fails | Python version mismatch | Check: `python3.13 --version`. Install Python 3.13+ if needed. |
 | Docker connection error | Docker not running | Start Docker: macOS (open Docker Desktop), Linux (`sudo systemctl start docker`) |
 | SAM build timeout | Network or resource issue | `sam build --use-container` |
+| Amplify deployment fails: "region not bootstrapped" | CDK not bootstrapped for region | Bootstrap CDK: `cd amplify && npm exec -- cdk bootstrap aws://<account-id>/<region>` (one-time per region) |
 
 ## Document Processing Issues
 

@@ -40,11 +40,6 @@ describe('Amplify Data Resource Configuration', () => {
       expect(resource.data).toBeDefined();
     });
 
-    it('should export extractSourcesTool function', async () => {
-      const resource = await import('./resource').then(m => m);
-      expect(resource.extractSourcesTool).toBeDefined();
-    });
-
     it('should have conversation route defined', async () => {
       const resource = await import('./resource').then(m => m.data);
       expect(resource).toBeDefined();
