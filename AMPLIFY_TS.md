@@ -856,3 +856,61 @@ template.yaml          | 234 ++++  (web component CDN resources)
 
 Good luck! The code architecture is solid - it's just the deployment tooling that needs work.
 
+---
+
+## Option 1 Implementation: Direct CDK Deployment (Nov 5, 2025)
+
+### Changes Made
+
+**File**: `template.yaml` line 2004-2005
+
+**Changed from**:
+```yaml
+- echo "Deploying Amplify backend via pipeline-deploy..."
+- npm exec --prefix amplify -- ampx pipeline-deploy --branch $PROJECT_NAME --app-id $PROJECT_NAME
+```
+
+**Changed to**:
+```yaml
+- echo "Deploying Amplify backend via direct CDK deploy..."
+- cd amplify && npx cdk deploy --all --require-approval never --outputs-file ../amplify_outputs.json
+```
+
+### Reasoning
+
+This change bypasses the `ampx pipeline-deploy` wrapper entirely and uses AWS CDK directly to deploy the Amplify backend. This approach:
+
+1. **Eliminates `ampx` wrapper complexity** - Removes the layer that was causing asset publishing failures
+2. **Uses standard CDK deployment** - Leverages well-tested CDK deployment mechanism
+3. **Provides better error visibility** - CDK errors are more straightforward than ampx wrapper errors
+4. **Maintains outputs compatibility** - The `--outputs-file` flag generates amplify_outputs.json for consumption
+
+### Expected Outcomes
+
+**If this works**:
+- CDK will successfully deploy auth and data stacks
+- CloudFormation stacks will be created with naming pattern `amplify-*`
+- Asset publishing to CDK bootstrap bucket will succeed
+- This confirms `ampx pipeline-deploy` was the problem, not our code or infrastructure
+
+**If this fails**:
+- Same CDK asset publishing error will appear
+- This indicates the problem is CDK bootstrap/IAM permissions, not the `ampx` wrapper
+- Next step would be investigating CDK bootstrap configuration (see Option 2 in handoff notes)
+
+### Testing Status
+
+**Status**: ⏳ Pending deployment test
+
+**Next Steps**:
+1. Commit this change to amp-test branch
+2. Deploy to test environment (e.g., amplify-test-12)
+3. Monitor CodeBuild logs for CDK deployment success/failure
+4. Document results in this file
+
+### Related Files
+
+- `template.yaml:2005` - Updated deployment command
+- `amplify/backend.ts` - Minimal backend (auth + data only, from Phase 1)
+- `publish.py` - Orchestrates deployment (no changes needed for this fix)
+
