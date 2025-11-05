@@ -428,6 +428,174 @@ Resources:
           # MinimumProtocolVersion: TLSv1.2_2021
 
   # =========================================================================
+  # Web Component CDN Infrastructure
+  # =========================================================================
+
+  WebComponentAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-wc-assets-${DeploymentSuffix}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: Engineering
+
+  WebComponentOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${ProjectName} web component CDN'
+
+  WebComponentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebComponentAssetsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt WebComponentOriginAccessIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebComponentAssetsBucket.Arn}/*'
+
+  WebComponentDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CDN for ${ProjectName} web component'
+        DefaultRootObject: 'amplify-chat.js'
+        Origins:
+          - Id: WebComponentS3Origin
+            DomainName: !GetAtt WebComponentAssetsBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${WebComponentOriginAccessIdentity}'
+        DefaultCacheBehavior:
+          TargetOriginId: WebComponentS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized managed policy
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: Engineering
+
+  WebComponentBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+      Policies:
+        - PolicyName: WebComponentBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 access for web component assets bucket
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt WebComponentAssetsBucket.Arn
+                  - !Sub '${WebComponentAssetsBucket.Arn}/*'
+              # CloudFront invalidation
+              - Effect: Allow
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${WebComponentDistribution}'
+              # S3 access for source artifacts
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*/*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebComponentBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${ProjectName}-wc-build-${DeploymentSuffix}'
+      Description: Build and deploy web component to CDN
+      ServiceRole: !GetAtt WebComponentBuildRole.Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 24
+              commands:
+                - echo "Installing dependencies..."
+                - cd src/amplify-chat
+                - npm ci
+            build:
+              commands:
+                - echo "Building web component..."
+                - npm run build:wc
+                - ls -lh dist/
+            post_build:
+              commands:
+                - echo "Deploying to S3..."
+                - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/amplify-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/amplify-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - echo "Invalidating CloudFront cache..."
+                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/amplify-chat.js" "/amplify-chat.esm.js"
+                - echo "Deployment complete!"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ASSET_BUCKET
+            Value: !Ref WebComponentAssetsBucket
+          - Name: DISTRIBUTION_ID
+            Value: !Ref WebComponentDistribution
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # =========================================================================
   # DynamoDB Tables
   # =========================================================================
 
@@ -1791,15 +1959,17 @@ Resources:
             Value: !Ref ProjectName
           - Name: AWS_REGION
             Value: !Ref AWS::Region
-          - Name: USER_POOL_ID
+          - Name: USERPOOLID
             Value: !Ref UserPool
-          - Name: USER_POOL_CLIENT_ID
+          - Name: USERPOOLCLIENTID
             Value: !Ref UserPoolClient
           - Name: DEPLOYMENT_SUFFIX
             Value: !Ref DeploymentSuffix
       Source:
         Type: S3
-        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        # Placeholder location - will be overridden by publish.py with sourceLocationOverride
+        # publish.py uploads amplify-source-*.zip and passes it to start_build()
+        Location: !Sub '${UISourceBucket}/amplify-placeholder.zip'
         BuildSpec: |
           version: 0.2
           phases:
@@ -1807,35 +1977,36 @@ Resources:
               runtime-versions:
                 nodejs: 24
               commands:
+                - echo "Installing system dependencies..."
+                - yum install -y git
                 - echo "Installing dependencies..."
-                - cd amplify
-                - npm ci
-
+                - npm ci --prefix amplify
+                - echo "Installing esbuild to root for CDK bundling..."
+                - npm install esbuild@0.25.12
             pre_build:
               commands:
                 - echo "Environment check..."
                 - echo "PROJECT_NAME=$PROJECT_NAME"
                 - echo "AWS_REGION=$AWS_REGION"
-                - echo "USER_POOL_ID=$USER_POOL_ID"
+                - echo "USERPOOLID=$USERPOOLID"
+                - echo "USERPOOLCLIENTID=$USERPOOLCLIENTID"
                 - node --version
                 - npm --version
-
+                - echo "Checking for lock file..."
+                - ls -la amplify/package-lock.json || echo "Lock file not found in amplify/"
+                - ls -la package-lock.json || echo "Lock file not found in root"
+                - echo "Ensuring lock file is accessible..."
+                - test -f amplify/package-lock.json && cp amplify/package-lock.json . || echo "No lock file to copy"
             build:
               commands:
-                - echo "Deploying Amplify backend via CDK..."
-                - echo "Note: Stack outputs will be retrieved from CloudFormation, not artifacts"
-                - |
-                  npx cdk deploy --all \
-                    --require-approval never \
-                    --context projectName=$PROJECT_NAME \
-                    --context region=$AWS_REGION \
-                    --context userPoolId=$USER_POOL_ID \
-                    --context userPoolClientId=$USER_POOL_CLIENT_ID
-
+                - echo "Cleaning up cached CDK state..."
+                - rm -rf .amplify/ amplify/.amplify/
+                - echo "Deploying Amplify backend via pipeline-deploy..."
+                - npm exec --prefix amplify -- ampx pipeline-deploy --branch $PROJECT_NAME --app-id $PROJECT_NAME
             post_build:
               commands:
                 - echo "Deployment complete"
-                - echo "Outputs are available in CloudFormation stacks: amplify-$PROJECT_NAME-*"
+                - echo "Outputs are available in CloudFormation stacks - amplify-$PROJECT_NAME-*"
                 - aws cloudformation describe-stacks --stack-name "amplify-$PROJECT_NAME-cdn" --query 'Stacks[0].Outputs' || true
       TimeoutInMinutes: 30
       Cache:
@@ -1999,6 +2170,31 @@ Outputs:
   UIUrl:
     Description: UI URL (HTTPS via CloudFront)
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  # Web Component CDN
+  WebComponentCDNUrl:
+    Description: CDN URL for embeddable chat web component
+    Value: !Sub 'https://${WebComponentDistribution.DomainName}/amplify-chat.js'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentCDNUrl'
+
+  WebComponentDistributionId:
+    Description: CloudFront distribution ID for web component
+    Value: !Ref WebComponentDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentDistributionId'
+
+  WebComponentBuildProjectName:
+    Description: CodeBuild project name for web component deployment
+    Value: !Ref WebComponentBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentBuildProject'
+
+  WebComponentAssetsBucketName:
+    Description: S3 bucket for web component assets
+    Value: !Ref WebComponentAssetsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentAssetsBucket'
 
   # Amplify Deployment
   AmplifyDeployProjectName:

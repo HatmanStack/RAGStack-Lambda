@@ -411,7 +411,7 @@ def get_codebuild_project_name(stack_name, region):
     return project_name
 
 
-def trigger_codebuild(project_name, environment_overrides, region):
+def trigger_codebuild(project_name, environment_overrides, region, source_location=None):
     """
     Trigger CodeBuild project with environment variable overrides.
 
@@ -419,6 +419,7 @@ def trigger_codebuild(project_name, environment_overrides, region):
         project_name: CodeBuild project name
         environment_overrides: List of env var dicts to override
         region: AWS region
+        source_location: Optional S3 location to override source (format: 'bucket/key.zip', NOT 's3://bucket/key')
 
     Returns:
         str: Build ID
@@ -430,10 +431,19 @@ def trigger_codebuild(project_name, environment_overrides, region):
 
     log_info(f"Starting CodeBuild project: {project_name}")
 
-    response = codebuild.start_build(
-        projectName=project_name,
-        environmentVariablesOverride=environment_overrides
-    )
+    # Build start_build parameters
+    build_params = {
+        'projectName': project_name,
+        'environmentVariablesOverride': environment_overrides
+    }
+
+    # Add source override if provided
+    if source_location:
+        build_params['sourceLocationOverride'] = source_location
+        build_params['sourceTypeOverride'] = 'S3'
+        log_info(f"  Source override: s3://{source_location}")
+
+    response = codebuild.start_build(**build_params)
 
     build_id = response['build']['id']
 
@@ -996,6 +1006,142 @@ def package_amplify_chat_source(bucket_name, region):
     return key
 
 
+def package_amplify_source(bucket_name, region):
+    """
+    Package Amplify backend source code as zip and upload to S3.
+
+    Creates a zip file of amplify/ directory (excluding build artifacts and dependencies)
+    plus the root package.json (needed by Amplify CLI), uploads it to the provided S3
+    bucket, and returns the S3 key for CodeBuild deployment.
+
+    This is required for the Amplify CodeBuild deployment because the amplify/ directory
+    contains custom infrastructure code:
+    - backend.ts with CDN stack, CodeBuild project, IAM policies
+    - data/resource.ts with custom GraphQL schema and resolvers
+    - data/functions/ with Lambda functions (conversation, extractSources, authorizer)
+    - data/config.ts with runtime configuration (KB ID, table names, etc.)
+
+    Args:
+        bucket_name: S3 bucket name to upload to
+        region: AWS region for bucket operations
+
+    Returns:
+        str: S3 key of uploaded Amplify source zip
+
+    Raises:
+        FileNotFoundError: If amplify/ directory doesn't exist
+        IOError: If packaging or upload fails
+    """
+    import zipfile
+    import tempfile
+    import time
+    from pathlib import Path
+
+    log_info("Packaging Amplify backend source...")
+
+    amplify_path = Path('amplify')
+    root_package_json = Path('package.json')
+
+    if not amplify_path.exists():
+        raise FileNotFoundError(f"Amplify directory not found: {amplify_path}")
+    if not root_package_json.exists():
+        raise FileNotFoundError(f"Root package.json not found: {root_package_json}")
+
+    # Create temporary zip file
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+        zip_path = tmp_file.name
+
+    try:
+        exclude_dirs = ['node_modules', 'cdk.out', 'dist', '.amplify']
+
+        # Create zip with amplify/* and root package.json
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add all amplify/ files
+            for file_path in amplify_path.rglob('*'):
+                if file_path.is_file():
+                    # Skip excluded directories
+                    if any(excluded in file_path.parts for excluded in exclude_dirs):
+                        continue
+                    # Keep amplify/* structure
+                    arcname = file_path
+                    zipf.write(file_path, arcname)
+
+            # Add root package.json
+            zipf.write(root_package_json, 'package.json')
+
+        # Upload to S3
+        s3_client = boto3.client('s3', region_name=region)
+        timestamp = int(time.time())
+        key = f'amplify-source-{timestamp}.zip'
+
+        log_info(f"Uploading to s3://{bucket_name}/{key}...")
+        try:
+            s3_client.upload_file(zip_path, bucket_name, key)
+        except ClientError as e:
+            raise IOError(f"Failed to upload source to S3: {e}") from e
+
+        # Clean up temporary file
+        os.remove(zip_path)
+
+        log_success("Amplify backend source uploaded to S3")
+        return key
+
+    except (FileNotFoundError, IOError):
+        # Re-raise expected exceptions
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise
+    except Exception as e:
+        # Clean up temporary file on unexpected error
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        raise IOError(f"Unexpected error packaging Amplify source: {e}") from e
+
+
+def create_amplify_placeholder(bucket_name, region):
+    """
+    Create empty placeholder zip for CodeBuild project creation.
+
+    CloudFormation validates that S3 source locations exist during stack creation.
+    This creates a minimal placeholder that will be overridden at build time.
+
+    Args:
+        bucket_name: S3 bucket name
+        region: AWS region
+
+    Returns:
+        str: S3 key of placeholder file
+    """
+    import zipfile
+    from io import BytesIO
+
+    log_info("Creating Amplify placeholder for CloudFormation validation...")
+
+    # Create minimal empty zip in memory
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add a minimal README so zip is not completely empty
+        zipf.writestr('README.txt', 'Placeholder for CodeBuild - will be overridden at build time')
+
+    zip_buffer.seek(0)
+
+    # Upload to S3 with fixed key (matches template.yaml placeholder)
+    s3 = boto3.client('s3', region_name=region)
+    key = 'amplify-placeholder.zip'
+
+    try:
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=key,
+            Body=zip_buffer.getvalue(),
+            ContentType='application/zip'
+        )
+        log_success(f"Amplify placeholder created: s3://{bucket_name}/{key}")
+        return key
+    except Exception as e:
+        raise IOError(f"Failed to upload placeholder: {e}") from e
+
+
 def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
@@ -1039,12 +1185,8 @@ def get_amplify_stack_outputs(project_name, region):
 
     Returns:
         dict: Combined stack outputs as key-value pairs
-            {
-                'WebComponentCDN': 'https://d123.cloudfront.net/amplify-chat.js',
-                'AssetBucketName': 'amplify-stack-assets-xyz',
-                'BuildProjectName': 'amplify-stack-build',
-                'DistributionId': 'E1234567890ABC'
-            }
+            Note: Web component CDN outputs (CDN URL, Build Project) are now in SAM stack.
+            Amplify stacks only contain auth and data outputs.
 
     Raises:
         ValueError: If Amplify stacks not found or have no outputs
@@ -1116,12 +1258,9 @@ def get_amplify_stack_outputs(project_name, region):
                 all_outputs[key] = value
                 log_info(f"  {key}: {value}")
 
-        # Ensure we have critical outputs
-        required_outputs = ['WebComponentCDN', 'BuildProjectName']
-        missing = [k for k in required_outputs if k not in all_outputs]
-
-        if missing:
-            raise ValueError(f"Missing required outputs: {missing}")
+        # Note: No longer requiring WebComponentCDN or BuildProjectName
+        # These outputs are now in the SAM stack (WebComponentCDNUrl, WebComponentBuildProjectName)
+        # Amplify stacks only contain auth and data outputs
 
         log_success(f"Retrieved {len(all_outputs)} outputs from Amplify stacks")
         return all_outputs
@@ -1389,6 +1528,15 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_error(f"Failed to generate Amplify configuration: {e}")
         raise IOError(f"Config generation failed: {e}") from e
 
+    # Step 2.5: Package Amplify backend source (after config.ts is generated)
+    log_info("Packaging Amplify backend source...")
+    try:
+        amplify_source_key = package_amplify_source(artifact_bucket, region)
+        log_success(f"Amplify backend source uploaded: s3://{artifact_bucket}/{amplify_source_key}")
+    except (FileNotFoundError, IOError) as e:
+        log_error(f"Failed to package Amplify source: {e}")
+        raise
+
     # Step 3: Deploy Amplify stack via CodeBuild
     log_info("Deploying Amplify stack via CodeBuild (GraphQL API, Lambda, CDN)...")
     log_info("This will take approximately 10-15 minutes...")
@@ -1410,8 +1558,15 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             {'name': 'WEB_COMPONENT_SOURCE_KEY', 'value': chat_source_key, 'type': 'PLAINTEXT'},
         ]
 
-        # Trigger CodeBuild deployment
-        build_id = trigger_codebuild(codebuild_project, env_overrides, region)
+        # Trigger CodeBuild deployment with Amplify source
+        # Note: CodeBuild expects 'bucket/key' format, not 's3://bucket/key'
+        amplify_source_location = f'{artifact_bucket}/{amplify_source_key}'
+        build_id = trigger_codebuild(
+            codebuild_project,
+            env_overrides,
+            region,
+            source_location=amplify_source_location
+        )
 
         # Wait for CodeBuild to complete (with timeout)
         wait_for_codebuild(build_id, region, timeout_minutes=30)
@@ -1425,22 +1580,23 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_warning(f"Or trigger CodeBuild manually: aws codebuild start-build --project-name {codebuild_project}")
         raise
 
-    # Step 4: Get Amplify stack outputs
-    log_info("Retrieving Amplify stack outputs...")
+    # Step 4: Get web component outputs from SAM stack
+    # Note: Web component CDN is now managed via SAM, not Amplify
+    log_info("Retrieving web component outputs from SAM stack...")
     try:
-        outputs = get_amplify_stack_outputs(project_name, region)
-        cdn_url = outputs.get('WebComponentCDN')
-        build_project = outputs.get('BuildProjectName')
+        sam_outputs = get_stack_outputs(sam_stack_name, region)
+        cdn_url = sam_outputs.get('WebComponentCDNUrl')
+        build_project = sam_outputs.get('WebComponentBuildProjectName')
 
         if not cdn_url or not build_project:
-            log_error("Missing required outputs from Amplify stack")
-            log_error(f"Outputs: {outputs}")
-            raise ValueError("Amplify stack outputs incomplete")
+            log_error("Missing required web component outputs from SAM stack")
+            log_error(f"SAM Outputs: {sam_outputs}")
+            raise ValueError("SAM stack outputs incomplete - WebComponentCDNUrl or WebComponentBuildProjectName missing")
 
         log_info(f"CDN URL: {cdn_url}")
         log_info(f"Build Project: {build_project}")
     except Exception as e:
-        log_error(f"Failed to retrieve Amplify outputs: {e}")
+        log_error(f"Failed to retrieve SAM stack outputs: {e}")
         raise IOError(f"Output retrieval failed: {e}") from e
 
     # Step 5: Trigger CodeBuild to build and deploy web component
@@ -1910,6 +2066,16 @@ Examples:
                 log_info(f"UI source uploaded to {artifact_bucket}/{ui_source_key}")
             except (FileNotFoundError, IOError) as e:
                 log_error(f"Failed to package UI: {e}")
+                sys.exit(1)
+
+        # Create Amplify placeholder if deploying chat
+        # This is required because CloudFormation validates S3 source locations during stack creation
+        # The placeholder will be overridden at build time with the actual amplify source
+        if args.deploy_chat:
+            try:
+                create_amplify_placeholder(artifact_bucket, args.region)
+            except IOError as e:
+                log_error(f"Failed to create Amplify placeholder: {e}")
                 sys.exit(1)
 
         # SAM build
