@@ -910,7 +910,25 @@ This change bypasses the `ampx pipeline-deploy` wrapper entirely and uses AWS CD
 
 ### Related Files
 
-- `template.yaml:2005` - Updated deployment command
+- `template.yaml:2005` - Updated deployment command (ampx → cdk)
 - `amplify/backend.ts` - Minimal backend (auth + data only, from Phase 1)
-- `publish.py` - Orchestrates deployment (no changes needed for this fix)
+- `publish.py:1980,2122` - Removed unnecessary Amplify CLI checks
+- `publish.py:328` - Deprecated check_amplify_cli() function
+
+### Follow-up Fix: Removed Amplify CLI Checks in publish.py
+
+After implementing direct CDK deployment, the `check_amplify_cli()` function became obsolete:
+
+**Changes Made:**
+1. Removed `check_amplify_cli()` call at line 1980 (chat-only deployment path)
+2. Removed `check_amplify_cli()` call at line 2122 (full deployment with chat path)
+3. Marked `check_amplify_cli()` function as [DEPRECATED] with explanation
+
+**Reasoning:**
+- The function checked for `ampx` CLI tool availability
+- With direct CDK deployment, we use `npx cdk deploy` instead of `ampx pipeline-deploy`
+- CDK packages are installed via `npm ci --prefix amplify` in CodeBuild
+- No need to check for or install Amplify CLI globally
+
+This simplifies the deployment process and removes a potential failure point.
 

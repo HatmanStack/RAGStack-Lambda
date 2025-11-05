@@ -327,8 +327,13 @@ def check_sam_cli():
 
 def check_amplify_cli():
     """
-    Check if Amplify CLI is installed, auto-install if missing.
+    [DEPRECATED] Check if Amplify CLI is installed, auto-install if missing.
 
+    This function is no longer used since we switched to direct CDK deployment.
+    The CodeBuild environment uses 'npx cdk deploy' instead of 'ampx pipeline-deploy'.
+    Kept for backward compatibility but not called in the deployment flow.
+
+    Original purpose:
     Uses `npx ampx` to check/use latest Amplify CLI. If not available,
     installs @aws-amplify/cli globally via npm.
 
@@ -1977,7 +1982,7 @@ Examples:
             log_info("Checking prerequisites...")
             check_python_version()
             check_aws_cli()
-            check_amplify_cli()
+            # Note: No longer checking Amplify CLI since we use direct CDK deployment
             log_success("Prerequisites met")
 
             # Get KB ID and ConfigurationTable name from existing SAM stack
@@ -2118,8 +2123,8 @@ Examples:
         if args.deploy_chat:
             log_info("SAM deployment complete. Now deploying Amplify chat backend...")
 
-            # Check Amplify CLI is available
-            check_amplify_cli()
+            # Note: No longer checking Amplify CLI since we use direct CDK deployment
+            # The CodeBuild environment will use 'npx cdk deploy' directly
 
             # Extract KB ID and ConfigurationTable name from SAM outputs
             try:
