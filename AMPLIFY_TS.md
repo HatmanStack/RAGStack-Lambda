@@ -932,3 +932,99 @@ After implementing direct CDK deployment, the `check_amplify_cli()` function bec
 
 This simplifies the deployment process and removes a potential failure point.
 
+---
+
+## Pivot: Direct CDK Deploy → ampx sandbox --once (Nov 5, 2025)
+
+### What Happened
+
+After implementing direct CDK deployment (commit f304199), testing revealed a critical issue:
+
+**Error from amplify-test-12 deployment:**
+```
+--app is required either in command-line, in cdk.json or in ~/.cdk.json
+cd amplify && npx cdk deploy --all --require-approval never --outputs-file ../amplify_outputs.json exit status 1
+```
+
+### Root Cause
+
+Amplify Gen 2's architecture requires synthesis before deployment:
+
+1. **backend.ts** defines the Amplify backend (auth, data, custom stacks)
+2. **ampx commands** synthesize backend.ts into CDK code at runtime
+3. **Raw CDK deploy** expects a pre-synthesized CDK app (cdk.json or --app parameter)
+4. **No cdk.json exists** in the amplify/ directory because Amplify Gen 2 generates CDK dynamically
+
+**The fundamental issue:** You cannot use `npx cdk deploy` directly on an Amplify Gen 2 backend because there's no CDK app to deploy until it's synthesized.
+
+### Solution: Use `ampx sandbox --once`
+
+**File:** `template.yaml` line 2004-2005
+
+**Changed from (failed approach):**
+```yaml
+- echo "Deploying Amplify backend via direct CDK deploy..."
+- cd amplify && npx cdk deploy --all --require-approval never --outputs-file ../amplify_outputs.json
+```
+
+**Changed to (working approach):**
+```yaml
+- echo "Deploying Amplify backend via sandbox (one-time deployment)..."
+- npm exec --prefix amplify -- ampx sandbox --once
+```
+
+### Why `ampx sandbox --once` Works
+
+**What it does:**
+1. Synthesizes backend.ts into CDK code
+2. Deploys the synthesized code to AWS
+3. `--once` flag prevents watch mode (exits after single deployment)
+
+**Advantages over pipeline-deploy:**
+- Designed for single deployments (like CI/CD)
+- May handle custom CDK stacks better than pipeline-deploy
+- Includes synthesis + deployment in one command
+- Was confirmed working locally (per earlier testing notes)
+
+**Concerns:**
+- Documentation says "not intended for production CI/CD"
+- However, `--once` mode behaves like a CI/CD deployment
+- Given pipeline-deploy failures, this may be more reliable
+
+### Comparison of Approaches Tried
+
+| Approach | Status | Issue |
+|----------|--------|-------|
+| `ampx sandbox` (no --once) | ❌ Failed | Circular JSON errors (CLI 1.6.0) |
+| `ampx pipeline-deploy` | ❌ Failed | CDK asset publishing errors (AmplifyBranchLinker) |
+| Direct `npx cdk deploy` | ❌ Failed | No CDK app (--app required) |
+| `ampx sandbox --once` | ⏳ Testing | Should work - synthesizes + deploys |
+
+### Expected Outcome
+
+**If this works:**
+- Amplify backend (auth + data) deploys successfully
+- CloudFormation stacks created
+- Outputs available for consumption
+- Proves sandbox mode can work in CodeBuild
+
+**If this fails:**
+- We've exhausted ampx options
+- Would need to investigate CDK bootstrap issues
+- Or consider moving auth/data to SAM template (Option D from handoff notes)
+
+### Testing Status
+
+**Status:** ⏳ Pending deployment test (amplify-test-13)
+
+**Next Steps:**
+1. Deploy with updated template.yaml
+2. Monitor CodeBuild logs for sandbox synthesis and deployment
+3. Check for CloudFormation stack creation
+4. Document results
+
+### Related Files
+
+- `template.yaml:2005` - Updated to use `ampx sandbox --once`
+- `AMPLIFY_TS.md` - This documentation
+

@@ -2001,8 +2001,8 @@ Resources:
               commands:
                 - echo "Cleaning up cached CDK state..."
                 - rm -rf .amplify/ amplify/.amplify/
-                - echo "Deploying Amplify backend via direct CDK deploy..."
-                - cd amplify && npx cdk deploy --all --require-approval never --outputs-file ../amplify_outputs.json
+                - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
+                - npm exec --prefix amplify -- ampx sandbox --once
             post_build:
               commands:
                 - echo "Deployment complete"
