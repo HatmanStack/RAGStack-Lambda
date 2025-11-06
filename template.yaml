@@ -2012,18 +2012,40 @@ Resources:
                 - echo "Cleaning up cached CDK state..."
                 - rm -rf .amplify/ amplify/.amplify/
                 - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
-                - npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
-                - echo "Generating amplify_outputs.json with API and auth configuration..."
                 - |
-                  # Find the sandbox stack name (pattern: amplify-*-sandbox-*)
-                  STACK_NAME=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, 'sandbox') && contains(StackName, 'amplify')].StackName | [0]" --output text)
-                  if [ -z "$STACK_NAME" ] || [ "$STACK_NAME" = "None" ]; then
-                    echo "❌ Error: Could not find Amplify sandbox stack"
-                    aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, 'amplify')].StackName"
+                  # Capture output to parse stack name
+                  npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME 2>&1 | tee /tmp/sandbox-output.log
+                - echo "Parsing stack name from sandbox output..."
+                - |
+                  # Extract stack name from the "Stack: amplify-..." line
+                  STACK_NAME=$(grep -oP "Stack: \K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
+
+                  if [ -z "$STACK_NAME" ]; then
+                    echo "❌ Error: Could not parse stack name from sandbox output"
+                    echo "Sandbox output:"
+                    cat /tmp/sandbox-output.log
                     exit 1
                   fi
-                  echo "Found Amplify sandbox stack: $STACK_NAME"
-                  npm exec --prefix amplify -- ampx generate outputs --stack $STACK_NAME
+
+                  echo "✓ Parsed stack name: $STACK_NAME"
+
+                  # Wait for stack creation to complete (handles case where ampx exits early)
+                  echo "Waiting for stack creation to complete..."
+                  aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" || \
+                  aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
+
+                  # Verify stack status
+                  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+                  echo "Stack status: $STACK_STATUS"
+
+                  if [[ "$STACK_STATUS" != "CREATE_COMPLETE" && "$STACK_STATUS" != "UPDATE_COMPLETE" ]]; then
+                    echo "❌ Error: Stack creation/update did not complete successfully"
+                    echo "Stack status: $STACK_STATUS"
+                    exit 1
+                  fi
+
+                  echo "Generating amplify_outputs.json with API and auth configuration..."
+                  npm exec --prefix amplify -- ampx generate outputs --stack "$STACK_NAME"
             post_build:
               commands:
                 - echo "Amplify backend deployment complete"

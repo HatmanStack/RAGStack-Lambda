@@ -1738,3 +1738,118 @@ After this fix:
 5. ✅ Web component gets working configuration
 6. ✅ Chat component connects to backend!
 
+---
+
+## Fix: Parse Stack Name and Wait for Completion (Nov 6, 2025)
+
+### Problem with Previous Fix
+
+The previous fix attempted to find the sandbox stack by querying CloudFormation for completed stacks, but it failed:
+
+**Error:**
+```
+❌ Error: Could not find Amplify sandbox stack
+[
+    "RAGStack-amplify-test-12",
+    "RAGStack-amplify-test-11"
+]
+```
+
+**Root Cause - Race Condition:**
+- `ampx sandbox --once` starts deployment and prints stack name
+- Circular JSON error causes command to exit **before stack creation completes**
+- Query for `CREATE_COMPLETE` stacks runs immediately after
+- Stack is still in `CREATE_IN_PROGRESS` state, so it's not found
+- Only SAM stacks (which are already complete) appear in the query results
+
+**Evidence from Logs:**
+```
+Stack: amplify-ragstacklambda-amplifytest12-sandbox-b6e9400061
+[ERROR] [UnknownFault] TypeError: Converting circular structure to JSON
+  --> starting at object with constructor 'IncomingMessage'
+  ... (command exits)
+
+# Immediately after:
+❌ Error: Could not find Amplify sandbox stack
+```
+
+The circular JSON error is **FATAL** - it causes early exit, not just a harmless warning!
+
+### The Solution
+
+Parse the stack name directly from `ampx sandbox` output, then explicitly wait for stack creation to complete:
+
+**File**: `template.yaml` lines 2015-2048
+
+```yaml
+build:
+  commands:
+    - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
+    - |
+      # Capture output to parse stack name
+      npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME 2>&1 | tee /tmp/sandbox-output.log
+    - echo "Parsing stack name from sandbox output..."
+    - |
+      # Extract stack name from the "Stack: amplify-..." line
+      STACK_NAME=$(grep -oP "Stack: \K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
+
+      if [ -z "$STACK_NAME" ]; then
+        echo "❌ Error: Could not parse stack name from sandbox output"
+        echo "Sandbox output:"
+        cat /tmp/sandbox-output.log
+        exit 1
+      fi
+
+      echo "✓ Parsed stack name: $STACK_NAME"
+
+      # Wait for stack creation to complete (handles case where ampx exits early)
+      echo "Waiting for stack creation to complete..."
+      aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" || \
+      aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
+
+      # Verify stack status
+      STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+        --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+      echo "Stack status: $STACK_STATUS"
+
+      if [[ "$STACK_STATUS" != "CREATE_COMPLETE" && "$STACK_STATUS" != "UPDATE_COMPLETE" ]]; then
+        echo "❌ Error: Stack creation/update did not complete successfully"
+        echo "Stack status: $STACK_STATUS"
+        exit 1
+      fi
+
+      echo "Generating amplify_outputs.json with API and auth configuration..."
+      npm exec --prefix amplify -- ampx generate outputs --stack "$STACK_NAME"
+```
+
+**How it works:**
+1. **Capture output**: `tee` saves all sandbox output to `/tmp/sandbox-output.log`
+2. **Parse stack name**: Use `grep` to extract stack name from "Stack: amplify-..." line
+3. **Wait explicitly**: `aws cloudformation wait` blocks until stack creation completes
+4. **Verify status**: Check stack is in `CREATE_COMPLETE` or `UPDATE_COMPLETE` state
+5. **Generate outputs**: Only proceed with `ampx generate outputs` after verification
+
+**Advantages:**
+- ✅ Works even if `ampx sandbox` exits early due to circular JSON error
+- ✅ No race condition - explicitly waits for stack completion
+- ✅ Robust error handling with status verification
+- ✅ Doesn't rely on querying for completed stacks (which might miss in-progress stacks)
+- ✅ Stack name comes directly from source (ampx output), not CloudFormation query
+
+### Files Changed
+
+- `template.yaml:2010-2048` - Parse stack name, wait for completion, verify status
+- `AMPLIFY_TS.md` - Document the fix
+
+### Expected Outcome
+
+After this fix:
+1. ✅ `ampx sandbox --once` starts deployment and prints stack name
+2. ✅ Stack name is captured from output (even if command exits early)
+3. ✅ `aws cloudformation wait` blocks until stack creation completes
+4. ✅ Stack status is verified before proceeding
+5. ✅ `ampx generate outputs --stack {parsed-name}` succeeds
+6. ✅ amplify_outputs.json populated with real auth and API config
+7. ✅ Web component gets working configuration
+8. ✅ Deployment succeeds despite circular JSON error!
+
