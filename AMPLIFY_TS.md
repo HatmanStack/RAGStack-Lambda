@@ -1545,3 +1545,117 @@ Full deployment flow now working:
 6. ✅ Assets deployed to CloudFront CDN
 7. ✅ Chat component ready for embedding!
 
+---
+
+## Critical Fix: Generate Amplify Outputs After Deployment (Nov 6, 2025)
+
+### The Problem - Empty Configuration File
+
+After all previous fixes, the web component built and deployed successfully, but **didn't work**. Investigation revealed:
+
+**S3 artifact check:**
+```bash
+aws s3 cp s3://BUCKET/amplify_outputs.json - | jq .
+{ "version": "1.4" }
+```
+
+**Build logs showed:**
+```
+✅ Amplify configuration injected successfully
+   API Endpoint: N/A
+   Region: N/A
+```
+
+**Root Cause**: `ampx sandbox --once` deploys the Amplify backend (auth, data stacks) successfully, but **doesn't populate amplify_outputs.json** with the actual API endpoints, auth pool IDs, or GraphQL URLs. It only creates a stub file with `{ "version": "1.4" }`.
+
+### Why This Happens
+
+`ampx sandbox --once` in CI/CD mode:
+- ✅ Synthesizes and deploys CDK stacks
+- ✅ Creates CloudFormation resources (Cognito, AppSync, etc.)
+- ❌ Doesn't automatically generate client configuration in outputs file
+- ❌ Expects you to run `ampx generate outputs` separately
+
+**Expected amplify_outputs.json structure:**
+```json
+{
+  "version": "1.4",
+  "auth": {
+    "aws_region": "us-west-2",
+    "user_pool_id": "us-west-2_xxxxx",
+    "user_pool_client_id": "xxxxx",
+    "identity_pool_id": "us-west-2:xxxxx"
+  },
+  "data": {
+    "url": "https://xxxxx.appsync-api.us-west-2.amazonaws.com/graphql",
+    "aws_region": "us-west-2",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "api_key": null
+  }
+}
+```
+
+**What we got:** Just `{ "version": "1.4" }`
+
+### The Solution
+
+Add explicit `ampx generate outputs` command after sandbox deployment to populate the configuration file.
+
+**File**: `template.yaml` line 2016-2017
+
+**Added:**
+```yaml
+build:
+  commands:
+    - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
+    - npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
+    - echo "Generating amplify_outputs.json with API and auth configuration..."
+    - npm exec --prefix amplify -- ampx generate outputs --branch $PROJECT_NAME --app-id $PROJECT_NAME
+```
+
+**What `ampx generate outputs` does:**
+- Reads deployed CloudFormation stack outputs
+- Extracts Cognito User Pool ID, Client ID, Identity Pool
+- Extracts AppSync GraphQL API endpoint and auth config
+- Writes complete configuration to `amplify_outputs.json`
+- Uses `--branch` and `--app-id` to identify which stacks to read
+
+### Files Changed
+
+- `template.yaml:2016-2017` - Added `ampx generate outputs` after sandbox deployment
+- `template.yaml:2020-2045` - Added validation to display file contents (debug)
+
+### Expected Outcome
+
+After this fix:
+1. ✅ `ampx sandbox --once` deploys backend stacks
+2. ✅ `ampx generate outputs` populates amplify_outputs.json with real config
+3. ✅ File uploaded to S3 contains auth and API configuration
+4. ✅ Web component downloads complete configuration
+5. ✅ inject-amplify-config.js embeds working API endpoints
+6. ✅ Web component connects to Amplify backend successfully
+7. ✅ Chat functionality fully operational!
+
+### Verification
+
+After redeployment, check the outputs file:
+```bash
+aws s3 cp s3://YOUR-BUCKET/amplify_outputs.json - | jq .
+```
+
+**Should see:**
+```json
+{
+  "version": "1.4",
+  "auth": { ... actual config ... },
+  "data": { ... actual GraphQL endpoint ... }
+}
+```
+
+**Not just:**
+```json
+{ "version": "1.4" }
+```
+
+This was the **critical missing piece** - the backend was deployed but client configuration wasn't being generated!
+

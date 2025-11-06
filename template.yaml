@@ -2013,6 +2013,8 @@ Resources:
                 - rm -rf .amplify/ amplify/.amplify/
                 - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
                 - npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
+                - echo "Generating amplify_outputs.json with API and auth configuration..."
+                - npm exec --prefix amplify -- ampx generate outputs --branch $PROJECT_NAME --app-id $PROJECT_NAME
             post_build:
               commands:
                 - echo "Amplify backend deployment complete"
