@@ -209,14 +209,22 @@
         }
       }
 
-      // Show all custom elements
-      const allElements = [];
-      customElements.forEach((definition, name) => {
-        allElements.push(name);
-      });
+      // Show details about what's in window.AmplifyChat
+      if (window.AmplifyChat) {
+        const type = typeof window.AmplifyChat;
+        const isFunc = typeof window.AmplifyChat === 'function';
+        const keys = Object.keys(window.AmplifyChat);
 
-      if (allElements.length > 0) {
-        statusEl.innerHTML += `<div>Registered elements: ${allElements.join(', ')}</div>`;
+        statusEl.innerHTML += `
+          <div style="margin-top: 10px; padding: 10px; background: #f8f8f8; border: 1px solid #ddd;">
+            <strong>window.AmplifyChat structure:</strong><br>
+            Type: ${type}<br>
+            Is Function: ${isFunc}<br>
+            Properties: ${keys.join(', ') || '(none)'}<br>
+            Has .AmplifyChat: ${!!window.AmplifyChat.AmplifyChat}<br>
+            Has .default: ${!!window.AmplifyChat.default}
+          </div>
+        `;
       }
     }
 
