@@ -8,7 +8,8 @@ CDN_URL="https://d2m6vpu87luaxh.cloudfront.net/amplify-chat.js"
 echo "Checking bundle format..."
 echo ""
 
-CONTENT=$(curl -s "$CDN_URL" | head -100)
+# Download first 1KB to check format (prevents broken pipe)
+CONTENT=$(curl -s -r 0-1023 "$CDN_URL")
 
 # Check for UMD pattern
 if echo "$CONTENT" | grep -q "function(module,exports)"; then
@@ -22,5 +23,5 @@ else
 fi
 
 echo ""
-echo "First 5 lines of bundle:"
+echo "First few lines of bundle:"
 echo "$CONTENT" | head -5
