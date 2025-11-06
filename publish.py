@@ -622,7 +622,9 @@ def check_docker():
 def sam_build():
     """Build SAM application."""
     log_info("Building SAM application...")
-    run_command(["sam", "build", "--parallel", "--cached"])
+    # Note: Removed --cached flag to ensure template.yaml changes (like BuildSpec updates)
+    # are always included in the build output, even when Lambda code hasn't changed
+    run_command(["sam", "build", "--parallel"])
     log_success("SAM build complete")
 
 

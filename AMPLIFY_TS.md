@@ -1102,3 +1102,98 @@ Note: Identifier may be sanitized (hyphens removed), but it will be in the name.
 - `publish.py:1588-1599` - Web component outputs retrieved from SAM, not Amplify
 - Phase 1 migration (commit 5dcad01) - When CDN moved to SAM
 
+---
+
+## BuildSpec Update Fix: Remove --cached Flag from sam build (Nov 6, 2025)
+
+### Problem Discovered
+
+**Issue**: When modifying BuildSpec in `template.yaml` and running `publish.py`, the changes weren't being deployed - even without `--chat-only`.
+
+**Root Cause**: The `--cached` flag in `sam build` command (line 625)
+
+### Why --cached Prevented BuildSpec Updates
+
+**The SAM Build Process:**
+1. `sam build` reads `template.yaml` and builds Lambda artifacts
+2. Outputs built artifacts to `.aws-sam/build/`
+3. Copies template to `.aws-sam/build/template.yaml`
+4. `sam deploy` deploys from `.aws-sam/build/template.yaml` (NOT source template.yaml)
+
+**What --cached does:**
+- If Lambda code hasn't changed, reuses cached build artifacts
+- **PROBLEM**: May skip updating `.aws-sam/build/template.yaml` with source changes
+- BuildSpec changes in source `template.yaml` don't make it to the deployed template
+
+**Observed Behavior:**
+- Manual `sam build && sam deploy` worked (no --cached, fresh template copy)
+- `publish.py` didn't update BuildSpec (used --cached, stale template)
+
+### The Fix
+
+**File**: `publish.py` line 625-627
+
+**Before:**
+```python
+def sam_build():
+    """Build SAM application."""
+    log_info("Building SAM application...")
+    run_command(["sam", "build", "--parallel", "--cached"])
+    log_success("SAM build complete")
+```
+
+**After:**
+```python
+def sam_build():
+    """Build SAM application."""
+    log_info("Building SAM application...")
+    # Note: Removed --cached flag to ensure template.yaml changes (like BuildSpec updates)
+    # are always included in the build output, even when Lambda code hasn't changed
+    run_command(["sam", "build", "--parallel"])
+    log_success("SAM build complete")
+```
+
+### Impact
+
+**Before Fix:**
+- ❌ BuildSpec changes required manual `sam build && sam deploy`
+- ❌ `publish.py` wouldn't pick up template changes
+- ❌ `--chat-only` testing workflow broken
+
+**After Fix:**
+- ✅ `publish.py` always deploys latest template.yaml
+- ✅ BuildSpec changes applied automatically
+- ✅ Can use full `publish.py` workflow for all changes
+- ⚠️  Slightly slower builds (no cache reuse), but more reliable
+
+### Trade-offs
+
+**Advantages:**
+- ✅ Template changes always deployed
+- ✅ Consistent behavior between manual and scripted deployments
+- ✅ Eliminates confusing "why didn't my change deploy?" issues
+- ✅ Reliable workflow
+
+**Disadvantages:**
+- ⏱️  Slower builds when only changing template (rebuilds all Lambda functions)
+- 💾 More S3 uploads (artifacts re-uploaded even if unchanged)
+
+**Verdict**: Reliability > Speed for deployment scripts. The time cost is acceptable given we're already building in parallel.
+
+### Alternative Considered
+
+Could use `--cached` but force template update with a custom script, but that's more complex and fragile. Simpler to just rebuild everything.
+
+### Testing
+
+After this fix, the following workflow should work:
+1. Modify BuildSpec in `template.yaml`
+2. Run `python publish.py --project-name X --admin-email Y --region Z --deploy-chat`
+3. BuildSpec changes deployed ✅
+
+OR:
+1. Modify BuildSpec in `template.yaml`
+2. Run `python publish.py ... --skip-ui` (to just update infrastructure)
+3. Run `python publish.py ... --chat-only` (to test with updated BuildSpec)
+4. All changes reflected ✅
+
