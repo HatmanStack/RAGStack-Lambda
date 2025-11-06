@@ -33,24 +33,23 @@ export class AmplifyBackendStack extends cdk.Stack {
     // Lambda Authorizer Function
     const authorizerFunction = new lambda.Function(this, 'AuthorizerFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'authorizer.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../data/functions'), {
+      handler: 'functions/authorizer.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
             'bash',
             '-c',
             [
-              'echo "Copying config.ts from parent directory..."',
-              'cp ../config.ts ./config.ts',
-              'echo "Installing dependencies..."',
-              'npm install',
-              'echo "Compiling TypeScript..."',
-              './node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck *.ts',
-              'echo "Copying node_modules..."',
-              'cp -r node_modules /asset-output/',
+              'echo "Installing dependencies in functions directory..."',
+              'cd functions && npm install && cd ..',
+              'echo "Compiling TypeScript files..."',
+              './functions/node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck config.ts functions/*.ts',
+              'echo "Copying node_modules to output..."',
+              'cp -r functions/node_modules /asset-output/functions/',
               'echo "Bundling complete"',
               'ls -la /asset-output/',
+              'ls -la /asset-output/functions/ || true',
             ].join(' && '),
           ],
         },
@@ -99,24 +98,23 @@ export class AmplifyBackendStack extends cdk.Stack {
     // Conversation Query Lambda Resolver
     const conversationFunction = new lambda.Function(this, 'ConversationFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'conversation.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../data/functions'), {
+      handler: 'functions/conversation.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
             'bash',
             '-c',
             [
-              'echo "Copying config.ts from parent directory..."',
-              'cp ../config.ts ./config.ts',
-              'echo "Installing dependencies..."',
-              'npm install',
-              'echo "Compiling TypeScript..."',
-              './node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck *.ts',
-              'echo "Copying node_modules..."',
-              'cp -r node_modules /asset-output/',
+              'echo "Installing dependencies in functions directory..."',
+              'cd functions && npm install && cd ..',
+              'echo "Compiling TypeScript files..."',
+              './functions/node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck config.ts functions/*.ts',
+              'echo "Copying node_modules to output..."',
+              'cp -r functions/node_modules /asset-output/functions/',
               'echo "Bundling complete"',
               'ls -la /asset-output/',
+              'ls -la /asset-output/functions/ || true',
             ].join(' && '),
           ],
         },
