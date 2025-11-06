@@ -1936,11 +1936,16 @@ Resources:
                 Resource:
                   - !GetAtt UserPool.Arn
 
-              # STS - for CDK context
+              # STS - for CDK context and bootstrap role assumption
               - Effect: Allow
                 Action:
                   - sts:GetCallerIdentity
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-*'
 
               # SSM - for CDK bootstrap
               - Effect: Allow
@@ -2021,9 +2026,14 @@ Resources:
 
                   # Deploy CDK stack
                   cd amplify
-                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json"
 
-                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json; then
+                  # Get current role ARN for CDK to use
+                  CURRENT_ROLE_ARN=$(aws sts get-caller-identity --query Arn --output text | sed 's/:sts:/:iam:/' | sed 's/:assumed-role\//:role\//' | sed 's/\/[^\/]*$//')
+                  echo "Using role: $CURRENT_ROLE_ARN"
+
+                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json --role-arn $CURRENT_ROLE_ARN"
+
+                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json --role-arn "$CURRENT_ROLE_ARN"; then
                     echo "❌ CDK deployment failed!"
                     echo "Checking for common issues..."
 
