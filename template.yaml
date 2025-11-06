@@ -2017,8 +2017,8 @@ Resources:
                   npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME 2>&1 | tee /tmp/sandbox-output.log
                 - echo "Parsing stack name from sandbox output..."
                 - |
-                  # Extract stack name from the "Stack: amplify-..." line
-                  STACK_NAME=$(grep -oP "Stack: \K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
+                  # Extract stack name from the "Stack: amplify-..." line (handles variable whitespace)
+                  STACK_NAME=$(grep -oP "Stack:\s+\K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
 
                   if [ -z "$STACK_NAME" ]; then
                     echo "❌ Error: Could not parse stack name from sandbox output"

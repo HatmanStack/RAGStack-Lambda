@@ -1790,8 +1790,8 @@ build:
       npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME 2>&1 | tee /tmp/sandbox-output.log
     - echo "Parsing stack name from sandbox output..."
     - |
-      # Extract stack name from the "Stack: amplify-..." line
-      STACK_NAME=$(grep -oP "Stack: \K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
+      # Extract stack name from the "Stack: amplify-..." line (handles variable whitespace)
+      STACK_NAME=$(grep -oP "Stack:\s+\K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
 
       if [ -z "$STACK_NAME" ]; then
         echo "❌ Error: Could not parse stack name from sandbox output"
@@ -1835,6 +1835,15 @@ build:
 - ✅ Robust error handling with status verification
 - ✅ Doesn't rely on querying for completed stacks (which might miss in-progress stacks)
 - ✅ Stack name comes directly from source (ampx output), not CloudFormation query
+
+**Note on Regex Pattern:**
+The grep pattern uses `Stack:\s+\K[a-zA-Z0-9-]+` with `\s+` to match one or more whitespace characters. This is necessary because the ampx output formats the stack name with variable spacing:
+```
+Stack:        amplify-ragstacklambda-amplifytest13-sandbox-d463b76c33
+      ^^^^^^^^ multiple spaces (not just one!)
+```
+
+Without `\s+`, the pattern `Stack: \K...` would only match exactly one space and fail to parse the stack name.
 
 ### Files Changed
 
