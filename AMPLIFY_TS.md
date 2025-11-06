@@ -1427,3 +1427,121 @@ Expected to see:
 - "amplify_outputs.json downloaded successfully"
 - Component deployed to CDN
 
+---
+
+## Vite 5 Configuration Fix: Remove Deprecated output.file (Nov 6, 2025)
+
+### New Error After Path Fix
+
+After fixing the amplify_outputs.json download path, the file was successfully injected! But Vite build failed:
+
+**Error:**
+```
+error during build:
+Vite does not support "rollupOptions.output.file". Please use "rollupOptions.output.dir"
+and "rollupOptions.output.entryFileNames" instead.
+```
+
+### Root Cause
+
+**Vite 5 Breaking Change**: The `rollupOptions.output.file` option was deprecated in Vite 5 and removed.
+
+**Previous config** (vite.wc.config.ts lines 27, 34):
+```typescript
+output: [
+  {
+    format: 'umd',
+    file: 'dist/wc.js',  // ❌ Deprecated
+    name: 'AmplifyChat',
+  },
+  {
+    format: 'es',
+    file: 'dist/wc.esm.js',  // ❌ Deprecated
+  },
+]
+```
+
+**Why it's a problem**: When using `build.lib`, Vite handles output naming automatically via `lib.fileName`. The `output.file` conflicts with this and was removed in Vite 5.
+
+### The Fix
+
+**Remove `file` options, rely on `lib.fileName`:**
+
+```typescript
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    lib: {
+      entry: path.resolve(__dirname, 'src/wc.ts'),
+      name: 'AmplifyChat',
+      fileName: (format) => `wc.${format === 'umd' ? '' : 'esm.'}js`,  // Handles naming
+      formats: ['umd', 'es'],  // Explicit formats
+    },
+    rollupOptions: {
+      external: [],
+      output: [
+        {
+          format: 'umd',
+          name: 'AmplifyChat',
+          globals: {},
+          // ✅ No 'file' - Vite uses lib.fileName
+        },
+        {
+          format: 'es',
+          // ✅ No 'file' - Vite uses lib.fileName
+        },
+      ],
+    },
+  },
+  // ...
+});
+```
+
+**Output files:**
+- UMD: `dist/wc.js` (for `<script>` tag usage)
+- ESM: `dist/wc.esm.js` (for `import` statements)
+
+### Changes Made
+
+**File**: `src/amplify-chat/vite.wc.config.ts`
+
+1. **Removed deprecated `file` options** from both output configurations
+2. **Updated `fileName` function** to handle both formats correctly
+3. **Added explicit `formats` array** for clarity
+
+### Why This Works
+
+**Vite 5 Library Mode**:
+- `lib.entry` defines the source file
+- `lib.fileName` function generates output names based on format
+- `lib.formats` specifies which formats to build
+- Vite automatically creates `dist/` and names files correctly
+
+**No need for `output.file`** because:
+- Vite handles file placement and naming automatically
+- `lib.fileName` already specifies the pattern
+- Removing `file` makes it compatible with Vite 5
+
+### Files Changed
+
+- `src/amplify-chat/vite.wc.config.ts:19-20, 24-35` - Removed deprecated `file` options, updated config
+
+### Expected Outcome
+
+After this fix:
+1. ✅ Vite build succeeds with no deprecation warnings
+2. ✅ Generates `dist/wc.js` (UMD format)
+3. ✅ Generates `dist/wc.esm.js` (ES Module format)
+4. ✅ Web component deployed to CloudFront CDN
+
+### Complete Success Path
+
+Full deployment flow now working:
+1. ✅ Amplify backend deploys with `ampx sandbox --once`
+2. ✅ amplify_outputs.json uploaded to S3
+3. ✅ Web component build downloads config from S3
+4. ✅ inject-amplify-config.js embeds configuration
+5. ✅ Vite builds both UMD and ESM bundles
+6. ✅ Assets deployed to CloudFront CDN
+7. ✅ Chat component ready for embedding!
+

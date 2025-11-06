@@ -16,7 +16,8 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
       name: 'AmplifyChat',
-      fileName: (format) => `wc.${format === 'umd' ? 'umd' : 'esm'}.js`,
+      fileName: (format) => `wc.${format === 'umd' ? '' : 'esm.'}js`,
+      formats: ['umd', 'es'],
     },
     rollupOptions: {
       external: [],
@@ -24,14 +25,12 @@ export default defineConfig({
         // UMD format for <script> tag usage
         {
           format: 'umd',
-          file: 'dist/wc.js',
           name: 'AmplifyChat',
           globals: {},
         },
         // ES Module format for npm imports
         {
           format: 'es',
-          file: 'dist/wc.esm.js',
         },
       ],
     },
