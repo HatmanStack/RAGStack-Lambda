@@ -2075,15 +2075,9 @@ Examples:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
 
-        # Create Amplify placeholder if deploying chat
-        # This is required because CloudFormation validates S3 source locations during stack creation
-        # The placeholder will be overridden at build time with the actual amplify source
-        if args.deploy_chat:
-            try:
-                create_amplify_placeholder(artifact_bucket, args.region)
-            except IOError as e:
-                log_error(f"Failed to create Amplify placeholder: {e}")
-                sys.exit(1)
+        # Note: Amplify placeholder is created automatically by CloudFormation custom resource
+        # The CreateAmplifyPlaceholder resource creates a minimal valid zip in S3
+        # Source will be overridden at build time via sourceLocationOverride
 
         # SAM build
         sam_build()

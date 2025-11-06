@@ -2173,11 +2173,102 @@ Resources:
       DeployRoleName: !Sub 'cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}'
       CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
 
+  # Custom resource to create Amplify placeholder in S3
+  CreateAmplifyPlaceholderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-create-amplify-placeholder-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt CreateAmplifyPlaceholderRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          import zipfile
+          import io
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  key = event['ResourceProperties']['Key']
+
+                  if request_type in ['Create', 'Update']:
+                      # Create minimal valid zip file
+                      zip_buffer = io.BytesIO()
+                      with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                          # Add a minimal placeholder file
+                          zip_file.writestr('placeholder.txt',
+                              'This is a placeholder. Actual source will be provided at build time via sourceLocationOverride.')
+
+                      # Upload to S3
+                      s3.put_object(
+                          Bucket=bucket_name,
+                          Key=key,
+                          Body=zip_buffer.getvalue(),
+                          ContentType='application/zip'
+                      )
+
+                      print(f"Created placeholder at s3://{bucket_name}/{key}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # Clean up on delete (best effort)
+                      try:
+                          s3.delete_object(Bucket=bucket_name, Key=key)
+                          print(f"Deleted placeholder from s3://{bucket_name}/{key}")
+                      except Exception as e:
+                          print(f"Could not delete placeholder: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  CreateAmplifyPlaceholderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3PlaceholderAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${UISourceBucket.Arn}/*'
+
+  CreateAmplifyPlaceholder:
+    Type: Custom::CreateAmplifyPlaceholder
+    Properties:
+      ServiceToken: !GetAtt CreateAmplifyPlaceholderFunction.Arn
+      BucketName: !Ref UISourceBucket
+      Key: 'amplify-placeholder.zip'
+
   AmplifyDeployProject:
     Type: AWS::CodeBuild::Project
     DependsOn:
       - UpdateCDKBucketPolicy
       - UpdateCDKDeployRole
+      - CreateAmplifyPlaceholder
     Properties:
       Name: !Sub '${ProjectName}-amplify-deploy-${DeploymentSuffix}'
       Description: Deploy Amplify Gen 2 backend via CDK
@@ -2203,8 +2294,6 @@ Resources:
             Value: !Ref UISourceBucket
       Source:
         Type: S3
-        # Placeholder location - will be overridden by publish.py with sourceLocationOverride
-        # publish.py uploads amplify-source-*.zip and passes it to start_build()
         Location: !Sub '${UISourceBucket}/amplify-placeholder.zip'
         BuildSpec: |
           version: 0.2
