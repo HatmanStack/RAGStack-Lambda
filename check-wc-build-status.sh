@@ -7,12 +7,30 @@ echo "Checking Web Component Build Status"
 echo "===================================="
 echo ""
 
-# Get project details from check-web-component.sh
-BUCKET=$(bash check-web-component.sh 2>/dev/null | grep "S3 Assets Bucket:" | awk '{print $4}')
-DISTRIBUTION=$(bash check-web-component.sh 2>/dev/null | grep "CloudFront Distribution ID:" | awk '{print $4}')
+# Try to find bucket and distribution from CloudFormation stack
+PROJECT_NAME="${PROJECT_NAME:-amplify-test-13}"
+STACK_NAME="RAGStack-${PROJECT_NAME}"
+
+echo "Looking for stack: $STACK_NAME"
+echo ""
+
+# Get bucket name from CloudFormation
+BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='WebComponentBucket'].OutputValue" --output text 2>/dev/null)
+DISTRIBUTION=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='WebComponentDistribution'].OutputValue" --output text 2>/dev/null)
+
+if [ -z "$BUCKET" ] || [ "$BUCKET" = "None" ]; then
+    echo "❌ Could not find S3 bucket from CloudFormation"
+    echo "   Trying alternate method..."
+
+    # Try to find bucket by naming pattern
+    BUCKET=$(aws s3 ls | grep -E "${PROJECT_NAME}.*wc-assets" | awk '{print $3}' | head -1)
+fi
 
 if [ -z "$BUCKET" ]; then
     echo "❌ Could not find S3 bucket"
+    echo ""
+    echo "Please provide bucket name manually:"
+    echo "  BUCKET_NAME=your-bucket-name bash $0"
     exit 1
 fi
 
@@ -23,29 +41,35 @@ echo ""
 # Check files in S3
 echo "Files in S3:"
 echo "-------------"
-aws s3 ls "s3://$BUCKET/" --human-readable || echo "❌ Failed to list S3 bucket"
+aws s3 ls "s3://$BUCKET/" --human-readable --recursive || echo "❌ Failed to list S3 bucket"
 
 echo ""
-echo "File Details:"
-echo "-------------"
-aws s3api head-object --bucket "$BUCKET" --key "amplify-chat.js" --query '{Size:ContentLength,LastModified:LastModified,ContentType:ContentType}' --output table 2>/dev/null || echo "❌ amplify-chat.js not found in S3"
+echo "amplify-chat.js Details:"
+echo "------------------------"
+aws s3api head-object --bucket "$BUCKET" --key "amplify-chat.js" 2>/dev/null | jq '{Size: .ContentLength, LastModified: .LastModified, ContentType: .ContentType, ETag: .ETag}' || echo "❌ amplify-chat.js not found in S3"
 
 echo ""
-echo "Recent CodeBuild Runs:"
-echo "---------------------"
-BUILD_PROJECT=$(aws codebuild list-projects --query "projects[?contains(@, 'wc-build')]" --output text | head -1)
+echo "Download first 500 bytes to check format:"
+echo "-----------------------------------------"
+aws s3 cp "s3://$BUCKET/amplify-chat.js" - 2>/dev/null | head -c 500
 
-if [ -n "$BUILD_PROJECT" ]; then
-    echo "Build Project: $BUILD_PROJECT"
-    echo ""
-    aws codebuild list-builds-for-project --project-name "$BUILD_PROJECT" --max-items 5 --query 'ids' --output table
+echo ""
+echo ""
+echo "==================================="
+echo ""
+
+# Check for UMD vs IIFE pattern
+FIRST_LINE=$(aws s3 cp "s3://$BUCKET/amplify-chat.js" - 2>/dev/null | head -c 200)
+
+if echo "$FIRST_LINE" | grep -q "var AmplifyChat=function"; then
+    echo "❌ S3 file format: UMD (old)"
+    echo "   The IIFE build didn't upload to S3!"
+elif echo "$FIRST_LINE" | grep -q "!function()" || echo "$FIRST_LINE" | grep -q "(function()"; then
+    echo "✅ S3 file format: IIFE (new)"
 else
-    echo "❌ Could not find web component build project"
+    echo "⚠️  S3 file format: Unknown"
 fi
 
 echo ""
-echo "To check latest build details:"
-echo "  bash check-amplify-build.sh"
-echo ""
-echo "To invalidate CloudFront cache:"
-echo "  bash fix-cdn-cache.sh"
+echo "To check build logs:"
+echo "  aws codebuild list-builds-for-project --project-name ${PROJECT_NAME}-wc-build-* --max-items 1"
