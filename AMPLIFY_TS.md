@@ -1376,10 +1376,12 @@ post_build:
 pre_build:
   commands:
     - echo "Downloading Amplify outputs from S3..."
-    - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json amplify_outputs.json
+    - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json ../../amplify_outputs.json
     - echo "✓ amplify_outputs.json downloaded successfully"
-    - ls -lh amplify_outputs.json
+    - ls -lh ../../amplify_outputs.json
 ```
+
+**Important**: Downloads to `../../amplify_outputs.json` because install phase does `cd src/amplify-chat`, so we need to go up 2 directories to reach repo root where the script expects the file.
 
 ### Why This Works
 

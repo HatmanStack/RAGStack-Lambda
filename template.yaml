@@ -571,9 +571,9 @@ Resources:
             pre_build:
               commands:
                 - echo "Downloading Amplify outputs from S3..."
-                - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json amplify_outputs.json
+                - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json ../../amplify_outputs.json
                 - echo "✓ amplify_outputs.json downloaded successfully"
-                - ls -lh amplify_outputs.json
+                - ls -lh ../../amplify_outputs.json
             build:
               commands:
                 - echo "Building web component..."
