@@ -1296,3 +1296,132 @@ python publish.py --project-name amplify-test-13 --admin-email test@example.com 
 
 The web component build should now complete successfully.
 
+---
+
+## Web Component Build Fix: Missing amplify_outputs.json (Nov 6, 2025)
+
+### New Error After S3 Format Fix
+
+After fixing the S3 source format bugs, the web component build failed with a new error:
+
+**Error:**
+```
+❌ Error: amplify_outputs.json not found at /codebuild/output/src512824946/src/amplify_outputs.json
+   Run `npx ampx deploy` first to generate Amplify configuration.
+```
+
+### Root Cause
+
+**The Problem**: Two separate CodeBuild projects, no shared filesystem
+
+1. **AmplifyDeployProject** runs `ampx sandbox --once` → generates `amplify_outputs.json`
+2. **WebComponentBuildProject** builds the web component → needs that file for config injection
+3. Each CodeBuild project runs in its own isolated environment
+4. The web component build has no access to the Amplify deployment's outputs
+
+**Why the file is needed**: The script `src/amplify-chat/scripts/inject-amplify-config.js` reads `amplify_outputs.json` and embeds it into the web component bundle, allowing zero-config embedding with all API endpoints and auth configuration baked in.
+
+### The Solution
+
+**Bridge the gap using S3 as shared storage:**
+
+1. Amplify deployment uploads `amplify_outputs.json` to S3
+2. Web component build downloads it from S3 before building
+
+### Changes Made
+
+**File: `template.yaml`**
+
+#### 1. Added ARTIFACT_BUCKET env var to both projects
+
+**AmplifyDeployProject (line 1968-1969):**
+```yaml
+- Name: ARTIFACT_BUCKET
+  Value: !Ref UISourceBucket
+```
+
+**WebComponentBuildProject (line 593-594):**
+```yaml
+- Name: ARTIFACT_BUCKET
+  Value: !Ref UISourceBucket
+```
+
+#### 2. Upload amplify_outputs.json in Amplify post_build (line 2011-2025)
+
+```yaml
+post_build:
+  commands:
+    - echo "Uploading amplify_outputs.json to S3 for web component build..."
+    - |
+      if [ -f "amplify_outputs.json" ]; then
+        aws s3 cp amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+        echo "✓ amplify_outputs.json uploaded successfully"
+      else
+        echo "⚠ Warning: amplify_outputs.json not found - checking amplify/ directory"
+        if [ -f "amplify/amplify_outputs.json" ]; then
+          aws s3 cp amplify/amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+          echo "✓ amplify_outputs.json uploaded from amplify/ directory"
+        else
+          echo "❌ Error: amplify_outputs.json not found in expected locations"
+          exit 1
+        fi
+      fi
+```
+
+**Note**: Checks both root and amplify/ directories because `ampx sandbox` may place the file in either location depending on where it's run.
+
+#### 3. Download amplify_outputs.json in web component pre_build (line 571-576)
+
+```yaml
+pre_build:
+  commands:
+    - echo "Downloading Amplify outputs from S3..."
+    - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json amplify_outputs.json
+    - echo "✓ amplify_outputs.json downloaded successfully"
+    - ls -lh amplify_outputs.json
+```
+
+### Why This Works
+
+**Deployment flow:**
+1. ✅ Amplify backend deploys via CodeBuild → generates amplify_outputs.json
+2. ✅ Amplify post_build uploads file to S3
+3. ✅ Web component build starts (triggered by publish.py)
+4. ✅ Web component pre_build downloads file from S3
+5. ✅ inject-amplify-config.js finds the file and embeds config
+6. ✅ Build succeeds, component deployed to CDN
+
+**S3 as shared storage**: Both CodeBuild projects have access to the artifact bucket, making it perfect for passing artifacts between deployments.
+
+### Expected Outcome
+
+After these fixes, the complete deployment should succeed:
+
+1. ✅ Amplify backend deploys (auth, data, GraphQL)
+2. ✅ amplify_outputs.json uploaded to S3
+3. ✅ Web component downloads config
+4. ✅ Web component builds with embedded Amplify configuration
+5. ✅ Component deployed to CloudFront CDN
+6. ✅ Full chat functionality available
+
+### Files Changed
+
+- `template.yaml:1968-1969` - Added ARTIFACT_BUCKET to AmplifyDeployProject
+- `template.yaml:2011-2025` - Upload amplify_outputs.json to S3
+- `template.yaml:593-594` - Added ARTIFACT_BUCKET to WebComponentBuildProject
+- `template.yaml:571-576` - Download amplify_outputs.json from S3
+
+### Testing
+
+Full deployment should now work end-to-end:
+```bash
+python publish.py --project-name amplify-test-14 --admin-email test@example.com --region us-west-2 --deploy-chat
+```
+
+Expected to see:
+- Amplify backend deployment success
+- "amplify_outputs.json uploaded successfully"
+- Web component build success
+- "amplify_outputs.json downloaded successfully"
+- Component deployed to CDN
+

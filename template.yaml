@@ -568,6 +568,12 @@ Resources:
                 - echo "Installing dependencies..."
                 - cd src/amplify-chat
                 - npm ci
+            pre_build:
+              commands:
+                - echo "Downloading Amplify outputs from S3..."
+                - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json amplify_outputs.json
+                - echo "✓ amplify_outputs.json downloaded successfully"
+                - ls -lh amplify_outputs.json
             build:
               commands:
                 - echo "Building web component..."
@@ -590,6 +596,8 @@ Resources:
             Value: !Ref WebComponentAssetsBucket
           - Name: DISTRIBUTION_ID
             Value: !Ref WebComponentDistribution
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref UISourceBucket
       TimeoutInMinutes: 15
       Tags:
         - Key: Project
@@ -1965,6 +1973,8 @@ Resources:
             Value: !Ref UserPoolClient
           - Name: DEPLOYMENT_SUFFIX
             Value: !Ref DeploymentSuffix
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref UISourceBucket
       Source:
         Type: S3
         # Placeholder location - will be overridden by publish.py with sourceLocationOverride
@@ -2006,6 +2016,21 @@ Resources:
             post_build:
               commands:
                 - echo "Amplify backend deployment complete"
+                - echo "Uploading amplify_outputs.json to S3 for web component build..."
+                - |
+                  if [ -f "amplify_outputs.json" ]; then
+                    aws s3 cp amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+                    echo "✓ amplify_outputs.json uploaded successfully"
+                  else
+                    echo "⚠ Warning: amplify_outputs.json not found - checking amplify/ directory"
+                    if [ -f "amplify/amplify_outputs.json" ]; then
+                      aws s3 cp amplify/amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+                      echo "✓ amplify_outputs.json uploaded from amplify/ directory"
+                    else
+                      echo "❌ Error: amplify_outputs.json not found in expected locations"
+                      exit 1
+                    fi
+                  fi
                 - echo "Listing Amplify CloudFormation stacks created by sandbox..."
                 - aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `amplify-`)].{Name:StackName, Status:StackStatus}' --output table || true
                 - echo "Note - Web component CDN is managed by SAM stack (not Amplify)"
