@@ -3,9 +3,12 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 /**
- * Vite configuration for building the Web Component UMD bundle
+ * Vite configuration for building the Web Component as an IIFE bundle
  *
- * This builds src/wc.ts into a UMD bundle that can be used with:
+ * This builds src/wc.ts into an IIFE (Immediately Invoked Function Expression)
+ * that auto-executes when loaded via script tag, ensuring customElements.define() runs.
+ *
+ * Usage:
  * <script src="path/to/amplify-chat.js"></script>
  * <amplify-chat conversation-id="my-chat"></amplify-chat>
  */
@@ -16,17 +19,15 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
       name: 'AmplifyChat',
-      fileName: (format) => `wc.${format === 'umd' ? '' : 'esm.'}js`,
-      formats: ['umd', 'es'],
+      fileName: (format) => `wc.${format === 'es' ? 'esm.' : ''}js`,
+      formats: ['iife', 'es'],  // Changed from ['umd', 'es'] to ['iife', 'es']
     },
     rollupOptions: {
-      external: [],
       output: [
-        // UMD format for <script> tag usage
+        // IIFE format for <script> tag usage (auto-executes)
         {
-          format: 'umd',
+          format: 'iife',
           name: 'AmplifyChat',
-          globals: {},
         },
         // ES Module format for npm imports
         {
