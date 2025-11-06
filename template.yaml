@@ -2147,13 +2147,9 @@ Resources:
                   # Deploy CDK stack
                   cd amplify
 
-                  # Get current role ARN for CDK to use
-                  CURRENT_ROLE_ARN=$(aws sts get-caller-identity --query Arn --output text | sed 's/:sts:/:iam:/' | sed 's/:assumed-role\//:role\//' | sed 's/\/[^\/]*$//')
-                  echo "Using role: $CURRENT_ROLE_ARN"
+                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json"
 
-                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json --role-arn $CURRENT_ROLE_ARN"
-
-                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json --role-arn "$CURRENT_ROLE_ARN"; then
+                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json; then
                     echo "❌ CDK deployment failed!"
                     echo "Checking for common issues..."
 
