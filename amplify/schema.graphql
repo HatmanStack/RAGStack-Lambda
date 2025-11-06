@@ -1,0 +1,24 @@
+type Source {
+  title: String!
+  location: String
+  snippet: String!
+}
+
+type ConversationResponse {
+  content: String!
+  sources: [Source]
+  modelUsed: String
+}
+
+type Query {
+  conversation(
+    message: String!
+    conversationId: String!
+    userId: String
+    userToken: String
+  ): ConversationResponse
+}
+
+schema {
+  query: Query
+}

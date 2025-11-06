@@ -2009,43 +2009,66 @@ Resources:
                 - test -f amplify/package-lock.json && cp amplify/package-lock.json . || echo "No lock file to copy"
             build:
               commands:
-                - echo "Cleaning up cached CDK state..."
-                - rm -rf .amplify/ amplify/.amplify/
-                - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
+                - echo "Cleaning up cached CDK/Amplify state..."
+                - rm -rf .amplify/ amplify/.amplify/ amplify/cdk.out/
+                - echo "Installing dependencies..."
+                - cd amplify && npm install && cd ..
+                - echo "Deploying Amplify backend via CDK..."
                 - |
-                  # Capture output to parse stack name
-                  npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME 2>&1 | tee /tmp/sandbox-output.log
-                - echo "Parsing stack name from sandbox output..."
+                  # Export environment variables needed by CDK stack
+                  export KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID}
+                  export CONFIGURATION_TABLE_NAME=${CONFIGURATION_TABLE_NAME}
+
+                  # Deploy CDK stack
+                  cd amplify
+                  npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json
+                  cd ..
+
+                  echo "✓ CDK deployment complete"
+                - echo "Generating amplify_outputs.json from CDK outputs..."
                 - |
-                  # Extract stack name from the "Stack: amplify-..." line (handles variable whitespace)
-                  STACK_NAME=$(grep -oP "Stack:\s+\K[a-zA-Z0-9-]+" /tmp/sandbox-output.log | head -1)
+                  # Convert CDK outputs to Amplify Gen 2 format
+                  STACK_NAME="amplify-${PROJECT_NAME}-backend"
 
-                  if [ -z "$STACK_NAME" ]; then
-                    echo "❌ Error: Could not parse stack name from sandbox output"
-                    echo "Sandbox output:"
-                    cat /tmp/sandbox-output.log
-                    exit 1
-                  fi
+                  # Get stack outputs
+                  API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiEndpoint'].OutputValue" --output text)
+                  API_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiId'].OutputValue" --output text)
+                  REGION=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text)
 
-                  echo "✓ Parsed stack name: $STACK_NAME"
+                  # Create amplify_outputs.json in Amplify Gen 2 format
+                  cat > amplify_outputs.json <<EOF
+                  {
+                    "version": "1.4",
+                    "auth": {
+                      "aws_region": "$REGION",
+                      "user_pool_id": "$USERPOOLID",
+                      "user_pool_client_id": "$USERPOOLCLIENTID",
+                      "identity_pool_id": "",
+                      "password_policy": {
+                        "min_length": 8,
+                        "require_numbers": true,
+                        "require_lowercase": true,
+                        "require_uppercase": true,
+                        "require_symbols": true
+                      },
+                      "oauth": {},
+                      "username_attributes": ["email"],
+                      "user_verification_types": ["email"],
+                      "mfa_methods": [],
+                      "mfa_configuration": "OPTIONAL"
+                    },
+                    "data": {
+                      "aws_region": "$REGION",
+                      "url": "$API_ENDPOINT",
+                      "api_id": "$API_ID",
+                      "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+                      "authorization_types": ["AWS_LAMBDA"]
+                    }
+                  }
+                  EOF
 
-                  # Wait for stack creation to complete (handles case where ampx exits early)
-                  echo "Waiting for stack creation to complete..."
-                  aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" || \
-                  aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" || true
-
-                  # Verify stack status
-                  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
-                  echo "Stack status: $STACK_STATUS"
-
-                  if [[ "$STACK_STATUS" != "CREATE_COMPLETE" && "$STACK_STATUS" != "UPDATE_COMPLETE" ]]; then
-                    echo "❌ Error: Stack creation/update did not complete successfully"
-                    echo "Stack status: $STACK_STATUS"
-                    exit 1
-                  fi
-
-                  echo "Generating amplify_outputs.json with API and auth configuration..."
-                  npm exec --prefix amplify -- ampx generate outputs --stack "$STACK_NAME"
+                  echo "✓ amplify_outputs.json generated successfully"
+                  cat amplify_outputs.json
             post_build:
               commands:
                 - echo "Amplify backend deployment complete"
