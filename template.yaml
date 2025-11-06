@@ -1955,8 +1955,128 @@ Resources:
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cdk-bootstrap/*'
 
+  # Custom resource to update CDK assets bucket policy to allow CodeBuild role
+  UpdateCDKBucketPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-update-cdk-bucket-policy-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt UpdateCDKBucketPolicyRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  codebuild_role_arn = event['ResourceProperties']['CodeBuildRoleArn']
+
+                  if request_type in ['Create', 'Update']:
+                      # Get existing bucket policy
+                      try:
+                          response = s3.get_bucket_policy(Bucket=bucket_name)
+                          policy = json.loads(response['Policy'])
+                      except s3.exceptions.from_code('NoSuchBucketPolicy'):
+                          # No existing policy, create new one
+                          policy = {
+                              'Version': '2012-10-17',
+                              'Statement': []
+                          }
+
+                      # Add statement to allow CodeBuild role
+                      new_statement = {
+                          'Sid': 'AllowCodeBuildAccess',
+                          'Effect': 'Allow',
+                          'Principal': {
+                              'AWS': codebuild_role_arn
+                          },
+                          'Action': [
+                              's3:GetObject',
+                              's3:PutObject',
+                              's3:ListBucket'
+                          ],
+                          'Resource': [
+                              f'arn:aws:s3:::{bucket_name}/*',
+                              f'arn:aws:s3:::{bucket_name}'
+                          ]
+                      }
+
+                      # Remove any existing statement with same Sid
+                      policy['Statement'] = [s for s in policy['Statement'] if s.get('Sid') != 'AllowCodeBuildAccess']
+                      policy['Statement'].append(new_statement)
+
+                      # Update bucket policy
+                      s3.put_bucket_policy(
+                          Bucket=bucket_name,
+                          Policy=json.dumps(policy)
+                      )
+
+                      print(f"Updated bucket policy for {bucket_name}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # On delete, try to remove our statement (best effort)
+                      try:
+                          response = s3.get_bucket_policy(Bucket=bucket_name)
+                          policy = json.loads(response['Policy'])
+                          policy['Statement'] = [s for s in policy['Statement'] if s.get('Sid') != 'AllowCodeBuildAccess']
+
+                          if policy['Statement']:
+                              s3.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+                          else:
+                              s3.delete_bucket_policy(Bucket=bucket_name)
+                      except Exception as e:
+                          print(f"Could not clean up bucket policy: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  UpdateCDKBucketPolicyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3BucketPolicyUpdate
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketPolicy
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}'
+
+  UpdateCDKBucketPolicy:
+    Type: Custom::UpdateCDKBucketPolicy
+    Properties:
+      ServiceToken: !GetAtt UpdateCDKBucketPolicyFunction.Arn
+      BucketName: !Sub 'cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}'
+      CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
+
   AmplifyDeployProject:
     Type: AWS::CodeBuild::Project
+    DependsOn: UpdateCDKBucketPolicy
     Properties:
       Name: !Sub '${ProjectName}-amplify-deploy-${DeploymentSuffix}'
       Description: Deploy Amplify Gen 2 backend via CDK
