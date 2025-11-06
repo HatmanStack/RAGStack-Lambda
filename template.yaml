@@ -2254,7 +2254,9 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${UISourceBucket.Arn}/*'
+                Resource: !Sub
+                  - '${BucketArn}/*'
+                  - BucketArn: !GetAtt UISourceBucket.Arn
 
   CreateAmplifyPlaceholder:
     Type: Custom::CreateAmplifyPlaceholder
