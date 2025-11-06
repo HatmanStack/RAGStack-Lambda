@@ -2018,19 +2018,31 @@ Resources:
                 - echo "Amplify backend deployment complete"
                 - echo "Uploading amplify_outputs.json to S3 for web component build..."
                 - |
+                  # Find amplify_outputs.json
+                  OUTPUT_FILE=""
                   if [ -f "amplify_outputs.json" ]; then
-                    aws s3 cp amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
-                    echo "✓ amplify_outputs.json uploaded successfully"
+                    OUTPUT_FILE="amplify_outputs.json"
+                  elif [ -f "amplify/amplify_outputs.json" ]; then
+                    OUTPUT_FILE="amplify/amplify_outputs.json"
                   else
-                    echo "⚠ Warning: amplify_outputs.json not found - checking amplify/ directory"
-                    if [ -f "amplify/amplify_outputs.json" ]; then
-                      aws s3 cp amplify/amplify_outputs.json s3://${ARTIFACT_BUCKET}/amplify_outputs.json
-                      echo "✓ amplify_outputs.json uploaded from amplify/ directory"
-                    else
-                      echo "❌ Error: amplify_outputs.json not found in expected locations"
-                      exit 1
-                    fi
+                    echo "❌ Error: amplify_outputs.json not found in expected locations"
+                    echo "Searched: ./amplify_outputs.json and ./amplify/amplify_outputs.json"
+                    ls -la amplify/ || true
+                    exit 1
                   fi
+
+                  # Validate file is not empty and contains required fields
+                  echo "Validating amplify_outputs.json..."
+                  cat "$OUTPUT_FILE"
+                  if ! grep -q "auth" "$OUTPUT_FILE" && ! grep -q "data" "$OUTPUT_FILE"; then
+                    echo "⚠️  Warning: amplify_outputs.json appears to be empty or malformed"
+                    echo "File contents:"
+                    cat "$OUTPUT_FILE"
+                  fi
+
+                  # Upload to S3
+                  aws s3 cp "$OUTPUT_FILE" s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+                  echo "✓ amplify_outputs.json uploaded successfully from $OUTPUT_FILE"
                 - echo "Listing Amplify CloudFormation stacks created by sandbox..."
                 - aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `amplify-`)].{Name:StackName, Status:StackStatus}' --output table || true
                 - echo "Note - Web component CDN is managed by SAM stack (not Amplify)"
