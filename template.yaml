@@ -2074,9 +2074,110 @@ Resources:
       BucketName: !Sub 'cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}'
       CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
 
+  # Custom resource to grant CDK deploy role permission to pass our CodeBuild role
+  UpdateCDKDeployRoleFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-update-cdk-deploy-role-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt UpdateCDKDeployRoleRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          iam = boto3.client('iam')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  deploy_role_name = event['ResourceProperties']['DeployRoleName']
+                  codebuild_role_arn = event['ResourceProperties']['CodeBuildRoleArn']
+
+                  policy_name = 'AllowPassCodeBuildRole'
+
+                  if request_type in ['Create', 'Update']:
+                      # Create or update inline policy on CDK deploy role
+                      policy_document = {
+                          'Version': '2012-10-17',
+                          'Statement': [
+                              {
+                                  'Effect': 'Allow',
+                                  'Action': 'iam:PassRole',
+                                  'Resource': codebuild_role_arn
+                              }
+                          ]
+                      }
+
+                      iam.put_role_policy(
+                          RoleName=deploy_role_name,
+                          PolicyName=policy_name,
+                          PolicyDocument=json.dumps(policy_document)
+                      )
+
+                      print(f"Updated {deploy_role_name} with iam:PassRole for {codebuild_role_arn}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # On delete, try to remove our inline policy (best effort)
+                      try:
+                          iam.delete_role_policy(
+                              RoleName=deploy_role_name,
+                              PolicyName=policy_name
+                          )
+                          print(f"Removed policy {policy_name} from {deploy_role_name}")
+                      except iam.exceptions.NoSuchEntityException:
+                          print(f"Policy {policy_name} not found on {deploy_role_name}")
+                      except Exception as e:
+                          print(f"Could not remove policy: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  UpdateCDKDeployRoleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: UpdateIAMRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}'
+
+  UpdateCDKDeployRole:
+    Type: Custom::UpdateCDKDeployRole
+    Properties:
+      ServiceToken: !GetAtt UpdateCDKDeployRoleFunction.Arn
+      DeployRoleName: !Sub 'cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}'
+      CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
+
   AmplifyDeployProject:
     Type: AWS::CodeBuild::Project
-    DependsOn: UpdateCDKBucketPolicy
+    DependsOn:
+      - UpdateCDKBucketPolicy
+      - UpdateCDKDeployRole
     Properties:
       Name: !Sub '${ProjectName}-amplify-deploy-${DeploymentSuffix}'
       Description: Deploy Amplify Gen 2 backend via CDK
