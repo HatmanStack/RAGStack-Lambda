@@ -32,11 +32,11 @@ export class AmplifyBackendStack extends cdk.Stack {
 
     // Lambda Authorizer Function
     const authorizerFunction = new lambda.Function(this, 'AuthorizerFunction', {
-      runtime: lambda.Runtime.NODEJS_24_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'authorizer.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data/functions'), {
         bundling: {
-          image: lambda.Runtime.NODEJS_24_X.bundlingImage,
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
           command: [
             'bash',
             '-c',
@@ -87,11 +87,11 @@ export class AmplifyBackendStack extends cdk.Stack {
 
     // Conversation Query Lambda Resolver
     const conversationFunction = new lambda.Function(this, 'ConversationFunction', {
-      runtime: lambda.Runtime.NODEJS_24_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'conversation.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data/functions'), {
         bundling: {
-          image: lambda.Runtime.NODEJS_24_X.bundlingImage,
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
           command: [
             'bash',
             '-c',
