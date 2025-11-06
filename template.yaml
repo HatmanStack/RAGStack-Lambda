@@ -2021,19 +2021,56 @@ Resources:
 
                   # Deploy CDK stack
                   cd amplify
-                  npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json
-                  cd ..
+                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json"
 
+                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json; then
+                    echo "❌ CDK deployment failed!"
+                    echo "Checking for common issues..."
+
+                    # Check if CDK is bootstrapped
+                    echo "Checking CDK bootstrap status..."
+                    aws cloudformation describe-stacks --stack-name CDKToolkit --region ${AWS_REGION} 2>&1 || echo "⚠️ CDK not bootstrapped"
+
+                    # Show any CloudFormation stacks in failed state
+                    echo "Checking for failed stacks..."
+                    aws cloudformation list-stacks --stack-status-filter CREATE_FAILED UPDATE_FAILED ROLLBACK_COMPLETE --query "StackSummaries[?contains(StackName, 'amplify')].{Name:StackName,Status:StackStatus}" --output table
+
+                    exit 1
+                  fi
+
+                  cd ..
                   echo "✓ CDK deployment complete"
                 - echo "Generating amplify_outputs.json from CDK outputs..."
                 - |
                   # Convert CDK outputs to Amplify Gen 2 format
                   STACK_NAME="amplify-${PROJECT_NAME}-backend"
 
+                  # Verify stack exists
+                  if ! aws cloudformation describe-stacks --stack-name "$STACK_NAME" &>/dev/null; then
+                    echo "❌ Error: CDK stack $STACK_NAME does not exist!"
+                    echo "CDK deployment must have failed silently."
+                    exit 1
+                  fi
+
                   # Get stack outputs
                   API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiEndpoint'].OutputValue" --output text)
                   API_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiId'].OutputValue" --output text)
                   REGION=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text)
+
+                  # Validate outputs are not empty
+                  if [ -z "$API_ENDPOINT" ] || [ "$API_ENDPOINT" = "None" ] || [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+                    echo "❌ Error: CDK stack exists but has no API outputs!"
+                    echo "API_ENDPOINT: $API_ENDPOINT"
+                    echo "API_ID: $API_ID"
+                    echo "Stack outputs:"
+                    aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs" --output table
+                    exit 1
+                  fi
+
+                  echo "✓ Retrieved CDK outputs:"
+                  echo "  API Endpoint: $API_ENDPOINT"
+                  echo "  API ID: $API_ID"
+                  echo "  Region: $REGION"
 
                   # Create amplify_outputs.json in Amplify Gen 2 format
                   cat > amplify_outputs.json <<EOF
