@@ -19,8 +19,12 @@ import { AMPLIFY_OUTPUTS } from './amplify-config.generated';
 // Configure Amplify with bundled config (zero-config embedding)
 Amplify.configure(AMPLIFY_OUTPUTS);
 
-// Export the Web Component
-export { AmplifyChat } from './components/AmplifyChat.wc';
+// Import and auto-register the Web Component
+// The import side effect will register the custom element
+import { AmplifyChat } from './components/AmplifyChat.wc';
+
+// Export the Web Component class for programmatic use
+export { AmplifyChat };
 
 // Export types for TypeScript users
 export type {
