@@ -1028,3 +1028,77 @@ Amplify Gen 2's architecture requires synthesis before deployment:
 - `template.yaml:2005` - Updated to use `ampx sandbox --once`
 - `AMPLIFY_TS.md` - This documentation
 
+---
+
+## Stack Naming Fix: Adding --identifier and Fixing Post-Build (Nov 5, 2025)
+
+### Problem Identified
+
+After deploying with `sam build && sam deploy`, the BuildSpec was updated correctly, but there were two issues:
+
+1. **Wrong Stack Reference**: Post-build tried to query `amplify-$PROJECT_NAME-cdn` which doesn't exist (CDN moved to SAM in Phase 1)
+2. **Unpredictable Stack Names**: Amplify Gen 2 auto-generates stack names with hashes, making them hard to discover
+
+### Changes Made
+
+**File: `template.yaml` lines 2004-2011**
+
+**Build Phase (line 2005):**
+```yaml
+# Before
+- npm exec --prefix amplify -- ampx sandbox --once
+
+# After
+- npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
+```
+
+**Post-Build Phase (lines 2006-2011):**
+```yaml
+# Before (incorrect)
+- echo "Outputs are available in CloudFormation stacks - amplify-$PROJECT_NAME-*"
+- aws cloudformation describe-stacks --stack-name "amplify-$PROJECT_NAME-cdn" --query 'Stacks[0].Outputs' || true
+
+# After (correct)
+- echo "Amplify backend deployment complete"
+- echo "Listing Amplify CloudFormation stacks created by sandbox..."
+- aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `amplify-`)].{Name:StackName, Status:StackStatus}' --output table || true
+- echo "Note - Web component CDN is managed by SAM stack (not Amplify)"
+```
+
+### Why These Changes Matter
+
+**1. `--identifier $PROJECT_NAME`** makes stack naming predictable:
+- Amplify Gen 2 uses the identifier in the backend-id portion of stack names
+- Stack names become: `amplify-{project-name}-{resource-type}-{hash}`
+- Example: `amplify-test-app-auth-abc123` instead of `amplify-randomid-auth-abc123`
+- Easier to discover stacks programmatically in publish.py
+
+**2. Fixed Post-Build Commands** reflect Phase 1 architecture:
+- Web component CDN is in SAM stack, not Amplify
+- Lists all Amplify stacks created (auth, data, etc.) for visibility
+- No longer tries to query non-existent `amplify-$PROJECT_NAME-cdn` stack
+- Uses pattern matching compatible with Amplify Gen 2's auto-generated names
+
+### Expected Stack Names
+
+With `--identifier amplify-test-12`, Amplify Gen 2 will create stacks like:
+- `amplify-amplifytest12-auth-{hash}` (Cognito user pool)
+- `amplify-amplifytest12-data-{hash}` (AppSync GraphQL API)
+- `amplify-amplifytest12-sandbox-{hash}` (sandbox metadata)
+
+Note: Identifier may be sanitized (hyphens removed), but it will be in the name.
+
+### Deployment Flow Update
+
+**When using `--chat-only` after sam build/deploy:**
+1. CodeBuild now has updated BuildSpec with correct commands
+2. Sandbox uses project name as identifier for consistent naming
+3. Post-build lists actual stacks created (not fake CDN stack)
+4. publish.py retrieves web component outputs from SAM stack (lines 1588-1599)
+
+### Related Documentation
+
+- `docs/AMPLIFY_STACK_NAMING.md` - Full explanation of Amplify Gen 2 naming patterns
+- `publish.py:1588-1599` - Web component outputs retrieved from SAM, not Amplify
+- Phase 1 migration (commit 5dcad01) - When CDN moved to SAM
+

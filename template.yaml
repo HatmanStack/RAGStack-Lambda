@@ -2002,12 +2002,13 @@ Resources:
                 - echo "Cleaning up cached CDK state..."
                 - rm -rf .amplify/ amplify/.amplify/
                 - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
-                - npm exec --prefix amplify -- ampx sandbox --once
+                - npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
             post_build:
               commands:
-                - echo "Deployment complete"
-                - echo "Outputs are available in CloudFormation stacks - amplify-$PROJECT_NAME-*"
-                - aws cloudformation describe-stacks --stack-name "amplify-$PROJECT_NAME-cdn" --query 'Stacks[0].Outputs' || true
+                - echo "Amplify backend deployment complete"
+                - echo "Listing Amplify CloudFormation stacks created by sandbox..."
+                - aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `amplify-`)].{Name:StackName, Status:StackStatus}' --output table || true
+                - echo "Note - Web component CDN is managed by SAM stack (not Amplify)"
       TimeoutInMinutes: 30
       Cache:
         Type: LOCAL
