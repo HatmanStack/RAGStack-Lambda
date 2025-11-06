@@ -437,9 +437,9 @@ Resources:
       BucketName: !Sub '${ProjectName}-wc-assets-${DeploymentSuffix}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false  # Allow CloudFront OAI bucket policy
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false  # Allow CloudFront OAI access
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
