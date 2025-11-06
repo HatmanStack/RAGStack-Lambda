@@ -35,19 +35,25 @@ export class AmplifyBackendStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'functions/authorizer.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
+        assetHash: 'v2-parent-dir-bundling', // Force new asset hash to bypass caching
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
             'bash',
             '-c',
             [
+              'echo "=== AUTHORIZER BUNDLING START ==="',
+              'echo "Working directory: $(pwd)"',
+              'echo "Listing files:"',
+              'ls -la',
               'echo "Installing dependencies in functions directory..."',
               'cd functions && npm install && cd ..',
-              'echo "Compiling TypeScript files..."',
+              'echo "Compiling TypeScript files from parent directory..."',
               './functions/node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck config.ts functions/*.ts',
               'echo "Copying node_modules to output..."',
               'cp -r functions/node_modules /asset-output/functions/',
-              'echo "Bundling complete"',
+              'echo "=== BUNDLING COMPLETE ==="',
+              'echo "Output directory structure:"',
               'ls -la /asset-output/',
               'ls -la /asset-output/functions/ || true',
             ].join(' && '),
@@ -100,19 +106,25 @@ export class AmplifyBackendStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'functions/conversation.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
+        assetHash: 'v2-parent-dir-bundling', // Force new asset hash to bypass caching
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
             'bash',
             '-c',
             [
+              'echo "=== CONVERSATION BUNDLING START ==="',
+              'echo "Working directory: $(pwd)"',
+              'echo "Listing files:"',
+              'ls -la',
               'echo "Installing dependencies in functions directory..."',
               'cd functions && npm install && cd ..',
-              'echo "Compiling TypeScript files..."',
+              'echo "Compiling TypeScript files from parent directory..."',
               './functions/node_modules/.bin/tsc --target ES2022 --module commonjs --moduleResolution node --outDir /asset-output --skipLibCheck config.ts functions/*.ts',
               'echo "Copying node_modules to output..."',
               'cp -r functions/node_modules /asset-output/functions/',
-              'echo "Bundling complete"',
+              'echo "=== BUNDLING COMPLETE ==="',
+              'echo "Output directory structure:"',
               'ls -la /asset-output/',
               'ls -la /asset-output/functions/ || true',
             ].join(' && '),
