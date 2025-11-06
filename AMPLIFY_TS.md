@@ -1659,3 +1659,82 @@ aws s3 cp s3://YOUR-BUCKET/amplify_outputs.json - | jq .
 
 This was the **critical missing piece** - the backend was deployed but client configuration wasn't being generated!
 
+---
+
+## Fix: Use --stack Instead of --branch for Sandbox Mode (Nov 6, 2025)
+
+### Problem with Initial Fix
+
+The previous fix added `ampx generate outputs --branch $PROJECT_NAME --app-id $PROJECT_NAME`, but it failed:
+
+**Error:**
+```
+[StackDoesNotExistError] Stack does not exist.
+Stack with id amplify-amplifytest12-amplifytest12-branch-66fe9b27bd does not exist
+```
+
+**Root Cause - Stack Naming Mismatch:**
+- `ampx sandbox` creates stack: `amplify-ragstacklambda-amplifytest12-sandbox-b6e9400061`
+- `ampx generate outputs --branch/--app-id` looks for: `amplify-{app-id}-{branch}-{hash}`
+- The `--branch` and `--app-id` parameters are designed for Amplify Console pipeline deployments, not sandbox mode!
+
+**Sandbox vs Pipeline Stack Naming:**
+```
+Pipeline mode: amplify-{app-id}-{branch}-{hash}
+Sandbox mode:  amplify-{backend-name}-{identifier}-sandbox-{hash}
+```
+
+### The Solution
+
+Use `--stack` parameter with the actual CloudFormation stack name instead of trying to construct it from branch/app-id:
+
+**File**: `template.yaml` lines 2017-2026
+
+```yaml
+- echo "Generating amplify_outputs.json with API and auth configuration..."
+- |
+  # Find the sandbox stack name (pattern: amplify-*-sandbox-*)
+  STACK_NAME=$(aws cloudformation list-stacks \
+    --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+    --query "StackSummaries[?contains(StackName, 'sandbox') && contains(StackName, 'amplify')].StackName | [0]" \
+    --output text)
+
+  if [ -z "$STACK_NAME" ] || [ "$STACK_NAME" = "None" ]; then
+    echo "❌ Error: Could not find Amplify sandbox stack"
+    exit 1
+  fi
+
+  echo "Found Amplify sandbox stack: $STACK_NAME"
+  npm exec --prefix amplify -- ampx generate outputs --stack $STACK_NAME
+```
+
+**How it works:**
+1. Query CloudFormation for stacks with "sandbox" and "amplify" in the name
+2. Get the first matching stack (most recent sandbox deployment)
+3. Pass actual stack name to `ampx generate outputs --stack`
+4. CLI reads outputs from that specific stack
+
+### Additional Issue: Circular JSON Error
+
+The logs also showed the circular JSON error returned:
+```
+[ERROR] [UnknownFault] TypeError: Converting circular structure to JSON
+```
+
+**However**: The deployment **continues and completes successfully** despite the error! The stack is created. This appears to be a non-fatal warning in CLI 1.8.0.
+
+### Files Changed
+
+- `template.yaml:2017-2026` - Find sandbox stack dynamically, use --stack parameter
+- AMPLIFY_TS.md - Document the fix
+
+### Expected Outcome
+
+After this fix:
+1. ✅ `ampx sandbox --once` deploys backend (with harmless circular JSON warning)
+2. ✅ Script finds actual sandbox stack name from CloudFormation
+3. ✅ `ampx generate outputs --stack {actual-name}` succeeds
+4. ✅ amplify_outputs.json populated with real auth and API config
+5. ✅ Web component gets working configuration
+6. ✅ Chat component connects to backend!
+

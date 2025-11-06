@@ -2014,7 +2014,16 @@ Resources:
                 - echo "Deploying Amplify backend via sandbox (one-time deployment)..."
                 - npm exec --prefix amplify -- ampx sandbox --once --identifier $PROJECT_NAME
                 - echo "Generating amplify_outputs.json with API and auth configuration..."
-                - npm exec --prefix amplify -- ampx generate outputs --branch $PROJECT_NAME --app-id $PROJECT_NAME
+                - |
+                  # Find the sandbox stack name (pattern: amplify-*-sandbox-*)
+                  STACK_NAME=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, 'sandbox') && contains(StackName, 'amplify')].StackName | [0]" --output text)
+                  if [ -z "$STACK_NAME" ] || [ "$STACK_NAME" = "None" ]; then
+                    echo "❌ Error: Could not find Amplify sandbox stack"
+                    aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, 'amplify')].StackName"
+                    exit 1
+                  fi
+                  echo "Found Amplify sandbox stack: $STACK_NAME"
+                  npm exec --prefix amplify -- ampx generate outputs --stack $STACK_NAME
             post_build:
               commands:
                 - echo "Amplify backend deployment complete"
