@@ -1005,7 +1005,7 @@ def package_amplify_chat_source(bucket_name, region):
         bucket_name=bucket_name,
         region=region,
         exclude_dirs=['node_modules', 'dist'],
-        archive_prefix='web-component',  # CodeBuild expects web-component/* structure
+        archive_prefix='src/amplify-chat',  # CodeBuild BuildSpec does 'cd src/amplify-chat'
         s3_key_prefix='web-component-source'
     )
 
@@ -1612,10 +1612,10 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
     try:
         codebuild = boto3.client('codebuild', region_name=region)
 
-        # Trigger build with source location (S3 format: s3://bucket/key)
+        # Trigger build with source location (CodeBuild S3 format: bucket/key, NOT s3://bucket/key)
         build_response = codebuild.start_build(
             projectName=build_project,
-            sourceLocationOverride=f's3://{artifact_bucket}/{chat_source_key}',
+            sourceLocationOverride=f'{artifact_bucket}/{chat_source_key}',
             sourceTypeOverride='S3',
         )
 

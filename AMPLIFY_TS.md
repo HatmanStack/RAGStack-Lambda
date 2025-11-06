@@ -1197,3 +1197,102 @@ OR:
 3. Run `python publish.py ... --chat-only` (to test with updated BuildSpec)
 4. All changes reflected ✅
 
+---
+
+## Web Component Build Fix: S3 Source Format and Structure (Nov 6, 2025)
+
+### New Error After Amplify Deploy
+
+After fixing all previous issues, Amplify backend deployed successfully! But the web component build failed:
+
+**Error:**
+```
+Failed to trigger CodeBuild: An error occurred (InvalidInputException) when calling the
+StartBuild operation: Invalid project source: location must be a valid S3 source
+```
+
+### Root Causes
+
+Found TWO bugs in `publish.py` affecting web component CodeBuild:
+
+#### Bug 1: Wrong S3 Source Format (Line 1618)
+
+**Problem:**
+```python
+sourceLocationOverride=f's3://{artifact_bucket}/{chat_source_key}'
+```
+
+**Issue**: CodeBuild S3 sources expect `bucket/key` format, NOT `s3://bucket/key`
+
+**Evidence**: Line 1569 comment says "CodeBuild expects 'bucket/key' format, not 's3://bucket/key'" for Amplify deploy, but web component build used wrong format
+
+**Fix:**
+```python
+# Before
+sourceLocationOverride=f's3://{artifact_bucket}/{chat_source_key}'
+
+# After
+sourceLocationOverride=f'{artifact_bucket}/{chat_source_key}'
+```
+
+#### Bug 2: Wrong Zip Structure (Line 1008)
+
+**Problem:**
+```python
+archive_prefix='web-component',  # Creates: web-component/* in zip
+```
+
+**Issue**: BuildSpec at template.yaml:569 does `cd src/amplify-chat`, expecting:
+```
+src/
+  amplify-chat/
+    package.json
+    ...
+```
+
+But zip created had structure:
+```
+web-component/
+  package.json
+  ...
+```
+
+**Fix:**
+```python
+# Before
+archive_prefix='web-component',
+
+# After
+archive_prefix='src/amplify-chat',  # Match BuildSpec expectations
+```
+
+### How These Bugs Manifested
+
+1. Amplify backend deployed successfully ✅
+2. publish.py tried to trigger web component build
+3. **Bug 1** caused immediate failure: `s3://` format rejected by CodeBuild
+4. **Bug 2** would have caused failure later: BuildSpec can't `cd src/amplify-chat` if zip contains `web-component/`
+
+### Files Changed
+
+- `publish.py:1618` - Removed `s3://` prefix from source location
+- `publish.py:1008` - Changed archive_prefix from `'web-component'` to `'src/amplify-chat'`
+- Added comment explaining CodeBuild S3 format requirements
+
+### Expected Outcome
+
+After these fixes, the web component build should:
+1. ✅ Accept the source location (correct `bucket/key` format)
+2. ✅ Successfully `cd src/amplify-chat` (correct zip structure)
+3. ✅ Run `npm ci` and `npm run build:wc`
+4. ✅ Deploy built component to CloudFront CDN
+
+### Testing Next
+
+Deploy with the fixes:
+```bash
+python publish.py --project-name amplify-test-13 --admin-email test@example.com --region us-west-2 --deploy-chat
+```
+
+The web component build should now complete successfully.
+
