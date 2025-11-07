@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check Amplify CodeBuild deployment status
 
-STACK_NAME="RAGStack-amplify-test-13"
+STACK_NAME="${1:-RAGStack-cdk-test-1}"
 
 # Get Amplify CodeBuild project name
 PROJECT=$(aws cloudformation describe-stacks \

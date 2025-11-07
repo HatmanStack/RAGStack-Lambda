@@ -3,7 +3,7 @@
 # Check if web component is UMD or IIFE format
 #
 
-CDN_URL="https://d2m6vpu87luaxh.cloudfront.net/amplify-chat.js"
+CDN_URL="https://d3w5cdfl4m6ati.cloudfront.net/amplify-chat.js"
 
 echo "Checking bundle format..."
 echo ""

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check if CDK backend stack exists
 
-PROJECT_NAME="amplify-test-13"
+PROJECT_NAME="${1:-cdk-test-1}"
 STACK_NAME="amplify-${PROJECT_NAME}-backend"
 
 echo "Checking for CDK backend stack: $STACK_NAME"

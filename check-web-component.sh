@@ -1,8 +1,8 @@
 #!/bin/bash
 # Script to check web component deployment status
 
-# Get stack name (adjust if needed)
-STACK_NAME="RAGStack-amplify-test-13"
+# Get stack name from argument or use default
+STACK_NAME="${1:-RAGStack-cdk-test-1}"
 
 echo "Checking Web Component Deployment Status"
 echo "========================================="

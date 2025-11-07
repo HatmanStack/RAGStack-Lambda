@@ -8,7 +8,7 @@ echo "===================================="
 echo ""
 
 # Try to find bucket and distribution from CloudFormation stack
-PROJECT_NAME="${PROJECT_NAME:-amplify-test-13}"
+PROJECT_NAME="${1:-cdk-test-1}"
 STACK_NAME="RAGStack-${PROJECT_NAME}"
 
 echo "Looking for stack: $STACK_NAME"

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check amplify_outputs.json in S3 artifact bucket
 
-STACK_NAME="RAGStack-amplify-test-13"
+STACK_NAME="${1:-RAGStack-cdk-test-1}"
 
 # Get artifact bucket name
 ARTIFACT_BUCKET=$(aws cloudformation describe-stacks \

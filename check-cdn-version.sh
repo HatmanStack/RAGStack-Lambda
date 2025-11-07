@@ -3,7 +3,7 @@
 # Check CloudFront CDN version and cache status
 #
 
-CDN_URL="https://d2m6vpu87luaxh.cloudfront.net/amplify-chat.js"
+CDN_URL="https://d3w5cdfl4m6ati.cloudfront.net/amplify-chat.js"
 
 echo "Checking CloudFront CDN version..."
 echo "URL: $CDN_URL"
