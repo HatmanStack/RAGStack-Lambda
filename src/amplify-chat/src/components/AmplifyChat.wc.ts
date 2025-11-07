@@ -61,7 +61,14 @@ class AmplifyChat extends HTMLElement {
    * Lifecycle: Element inserted into DOM
    */
   connectedCallback(): void {
-    this.render();
+    try {
+      console.log('[AmplifyChat] connectedCallback - element added to DOM');
+      this.render();
+      console.log('[AmplifyChat] render() completed successfully');
+    } catch (error) {
+      console.error('[AmplifyChat] Error in connectedCallback:', error);
+      throw error;
+    }
   }
 
   /**
@@ -116,55 +123,76 @@ class AmplifyChat extends HTMLElement {
    * Render the React component into this element
    */
   private render(): void {
-    // Create root if it doesn't exist
-    if (!this.root) {
-      this.root = createRoot(this);
+    try {
+      console.log('[AmplifyChat] render() called');
+
+      // Create root if it doesn't exist
+      if (!this.root) {
+        console.log('[AmplifyChat] Creating React root...');
+        this.root = createRoot(this);
+        console.log('[AmplifyChat] React root created');
+      }
+
+      // Build props from attributes
+      const props: ChatWithSourcesProps = {
+        conversationId: this.getAttribute(
+          'conversation-id',
+          'default'
+        ),
+        headerText: this.getAttribute(
+          'header-text',
+          'Document Q&A'
+        ),
+        headerSubtitle: this.getAttribute(
+          'header-subtitle',
+          'Ask questions about your documents'
+        ),
+        showSources: this.getBooleanAttribute('show-sources', true),
+        maxWidth: this.getAttribute('max-width', '100%'),
+        userId: super.getAttribute('user-id') || null,
+        userToken: super.getAttribute('user-token') || null,
+        themePreset: (super.getAttribute('theme-preset') || 'light') as 'light' | 'dark' | 'brand',
+        themeOverrides: this.getThemeOverrides(),
+        onSendMessage: (message: string, conversationId: string) => {
+          this.dispatchEvent(
+            new CustomEvent('amplify-chat:send-message', {
+              detail: { message, conversationId },
+              bubbles: true,
+              composed: true,
+            })
+          );
+        },
+        onResponseReceived: (response: ChatMessage) => {
+          this.dispatchEvent(
+            new CustomEvent('amplify-chat:response-received', {
+              detail: response,
+              bubbles: true,
+              composed: true,
+            })
+          );
+        },
+      };
+
+      console.log('[AmplifyChat] Rendering with props:', props);
+
+      // Render the component
+      this.root.render(
+        React.createElement(ChatWithSources, props)
+      );
+
+      console.log('[AmplifyChat] React.createElement() completed');
+    } catch (error) {
+      console.error('[AmplifyChat] Error in render():', error);
+      // Display error in the element
+      this.innerHTML = `
+        <div style="padding: 20px; border: 2px solid red; background: #fee; color: #c00;">
+          <h3>AmplifyChat Error</h3>
+          <p>Failed to render chat component. Check console for details.</p>
+          <pre>${error instanceof Error ? error.message : String(error)}</pre>
+        </div>
+      `;
+      throw error;
     }
-
-    // Build props from attributes
-    const props: ChatWithSourcesProps = {
-      conversationId: this.getAttribute(
-        'conversation-id',
-        'default'
-      ),
-      headerText: this.getAttribute(
-        'header-text',
-        'Document Q&A'
-      ),
-      headerSubtitle: this.getAttribute(
-        'header-subtitle',
-        'Ask questions about your documents'
-      ),
-      showSources: this.getBooleanAttribute('show-sources', true),
-      maxWidth: this.getAttribute('max-width', '100%'),
-      userId: super.getAttribute('user-id') || null,
-      userToken: super.getAttribute('user-token') || null,
-      themePreset: (super.getAttribute('theme-preset') || 'light') as 'light' | 'dark' | 'brand',
-      themeOverrides: this.getThemeOverrides(),
-      onSendMessage: (message: string, conversationId: string) => {
-        this.dispatchEvent(
-          new CustomEvent('amplify-chat:send-message', {
-            detail: { message, conversationId },
-            bubbles: true,
-            composed: true,
-          })
-        );
-      },
-      onResponseReceived: (response: ChatMessage) => {
-        this.dispatchEvent(
-          new CustomEvent('amplify-chat:response-received', {
-            detail: response,
-            bubbles: true,
-            composed: true,
-          })
-        );
-      },
-    };
-
-    // Render the component
-    this.root.render(
-      React.createElement(ChatWithSources, props)
-    );
   }
 
   /**
