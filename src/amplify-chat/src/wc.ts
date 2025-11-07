@@ -13,27 +13,6 @@
  * ```
  */
 
-// Global error handler to catch async errors before browser masks them
-window.addEventListener('error', (event) => {
-  if (event.filename?.includes('amplify-chat')) {
-    console.error('[AmplifyChat] Uncaught error:', {
-      message: event.message,
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-      error: event.error,
-    });
-  }
-});
-
-// Catch unhandled promise rejections
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('[AmplifyChat] Unhandled promise rejection:', {
-    reason: event.reason,
-    promise: event.promise,
-  });
-});
-
 console.log('[AmplifyChat] Bundle loading...');
 
 import { Amplify } from 'aws-amplify';
@@ -108,3 +87,28 @@ declare global {
 
 // Version
 export const VERSION = '1.0.0';
+
+// Setup global error handlers AFTER bundle loads successfully
+// (Moved to end to avoid interfering with script loading)
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    if (event.filename?.includes('amplify-chat')) {
+      console.error('[AmplifyChat] Uncaught error:', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error,
+      });
+    }
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[AmplifyChat] Unhandled promise rejection:', {
+      reason: event.reason,
+      promise: event.promise,
+    });
+  });
+
+  console.log('[AmplifyChat] Error handlers registered');
+}
