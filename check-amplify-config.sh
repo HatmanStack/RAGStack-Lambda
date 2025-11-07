@@ -13,11 +13,13 @@ echo ""
 echo "1️⃣ Getting artifact bucket name..."
 ARTIFACT_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
-  --query "Stacks[0].Outputs[?OutputKey=='UISourceBucket'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ArtifactBucketName'].OutputValue" \
   --output text 2>/dev/null)
 
 if [ -z "$ARTIFACT_BUCKET" ] || [ "$ARTIFACT_BUCKET" = "None" ]; then
   echo "   ❌ Could not find artifact bucket"
+  echo "   This means the stack was deployed without UI (--skip-ui flag used)"
+  echo "   or the BuildUI condition is false."
   exit 1
 fi
 
@@ -78,7 +80,7 @@ echo ""
 echo "5️⃣ Testing CDN endpoint..."
 CDN_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
-  --query "Stacks[0].Outputs[?OutputKey=='WebComponentCDN'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='WebComponentCDNUrl'].OutputValue" \
   --output text 2>/dev/null)
 
 if [ -n "$CDN_URL" ] && [ "$CDN_URL" != "None" ]; then
