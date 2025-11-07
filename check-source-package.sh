@@ -16,8 +16,21 @@ ARTIFACT_BUCKET=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='ArtifactBucketName'].OutputValue" \
   --output text 2>/dev/null)
 
+# If not found via output, try to find by pattern
 if [ -z "$ARTIFACT_BUCKET" ] || [ "$ARTIFACT_BUCKET" = "None" ]; then
+  echo "   ⚠️ ArtifactBucketName output not found, trying alternate method..."
+  PROJECT_NAME=$(echo "$STACK_NAME" | sed 's/RAGStack-//')
+  ARTIFACT_BUCKET=$(aws s3 ls | grep -E "${PROJECT_NAME}.*artifacts" | awk '{print $3}' | head -1)
+fi
+
+if [ -z "$ARTIFACT_BUCKET" ]; then
   echo "   ❌ Could not find artifact bucket"
+  echo "   Tried:"
+  echo "     - CloudFormation output: ArtifactBucketName"
+  echo "     - S3 bucket pattern: ${PROJECT_NAME}.*artifacts"
+  echo ""
+  echo "   Available S3 buckets:"
+  aws s3 ls | grep -i "${PROJECT_NAME:-cdk-test}" | head -10
   exit 1
 fi
 
