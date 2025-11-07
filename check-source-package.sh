@@ -13,7 +13,7 @@ echo ""
 echo "1️⃣ Finding source package..."
 ARTIFACT_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
-  --query "Stacks[0].Outputs[?OutputKey=='UISourceBucket'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ArtifactBucketName'].OutputValue" \
   --output text 2>/dev/null)
 
 if [ -z "$ARTIFACT_BUCKET" ] || [ "$ARTIFACT_BUCKET" = "None" ]; then
