@@ -48,6 +48,11 @@ Parameters:
     Description: S3 key for UI source code zip
     Default: ''
 
+  WebComponentSourceKey:
+    Type: String
+    Description: S3 key for web component source code zip
+    Default: ''
+
   AdminEmail:
     Type: String
     Description: Admin email for Cognito user and CloudWatch/budget alerts
@@ -579,7 +584,7 @@ Resources:
         Type: NO_ARTIFACTS
       Source:
         Type: S3
-        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        Location: !Sub '${UISourceBucket}/${WebComponentSourceKey}'
         BuildSpec: |
           version: 0.2
           phases:

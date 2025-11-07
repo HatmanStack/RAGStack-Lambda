@@ -783,7 +783,7 @@ def create_sam_artifact_bucket(project_name, region):
     return bucket_name
 
 
-def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, skip_ui=False):
+def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -793,6 +793,7 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
         region: AWS region
         artifact_bucket: S3 bucket for SAM artifacts and UI source
         ui_source_key: S3 key for UI source zip (if not skip_ui)
+        wc_source_key: S3 key for web component source zip
         skip_ui: Whether to skip UI deployment
 
     Returns:
@@ -842,6 +843,11 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
         log_info("UI will be deployed via CodeBuild during stack creation")
         param_overrides.append(f"UISourceBucket={artifact_bucket}")
         param_overrides.append(f"UISourceKey={ui_source_key}")
+
+    # Add web component source key if provided
+    if wc_source_key:
+        log_info("Web component will be deployed via CodeBuild during stack creation")
+        param_overrides.append(f"WebComponentSourceKey={wc_source_key}")
 
     cmd = [
         "sam", "deploy",
@@ -2075,6 +2081,15 @@ Examples:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
 
+        # Package web component source
+        wc_source_key = None
+        try:
+            wc_source_key = package_amplify_chat_source(artifact_bucket, args.region)
+            log_info(f"Web component source uploaded to {artifact_bucket}/{wc_source_key}")
+        except (FileNotFoundError, IOError) as e:
+            log_error(f"Failed to package web component: {e}")
+            sys.exit(1)
+
         # Note: Amplify placeholder is created automatically by CloudFormation custom resource
         # The CreateAmplifyPlaceholder resource creates a minimal valid zip in S3
         # Source will be overridden at build time via sourceLocationOverride
@@ -2090,13 +2105,14 @@ Examples:
             log_error(f"Failed to handle existing stack: {e}")
             sys.exit(1)
 
-        # SAM deploy with UI parameters
+        # SAM deploy with UI and web component parameters
         stack_name = sam_deploy(
             args.project_name,
             args.admin_email,
             args.region,
             artifact_bucket,
             ui_source_key=ui_source_key,
+            wc_source_key=wc_source_key,
             skip_ui=args.skip_ui
         )
 
