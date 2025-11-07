@@ -471,6 +471,27 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub '${WebComponentAssetsBucket.Arn}/*'
 
+  WebComponentCORSPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectName}-wc-cors-${DeploymentSuffix}'
+        Comment: CORS policy for web component CDN
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items:
+              - '*'
+          AccessControlAllowHeaders:
+            Items:
+              - '*'
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowCredentials: false
+          OriginOverride: true
+
   WebComponentDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -495,6 +516,7 @@ Resources:
             - HEAD
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized managed policy
+          ResponseHeadersPolicyId: !Ref WebComponentCORSPolicy
         HttpVersion: http2
         PriceClass: PriceClass_100
       Tags:
