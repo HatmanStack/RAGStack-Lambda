@@ -2296,6 +2296,7 @@ Resources:
         Type: S3
         Location: !Sub '${UISourceBucket}/amplify-placeholder.zip'
         BuildSpec: |
+          # BuildSpec updated: 2025-11-07 - Added --ignore-scripts flags
           version: 0.2
           phases:
             install:
