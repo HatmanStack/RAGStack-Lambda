@@ -15,6 +15,12 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Replace Node.js globals with browser-compatible values
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    'process.env': '{}',
+    'global': 'globalThis',
+  },
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
