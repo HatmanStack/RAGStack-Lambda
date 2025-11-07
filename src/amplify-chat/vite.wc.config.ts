@@ -28,12 +28,16 @@ export default defineConfig({
         {
           format: 'iife',
           name: 'AmplifyChat',
+          // Don't externalize dependencies - bundle everything for standalone use
+          inlineDynamicImports: true,
         },
         // ES Module format for npm imports
         {
           format: 'es',
         },
       ],
+      // Bundle all dependencies (React, Amplify, etc.) for standalone IIFE
+      external: [],
     },
   },
   resolve: {

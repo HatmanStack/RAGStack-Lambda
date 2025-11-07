@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check CDN File Tail</title>
+</head>
+<body>
+    <h1>Checking Last 100 Lines of CDN File</h1>
+    <pre id="output"></pre>
+    <pre id="code"></pre>
+
+    <script>
+        const output = document.getElementById('output');
+        const codeEl = document.getElementById('code');
+
+        output.textContent = 'Fetching from CDN...\n';
+
+        fetch('https://d3w5cdfl4m6ati.cloudfront.net/amplify-chat.js')
+            .then(response => response.text())
+            .then(code => {
+                output.textContent += `Code length: ${code.length} bytes\n\n`;
+
+                // Get last 100 lines
+                const lines = code.split('\n');
+                const lastLines = lines.slice(-100);
+
+                output.textContent += `Total lines: ${lines.length}\n`;
+                output.textContent += `Showing last 100 lines:\n\n`;
+
+                codeEl.textContent = lastLines.join('\n');
+
+                // Check for IIFE invocation patterns
+                const lastChunk = code.slice(-500);
+                const hasIIFEInvocation = lastChunk.includes('}()') ||
+                                         lastChunk.includes('}(this)') ||
+                                         lastChunk.includes('}(window)') ||
+                                         lastChunk.includes('}).call(this)');
+
+                output.textContent += `\n\nLast 500 characters:\n${lastChunk}\n\n`;
+                output.textContent += `Has IIFE invocation: ${hasIIFEInvocation ? '✅ YES' : '❌ NO'}\n`;
+            })
+            .catch(error => {
+                output.textContent += `\n❌ Error: ${error.message}\n`;
+            });
+    </script>
+</body>
+</html>
