@@ -43,11 +43,17 @@ aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep -E "ui-source|amplify-chat-source" | t
 
 # Download and inspect the latest package
 echo ""
-echo "3️⃣ Downloading latest amplify-chat source package..."
+echo "3️⃣ Downloading latest source package..."
+# Try amplify-chat-source first, fall back to ui-source
 LATEST_SOURCE=$(aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep "amplify-chat-source" | sort | tail -1 | awk '{print $4}')
 
 if [ -z "$LATEST_SOURCE" ]; then
-  echo "   ❌ No amplify-chat source package found!"
+  echo "   ⚠️ No amplify-chat-source found, checking ui-source..."
+  LATEST_SOURCE=$(aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep "ui-source" | sort | tail -1 | awk '{print $4}')
+fi
+
+if [ -z "$LATEST_SOURCE" ]; then
+  echo "   ❌ No source package found!"
   exit 1
 fi
 
