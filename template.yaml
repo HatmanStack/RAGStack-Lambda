@@ -2306,8 +2306,10 @@ Resources:
                 - yum install -y git
                 - echo "Installing dependencies..."
                 - npm ci --prefix amplify
+                - echo "Installing patch-package globally to prevent postinstall failures..."
+                - npm install -g patch-package
                 - echo "Installing esbuild to root for CDK bundling..."
-                - npm install esbuild@0.25.12 --ignore-scripts
+                - npm install esbuild@0.25.12
             pre_build:
               commands:
                 - echo "Environment check..."
@@ -2326,8 +2328,6 @@ Resources:
               commands:
                 - echo "Cleaning up cached CDK/Amplify state..."
                 - rm -rf .amplify/ amplify/.amplify/ amplify/cdk.out/
-                - echo "Installing dependencies..."
-                - cd amplify && npm install && cd ..
                 - echo "Deploying Amplify backend via CDK..."
                 - |
                   # Export environment variables needed by CDK stack
