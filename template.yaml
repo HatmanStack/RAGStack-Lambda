@@ -2305,11 +2305,9 @@ Resources:
                 - echo "Installing system dependencies..."
                 - yum install -y git
                 - echo "Installing dependencies..."
-                - npm ci --prefix amplify
-                - echo "Installing patch-package globally to prevent postinstall failures..."
-                - npm install -g patch-package
+                - npm ci --prefix amplify --ignore-scripts
                 - echo "Installing esbuild to root for CDK bundling..."
-                - npm install esbuild@0.25.12
+                - npm install esbuild@0.25.12 --ignore-scripts
             pre_build:
               commands:
                 - echo "Environment check..."
