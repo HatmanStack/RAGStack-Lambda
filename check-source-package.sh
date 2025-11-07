@@ -39,21 +39,17 @@ echo "   Artifact Bucket: $ARTIFACT_BUCKET"
 # List UI source files
 echo ""
 echo "2️⃣ Listing source packages in S3..."
-aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep -E "ui-source|amplify-chat-source" | tail -5
+aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep -E "ui-source|web-component-source" | tail -5
 
 # Download and inspect the latest package
 echo ""
-echo "3️⃣ Downloading latest source package..."
-# Try amplify-chat-source first, fall back to ui-source
-LATEST_SOURCE=$(aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep "amplify-chat-source" | sort | tail -1 | awk '{print $4}')
+echo "3️⃣ Downloading latest web component source package..."
+# Look for web-component-source
+LATEST_SOURCE=$(aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep "web-component-source" | sort | tail -1 | awk '{print $4}')
 
 if [ -z "$LATEST_SOURCE" ]; then
-  echo "   ⚠️ No amplify-chat-source found, checking ui-source..."
-  LATEST_SOURCE=$(aws s3 ls "s3://$ARTIFACT_BUCKET/" | grep "ui-source" | sort | tail -1 | awk '{print $4}')
-fi
-
-if [ -z "$LATEST_SOURCE" ]; then
-  echo "   ❌ No source package found!"
+  echo "   ❌ No web-component-source found!"
+  echo "   This means the web component source was never packaged."
   exit 1
 fi
 
