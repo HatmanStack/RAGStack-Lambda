@@ -428,6 +428,182 @@ Resources:
           # MinimumProtocolVersion: TLSv1.2_2021
 
   # =========================================================================
+  # Web Component CDN Infrastructure
+  # =========================================================================
+
+  WebComponentAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-wc-assets-${DeploymentSuffix}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false  # Allow CloudFront OAI bucket policy
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false  # Allow CloudFront OAI access
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: Engineering
+
+  WebComponentOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${ProjectName} web component CDN'
+
+  WebComponentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebComponentAssetsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt WebComponentOriginAccessIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebComponentAssetsBucket.Arn}/*'
+
+  WebComponentDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CDN for ${ProjectName} web component'
+        DefaultRootObject: 'amplify-chat.js'
+        Origins:
+          - Id: WebComponentS3Origin
+            DomainName: !GetAtt WebComponentAssetsBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${WebComponentOriginAccessIdentity}'
+        DefaultCacheBehavior:
+          TargetOriginId: WebComponentS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized managed policy
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: Engineering
+
+  WebComponentBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+      Policies:
+        - PolicyName: WebComponentBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 access for web component assets bucket
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt WebComponentAssetsBucket.Arn
+                  - !Sub '${WebComponentAssetsBucket.Arn}/*'
+              # CloudFront invalidation
+              - Effect: Allow
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${WebComponentDistribution}'
+              # S3 access for source artifacts
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*/*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebComponentBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${ProjectName}-wc-build-${DeploymentSuffix}'
+      Description: Build and deploy web component to CDN
+      ServiceRole: !GetAtt WebComponentBuildRole.Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 24
+              commands:
+                - echo "Installing dependencies..."
+                - cd src/amplify-chat
+                - npm ci
+            pre_build:
+              commands:
+                - echo "Downloading Amplify outputs from S3..."
+                - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json ../../amplify_outputs.json
+                - echo "✓ amplify_outputs.json downloaded successfully"
+                - ls -lh ../../amplify_outputs.json
+            build:
+              commands:
+                - echo "Building web component..."
+                - npm run build:wc
+                - ls -lh dist/
+            post_build:
+              commands:
+                - echo "Deploying to S3..."
+                - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/amplify-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/amplify-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - echo "Invalidating CloudFront cache..."
+                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/amplify-chat.js" "/amplify-chat.esm.js"
+                - echo "Deployment complete!"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ASSET_BUCKET
+            Value: !Ref WebComponentAssetsBucket
+          - Name: DISTRIBUTION_ID
+            Value: !Ref WebComponentDistribution
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref UISourceBucket
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # =========================================================================
   # DynamoDB Tables
   # =========================================================================
 
@@ -678,7 +854,9 @@ Resources:
               Action: bedrock:GetInferenceProfile
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
-              Action: aws-marketplace:ViewSubscriptions
+              Action:
+                - aws-marketplace:ViewSubscriptions
+                - aws-marketplace:Subscribe
               Resource: '*'
 
   ##########################################################################
@@ -1626,6 +1804,664 @@ Resources:
             - SubscriptionType: EMAIL
               Address: !Ref AdminEmail
 
+  # =========================================================================
+  # Amplify Deployment via CodeBuild
+  # =========================================================================
+
+  AmplifyDeployCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub 'codebuild.${AWS::URLSuffix}'
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/CloudWatchLogsFullAccess'
+      Policies:
+        - PolicyName: AmplifyDeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudFormation - for CDK stack deployment
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource: '*'
+
+              # AppSync - for GraphQL API
+              - Effect: Allow
+                Action:
+                  - appsync:*
+                Resource: '*'
+
+              # Lambda - for AppSync resolvers
+              - Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:TagResource
+                  - lambda:UntagResource
+                  - lambda:ListTags
+                  - lambda:PublishVersion
+                  - lambda:CreateAlias
+                  - lambda:DeleteAlias
+                  - lambda:UpdateAlias
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource: '*'
+
+              # IAM - for Lambda execution roles created by CDK
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                Resource: '*'
+
+              # IAM PassRole - scoped to Amplify and Lambda roles only
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/amplify-*'
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*LambdaExecutionRole*'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      - lambda.amazonaws.com
+                      - appsync.amazonaws.com
+
+              # S3 - for CDK assets and web component storage
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:GetBucketPolicy
+                  - s3:PutBucketTagging
+                  - s3:PutBucketVersioning
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutEncryptionConfiguration
+                Resource: '*'
+
+              # CloudFront - for web component CDN
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateDistribution
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:GetDistribution
+                  - cloudfront:DeleteDistribution
+                  - cloudfront:TagResource
+                  - cloudfront:CreateOriginAccessControl
+                  - cloudfront:DeleteOriginAccessControl
+                  - cloudfront:CreateCloudFrontOriginAccessIdentity
+                  - cloudfront:DeleteCloudFrontOriginAccessIdentity
+                  - cloudfront:GetCloudFrontOriginAccessIdentity
+                  - cloudfront:UpdateCloudFrontOriginAccessIdentity
+                Resource: '*'
+
+              # CodeBuild - for nested web component build project
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateProject
+                  - codebuild:UpdateProject
+                  - codebuild:DeleteProject
+                  - codebuild:BatchGetProjects
+                Resource: '*'
+
+              # Cognito - read-only to verify User Pool
+              - Effect: Allow
+                Action:
+                  - cognito-idp:DescribeUserPool
+                  - cognito-idp:DescribeUserPoolClient
+                Resource:
+                  - !GetAtt UserPool.Arn
+
+              # STS - for CDK context and bootstrap role assumption
+              - Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-*'
+
+              # SSM - for CDK bootstrap
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cdk-bootstrap/*'
+
+  # Custom resource to update CDK assets bucket policy to allow CodeBuild role
+  UpdateCDKBucketPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-update-cdk-bucket-policy-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt UpdateCDKBucketPolicyRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  codebuild_role_arn = event['ResourceProperties']['CodeBuildRoleArn']
+
+                  if request_type in ['Create', 'Update']:
+                      # Get existing bucket policy
+                      try:
+                          response = s3.get_bucket_policy(Bucket=bucket_name)
+                          policy = json.loads(response['Policy'])
+                      except s3.exceptions.from_code('NoSuchBucketPolicy'):
+                          # No existing policy, create new one
+                          policy = {
+                              'Version': '2012-10-17',
+                              'Statement': []
+                          }
+
+                      # Add statement to allow CodeBuild role
+                      new_statement = {
+                          'Sid': 'AllowCodeBuildAccess',
+                          'Effect': 'Allow',
+                          'Principal': {
+                              'AWS': codebuild_role_arn
+                          },
+                          'Action': [
+                              's3:GetObject',
+                              's3:PutObject',
+                              's3:ListBucket'
+                          ],
+                          'Resource': [
+                              f'arn:aws:s3:::{bucket_name}/*',
+                              f'arn:aws:s3:::{bucket_name}'
+                          ]
+                      }
+
+                      # Remove any existing statement with same Sid
+                      policy['Statement'] = [s for s in policy['Statement'] if s.get('Sid') != 'AllowCodeBuildAccess']
+                      policy['Statement'].append(new_statement)
+
+                      # Update bucket policy
+                      s3.put_bucket_policy(
+                          Bucket=bucket_name,
+                          Policy=json.dumps(policy)
+                      )
+
+                      print(f"Updated bucket policy for {bucket_name}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # On delete, try to remove our statement (best effort)
+                      try:
+                          response = s3.get_bucket_policy(Bucket=bucket_name)
+                          policy = json.loads(response['Policy'])
+                          policy['Statement'] = [s for s in policy['Statement'] if s.get('Sid') != 'AllowCodeBuildAccess']
+
+                          if policy['Statement']:
+                              s3.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+                          else:
+                              s3.delete_bucket_policy(Bucket=bucket_name)
+                      except Exception as e:
+                          print(f"Could not clean up bucket policy: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  UpdateCDKBucketPolicyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3BucketPolicyUpdate
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketPolicy
+                  - s3:PutBucketPolicy
+                  - s3:DeleteBucketPolicy
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}'
+
+  UpdateCDKBucketPolicy:
+    Type: Custom::UpdateCDKBucketPolicy
+    Properties:
+      ServiceToken: !GetAtt UpdateCDKBucketPolicyFunction.Arn
+      BucketName: !Sub 'cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}'
+      CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
+
+  # Custom resource to grant CDK deploy role permission to pass our CodeBuild role
+  UpdateCDKDeployRoleFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-update-cdk-deploy-role-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt UpdateCDKDeployRoleRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          iam = boto3.client('iam')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  deploy_role_name = event['ResourceProperties']['DeployRoleName']
+                  codebuild_role_arn = event['ResourceProperties']['CodeBuildRoleArn']
+
+                  policy_name = 'AllowPassCodeBuildRole'
+
+                  if request_type in ['Create', 'Update']:
+                      # Create or update inline policy on CDK deploy role
+                      policy_document = {
+                          'Version': '2012-10-17',
+                          'Statement': [
+                              {
+                                  'Effect': 'Allow',
+                                  'Action': 'iam:PassRole',
+                                  'Resource': codebuild_role_arn
+                              }
+                          ]
+                      }
+
+                      iam.put_role_policy(
+                          RoleName=deploy_role_name,
+                          PolicyName=policy_name,
+                          PolicyDocument=json.dumps(policy_document)
+                      )
+
+                      print(f"Updated {deploy_role_name} with iam:PassRole for {codebuild_role_arn}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # On delete, try to remove our inline policy (best effort)
+                      try:
+                          iam.delete_role_policy(
+                              RoleName=deploy_role_name,
+                              PolicyName=policy_name
+                          )
+                          print(f"Removed policy {policy_name} from {deploy_role_name}")
+                      except iam.exceptions.NoSuchEntityException:
+                          print(f"Policy {policy_name} not found on {deploy_role_name}")
+                      except Exception as e:
+                          print(f"Could not remove policy: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  UpdateCDKDeployRoleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: UpdateIAMRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}'
+
+  UpdateCDKDeployRole:
+    Type: Custom::UpdateCDKDeployRole
+    Properties:
+      ServiceToken: !GetAtt UpdateCDKDeployRoleFunction.Arn
+      DeployRoleName: !Sub 'cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}'
+      CodeBuildRoleArn: !GetAtt AmplifyDeployCodeBuildRole.Arn
+
+  # Custom resource to create Amplify placeholder in S3
+  CreateAmplifyPlaceholderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-create-amplify-placeholder-${DeploymentSuffix}'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt CreateAmplifyPlaceholderRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          import zipfile
+          import io
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  print(f"Event: {json.dumps(event)}")
+
+                  request_type = event['RequestType']
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  key = event['ResourceProperties']['Key']
+
+                  if request_type in ['Create', 'Update']:
+                      # Create minimal valid zip file
+                      zip_buffer = io.BytesIO()
+                      with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                          # Add a minimal placeholder file
+                          zip_file.writestr('placeholder.txt',
+                              'This is a placeholder. Actual source will be provided at build time via sourceLocationOverride.')
+
+                      # Upload to S3
+                      s3.put_object(
+                          Bucket=bucket_name,
+                          Key=key,
+                          Body=zip_buffer.getvalue(),
+                          ContentType='application/zip'
+                      )
+
+                      print(f"Created placeholder at s3://{bucket_name}/{key}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+                  elif request_type == 'Delete':
+                      # Clean up on delete (best effort)
+                      try:
+                          s3.delete_object(Bucket=bucket_name, Key=key)
+                          print(f"Deleted placeholder from s3://{bucket_name}/{key}")
+                      except Exception as e:
+                          print(f"Could not delete placeholder: {e}")
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  CreateAmplifyPlaceholderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3PlaceholderAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${UISourceBucket}/*'
+
+  CreateAmplifyPlaceholder:
+    Type: Custom::CreateAmplifyPlaceholder
+    Properties:
+      ServiceToken: !GetAtt CreateAmplifyPlaceholderFunction.Arn
+      BucketName: !Ref UISourceBucket
+      Key: 'amplify-placeholder.zip'
+
+  AmplifyDeployProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - UpdateCDKBucketPolicy
+      - UpdateCDKDeployRole
+      - CreateAmplifyPlaceholder
+    Properties:
+      Name: !Sub '${ProjectName}-amplify-deploy-${DeploymentSuffix}'
+      Description: Deploy Amplify Gen 2 backend via CDK
+      ServiceRole: !GetAtt AmplifyDeployCodeBuildRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: PROJECT_NAME
+            Value: !Ref ProjectName
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: USERPOOLID
+            Value: !Ref UserPool
+          - Name: USERPOOLCLIENTID
+            Value: !Ref UserPoolClient
+          - Name: DEPLOYMENT_SUFFIX
+            Value: !Ref DeploymentSuffix
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref UISourceBucket
+      Source:
+        Type: S3
+        Location: !Sub '${UISourceBucket}/amplify-placeholder.zip'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 24
+              commands:
+                - echo "Installing system dependencies..."
+                - yum install -y git
+                - echo "Installing dependencies..."
+                - npm ci --prefix amplify
+                - echo "Installing esbuild to root for CDK bundling..."
+                - npm install esbuild@0.25.12
+            pre_build:
+              commands:
+                - echo "Environment check..."
+                - echo "PROJECT_NAME=$PROJECT_NAME"
+                - echo "AWS_REGION=$AWS_REGION"
+                - echo "USERPOOLID=$USERPOOLID"
+                - echo "USERPOOLCLIENTID=$USERPOOLCLIENTID"
+                - node --version
+                - npm --version
+                - echo "Checking for lock file..."
+                - ls -la amplify/package-lock.json || echo "Lock file not found in amplify/"
+                - ls -la package-lock.json || echo "Lock file not found in root"
+                - echo "Ensuring lock file is accessible..."
+                - test -f amplify/package-lock.json && cp amplify/package-lock.json . || echo "No lock file to copy"
+            build:
+              commands:
+                - echo "Cleaning up cached CDK/Amplify state..."
+                - rm -rf .amplify/ amplify/.amplify/ amplify/cdk.out/
+                - echo "Installing dependencies..."
+                - cd amplify && npm install && cd ..
+                - echo "Deploying Amplify backend via CDK..."
+                - |
+                  # Export environment variables needed by CDK stack
+                  export KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID}
+                  export CONFIGURATION_TABLE_NAME=${CONFIGURATION_TABLE_NAME}
+
+                  # Deploy CDK stack
+                  cd amplify
+
+                  echo "Running: npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json"
+
+                  if ! npx cdk deploy --all --require-approval never --outputs-file ./cdk-outputs.json; then
+                    echo "❌ CDK deployment failed!"
+                    echo "Checking for common issues..."
+
+                    # Check if CDK is bootstrapped
+                    echo "Checking CDK bootstrap status..."
+                    aws cloudformation describe-stacks --stack-name CDKToolkit --region ${AWS_REGION} 2>&1 || echo "⚠️ CDK not bootstrapped"
+
+                    # Show any CloudFormation stacks in failed state
+                    echo "Checking for failed stacks..."
+                    aws cloudformation list-stacks --stack-status-filter CREATE_FAILED UPDATE_FAILED ROLLBACK_COMPLETE --query "StackSummaries[?contains(StackName, 'amplify')].{Name:StackName,Status:StackStatus}" --output table
+
+                    exit 1
+                  fi
+
+                  cd ..
+                  echo "✓ CDK deployment complete"
+                - echo "Generating amplify_outputs.json from CDK outputs..."
+                - |
+                  # Convert CDK outputs to Amplify Gen 2 format
+                  STACK_NAME="amplify-${PROJECT_NAME}-backend"
+
+                  # Verify stack exists
+                  if ! aws cloudformation describe-stacks --stack-name "$STACK_NAME" &>/dev/null; then
+                    echo "❌ Error: CDK stack $STACK_NAME does not exist!"
+                    echo "CDK deployment must have failed silently."
+                    exit 1
+                  fi
+
+                  # Get stack outputs
+                  API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiEndpoint'].OutputValue" --output text)
+                  API_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiId'].OutputValue" --output text)
+                  REGION=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text)
+
+                  # Validate outputs are not empty
+                  if [ -z "$API_ENDPOINT" ] || [ "$API_ENDPOINT" = "None" ] || [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+                    echo "❌ Error: CDK stack exists but has no API outputs!"
+                    echo "API_ENDPOINT: $API_ENDPOINT"
+                    echo "API_ID: $API_ID"
+                    echo "Stack outputs:"
+                    aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs" --output table
+                    exit 1
+                  fi
+
+                  echo "✓ Retrieved CDK outputs:"
+                  echo "  API Endpoint: $API_ENDPOINT"
+                  echo "  API ID: $API_ID"
+                  echo "  Region: $REGION"
+
+                  # Create amplify_outputs.json in Amplify Gen 2 format
+                  cat > amplify_outputs.json <<EOF
+                  {
+                    "version": "1.4",
+                    "auth": {
+                      "aws_region": "$REGION",
+                      "user_pool_id": "$USERPOOLID",
+                      "user_pool_client_id": "$USERPOOLCLIENTID",
+                      "identity_pool_id": "",
+                      "password_policy": {
+                        "min_length": 8,
+                        "require_numbers": true,
+                        "require_lowercase": true,
+                        "require_uppercase": true,
+                        "require_symbols": true
+                      },
+                      "oauth": {},
+                      "username_attributes": ["email"],
+                      "user_verification_types": ["email"],
+                      "mfa_methods": [],
+                      "mfa_configuration": "OPTIONAL"
+                    },
+                    "data": {
+                      "aws_region": "$REGION",
+                      "url": "$API_ENDPOINT",
+                      "api_id": "$API_ID",
+                      "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+                      "authorization_types": ["AWS_LAMBDA"]
+                    }
+                  }
+                  EOF
+
+                  echo "✓ amplify_outputs.json generated successfully"
+                  cat amplify_outputs.json
+            post_build:
+              commands:
+                - echo "Amplify backend deployment complete"
+                - echo "Uploading amplify_outputs.json to S3 for web component build..."
+                - |
+                  # Find amplify_outputs.json
+                  OUTPUT_FILE=""
+                  if [ -f "amplify_outputs.json" ]; then
+                    OUTPUT_FILE="amplify_outputs.json"
+                  elif [ -f "amplify/amplify_outputs.json" ]; then
+                    OUTPUT_FILE="amplify/amplify_outputs.json"
+                  else
+                    echo "❌ Error: amplify_outputs.json not found in expected locations"
+                    echo "Searched: ./amplify_outputs.json and ./amplify/amplify_outputs.json"
+                    ls -la amplify/ || true
+                    exit 1
+                  fi
+
+                  # Validate file is not empty and contains required fields
+                  echo "Validating amplify_outputs.json..."
+                  cat "$OUTPUT_FILE"
+                  if ! grep -q "auth" "$OUTPUT_FILE" && ! grep -q "data" "$OUTPUT_FILE"; then
+                    echo "⚠️  Warning: amplify_outputs.json appears to be empty or malformed"
+                    echo "File contents:"
+                    cat "$OUTPUT_FILE"
+                  fi
+
+                  # Upload to S3
+                  aws s3 cp "$OUTPUT_FILE" s3://${ARTIFACT_BUCKET}/amplify_outputs.json
+                  echo "✓ amplify_outputs.json uploaded successfully from $OUTPUT_FILE"
+                - echo "Listing Amplify CloudFormation stacks created by sandbox..."
+                - aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `amplify-`)].{Name:StackName, Status:StackStatus}' --output table || true
+                - echo "Note - Web component CDN is managed by SAM stack (not Amplify)"
+      TimeoutInMinutes: 30
+      Cache:
+        Type: LOCAL
+        Modes:
+          - LOCAL_SOURCE_CACHE
+          - LOCAL_CUSTOM_CACHE
+
 Outputs:
   # S3 Buckets
   InputBucketName:
@@ -1781,3 +2617,39 @@ Outputs:
   UIUrl:
     Description: UI URL (HTTPS via CloudFront)
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  # Web Component CDN
+  WebComponentCDNUrl:
+    Description: CDN URL for embeddable chat web component
+    Value: !Sub 'https://${WebComponentDistribution.DomainName}/amplify-chat.js'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentCDNUrl'
+
+  WebComponentDistributionId:
+    Description: CloudFront distribution ID for web component
+    Value: !Ref WebComponentDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentDistributionId'
+
+  WebComponentBuildProjectName:
+    Description: CodeBuild project name for web component deployment
+    Value: !Ref WebComponentBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentBuildProject'
+
+  WebComponentAssetsBucketName:
+    Description: S3 bucket for web component assets
+    Value: !Ref WebComponentAssetsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentAssetsBucket'
+
+  # Amplify Deployment
+  AmplifyDeployProjectName:
+    Description: CodeBuild project name for Amplify deployment
+    Value: !Ref AmplifyDeployProject
+    Export:
+      Name: !Sub '${AWS::StackName}-AmplifyDeployProject'
+
+  AmplifyDeployProjectArn:
+    Description: CodeBuild project ARN for Amplify deployment
+    Value: !GetAtt AmplifyDeployProject.Arn

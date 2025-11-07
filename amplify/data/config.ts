@@ -10,24 +10,24 @@
 export const KNOWLEDGE_BASE_CONFIG = {
   // Bedrock Knowledge Base ID from SAM deployment
   // Retrieved from CloudFormation stack outputs
-  knowledgeBaseId: "MNFPINGPAL",
+  knowledgeBaseId: "LTHSSWBOXT",
 
   // AWS Region where Bedrock Knowledge Base is deployed
   region: "us-west-2",
 
   // ConfigurationTable name for runtime config reading
   // Amplify Lambda reads chat settings from this table
-  configurationTableName: "amplify-test-config-6yp8d",
+  configurationTableName: "amplify-test-11-config-hzb31",
 
   // Cognito User Pool (from SAM stack)
   // Used by Lambda Authorizer for JWT validation when requireAuth is enabled
-  userPoolId: "us-west-2_QhYsPTi2N",
-  userPoolClientId: "pkducqf0b914kac0ks7abo61v",
+  userPoolId: "us-west-2_P7XMxuVJY",
+  userPoolClientId: "3gghkg38kesqafldotcpbdeks8",
 
   // Web component source location (for CodeBuild)
   // CodeBuild downloads and extracts this zip to build the component
-  webComponentSourceBucket: "amplify-test-artifacts-631094035453",
-  webComponentSourceKey: "web-component-source-1762286739.zip",
+  webComponentSourceBucket: "amplify-test-11-artifacts-631094035453",
+  webComponentSourceKey: "web-component-source-1762323960.zip",
 } as const;
 
 // Type-safe export for use in resource.ts

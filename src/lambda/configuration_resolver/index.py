@@ -4,7 +4,7 @@ This Lambda function handles GraphQL queries and mutations for configuration man
 - getConfiguration: Returns Schema, Default, and Custom configurations
 - updateConfiguration: Updates Custom configuration
 """
-
+print('hello')
 import json
 import logging
 import os
@@ -165,8 +165,8 @@ def handle_update_configuration(custom_config):
         if not schema_item:
             raise ValueError("Schema configuration not found in DynamoDB")
 
-        schema_config = json.loads(schema_item.get("config", "{}"))
-        valid_fields = set(schema_config.get("fields", {}).keys())
+        schema_config = schema_item.get("Schema", {})
+        valid_fields = set(schema_config.get("properties", {}).keys())
 
         # Check for invalid keys
         provided_keys = set(custom_config_obj.keys()) - {"Configuration"}  # Exclude partition key

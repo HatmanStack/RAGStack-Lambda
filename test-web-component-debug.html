@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amplify Chat Debug Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .debug {
+      background: white;
+      padding: 20px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .error { color: red; }
+    .success { color: green; }
+    .info { color: blue; }
+  </style>
+</head>
+<body>
+  <h1>Web Component Debug Test</h1>
+
+  <div class="debug">
+    <h2>Script Loading Test</h2>
+    <div id="script-status">Loading...</div>
+  </div>
+
+  <div class="debug">
+    <h2>Custom Element Test</h2>
+    <div id="element-status">Checking...</div>
+  </div>
+
+  <div class="debug">
+    <h2>Global Object Test</h2>
+    <div id="global-status">Checking...</div>
+  </div>
+
+  <div class="debug">
+    <h2>Chat Component</h2>
+    <amplify-chat conversation-id="debug-test"></amplify-chat>
+  </div>
+
+  <div class="debug">
+    <h2>JavaScript Errors</h2>
+    <div id="errors">None</div>
+  </div>
+
+  <script>
+    const errors = [];
+
+    // Capture all errors
+    window.addEventListener('error', (e) => {
+      errors.push(`${e.message} at ${e.filename}:${e.lineno}:${e.colno}`);
+      document.getElementById('errors').innerHTML = errors.map(err =>
+        `<div class="error">❌ ${err}</div>`
+      ).join('');
+    });
+
+    // Capture console errors
+    const originalError = console.error;
+    console.error = function(...args) {
+      errors.push(args.join(' '));
+      document.getElementById('errors').innerHTML = errors.map(err =>
+        `<div class="error">❌ ${err}</div>`
+      ).join('');
+      originalError.apply(console, args);
+    };
+  </script>
+
+  <!-- Load the web component -->
+  <script src="https://d2m6vpu87luaxh.cloudfront.net/amplify-chat.js"
+          onload="console.log('✓ Script loaded successfully')"
+          onerror="console.error('✗ Script failed to load')"></script>
+
+  <script>
+    // Wait for everything to load
+    window.addEventListener('load', () => {
+      // Check script loaded
+      document.getElementById('script-status').innerHTML =
+        '<div class="success">✓ Script tag executed</div>';
+
+      // Check if custom element is defined
+      const isDefined = customElements.get('amplify-chat');
+      document.getElementById('element-status').innerHTML = isDefined
+        ? '<div class="success">✓ Custom element IS registered</div>'
+        : '<div class="error">✗ Custom element NOT registered</div>';
+
+      // Check what's in the global scope
+      const globalKeys = [];
+      if (window.AmplifyChat) {
+        globalKeys.push('window.AmplifyChat exists');
+      }
+      if (window.Amplify) {
+        globalKeys.push('window.Amplify exists');
+      }
+
+      // Check what the UMD module exposed
+      const umdKeys = Object.keys(window).filter(key =>
+        key.includes('Amplify') || key.includes('Chat')
+      );
+
+      document.getElementById('global-status').innerHTML = `
+        <div class="info">UMD exports found: ${umdKeys.join(', ') || 'NONE'}</div>
+        <div class="info">Global checks: ${globalKeys.join(', ') || 'NONE'}</div>
+      `;
+
+      // Try to manually register if it's available
+      if (!isDefined && window.AmplifyChat) {
+        console.log('Attempting manual registration...');
+        try {
+          customElements.define('amplify-chat', window.AmplifyChat);
+          document.getElementById('element-status').innerHTML =
+            '<div class="success">✓ Manually registered successfully!</div>';
+        } catch (e) {
+          document.getElementById('element-status').innerHTML +=
+            `<div class="error">Manual registration failed: ${e.message}</div>`;
+        }
+      }
+
+      // Final error check
+      setTimeout(() => {
+        if (errors.length === 0) {
+          document.getElementById('errors').innerHTML =
+            '<div class="success">✓ No JavaScript errors detected</div>';
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

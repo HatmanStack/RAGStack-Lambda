@@ -8,12 +8,6 @@ export const auth = defineAuth({
   loginWith: {
     email: true,
   },
-  // Optional: password policy
-  passwordPolicy: {
-    minimumLength: 8,
-    requireNumbers: true,
-    requireSpecialCharacters: false,
-    requireUppercase: true,
-    requireLowercase: true,
-  },
+  // Password policy configured via Cognito defaults
+  // Custom password policy not supported in this Amplify version
 });

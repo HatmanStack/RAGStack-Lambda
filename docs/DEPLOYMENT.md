@@ -83,6 +83,12 @@ amplify delete
 
 **"Insufficient permissions"** → Need admin IAM access
 
+**"Region not bootstrapped"** → First-time Amplify deployment requires CDK bootstrap:
+```bash
+cd amplify
+npm exec -- cdk bootstrap aws://<account-id>/<region>
+```
+
 **UI not loading** → Invalidate CloudFront: `aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"`
 
 See [Troubleshooting Guide](TROUBLESHOOTING.md) for more.

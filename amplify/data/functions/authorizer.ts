@@ -147,7 +147,7 @@ export const handler = async (event: any) => {
 
   } catch (error) {
     console.error('Token verification failed:', {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       tokenPrefix: token.substring(0, 20),
     });
 
