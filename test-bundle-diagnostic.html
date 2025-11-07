@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AmplifyChat Bundle Diagnostic</title>
+</head>
+<body>
+  <h1>Bundle Diagnostic Test</h1>
+  <div id="results"></div>
+
+  <script>
+    const results = [];
+
+    function log(message, isError = false) {
+      console.log(message);
+      results.push({ message, isError, timestamp: new Date().toISOString() });
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      const html = results.map(r =>
+        `<div style="color: ${r.isError ? 'red' : 'green'}; font-family: monospace;">
+          ${r.timestamp}: ${r.message}
+        </div>`
+      ).join('');
+      document.getElementById('results').innerHTML = html;
+    }
+
+    // Test 1: Can we log at all?
+    log('✓ JavaScript is executing');
+
+    // Test 2: Check if script tag exists
+    setTimeout(() => {
+      const scripts = Array.from(document.getElementsByTagName('script'));
+      const amplifyChatScript = scripts.find(s => s.src.includes('amplify-chat'));
+
+      if (amplifyChatScript) {
+        log(`✓ Script tag found: ${amplifyChatScript.src}`);
+        log(`  - Script loaded: ${amplifyChatScript.readyState || 'unknown'}`);
+      } else {
+        log('✗ Script tag NOT FOUND', true);
+      }
+
+      // Test 3: Check window.AmplifyChat
+      if (window.AmplifyChat) {
+        log('✓ window.AmplifyChat EXISTS');
+        log(`  - Type: ${typeof window.AmplifyChat}`);
+        log(`  - Constructor: ${window.AmplifyChat.constructor.name}`);
+      } else {
+        log('✗ window.AmplifyChat MISSING - IIFE did not execute!', true);
+      }
+
+      // Test 4: Check custom element
+      const isDefined = customElements.get('amplify-chat');
+      if (isDefined) {
+        log('✓ Custom element IS registered');
+      } else {
+        log('✗ Custom element NOT registered', true);
+      }
+
+      // Test 5: Download and inspect bundle
+      log('→ Fetching bundle from CDN...');
+      fetch('https://d3w5cdfl4m6ati.cloudfront.net/amplify-chat.js?diag=' + Date.now())
+        .then(response => {
+          log(`  - HTTP Status: ${response.status}`);
+          log(`  - Content-Type: ${response.headers.get('content-type')}`);
+          log(`  - Content-Length: ${response.headers.get('content-length')}`);
+          return response.text();
+        })
+        .then(code => {
+          log(`  - Downloaded ${code.length} characters`);
+
+          // Check for our logging
+          if (code.includes('Bundle loading')) {
+            log('  ✓ Contains "Bundle loading" string');
+          } else {
+            log('  ✗ Missing "Bundle loading" string', true);
+          }
+
+          // Check structure
+          if (code.includes('var AmplifyChat=') || code.includes('var AmplifyChat =')) {
+            log('  ✓ Has "var AmplifyChat=" declaration');
+          } else {
+            log('  ✗ Missing "var AmplifyChat=" declaration', true);
+          }
+
+          // Check for syntax issues in first 1000 chars
+          const start = code.substring(0, 1000);
+          log(`  - First 200 chars: ${start.substring(0, 200).replace(/\s+/g, ' ')}`);
+
+          // Try to execute it manually
+          log('→ Attempting manual execution...');
+          try {
+            eval(code);
+            log('  ✓ Manual eval() succeeded');
+
+            if (window.AmplifyChat) {
+              log('  ✓ window.AmplifyChat now exists after eval!');
+            } else {
+              log('  ✗ eval succeeded but window.AmplifyChat still missing', true);
+            }
+          } catch (error) {
+            log(`  ✗ Manual eval() FAILED: ${error.message}`, true);
+            log(`  - Error at line ~${error.lineNumber || 'unknown'}`, true);
+          }
+        })
+        .catch(error => {
+          log(`✗ Fetch failed: ${error.message}`, true);
+        });
+    }, 100);
+
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      log(`✗ ERROR: ${event.message} (${event.filename}:${event.lineno})`, true);
+    });
+  </script>
+
+  <!-- This should load AFTER the diagnostic code above -->
+  <script src="https://d3w5cdfl4m6ati.cloudfront.net/amplify-chat.js?v=diagnostic"></script>
+</body>
+</html>
