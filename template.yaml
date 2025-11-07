@@ -428,6 +428,79 @@ Resources:
           # MinimumProtocolVersion: TLSv1.2_2021
 
   # =========================================================================
+  # Web Component CDN (Embeddable Chat)
+  # =========================================================================
+
+  WebComponentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-web-component-${DeploymentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: Engineering
+
+  WebComponentOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${ProjectName} web component CDN'
+
+  WebComponentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebComponentBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt WebComponentOAI.S3CanonicalUserId
+            Action: s3:GetObject
+            Resource: !Sub '${WebComponentBucket.Arn}/*'
+
+  WebComponentCDN:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} Web Component CDN'
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebComponentBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${WebComponentOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+          ResponseHeadersPolicyId: 5cc3b908-e619-4b99-88e5-2cf7f45965bd  # CORS-With-Preflight
+        DefaultRootObject: amplify-chat.js
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  # =========================================================================
   # DynamoDB Tables
   # =========================================================================
 
@@ -1114,6 +1187,10 @@ Resources:
         UserPoolId: !Ref UserPool
         AwsRegion: !Ref AWS::Region
         DefaultAction: ALLOW
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AWS_LAMBDA
+          LambdaAuthorizerConfig:
+            AuthorizerUri: !GetAtt ChatAuthorizerFunction.Arn
       LogConfig:
         CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
         FieldLogLevel: ERROR
@@ -1165,6 +1242,39 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !GetAtt ProcessingStateMachine.Arn
+
+  # Lambda Authorizer for Chat (validates JWT tokens, supports anonymous mode)
+  ChatAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-chat-authorizer-${DeploymentSuffix}'
+      CodeUri: src/lambda/chat_authorizer/
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Description: Lambda authorizer for AppSync chat API with optional auth
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          AWS_REGION: !Ref AWS::Region
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+
+  # Permission for AppSync to invoke Chat Authorizer
+  ChatAuthorizerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ChatAuthorizerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: appsync.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function
@@ -1781,3 +1891,28 @@ Outputs:
   UIUrl:
     Description: UI URL (HTTPS via CloudFront)
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  # Web Component CDN
+  WebComponentBucketName:
+    Description: S3 bucket for web component assets
+    Value: !Ref WebComponentBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentBucket'
+
+  WebComponentCDNDomain:
+    Description: CloudFront domain for web component CDN
+    Value: !GetAtt WebComponentCDN.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentCDNDomain'
+
+  WebComponentCDNDistributionId:
+    Description: CloudFront distribution ID for web component
+    Value: !Ref WebComponentCDN
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentCDNDistributionId'
+
+  WebComponentCDNUrl:
+    Description: Full CDN URL for embeddable web component
+    Value: !Sub 'https://${WebComponentCDN.DomainName}/amplify-chat.js'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebComponentCDNUrl'

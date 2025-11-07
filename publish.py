@@ -826,6 +826,218 @@ def package_amplify_chat_source(bucket_name, region):
     return key
 
 
+def build_and_deploy_web_component(stack_name, region):
+    """
+    Build web component with SAM stack outputs and deploy to CDN.
+
+    This function:
+    1. Gets SAM stack outputs (GraphQL API, Cognito, CDN bucket)
+    2. Generates amplify_outputs.json from stack outputs
+    3. Builds web component with npm
+    4. Uploads dist files to S3 CDN bucket
+    5. Invalidates CloudFront cache
+
+    Args:
+        stack_name: CloudFormation stack name
+        region: AWS region
+
+    Returns:
+        str: CDN URL for web component (https://xxx.cloudfront.net/amplify-chat.js)
+
+    Raises:
+        subprocess.CalledProcessError: If build fails
+        FileNotFoundError: If src/amplify-chat not found
+        IOError: If upload fails
+    """
+    log_info("Building and deploying web component...")
+
+    # Step 1: Get SAM stack outputs
+    log_info("Fetching SAM stack outputs...")
+    try:
+        outputs = get_stack_outputs(stack_name, region)
+
+        api_url = outputs.get('GraphQLApiUrl')
+        user_pool_id = outputs.get('UserPoolId')
+        user_pool_client_id = outputs.get('UserPoolClientId')
+        cdn_bucket = outputs.get('WebComponentBucketName')
+        distribution_id = outputs.get('WebComponentCDNDistributionId')
+        cdn_url = outputs.get('WebComponentCDNUrl')
+
+        if not all([api_url, user_pool_id, user_pool_client_id, cdn_bucket, distribution_id]):
+            raise ValueError(f"Missing required stack outputs: {outputs}")
+
+        log_success("SAM stack outputs retrieved")
+        log_info(f"  GraphQL API: {api_url}")
+        log_info(f"  User Pool: {user_pool_id}")
+        log_info(f"  CDN Bucket: {cdn_bucket}")
+
+    except Exception as e:
+        log_error(f"Failed to get stack outputs: {e}")
+        raise
+
+    # Step 2: Generate amplify_outputs.json
+    log_info("Generating amplify_outputs.json from SAM outputs...")
+    try:
+        amplify_config = {
+            "data": {
+                "url": api_url,
+                "aws_region": region,
+                "default_authorization_type": "AWS_LAMBDA",
+                "authorization_types": ["AWS_LAMBDA", "AMAZON_COGNITO_USER_POOLS"]
+            },
+            "auth": {
+                "user_pool_id": user_pool_id,
+                "aws_region": region,
+                "user_pool_client_id": user_pool_client_id,
+                "identity_pool_id": "",
+                "password_policy": {
+                    "min_length": 8,
+                    "require_lowercase": True,
+                    "require_numbers": True,
+                    "require_symbols": True,
+                    "require_uppercase": True
+                }
+            },
+            "version": "1.2"
+        }
+
+        # Write to repo root
+        amplify_outputs_path = Path('amplify_outputs.json')
+        amplify_outputs_path.write_text(json.dumps(amplify_config, indent=2))
+        log_success(f"Generated amplify_outputs.json")
+
+    except Exception as e:
+        log_error(f"Failed to generate amplify_outputs.json: {e}")
+        raise IOError(f"Config generation failed: {e}") from e
+
+    # Step 3: Build web component
+    log_info("Building web component with npm...")
+    try:
+        web_component_dir = Path('src/amplify-chat')
+
+        if not web_component_dir.exists():
+            raise FileNotFoundError(f"Web component directory not found: {web_component_dir}")
+
+        # Install dependencies
+        log_info("Installing npm dependencies...")
+        subprocess.run(
+            ['npm', 'ci'],
+            cwd=str(web_component_dir),
+            check=True,
+            capture_output=True
+        )
+
+        # Build web component
+        log_info("Running npm build:wc...")
+        result = subprocess.run(
+            ['npm', 'run', 'build:wc'],
+            cwd=str(web_component_dir),
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        log_success("Web component built successfully")
+
+        # Verify dist files exist
+        dist_dir = web_component_dir / 'dist'
+        if not (dist_dir / 'wc.js').exists():
+            raise FileNotFoundError(f"Build output not found: {dist_dir / 'wc.js'}")
+
+    except subprocess.CalledProcessError as e:
+        log_error(f"Build failed: {e.stderr}")
+        raise
+    except Exception as e:
+        log_error(f"Build error: {e}")
+        raise
+
+    # Step 4: Upload to S3 CDN bucket
+    log_info(f"Uploading web component to S3: {cdn_bucket}...")
+    try:
+        s3_client = boto3.client('s3', region_name=region)
+
+        # Upload UMD bundle
+        s3_client.upload_file(
+            str(web_component_dir / 'dist' / 'wc.js'),
+            cdn_bucket,
+            'amplify-chat.js',
+            ExtraArgs={
+                'ContentType': 'application/javascript',
+                'CacheControl': 'public, max-age=31536000',  # 1 year
+                'Metadata': {
+                    'source': 'sam-deployment',
+                    'version': '1.0.0'
+                }
+            }
+        )
+        log_success("Uploaded amplify-chat.js (UMD)")
+
+        # Upload ESM bundle
+        s3_client.upload_file(
+            str(web_component_dir / 'dist' / 'wc.esm.js'),
+            cdn_bucket,
+            'amplify-chat.esm.js',
+            ExtraArgs={
+                'ContentType': 'application/javascript',
+                'CacheControl': 'public, max-age=31536000',
+                'Metadata': {
+                    'source': 'sam-deployment',
+                    'version': '1.0.0'
+                }
+            }
+        )
+        log_success("Uploaded amplify-chat.esm.js (ESM)")
+
+        # Upload CSS if it exists
+        css_path = web_component_dir / 'dist' / 'style.css'
+        if css_path.exists():
+            s3_client.upload_file(
+                str(css_path),
+                cdn_bucket,
+                'amplify-chat.css',
+                ExtraArgs={
+                    'ContentType': 'text/css',
+                    'CacheControl': 'public, max-age=31536000'
+                }
+            )
+            log_success("Uploaded amplify-chat.css")
+
+    except Exception as e:
+        log_error(f"Failed to upload to S3: {e}")
+        raise IOError(f"S3 upload failed: {e}") from e
+
+    # Step 5: Invalidate CloudFront cache
+    log_info("Invalidating CloudFront cache...")
+    try:
+        cf_client = boto3.client('cloudfront', region_name=region)
+
+        invalidation_response = cf_client.create_invalidation(
+            DistributionId=distribution_id,
+            InvalidationBatch={
+                'Paths': {
+                    'Quantity': 3,
+                    'Items': [
+                        '/amplify-chat.js',
+                        '/amplify-chat.esm.js',
+                        '/amplify-chat.css'
+                    ]
+                },
+                'CallerReference': f'web-component-deploy-{int(__import__("time").time())}'
+            }
+        )
+
+        invalidation_id = invalidation_response['Invalidation']['Id']
+        log_success(f"CloudFront invalidation created: {invalidation_id}")
+
+    except Exception as e:
+        log_warning(f"CloudFront invalidation failed (non-fatal): {e}")
+        # Don't raise - invalidation failure is not critical
+
+    log_success(f"Web component deployed successfully!")
+    log_info(f"  CDN URL: {cdn_url}")
+    return cdn_url
+
+
 def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
@@ -1597,13 +1809,13 @@ Examples:
     parser.add_argument(
         "--deploy-chat",
         action="store_true",
-        help="Deploy both SAM core and Amplify chat backend together"
+        help="Deploy both SAM core and web component chat together"
     )
 
     parser.add_argument(
         "--chat-only",
         action="store_true",
-        help="Deploy Amplify chat backend only (assumes SAM core already deployed)"
+        help="Deploy web component chat only (assumes SAM core already deployed)"
     )
 
     args = parser.parse_args()
@@ -1634,9 +1846,9 @@ Examples:
 
         # Log deployment mode
         if args.chat_only:
-            log_info("Mode: Amplify chat deployment only (SAM core assumed deployed)")
+            log_info("Mode: Web component chat deployment only (SAM core assumed deployed)")
         elif args.deploy_chat:
-            log_info("Mode: SAM core + Amplify chat deployment")
+            log_info("Mode: SAM core + web component chat deployment")
         else:
             log_info("Mode: SAM core deployment only")
 
@@ -1645,16 +1857,16 @@ Examples:
         log_info(f"Region: {args.region}")
 
         # =====================================================================
-        # Chat-only deployment path (Amplify only)
+        # Chat-only deployment path (web component only)
         # =====================================================================
         if args.chat_only:
-            log_info("Starting Amplify chat-only deployment...")
+            log_info("Starting web component chat-only deployment...")
 
             # Check prerequisites (lighter check for chat-only)
             log_info("Checking prerequisites...")
             check_python_version()
             check_aws_cli()
-            check_amplify_cli()
+            check_nodejs_version(skip_ui=False)  # Need Node for npm build
             log_success("Prerequisites met")
 
             # Get KB ID and ConfigurationTable name from existing SAM stack
@@ -1690,27 +1902,19 @@ Examples:
                 log_error(str(e))
                 sys.exit(1)
 
-            # Deploy Amplify
+            # Deploy web component
             try:
-                cdn_url = amplify_deploy(
-                    args.project_name,
-                    args.region,
-                    kb_id,
-                    artifact_bucket,
-                    config_table_name,
-                    user_pool_id,
-                    user_pool_client_id
-                )
+                cdn_url = build_and_deploy_web_component(stack_name, args.region)
 
                 # Update chat_deployed flag and CDN URL
                 seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
 
                 log_success(f"Chat CDN URL: {cdn_url}")
             except Exception as e:
-                log_error(f"Amplify deployment failed: {e}")
+                log_error(f"Web component deployment failed: {e}")
                 sys.exit(1)
 
-            log_success("Amplify chat backend deployed successfully!")
+            log_success("Web component deployed successfully!")
             sys.exit(0)
 
         # =====================================================================
@@ -1779,13 +1983,10 @@ Examples:
         print_outputs(outputs, args.project_name, args.region)
 
         # =====================================================================
-        # Deploy Amplify chat if requested
+        # Deploy web component chat if requested
         # =====================================================================
         if args.deploy_chat:
-            log_info("SAM deployment complete. Now deploying Amplify chat backend...")
-
-            # Check Amplify CLI is available
-            check_amplify_cli()
+            log_info("SAM deployment complete. Now deploying web component chat...")
 
             # Extract KB ID and ConfigurationTable name from SAM outputs
             try:
@@ -1812,36 +2013,28 @@ Examples:
                 log_warning("Chat deployment skipped due to missing SAM outputs")
                 sys.exit(0)
 
-            # Deploy Amplify
+            # Deploy web component
             try:
-                # Set chat_deployed=True BEFORE Amplify deploy to avoid race condition
+                # Set chat_deployed=True BEFORE deploy to avoid race condition
                 # If deploy fails, flag is set but no harm (chat won't work, but UI shows it)
                 log_info("Marking chat as deployed in configuration...")
                 seed_configuration_table(stack_name, args.region, chat_deployed=True)
 
-                cdn_url = amplify_deploy(
-                    args.project_name,
-                    args.region,
-                    kb_id,
-                    artifact_bucket,
-                    config_table_name,
-                    user_pool_id,
-                    user_pool_client_id
-                )
+                cdn_url = build_and_deploy_web_component(stack_name, args.region)
 
                 # Update configuration with CDN URL now that deployment succeeded
                 log_info("Updating configuration with CDN URL...")
                 seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
 
-                log_success("Amplify chat backend deployed successfully!")
+                log_success("Web component deployed successfully!")
                 log_success(f"Chat CDN URL: {cdn_url}")
 
                 # Add CDN URL to outputs for final display
                 outputs['ChatCDN'] = cdn_url
 
             except Exception as e:
-                log_error(f"Amplify deployment failed: {e}")
-                log_warning("SAM core is deployed, but chat backend deployment failed")
+                log_error(f"Web component deployment failed: {e}")
+                log_warning("SAM core is deployed, but web component deployment failed")
                 log_warning("Note: chat_deployed flag was set but deployment failed")
                 log_warning("  Admins may see chat settings UI, but functionality won't work")
                 log_warning("  To fix: Retry deployment or manually set chat_deployed=false in DynamoDB")

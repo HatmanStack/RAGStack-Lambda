@@ -24,9 +24,26 @@ function main() {
 
   // Check if amplify_outputs.json exists
   if (!fs.existsSync(AMPLIFY_OUTPUTS_PATH)) {
-    console.error('❌ Error: amplify_outputs.json not found at', AMPLIFY_OUTPUTS_PATH);
-    console.error('   Run `npx ampx deploy` first to generate Amplify configuration.');
-    process.exit(1);
+    console.warn('⚠️  Warning: amplify_outputs.json not found at', AMPLIFY_OUTPUTS_PATH);
+    console.warn('   Building with runtime configuration support only.');
+    console.warn('   Users will need to set window.AmplifyConfig before using the component.');
+
+    // Generate stub config file for runtime configuration
+    const stubConfigContent = `/**
+ * Amplify Configuration Stub
+ *
+ * This file is a placeholder generated when amplify_outputs.json doesn't exist.
+ * The web component will expect configuration at runtime via window.AmplifyConfig.
+ *
+ * Generated: ${new Date().toISOString()}
+ */
+
+export const AMPLIFY_OUTPUTS = null;
+`;
+
+    fs.writeFileSync(GENERATED_CONFIG_PATH, stubConfigContent, 'utf-8');
+    console.log('✅ Generated stub config for runtime configuration');
+    return; // Exit successfully
   }
 
   try {
