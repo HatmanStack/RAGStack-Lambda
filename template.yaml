@@ -48,6 +48,11 @@ Parameters:
     Description: S3 key for UI source code zip
     Default: ''
 
+  WebComponentSourceKey:
+    Type: String
+    Description: S3 key for web component source code zip
+    Default: ''
+
   AdminEmail:
     Type: String
     Description: Admin email for Cognito user and CloudWatch/budget alerts
@@ -471,6 +476,27 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub '${WebComponentAssetsBucket.Arn}/*'
 
+  WebComponentCORSPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectName}-wc-cors-${DeploymentSuffix}'
+        Comment: CORS policy for web component CDN
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items:
+              - '*'
+          AccessControlAllowHeaders:
+            Items:
+              - '*'
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowCredentials: false
+          OriginOverride: true
+
   WebComponentDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -495,6 +521,7 @@ Resources:
             - HEAD
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized managed policy
+          ResponseHeadersPolicyId: !Ref WebComponentCORSPolicy
         HttpVersion: http2
         PriceClass: PriceClass_100
       Tags:
@@ -557,7 +584,7 @@ Resources:
         Type: NO_ARTIFACTS
       Source:
         Type: S3
-        Location: !Sub '${UISourceBucket}/${UISourceKey}'
+        Location: !Sub '${UISourceBucket}/${WebComponentSourceKey}'
         BuildSpec: |
           version: 0.2
           phases:
@@ -2296,6 +2323,7 @@ Resources:
         Type: S3
         Location: !Sub '${UISourceBucket}/amplify-placeholder.zip'
         BuildSpec: |
+          # BuildSpec updated: 2025-11-07 - Added --ignore-scripts flags
           version: 0.2
           phases:
             install:
@@ -2305,9 +2333,9 @@ Resources:
                 - echo "Installing system dependencies..."
                 - yum install -y git
                 - echo "Installing dependencies..."
-                - npm ci --prefix amplify
+                - npm ci --prefix amplify --ignore-scripts
                 - echo "Installing esbuild to root for CDK bundling..."
-                - npm install esbuild@0.25.12
+                - npm install esbuild@0.25.12 --ignore-scripts
             pre_build:
               commands:
                 - echo "Environment check..."
@@ -2326,8 +2354,6 @@ Resources:
               commands:
                 - echo "Cleaning up cached CDK/Amplify state..."
                 - rm -rf .amplify/ amplify/.amplify/ amplify/cdk.out/
-                - echo "Installing dependencies..."
-                - cd amplify && npm install && cd ..
                 - echo "Deploying Amplify backend via CDK..."
                 - |
                   # Export environment variables needed by CDK stack

@@ -21,7 +21,8 @@
  */
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
-import { AIConversation } from '@aws-amplify/ui-react-ai';
+// Temporarily commented out - requires backend AI configuration
+// import { AIConversation } from '@aws-amplify/ui-react-ai';
 import { SourcesDisplay } from './SourcesDisplay';
 import { ChatWithSourcesProps, Source } from '../types';
 import { applyTheme, type ThemePreset, type ThemeOverrides } from '../styles/themes';
@@ -146,25 +147,26 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
 
       {/* Chat Content */}
       <div className={styles.chatContent}>
-        <AIConversation
-          conversationId={conversationId}
-          context={{
-            userId: userId || undefined,
-            userToken: userToken || undefined,
-          }}
-          responseComponent={showSources ? ResponseComponent : undefined}
-          messages={{
-            userRole: 'user',
-            assistantRole: 'assistant',
-          }}
-          messageRenderer={{
-            text: (message: string) => (
-              <p className={styles.messageText}>{message}</p>
-            ),
-          }}
-          allowAttachments={false}
-          isLoading={false}
-        />
+        {/* Temporary placeholder - AIConversation requires backend AI configuration */}
+        <div style={{ padding: '20px', textAlign: 'center', background: '#f9f9f9', borderRadius: '8px' }}>
+          <h3 style={{ color: '#4CAF50', marginBottom: '10px' }}>✅ Web Component Loaded Successfully!</h3>
+          <p style={{ marginBottom: '5px' }}>Conversation ID: <strong>{conversationId}</strong></p>
+          <p style={{ marginBottom: '5px' }}>User ID: <strong>{userId || 'Not set'}</strong></p>
+          <p style={{ marginBottom: '15px' }}>Show Sources: <strong>{showSources ? 'Yes' : 'No'}</strong></p>
+
+          <div style={{ marginTop: '20px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107' }}>
+            <p style={{ fontWeight: 'bold', marginBottom: '10px' }}>⚠️ AIConversation Backend Setup Required:</p>
+            <ul style={{ textAlign: 'left', display: 'inline-block', margin: 0 }}>
+              <li>GraphQL schema with AI conversation types</li>
+              <li>Lambda resolvers for Bedrock integration</li>
+              <li>Amplify AI Kit configuration</li>
+            </ul>
+            <p style={{ marginTop: '15px', fontSize: '14px', color: '#666' }}>
+              This placeholder confirms the web component infrastructure is working.
+              Replace with proper AIConversation once backend is configured.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Footer Section */}

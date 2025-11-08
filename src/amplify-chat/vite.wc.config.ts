@@ -15,6 +15,12 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Replace Node.js globals with browser-compatible values
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    'process.env': '{}',
+    'global': 'globalThis',
+  },
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
@@ -22,23 +28,33 @@ export default defineConfig({
       fileName: (format) => `wc.${format === 'es' ? 'esm.' : ''}js`,
       formats: ['iife', 'es'],  // Changed from ['umd', 'es'] to ['iife', 'es']
     },
+    cssCodeSplit: false,  // Inline all CSS into the JS bundle
     rollupOptions: {
       output: [
         // IIFE format for <script> tag usage (auto-executes)
         {
           format: 'iife',
           name: 'AmplifyChat',
+          // Don't externalize dependencies - bundle everything for standalone use
+          inlineDynamicImports: true,
         },
         // ES Module format for npm imports
         {
           format: 'es',
         },
       ],
+      // Bundle all dependencies (React, Amplify, etc.) for standalone IIFE
+      external: [],
     },
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  css: {
+    modules: {
+      localsConvention: 'camelCase',  // Convert CSS class names to camelCase for JS
     },
   },
 });
