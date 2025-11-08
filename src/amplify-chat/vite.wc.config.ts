@@ -28,6 +28,7 @@ export default defineConfig({
       fileName: (format) => `wc.${format === 'es' ? 'esm.' : ''}js`,
       formats: ['iife', 'es'],  // Changed from ['umd', 'es'] to ['iife', 'es']
     },
+    cssCodeSplit: false,  // Inline all CSS into the JS bundle
     rollupOptions: {
       output: [
         // IIFE format for <script> tag usage (auto-executes)
@@ -49,6 +50,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  css: {
+    modules: {
+      localsConvention: 'camelCase',  // Convert CSS class names to camelCase for JS
     },
   },
 });

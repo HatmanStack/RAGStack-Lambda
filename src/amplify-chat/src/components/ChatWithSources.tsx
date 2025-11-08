@@ -147,23 +147,8 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
       {/* Chat Content */}
       <div className={styles.chatContent}>
         <AIConversation
-          conversationId={conversationId}
-          context={{
-            userId: userId || undefined,
-            userToken: userToken || undefined,
-          }}
-          responseComponent={showSources ? ResponseComponent : undefined}
-          messages={{
-            userRole: 'user',
-            assistantRole: 'assistant',
-          }}
-          messageRenderer={{
-            text: (message: string) => (
-              <p className={styles.messageText}>{message}</p>
-            ),
-          }}
+          id={conversationId}
           allowAttachments={false}
-          isLoading={false}
         />
       </div>
 
