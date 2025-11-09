@@ -2,21 +2,25 @@
  * ChatInterface Component
  *
  * Main chat component that orchestrates message state management.
- * Phase 1: Uses mock responses. Phase 2 will integrate with GraphQL backend.
+ * Phase 2: Integrated with GraphQL backend via generateClient.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { generateClient } from 'aws-amplify/data';
+import type { Schema } from '../../../../amplify/data/resource';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import styles from '../styles/ChatWithSources.module.css';
 
+// Initialize GraphQL client at module level (reused across instances)
+const client = generateClient<Schema>();
+
 /**
  * ChatInterface Component
  *
  * Manages conversation state, message persistence, and orchestrates child components.
- * Currently uses setTimeout to simulate backend responses (Phase 1).
- * GraphQL integration will replace mock logic in Phase 2.
+ * Integrated with GraphQL backend via generateClient<Schema>().
  *
  * @param conversationId - Unique conversation identifier
  * @param userId - User ID for authenticated mode (optional)
