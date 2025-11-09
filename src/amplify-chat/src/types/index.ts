@@ -134,3 +134,124 @@ export interface BedrockCitation {
     text?: string;
   }>;
 }
+
+/**
+ * Props for the ChatInterface component
+ * Main chat component that manages message state
+ */
+export interface ChatInterfaceProps {
+  /**
+   * Conversation ID - used for session persistence
+   */
+  conversationId: string;
+
+  /**
+   * User ID for authenticated mode (optional)
+   */
+  userId?: string | null;
+
+  /**
+   * Authentication token for authenticated mode (optional)
+   */
+  userToken?: string | null;
+
+  /**
+   * Callback when message is sent
+   * @param message - The message that was sent
+   */
+  onSendMessage?: (message: string) => void;
+
+  /**
+   * Callback when response is received
+   * @param response - The full response object with sources
+   */
+  onResponseReceived?: (response: ChatMessage) => void;
+
+  /**
+   * Show/hide sources section
+   * @default true
+   */
+  showSources?: boolean;
+
+  /**
+   * Input placeholder text
+   * @default "Type your message..."
+   */
+  inputPlaceholder?: string;
+}
+
+/**
+ * Error state for MessageList component
+ */
+export interface ErrorState {
+  message: string;
+  retryable: boolean;
+  onRetry?: () => void;
+}
+
+/**
+ * Props for the MessageList component
+ * Scrollable container for messages
+ */
+export interface MessageListProps {
+  /**
+   * Array of messages to display
+   */
+  messages: ChatMessage[];
+
+  /**
+   * Loading indicator state
+   */
+  isLoading: boolean;
+
+  /**
+   * Error state (if any)
+   */
+  error?: ErrorState | null;
+
+  /**
+   * Show/hide sources section
+   * @default true
+   */
+  showSources?: boolean;
+}
+
+/**
+ * Props for the MessageBubble component
+ * Individual message display
+ */
+export interface MessageBubbleProps {
+  /**
+   * Message to display
+   */
+  message: ChatMessage;
+
+  /**
+   * Show/hide sources section
+   * @default true
+   */
+  showSources?: boolean;
+}
+
+/**
+ * Props for the MessageInput component
+ * Text input with send button
+ */
+export interface MessageInputProps {
+  /**
+   * Callback when message is sent
+   * @param message - The message text
+   */
+  onSend: (message: string) => void;
+
+  /**
+   * Loading state - disables input during send
+   */
+  isLoading: boolean;
+
+  /**
+   * Placeholder text
+   * @default "Type your message..."
+   */
+  placeholder?: string;
+}
