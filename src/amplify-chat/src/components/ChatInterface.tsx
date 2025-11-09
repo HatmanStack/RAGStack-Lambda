@@ -57,8 +57,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [hasPartialCredentials]);
 
-  // SessionStorage key with conversationId
-  const storageKey = `chat-${conversationId}`;
+  // SessionStorage key with userId and conversationId for isolation
+  const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
+
+  // Message limit to prevent sessionStorage quota exceeded
+  const MESSAGE_LIMIT = 50;
 
   // Restore messages from sessionStorage on mount
   useEffect(() => {
@@ -73,12 +76,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [storageKey]);
 
-  // Save messages to sessionStorage when they change
+  // Save messages to sessionStorage when they change (with message limit and error handling)
   useEffect(() => {
     if (messages.length > 0) {
-      sessionStorage.setItem(storageKey, JSON.stringify(messages));
+      try {
+        // Limit stored messages to prevent quota exceeded
+        const messagesToStore =
+          messages.length > MESSAGE_LIMIT ? messages.slice(-MESSAGE_LIMIT) : messages;
+
+        sessionStorage.setItem(storageKey, JSON.stringify(messagesToStore));
+      } catch (err) {
+        // Handle QuotaExceededError gracefully
+        if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+          console.warn(
+            `ChatInterface: sessionStorage quota exceeded for key "${storageKey}". ` +
+              'Conversation will continue without persistence.'
+          );
+        } else {
+          console.error('ChatInterface: Failed to save messages to sessionStorage:', err);
+        }
+      }
     }
-  }, [messages, storageKey]);
+  }, [messages, storageKey, MESSAGE_LIMIT]);
+
+  // Clear conversation from sessionStorage and component state
+  const clearConversation = useCallback(() => {
+    try {
+      sessionStorage.removeItem(storageKey);
+      setMessages([]);
+      setError(null);
+      console.log(`ChatInterface: Cleared conversation "${storageKey}"`);
+    } catch (err) {
+      console.error('ChatInterface: Failed to clear conversation:', err);
+    }
+  }, [storageKey]);
 
   // Handle send message (Phase 2: real GraphQL query)
   const handleSend = useCallback(
