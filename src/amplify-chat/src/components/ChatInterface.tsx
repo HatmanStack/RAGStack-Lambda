@@ -66,9 +66,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [messages, storageKey]);
 
-  // Handle send message (Phase 1: mock response)
+  // Handle send message (Phase 2: real GraphQL query)
   const handleSend = useCallback(
-    (messageText: string) => {
+    async (messageText: string) => {
       // Create user message
       const userMessage: ChatMessage = {
         role: 'user',
@@ -88,34 +88,52 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setIsLoading(true);
       setError(null);
 
-      // Simulate backend response with setTimeout (Phase 1)
-      // Phase 2 will replace this with actual GraphQL query
-      setTimeout(() => {
-        const assistantMessage: ChatMessage = {
-          role: 'assistant',
-          content: `This is a mock response to: "${messageText}". Real backend integration coming in Phase 2!`,
-          timestamp: new Date().toISOString(),
-          sources: [
-            {
-              title: 'Mock Document',
-              location: 'Page 1',
-              snippet: 'This is a mock source snippet for testing purposes.',
-            },
-          ],
-          modelUsed: 'mock-model',
-        };
+      try {
+        // Call GraphQL conversation query
+        const response = await client.queries.conversation({
+          message: messageText,
+          conversationId: conversationId,
+          userId: userId || undefined,
+          userToken: userToken || undefined,
+        });
 
-        // Add assistant message
-        setMessages((prev) => [...prev, assistantMessage]);
-        setIsLoading(false);
+        // Check for response data
+        if (response.data) {
+          const { content, sources, modelUsed } = response.data;
 
-        // Call onResponseReceived callback if provided
-        if (onResponseReceived) {
-          onResponseReceived(assistantMessage);
+          // Create assistant message from response
+          const assistantMessage: ChatMessage = {
+            role: 'assistant',
+            content: content || 'No response from assistant',
+            timestamp: new Date().toISOString(),
+            sources: sources || [],
+            modelUsed: modelUsed || undefined,
+          };
+
+          // Add assistant message
+          setMessages((prev) => [...prev, assistantMessage]);
+
+          // Call onResponseReceived callback if provided
+          if (onResponseReceived) {
+            onResponseReceived(assistantMessage);
+          }
+        } else {
+          // Handle case where response.data is null/undefined
+          throw new Error(response.errors?.[0]?.message || 'No response data received');
         }
-      }, 1000); // 1 second delay to simulate network
+      } catch (err) {
+        // Basic error handling (will be enhanced in Task 3)
+        console.error('Conversation query error:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError({
+          message: errorMessage,
+          retryable: true,
+        });
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [conversationId, onSendMessage, onResponseReceived]
+    [conversationId, userId, userToken, onSendMessage, onResponseReceived]
   );
 
   return (
