@@ -184,6 +184,7 @@ export interface ChatInterfaceProps {
  * Error state for MessageList component
  */
 export interface ErrorState {
+  type: 'auth' | 'quota' | 'network' | 'validation' | 'unknown';
   message: string;
   retryable: boolean;
   onRetry?: () => void;

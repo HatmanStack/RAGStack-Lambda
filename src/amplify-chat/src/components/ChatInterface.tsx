@@ -122,12 +122,45 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           throw new Error(response.errors?.[0]?.message || 'No response data received');
         }
       } catch (err) {
-        // Basic error handling (will be enhanced in Task 3)
+        // Error classification and handling
         console.error('Conversation query error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+
+        // Classify error type based on message patterns
+        let errorType: ErrorState['type'] = 'unknown';
+        let retryable = true;
+
+        if (errorMessage.toLowerCase().includes('authentication required')) {
+          errorType = 'auth';
+          retryable = false;
+        } else if (
+          errorMessage.toLowerCase().includes('quota exceeded') ||
+          errorMessage.toLowerCase().includes('quota')
+        ) {
+          errorType = 'quota';
+          retryable = true;
+        } else if (
+          errorMessage.toLowerCase().includes('network') ||
+          errorMessage.toLowerCase().includes('fetch')
+        ) {
+          errorType = 'network';
+          retryable = true;
+        } else if (errorMessage.toLowerCase().includes('validation')) {
+          errorType = 'validation';
+          retryable = false;
+        }
+
         setError({
+          type: errorType,
           message: errorMessage,
-          retryable: true,
+          retryable: retryable,
+          onRetry: retryable
+            ? () => {
+                // Retry by re-sending the same message
+                setError(null);
+                handleSend(messageText);
+              }
+            : undefined,
         });
       } finally {
         setIsLoading(false);
