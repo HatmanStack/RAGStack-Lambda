@@ -43,6 +43,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
 
+  // Determine authentication mode
+  const isAuthenticated = Boolean(userId && userToken);
+  const hasPartialCredentials = Boolean(userId && !userToken) || Boolean(!userId && userToken);
+
+  // Warn about partial credentials
+  useEffect(() => {
+    if (hasPartialCredentials) {
+      console.warn(
+        'ChatInterface: Both userId and userToken must be provided for authenticated mode. ' +
+          'Currently in invalid state - messages may fail.'
+      );
+    }
+  }, [hasPartialCredentials]);
+
   // SessionStorage key with conversationId
   const storageKey = `chat-${conversationId}`;
 
@@ -171,6 +185,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className={styles.chatContainer}>
+      {/* Authentication status indicator */}
+      {(isAuthenticated || hasPartialCredentials) && (
+        <div className={styles.authStatus}>
+          {isAuthenticated && (
+            <span className={styles.authBadge} title={`Authenticated as: ${userId}`}>
+              🔐 Authenticated
+            </span>
+          )}
+          {hasPartialCredentials && (
+            <span className={styles.authWarning} title="Incomplete credentials">
+              ⚠️ Invalid Auth
+            </span>
+          )}
+        </div>
+      )}
       <MessageList
         messages={messages}
         isLoading={isLoading}
