@@ -68,7 +68,7 @@ describe('ChatInterface', () => {
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
   });
 
-  it('adds user message when handleSend is called', () => {
+  it('adds user message when handleSend is called', async () => {
     render(<ChatInterface conversationId="test-1" showSources={true} />);
 
     const input = screen.getByPlaceholderText(/type your message/i);
@@ -80,9 +80,14 @@ describe('ChatInterface', () => {
 
     // User message should appear immediately
     expect(screen.getByText('Hello')).toBeInTheDocument();
+
+    // Wait for async GraphQL call to complete to avoid act() warnings
+    await waitFor(() => {
+      expect(mockConversationQuery).toHaveBeenCalled();
+    });
   });
 
-  it('sets isLoading to true during mock response', () => {
+  it('sets isLoading to true during mock response', async () => {
     render(<ChatInterface conversationId="test-1" showSources={true} />);
 
     const input = screen.getByPlaceholderText(/type your message/i);
@@ -94,6 +99,11 @@ describe('ChatInterface', () => {
 
     // Loading indicator should appear
     expect(screen.getByText('Assistant is typing')).toBeInTheDocument();
+
+    // Wait for async response to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Assistant is typing')).not.toBeInTheDocument();
+    });
   });
 
   it('adds assistant message after delay', async () => {
@@ -165,7 +175,7 @@ describe('ChatInterface', () => {
     expect(await screen.findByText('Previous message')).toBeInTheDocument();
   });
 
-  it('calls onSendMessage callback when message is sent', () => {
+  it('calls onSendMessage callback when message is sent', async () => {
     const mockOnSendMessage = vi.fn();
     render(
       <ChatInterface conversationId="test-1" onSendMessage={mockOnSendMessage} showSources={true} />
@@ -180,6 +190,11 @@ describe('ChatInterface', () => {
 
     // Callback should be called with message text and conversation ID
     expect(mockOnSendMessage).toHaveBeenCalledWith('Callback test', 'test-1');
+
+    // Wait for async operations to complete
+    await waitFor(() => {
+      expect(mockConversationQuery).toHaveBeenCalled();
+    });
   });
 
   it('calls onResponseReceived callback when response is received', async () => {
