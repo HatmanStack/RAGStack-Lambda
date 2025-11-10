@@ -5,7 +5,7 @@ A reusable React component for AI chat with source attribution, built with AWS A
 ## Quick Start
 
 ```bash
-npm install @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
+npm install @ragstack/amplify-chat aws-amplify
 ```
 
 ```tsx
