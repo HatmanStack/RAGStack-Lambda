@@ -14,6 +14,7 @@
  * - conversation-id: Unique conversation ID (default: "default")
  * - header-text: Custom header title (default: "Document Q&A")
  * - header-subtitle: Custom subtitle (default: "Ask questions about your documents")
+ * - input-placeholder: Custom input placeholder (default: "Ask a question...")
  * - show-sources: Show/hide sources (default: "true")
  * - max-width: Component max-width (default: "100%")
  * - user-id: User ID for authenticated mode (optional)
@@ -48,6 +49,7 @@ class AmplifyChat extends HTMLElement {
       'conversation-id',
       'header-text',
       'header-subtitle',
+      'input-placeholder',
       'show-sources',
       'max-width',
       'user-id',
@@ -146,6 +148,10 @@ class AmplifyChat extends HTMLElement {
         headerSubtitle: this.getAttribute(
           'header-subtitle',
           'Ask questions about your documents'
+        ),
+        inputPlaceholder: this.getAttribute(
+          'input-placeholder',
+          'Ask a question...'
         ),
         showSources: this.getBooleanAttribute('show-sources', true),
         maxWidth: this.getAttribute('max-width', '100%'),
