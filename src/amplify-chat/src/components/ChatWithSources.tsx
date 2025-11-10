@@ -1,20 +1,22 @@
 /**
  * ChatWithSources Component
  *
- * A reusable, embeddable chat component that wraps Amplify's <AIConversation>
- * and adds custom source/citation display below responses.
+ * A reusable, embeddable chat component that provides a complete AI chat interface
+ * with custom source/citation display using AWS Bedrock Knowledge Base.
  *
  * This component is designed to be embedded in multiple applications.
- * It does NOT include authentication - parent app handles auth via Authenticator.
+ * Supports both authenticated and guest modes for flexible deployment.
  *
  * Usage:
  * ```tsx
  * import { ChatWithSources } from '@your-org/amplify-chat';
  *
- * <Authenticator> {// Your auth wrapper}
+ * <Authenticator> {// Optional auth wrapper for authenticated mode}
  *   <ChatWithSources
  *     conversationId="my-chat-1"
  *     headerText="Ask me anything"
+ *     userId={user.id}
+ *     userToken={user.token}
  *   />
  * </Authenticator>
  * ```
@@ -22,38 +24,21 @@
 
 import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { ChatInterface } from './ChatInterface';
-import { SourcesDisplay } from './SourcesDisplay';
-import { ChatWithSourcesProps, Source } from '../types';
+import { ChatWithSourcesProps } from '../types';
 import { applyTheme, type ThemePreset, type ThemeOverrides } from '../styles/themes';
 import styles from '../styles/ChatWithSources.module.css';
-
-/**
- * Custom response component that renders AI responses with sources
- *
- * This component is passed to <AIConversation> as the responseComponent prop.
- * It receives the message text and sources, then renders them with styling.
- */
-const ResponseComponent = React.memo(
-  ({ message, sources }: { message: string; sources?: Source[] }) => (
-    <div className={styles.responseContainer}>
-      <p className={styles.responseText}>{message}</p>
-      {sources && sources.length > 0 && (
-        <SourcesDisplay sources={sources} />
-      )}
-    </div>
-  )
-);
-
-ResponseComponent.displayName = 'ResponseComponent';
 
 /**
  * ChatWithSources Component
  *
  * Main embeddable chat interface that:
- * - Wraps Amplify's <AIConversation> component
- * - Displays sources/citations below responses
- * - Handles message state and streaming
- * - Provides hooks for parent app to track messages
+ * - Wraps custom ChatInterface component
+ * - Provides header and footer UI chrome
+ * - Applies theme configuration
+ * - Forwards props and callbacks to ChatInterface
+ * - Supports both authenticated and guest modes
+ *
+ * ChatInterface handles all chat logic, message state, and GraphQL integration.
  *
  * @param props - Component configuration
  * @returns React component rendering the chat interface
@@ -64,6 +49,8 @@ ResponseComponent.displayName = 'ResponseComponent';
  *   conversationId="chat-1"
  *   headerText="Document Q&A"
  *   showSources={true}
+ *   userId={user.id}
+ *   userToken={user.token}
  *   onSendMessage={(msg, convId) => console.log('Sent:', msg)}
  * />
  * ```
