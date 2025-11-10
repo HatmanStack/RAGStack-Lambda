@@ -18,17 +18,35 @@ export const mockScrollIntoView = () => {
  * Mock sessionStorage for persistence tests
  * ChatInterface component uses this for message persistence
  */
-export const mockSessionStorage = () => {
-  const storage = new Map<string, string>();
+let mockStorage: Map<string, string>;
 
-  global.sessionStorage = {
-    getItem: (key: string) => storage.get(key) || null,
-    setItem: (key: string, value: string) => storage.set(key, value),
-    removeItem: (key: string) => storage.delete(key),
-    clear: () => storage.clear(),
-    length: storage.size,
-    key: (index: number) => Array.from(storage.keys())[index] || null,
-  } as Storage;
+export const mockSessionStorage = () => {
+  // Create a shared storage Map that persists
+  mockStorage = new Map<string, string>();
+
+  const sessionStorageMock = {
+    getItem: vi.fn((key: string) => {
+      const value = mockStorage.get(key) || null;
+      return value;
+    }),
+    setItem: vi.fn((key: string, value: string) => {
+      mockStorage.set(key, value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      mockStorage.delete(key);
+    }),
+    clear: vi.fn(() => {
+      mockStorage.clear();
+    }),
+    get length() {
+      return mockStorage.size;
+    },
+    key: vi.fn((index: number) => Array.from(mockStorage.keys())[index] || null),
+  };
+
+  global.sessionStorage = sessionStorageMock as Storage;
+
+  return sessionStorageMock;
 };
 
 /**
