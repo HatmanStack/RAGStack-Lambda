@@ -1,0 +1,101 @@
+/**
+ * MessageInput Component Styles
+ * Phase 3: Comprehensive theming with CSS custom properties
+ */
+
+.inputContainer {
+  border-top: 1px solid var(--chat-color-border-light, #e3e3e3);
+  background: var(--chat-color-bg, #ffffff);
+  padding: var(--chat-spacing-md, 12px);
+}
+
+.inputWrapper {
+  display: flex;
+  gap: var(--chat-spacing-sm, 8px);
+  align-items: flex-end;
+}
+
+.textarea {
+  flex: 1;
+  min-height: 44px; /* Increased for better touch target */
+  max-height: 200px;
+  padding: var(--chat-spacing-sm, 8px) var(--chat-spacing-md, 12px);
+  border: 1px solid var(--chat-color-border, #d5d5d5);
+  border-radius: var(--chat-radius-md, 4px);
+  font-family: var(--chat-font-family, inherit);
+  font-size: 16px; /* Prevent iOS zoom - must stay 16px */
+  line-height: var(--chat-line-height-normal, 1.5);
+  color: var(--chat-color-text, #1a1a1a);
+  background-color: var(--chat-color-bg, #ffffff);
+  resize: none;
+  overflow-y: auto;
+  transition: border-color var(--chat-transition-fast, 100ms ease-in-out);
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--chat-color-user-bg, #0972d3);
+  box-shadow: 0 0 0 1px var(--chat-color-user-bg, #0972d3);
+}
+
+.textarea:disabled {
+  background-color: var(--chat-color-bg-secondary, #f5f5f5);
+  color: var(--chat-color-text-secondary, #666666);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.sendButton {
+  min-height: 44px; /* Minimum touch target size */
+  min-width: 80px;
+  padding: var(--chat-spacing-sm, 8px) var(--chat-spacing-lg, 16px);
+  background-color: var(--chat-color-user-bg, #0972d3);
+  color: var(--chat-color-user-text, #ffffff);
+  border: none;
+  border-radius: var(--chat-radius-md, 4px);
+  font-size: var(--chat-font-size-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--chat-transition-normal, 200ms ease-in-out),
+    transform var(--chat-transition-fast, 100ms ease-in-out);
+  white-space: nowrap;
+}
+
+.sendButton:hover:not(:disabled) {
+  background-color: var(--chat-color-primary, #0056b3);
+  transform: translateY(-1px);
+}
+
+.sendButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sendButton:disabled {
+  background-color: var(--chat-color-border, #d5d5d5);
+  color: var(--chat-color-text-secondary, #666666);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Touch device optimization */
+@media (hover: none) and (pointer: coarse) {
+  .sendButton:hover:not(:disabled) {
+    transform: none; /* Disable hover transform on touch devices */
+  }
+
+  .sendButton:active:not(:disabled) {
+    background-color: var(--chat-color-primary, #0056b3);
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  .inputContainer {
+    padding: var(--chat-spacing-sm, 8px);
+  }
+
+  .sendButton {
+    min-width: 60px;
+    padding: var(--chat-spacing-sm, 8px);
+  }
+}

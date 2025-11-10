@@ -7,7 +7,6 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -17,6 +16,6 @@
     "jsx": "react-jsx",
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src"],
+  "include": ["src", "../../amplify/data/resource.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
 }
