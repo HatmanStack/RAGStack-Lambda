@@ -29,11 +29,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, showSou
   // Determine if sources should be displayed
   const shouldShowSources = role === 'assistant' && showSources && sources && sources.length > 0;
 
+  // Create ARIA label based on role
+  const ariaLabel = role === 'user' ? 'Your message' : 'Assistant message';
+
   return (
-    <div className={bubbleClass}>
+    <div
+      className={bubbleClass}
+      role="article"
+      aria-label={ariaLabel}
+    >
       {/* Message content */}
-      <div className={styles.messageContent}>
-        <p>{content}</p>
+      <div className={styles.messageContent} aria-labelledby={`message-content-${timestamp}`}>
+        <p id={`message-content-${timestamp}`}>{content}</p>
       </div>
 
       {/* Sources (only for assistant messages with sources) */}
@@ -41,14 +48,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, showSou
 
       {/* Optional: timestamp */}
       {timestamp && (
-        <div className={styles.messageTimestamp}>
+        <div className={styles.messageTimestamp} aria-label="Message timestamp">
           {new Date(timestamp).toLocaleTimeString()}
         </div>
       )}
 
       {/* Optional: model used badge (for assistant messages) */}
       {role === 'assistant' && modelUsed && (
-        <div className={styles.modelBadge}>Model: {modelUsed}</div>
+        <div className={styles.modelBadge} aria-label={`Model used: ${modelUsed}`}>
+          Model: {modelUsed}
+        </div>
       )}
     </div>
   );

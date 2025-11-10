@@ -37,10 +37,16 @@ export const MessageList: React.FC<MessageListProps> = ({
   }, [messages, isLoading]);
 
   return (
-    <div className={styles.messageListContainer}>
+    <div
+      className={styles.messageListContainer}
+      role="log"
+      aria-live="polite"
+      aria-busy={isLoading}
+      aria-label="Chat message history"
+    >
       {/* Empty state */}
       {messages.length === 0 && !isLoading && !error && (
-        <div className={styles.emptyState}>
+        <div className={styles.emptyState} role="status" aria-live="polite">
           <p>Start a conversation by typing a message below.</p>
         </div>
       )}
@@ -60,9 +66,9 @@ export const MessageList: React.FC<MessageListProps> = ({
 
       {/* Loading indicator */}
       {isLoading && (
-        <div className={styles.loadingIndicator}>
+        <div className={styles.loadingIndicator} role="status" aria-live="polite">
           <span className={styles.loadingText}>Assistant is typing</span>
-          <span className={styles.loadingDots}>
+          <span className={styles.loadingDots} aria-hidden="true">
             <span>.</span>
             <span>.</span>
             <span>.</span>
@@ -72,11 +78,18 @@ export const MessageList: React.FC<MessageListProps> = ({
 
       {/* Error message */}
       {error && (
-        <div className={styles.errorBubble}>
-          <div className={styles.errorIcon}>⚠️</div>
+        <div className={styles.errorBubble} role="alert" aria-live="assertive">
+          <div className={styles.errorIcon} aria-hidden="true">
+            ⚠️
+          </div>
           <div className={styles.errorMessage}>{error.message}</div>
           {error.retryable && error.onRetry && (
-            <button className={styles.retryButton} onClick={error.onRetry} type="button">
+            <button
+              className={styles.retryButton}
+              onClick={error.onRetry}
+              type="button"
+              aria-label="Retry sending message"
+            >
               Retry
             </button>
           )}
@@ -84,7 +97,7 @@ export const MessageList: React.FC<MessageListProps> = ({
       )}
 
       {/* Scroll anchor */}
-      <div ref={endOfMessagesRef} />
+      <div ref={endOfMessagesRef} aria-hidden="true" />
     </div>
   );
 };

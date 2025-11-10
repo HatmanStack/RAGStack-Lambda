@@ -36,6 +36,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [value]);
 
+  // Scroll to input when focused (mobile keyboard handling)
+  const handleFocus = () => {
+    if (textareaRef.current) {
+      // Small delay to ensure virtual keyboard is up
+      setTimeout(() => {
+        textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 300);
+    }
+  };
+
   // Handle input change
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
@@ -53,6 +63,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Call parent callback and clear input
     onSend(trimmed);
     setValue('');
+
+    // Clear focus on mobile to hide keyboard after send
+    if (textareaRef.current && 'ontouchstart' in window) {
+      textareaRef.current.blur();
+    }
   };
 
   // Handle Enter key (Enter = send, Shift+Enter = newline)
@@ -75,15 +90,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
           placeholder={placeholder}
           disabled={isLoading}
           rows={1}
+          aria-label="Type your message"
+          aria-disabled={isLoading}
+          aria-multiline="true"
+          role="textbox"
         />
         <button
           className={styles.sendButton}
           onClick={handleSend}
           disabled={isSendDisabled}
           type="button"
+          aria-label="Send message"
+          aria-disabled={isSendDisabled}
         >
           Send
         </button>

@@ -544,6 +544,21 @@
 }
 
 /* ============================================================================
+   MOBILE OPTIMIZATION - iOS Safe Area Support
+   ============================================================================ */
+
+/* Support for iOS notch and home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .chatContainer {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .messageListContainer {
+    padding-bottom: max(var(--chat-spacing-lg), env(safe-area-inset-bottom));
+  }
+}
+
+/* ============================================================================
    ACCESSIBILITY
    ============================================================================ */
 
@@ -556,6 +571,11 @@
   .chatContainer {
     border-width: 2px;
   }
+
+  /* Improve focus indicators in high contrast mode */
+  :focus-visible {
+    outline-width: 3px;
+  }
 }
 
 /* Reduced motion support */
@@ -564,6 +584,7 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -571,4 +592,21 @@
 :focus-visible {
   outline: 2px solid var(--chat-color-source-accent);
   outline-offset: 2px;
+  border-radius: var(--chat-radius-sm);
+}
+
+/* Skip to content link for screen readers */
+.skipLink {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--chat-color-user-bg);
+  color: var(--chat-color-user-text);
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skipLink:focus {
+  top: 0;
 }
