@@ -12,9 +12,21 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../../../../amplify/data/resource';
 
-// Load amplify_outputs configuration
-// Located at project root: ../../amplify_outputs.json
+// Load amplify_outputs configuration from project root
+// Path explanation:
+//   - From: src/amplify-chat/src/components/__tests__/integration/
+//   - Up 4 levels to src/amplify-chat/: ../../../../
+//   - Up 2 more levels to project root: ../../
+//   - Total: ../../../../../../amplify_outputs.json
+// NOTE: This could be improved with a tsconfig path alias if needed
 import outputs from '../../../../../../amplify_outputs.json';
+
+/**
+ * Generate unique conversation ID to prevent test pollution
+ * Each test run gets its own conversation to avoid interference
+ */
+const generateConversationId = () =>
+  `integration-test-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
 // TODO: Integration tests require backend to be deployed and accessible
 // Currently skipped due to test environment configuration complexity
@@ -30,7 +42,7 @@ describe.skip('Integration: Conversation GraphQL Query', () => {
   it('should successfully query the conversation endpoint', async () => {
     const result = await client.queries.conversation({
       message: 'What is the capital of France?',
-      conversationId: 'integration-test-1',
+      conversationId: generateConversationId(),
     });
 
     // Verify response structure
@@ -54,7 +66,8 @@ describe.skip('Integration: Conversation GraphQL Query', () => {
   }, 30000); // 30s timeout for real backend call
 
   it('should handle multiple messages in same conversation', async () => {
-    const conversationId = 'integration-test-2';
+    // Use unique ID to prevent pollution between test runs
+    const conversationId = generateConversationId();
 
     // First message
     const result1 = await client.queries.conversation({
@@ -80,7 +93,7 @@ describe.skip('Integration: Conversation GraphQL Query', () => {
   it('should work in guest mode (no userId/userToken)', async () => {
     const result = await client.queries.conversation({
       message: 'Test guest mode',
-      conversationId: 'guest-test-1',
+      conversationId: generateConversationId(),
       // No userId or userToken provided
     });
 

@@ -57,4 +57,6 @@ export const cleanupTestUtils = () => {
   if (global.sessionStorage) {
     sessionStorage.clear();
   }
+  // Clear all mock function call history
+  vi.clearAllMocks();
 };

@@ -26,6 +26,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 }) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
 
   // Auto-resize textarea as user types
   useEffect(() => {
@@ -36,12 +37,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [value]);
 
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Scroll to input when focused (mobile keyboard handling)
   const handleFocus = () => {
     if (textareaRef.current) {
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+
       // Small delay to ensure virtual keyboard is up
-      setTimeout(() => {
+      scrollTimeoutRef.current = window.setTimeout(() => {
         textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        scrollTimeoutRef.current = null;
       }, 300);
     }
   };

@@ -16,6 +16,12 @@ import styles from '../styles/ChatWithSources.module.css';
 // Initialize GraphQL client at module level (reused across instances)
 const client = generateClient<Schema>();
 
+// Message limit to prevent sessionStorage quota exceeded (module scope constant)
+const MESSAGE_LIMIT = 50;
+
+// Maximum retry attempts before marking error as non-retryable
+const MAX_RETRIES = 3;
+
 /**
  * ChatInterface Component
  *
@@ -60,11 +66,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // SessionStorage key with userId and conversationId for isolation
   const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
 
-  // Message limit to prevent sessionStorage quota exceeded
-  const MESSAGE_LIMIT = 50;
-
-  // Restore messages from sessionStorage on mount
+  // Restore messages from sessionStorage on mount (clear first to handle storageKey changes)
   useEffect(() => {
+    // Clear messages first - prevents old messages from persisting when storageKey changes
+    setMessages([]);
+
     const stored = sessionStorage.getItem(storageKey);
     if (stored) {
       try {
@@ -97,7 +103,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         }
       }
     }
-  }, [messages, storageKey, MESSAGE_LIMIT]);
+  }, [messages, storageKey]);
 
   // Clear conversation from sessionStorage and component state
   const clearConversation = useCallback(() => {
@@ -195,14 +201,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           retryable = false;
         }
 
+        // Get current retry count from error state
+        const currentRetryCount = error?.retryCount || 0;
+        const canRetry = retryable && currentRetryCount < MAX_RETRIES;
+
         setError({
           type: errorType,
           message: errorMessage,
-          retryable: retryable,
-          onRetry: retryable
+          retryable: canRetry,
+          retryCount: currentRetryCount,
+          onRetry: canRetry
             ? () => {
-                // Retry by re-sending the same message
-                setError(null);
+                // Increment retry count and retry by re-sending the same message
+                setError((prevError) => ({
+                  ...prevError!,
+                  retryCount: (prevError?.retryCount || 0) + 1,
+                }));
                 handleSend(messageText);
               }
             : undefined,

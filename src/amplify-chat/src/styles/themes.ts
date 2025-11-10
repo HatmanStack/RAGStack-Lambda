@@ -149,9 +149,13 @@ export function applyTheme(
     };
 
     const spacingVars = spacingMap[overrides.spacing];
-    Object.entries(spacingVars).forEach(([key, value]) => {
-      target.style.setProperty(key, value);
-    });
+    if (spacingVars && typeof spacingVars === 'object') {
+      Object.entries(spacingVars).forEach(([key, value]) => {
+        target.style.setProperty(key, value);
+      });
+    } else {
+      console.warn(`Invalid spacing preset: "${overrides.spacing}". Expected: compact, comfortable, or spacious.`);
+    }
   }
 
   // Apply custom overrides (highest priority)

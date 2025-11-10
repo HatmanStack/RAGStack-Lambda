@@ -189,6 +189,8 @@ export interface ErrorState {
   message: string;
   retryable: boolean;
   onRetry?: () => void;
+  /** Number of retry attempts made (for rate limiting) */
+  retryCount?: number;
 }
 
 /**
