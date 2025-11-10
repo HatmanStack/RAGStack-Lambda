@@ -93,7 +93,7 @@ class AmplifyChat extends HTMLElement {
   /**
    * Get attribute value with fallback
    */
-  private getAttribute(name: string, fallback: string): string {
+  private getAttributeWithFallback(name: string, fallback: string): string {
     return super.getAttribute(name) || fallback;
   }
 
@@ -137,24 +137,24 @@ class AmplifyChat extends HTMLElement {
 
       // Build props from attributes
       const props: ChatWithSourcesProps = {
-        conversationId: this.getAttribute(
+        conversationId: this.getAttributeWithFallback(
           'conversation-id',
           'default'
         ),
-        headerText: this.getAttribute(
+        headerText: this.getAttributeWithFallback(
           'header-text',
           'Document Q&A'
         ),
-        headerSubtitle: this.getAttribute(
+        headerSubtitle: this.getAttributeWithFallback(
           'header-subtitle',
           'Ask questions about your documents'
         ),
-        inputPlaceholder: this.getAttribute(
+        inputPlaceholder: this.getAttributeWithFallback(
           'input-placeholder',
           'Ask a question...'
         ),
         showSources: this.getBooleanAttribute('show-sources', true),
-        maxWidth: this.getAttribute('max-width', '100%'),
+        maxWidth: this.getAttributeWithFallback('max-width', '100%'),
         userId: super.getAttribute('user-id') || null,
         userToken: super.getAttribute('user-token') || null,
         themePreset: (super.getAttribute('theme-preset') || 'light') as 'light' | 'dark' | 'brand',
@@ -205,7 +205,7 @@ class AmplifyChat extends HTMLElement {
    * Public API: Programmatically get conversation ID
    */
   getConversationId(): string {
-    return this.getAttribute('conversation-id', 'default');
+    return this.getAttributeWithFallback('conversation-id', 'default');
   }
 
   /**
