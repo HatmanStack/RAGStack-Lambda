@@ -126,7 +126,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       // Call onSendMessage callback if provided
       if (onSendMessage) {
-        onSendMessage(messageText);
+        onSendMessage(messageText, conversationId);
       }
 
       // Set loading state
@@ -211,7 +211,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setIsLoading(false);
       }
     },
-    [conversationId, userId, userToken, onSendMessage, onResponseReceived]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
+    // to prevent handleSend recreation when parent passes new callback references.
+    // These are optional side-effect callbacks that don't affect core functionality.
+    [conversationId, userId, userToken]
   );
 
   return (

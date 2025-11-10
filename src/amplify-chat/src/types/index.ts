@@ -158,8 +158,9 @@ export interface ChatInterfaceProps {
   /**
    * Callback when message is sent
    * @param message - The message that was sent
+   * @param conversationId - The conversation ID
    */
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: (message: string, conversationId: string) => void;
 
   /**
    * Callback when response is received
