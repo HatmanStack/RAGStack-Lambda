@@ -93,9 +93,9 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
       return;
     }
     applyTheme(
+      containerRef.current,
       themePreset as ThemePreset,
-      themeOverrides as ThemeOverrides,
-      containerRef.current
+      themeOverrides as ThemeOverrides
     );
   }, [themePreset, themeOverrides]);
   // Memoize callbacks to prevent unnecessary re-renders
