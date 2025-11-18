@@ -1377,7 +1377,7 @@ def write_amplify_outputs(
     log_info(f"  Auth: AWS_IAM (guest access enabled via Identity Pool)")
 
 
-def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name):
+def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name, tracking_table_name, input_bucket):
     """
     Deploy Amplify chat backend via CodeBuild with web component CDN.
 
@@ -1405,6 +1405,8 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         user_pool_id: Cognito User Pool ID (from SAM stack)
         user_pool_client_id: Cognito User Pool Client ID (from SAM stack)
         sam_stack_name: SAM CloudFormation stack name (to get CodeBuild project)
+        tracking_table_name: DynamoDB TrackingTable name (from SAM stack)
+        input_bucket: S3 InputBucket name (from SAM stack)
 
     Returns:
         str: CDN URL for web component (https://d123.cloudfront.net/amplify-chat.js)
@@ -1465,10 +1467,12 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         env_overrides = [
             {'name': 'PROJECT_NAME', 'value': project_name, 'type': 'PLAINTEXT'},
             {'name': 'AWS_REGION', 'value': region, 'type': 'PLAINTEXT'},
-            {'name': 'USER_POOL_ID', 'value': user_pool_id, 'type': 'PLAINTEXT'},
-            {'name': 'USER_POOL_CLIENT_ID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
+            {'name': 'USERPOOLID', 'value': user_pool_id, 'type': 'PLAINTEXT'},
+            {'name': 'USERPOOLCLIENTID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
             {'name': 'KNOWLEDGE_BASE_ID', 'value': kb_id, 'type': 'PLAINTEXT'},
             {'name': 'CONFIGURATION_TABLE_NAME', 'value': config_table_name, 'type': 'PLAINTEXT'},
+            {'name': 'TRACKING_TABLE_NAME', 'value': tracking_table_name, 'type': 'PLAINTEXT'},
+            {'name': 'INPUT_BUCKET', 'value': input_bucket, 'type': 'PLAINTEXT'},
         ]
 
         # Trigger CodeBuild deployment with Amplify source
@@ -1992,6 +1996,8 @@ Examples:
                 artifact_bucket = sam_outputs.get('ArtifactBucketName')
                 user_pool_id = sam_outputs.get('UserPoolId')
                 user_pool_client_id = sam_outputs.get('UserPoolClientId')
+                tracking_table_name = sam_outputs.get('TrackingTableName')
+                input_bucket = sam_outputs.get('InputBucketName')
 
                 if not config_table_name:
                     log_error("ConfigurationTableName not found in SAM stack outputs")
@@ -2005,10 +2011,20 @@ Examples:
                     log_error("UserPoolId or UserPoolClientId not found in SAM stack outputs")
                     sys.exit(1)
 
+                if not tracking_table_name:
+                    log_error("TrackingTableName not found in SAM stack outputs")
+                    sys.exit(1)
+
+                if not input_bucket:
+                    log_error("InputBucketName not found in SAM stack outputs")
+                    sys.exit(1)
+
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
                 log_info(f"Artifact Bucket: {artifact_bucket}")
                 log_info(f"User Pool ID: {user_pool_id}")
+                log_info(f"Tracking Table: {tracking_table_name}")
+                log_info(f"Input Bucket: {input_bucket}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -2024,7 +2040,9 @@ Examples:
                     config_table_name,
                     user_pool_id,
                     user_pool_client_id,
-                    stack_name  # SAM stack name for CodeBuild project lookup
+                    stack_name,  # SAM stack name for CodeBuild project lookup
+                    tracking_table_name,
+                    input_bucket
                 )
 
                 # Update chat_deployed flag and CDN URL
@@ -2154,18 +2172,32 @@ Examples:
                 # Get ConfigurationTable name and User Pool from SAM outputs
                 sam_outputs = get_stack_outputs(stack_name, args.region)
                 config_table_name = sam_outputs.get('ConfigurationTableName')
+                artifact_bucket = sam_outputs.get('ArtifactBucketName')
                 user_pool_id = sam_outputs.get('UserPoolId')
                 user_pool_client_id = sam_outputs.get('UserPoolClientId')
+                tracking_table_name = sam_outputs.get('TrackingTableName')
+                input_bucket = sam_outputs.get('InputBucketName')
 
                 if not config_table_name:
                     raise ValueError("ConfigurationTableName not found in SAM stack outputs")
 
+                if not artifact_bucket:
+                    raise ValueError("ArtifactBucketName not found in SAM stack outputs")
+
                 if not user_pool_id or not user_pool_client_id:
                     raise ValueError("UserPoolId or UserPoolClientId not found in SAM stack outputs")
+
+                if not tracking_table_name:
+                    raise ValueError("TrackingTableName not found in SAM stack outputs")
+
+                if not input_bucket:
+                    raise ValueError("InputBucketName not found in SAM stack outputs")
 
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
                 log_info(f"User Pool ID: {user_pool_id}")
+                log_info(f"Tracking Table: {tracking_table_name}")
+                log_info(f"Input Bucket: {input_bucket}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -2187,7 +2219,9 @@ Examples:
                     config_table_name,
                     user_pool_id,
                     user_pool_client_id,
-                    stack_name  # SAM stack name for CodeBuild project lookup
+                    stack_name,  # SAM stack name for CodeBuild project lookup
+                    tracking_table_name,
+                    input_bucket
                 )
 
                 # Update configuration with CDN URL now that deployment succeeded

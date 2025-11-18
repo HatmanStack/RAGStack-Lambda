@@ -15,10 +15,12 @@ export class AmplifyBackendStack extends cdk.Stack {
     const configTableName = process.env.CONFIGURATION_TABLE_NAME;
     const samUserPoolId = process.env.USERPOOLID;
     const samUserPoolClientId = process.env.USERPOOLCLIENTID;
+    const trackingTableName = process.env.TRACKING_TABLE_NAME;
+    const inputBucket = process.env.INPUT_BUCKET;
 
-    if (!kbId || !configTableName || !samUserPoolId || !samUserPoolClientId) {
+    if (!kbId || !configTableName || !samUserPoolId || !samUserPoolClientId || !trackingTableName || !inputBucket) {
       throw new Error(
-        'Required environment variables not set: KNOWLEDGE_BASE_ID, CONFIGURATION_TABLE_NAME, USERPOOLID, USERPOOLCLIENTID'
+        'Required environment variables not set: KNOWLEDGE_BASE_ID, CONFIGURATION_TABLE_NAME, USERPOOLID, USERPOOLCLIENTID, TRACKING_TABLE_NAME, INPUT_BUCKET'
       );
     }
 
@@ -135,6 +137,8 @@ export class AmplifyBackendStack extends cdk.Stack {
       environment: {
         KNOWLEDGE_BASE_ID: kbId,
         CONFIGURATION_TABLE_NAME: configTableName,
+        TRACKING_TABLE_NAME: trackingTableName,
+        INPUT_BUCKET: inputBucket,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
       },
     });
@@ -155,6 +159,30 @@ export class AmplifyBackendStack extends cdk.Stack {
     conversationFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['dynamodb:GetItem'],
+        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/${configTableName}`],
+      })
+    );
+
+    // Grant DynamoDB read permission for TrackingTable (for document URL mapping)
+    conversationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem'],
+        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/${trackingTableName}`],
+      })
+    );
+
+    // Grant S3 read permission for InputBucket (for presigned URLs)
+    conversationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject'],
+        resources: [`arn:aws:s3:::${inputBucket}/*`],
+      })
+    );
+
+    // Grant DynamoDB Update permission for quota tracking
+    conversationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:UpdateItem'],
         resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/${configTableName}`],
       })
     );
