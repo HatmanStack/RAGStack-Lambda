@@ -1,7 +1,0 @@
-{
-  "app": "npx tsx bin/app.ts",
-  "context": {
-    "@aws-cdk/core:newStyleStackSynthesis": true,
-    "@aws-cdk/core:stackRelativeExports": true
-  }
-}

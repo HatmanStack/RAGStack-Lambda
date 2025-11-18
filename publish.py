@@ -325,70 +325,6 @@ def check_sam_cli():
     return True
 
 
-def check_amplify_cli():
-    """
-    [DEPRECATED] Check if Amplify CLI is installed, auto-install if missing.
-
-    This function is no longer used since we switched to direct CDK deployment.
-    The CodeBuild environment uses 'npx cdk deploy' instead of 'ampx pipeline-deploy'.
-    Kept for backward compatibility but not called in the deployment flow.
-
-    Original purpose:
-    Uses `npx ampx` to check/use latest Amplify CLI. If not available,
-    installs @aws-amplify/cli globally via npm.
-
-    Returns:
-        bool: True if Amplify CLI is available
-
-    Raises:
-        SystemExit: If installation fails
-    """
-    log_info("Checking Amplify CLI...")
-
-    # Check if Amplify CLI is available via npx
-    check_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
-                                 capture_output=True,
-                                 text=True)
-
-    if check_result.returncode == 0:
-        version_output = check_result.stdout.strip()
-        log_success(f"Found Amplify CLI: {version_output}")
-        return True
-
-    # Not found, attempt auto-installation
-    log_warning("Amplify CLI not found, installing globally...")
-    try:
-        install_result = subprocess.run(
-            ['npm', 'install', '-g', '@aws-amplify/cli'],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-
-        if install_result.returncode != 0:
-            log_error("Failed to install Amplify CLI")
-            log_info("Error output: " + install_result.stderr)
-            log_info("Install manually: npm install -g @aws-amplify/cli")
-            sys.exit(1)
-
-        log_success("Amplify CLI installed successfully")
-
-        # Verify installation
-        verify_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
-                                      capture_output=True,
-                                      text=True)
-        if verify_result.returncode == 0:
-            log_success(f"Verified: {verify_result.stdout.strip()}")
-            return True
-        else:
-            log_error("Installation succeeded but verification failed")
-            sys.exit(1)
-
-    except Exception as e:
-        log_error(f"Failed to install Amplify CLI: {e}")
-        sys.exit(1)
-
-
 def get_codebuild_project_name(stack_name, region):
     """
     Get CodeBuild project name from SAM stack outputs.
@@ -566,57 +502,6 @@ def cleanup_failed_amplify_stacks(project_name, region):
 
     log_success(f"Cleanup initiated for {len(stacks_to_delete)} stack(s)")
     log_info("Monitor deletion in CloudFormation console")
-
-
-def check_docker():
-    """
-    Check if Docker is installed and the daemon is running.
-
-    Docker is required for SAM to build Lambda layers with native dependencies.
-    The layers need to be compiled for Amazon Linux (Lambda's runtime environment).
-
-    Returns:
-        bool: True if Docker is available and running
-
-    Raises:
-        SystemExit: If Docker not found or not running
-    """
-    log_info("Checking Docker...")
-
-    # Check if docker command exists
-    docker_check = subprocess.run(['docker', '--version'],
-                                 capture_output=True,
-                                 text=True)
-
-    if docker_check.returncode != 0:
-        log_error("Docker not found")
-        log_info("Docker is required to build Lambda layers for Amazon Linux")
-        log_info("Install Docker: https://docs.docker.com/get-docker/")
-        log_info("After install, start Docker daemon:")
-        log_info("  macOS: Open Docker Desktop application")
-        log_info("  Linux: sudo systemctl start docker")
-        log_info("  Windows: Open Docker Desktop application")
-        sys.exit(1)
-
-    version_output = docker_check.stdout.strip()
-    log_success(f"Found {version_output}")
-
-    # Check if Docker daemon is running
-    daemon_check = subprocess.run(['docker', 'ps'],
-                                 capture_output=True,
-                                 text=True)
-
-    if daemon_check.returncode != 0:
-        log_error("Docker daemon is not running")
-        log_info("Start Docker daemon:")
-        log_info("  macOS: Open Docker Desktop application")
-        log_info("  Linux: sudo systemctl start docker")
-        log_info("  Windows: Open Docker Desktop application")
-        log_info("\nError details: " + daemon_check.stderr)
-        sys.exit(1)
-
-    log_success("Docker daemon is running")
-    return True
 
 
 def sam_build():
@@ -1123,50 +1008,6 @@ def package_amplify_source(bucket_name, region):
         if os.path.exists(zip_path):
             os.remove(zip_path)
         raise IOError(f"Unexpected error packaging Amplify source: {e}") from e
-
-
-def create_amplify_placeholder(bucket_name, region):
-    """
-    Create empty placeholder zip for CodeBuild project creation.
-
-    CloudFormation validates that S3 source locations exist during stack creation.
-    This creates a minimal placeholder that will be overridden at build time.
-
-    Args:
-        bucket_name: S3 bucket name
-        region: AWS region
-
-    Returns:
-        str: S3 key of placeholder file
-    """
-    import zipfile
-    from io import BytesIO
-
-    log_info("Creating Amplify placeholder for CloudFormation validation...")
-
-    # Create minimal empty zip in memory
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Add a minimal README so zip is not completely empty
-        zipf.writestr('README.txt', 'Placeholder for CodeBuild - will be overridden at build time')
-
-    zip_buffer.seek(0)
-
-    # Upload to S3 with fixed key (matches template.yaml placeholder)
-    s3 = boto3.client('s3', region_name=region)
-    key = 'amplify-placeholder.zip'
-
-    try:
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=key,
-            Body=zip_buffer.getvalue(),
-            ContentType='application/zip'
-        )
-        log_success(f"Amplify placeholder created: s3://{bucket_name}/{key}")
-        return key
-    except Exception as e:
-        raise IOError(f"Failed to upload placeholder: {e}") from e
 
 
 def get_stack_outputs(stack_name, region="us-east-1"):
