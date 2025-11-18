@@ -56,9 +56,10 @@ export function App() {
 
 - ✨ **Embeddable** - Use in any React app
 - 🤖 **AI-Powered** - Integrates with Bedrock and Claude
-- 📚 **Source Attribution** - Shows document sources
+- 📚 **Source Attribution** - Shows document sources with collapsible UI
+- 📎 **Document Access** - Download original source documents (admin-configurable)
 - 🎨 **Styled** - Compatible with Cloudscape
-- ♿ **Accessible** - WCAG 2.1 AA compliant
+- ♿ **Accessible** - WCAG 2.1 AA compliant (keyboard nav, screen readers)
 - 📱 **Responsive** - Desktop, tablet, mobile
 - 🌙 **Dark Mode** - System preference support
 - ✅ **Tested** - Comprehensive test suite
@@ -98,6 +99,54 @@ onResponseReceived={(response: ChatMessage) => {
   console.log('Sources:', response.sources);
 }}
 ```
+
+## Source Citations
+
+### Collapsible Sources
+
+Source citations appear below each AI response in a collapsible UI:
+
+- **Default state:** Collapsed (clean UI)
+- **Expand/collapse:** Click "Show/Hide" button
+- **Persistence:** State saved in sessionStorage (persists on page refresh)
+- **Accessibility:** Keyboard navigable (Tab + Enter), screen reader support
+
+```tsx
+// Example source structure
+{
+  title: "financial-report-2024.pdf",
+  location: "chunk-005",
+  snippet: "Q4 revenue was $2.3M...",
+  documentUrl: "https://s3.amazonaws.com/...",  // Optional
+  documentAccessAllowed: true  // Configuration flag
+}
+```
+
+### Document Downloads
+
+When `chat_allow_document_access` is enabled (admin UI → Configuration):
+
+- **"View Document" links** appear in source citations
+- **Presigned S3 URLs** for original uploaded files (not vector chunks)
+- **1-hour expiry** for security
+- **Read-only access** (no modification)
+
+**User experience:**
+1. User sends query → AI responds with sources
+2. User expands sources → sees snippets + "View Document" links
+3. User clicks link → original PDF/image/doc downloads
+4. URL expires after 1 hour
+
+**Admin controls:**
+- Toggle on/off in real-time (no redeployment)
+- Changes apply within 60 seconds (DynamoDB config cache)
+
+### Accessibility Features
+
+- **Keyboard navigation:** Tab to navigate, Enter/Space to activate
+- **Screen reader support:** ARIA labels, state announcements
+- **Focus indicators:** Visible focus outlines on all interactive elements
+- **Semantic HTML:** `<button>` elements (not `<div onClick>`)
 
 ## Styling
 

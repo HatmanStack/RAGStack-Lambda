@@ -1,10 +1,19 @@
 # Configuration Guide
 
-## User-Configurable Settings (3)
+## User-Configurable Settings
 
+### Document Processing
 - `ocr_backend` - "textract" or "bedrock"
 - `bedrock_ocr_model_id` - Claude model for OCR
 - `chat_model_id` - Claude model for queries
+
+### Chat Configuration
+- `chat_require_auth` - Enable/disable authentication (boolean)
+- `chat_primary_model` - Primary chat model ARN
+- `chat_fallback_model` - Fallback chat model ARN
+- `chat_global_quota_daily` - Daily query limit (all users)
+- `chat_per_user_quota_daily` - Daily query limit (per user)
+- `chat_allow_document_access` - Enable/disable source document downloads (boolean)
 
 **Hardcoded** (managed by Bedrock KB API):
 - Text embeddings: `amazon.titan-embed-text-v2:0`
@@ -50,6 +59,51 @@ aws dynamodb put-item \
 **Monthly estimate** (1000 docs, 5 pages each):
 - Textract + Haiku: ~$7-10
 - Bedrock + Haiku: ~$25-30
+
+## Document Access Configuration
+
+### `chat_allow_document_access`
+
+Controls whether users can download original source documents from chat responses.
+
+**Type:** Boolean
+**Default:** `false` (disabled)
+**Purpose:** Enable/disable "View Document" links in chat source citations
+
+**How it works:**
+1. When enabled, chat responses include presigned S3 URLs for original documents
+2. URLs expire after 1 hour (security feature)
+3. Only read-only access (GetObject), no modification or deletion
+4. Users can download PDFs, images, and other source files
+
+**Enable via Admin UI:**
+1. Navigate to Configuration page
+2. Toggle "Allow Document Access" switch
+3. Changes apply immediately (60-second cache delay)
+
+**Enable via CLI:**
+```bash
+aws dynamodb update-item \
+  --table-name {ProjectName}-config-{Suffix} \
+  --key '{"Configuration": {"S": "Default"}}' \
+  --update-expression "SET chat_allow_document_access = :val" \
+  --expression-attribute-values '{":val": {"BOOL": true}}'
+```
+
+**Security Implications:**
+- URLs are time-limited (1 hour expiry)
+- URLs are revocable by disabling the setting
+- No bucket listing or write access
+- Presigned URLs contain AWS credentials in query params (do not log)
+
+**When to enable:**
+- Internal knowledge base (trusted users)
+- Public documentation (already public sources)
+
+**When to disable:**
+- Sensitive/confidential documents
+- Compliance requirements prohibit downloads
+- Citation snippets are sufficient
 
 ## FAQ
 

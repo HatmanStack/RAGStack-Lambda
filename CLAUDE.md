@@ -205,6 +205,16 @@ pwd
 ### Configuration Management
 Runtime configuration is stored in DynamoDB (table: `{ProjectName}-config-{Suffix}`). Changes apply immediately without redeployment. Access via `ConfigurationManager` class in `lib/ragstack_common/config.py`.
 
+**Chat Configuration Options:**
+- `chat_require_auth` - Enable/disable authentication (default: false)
+- `chat_primary_model` - Primary chat model ARN
+- `chat_fallback_model` - Fallback chat model ARN
+- `chat_global_quota_daily` - Daily query limit for all users (default: 10000)
+- `chat_per_user_quota_daily` - Daily query limit per user (default: 100)
+- `chat_allow_document_access` - Enable/disable source document downloads (default: false)
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed configuration guide.
+
 ### OCR Backends
 - **textract (default):** AWS Textract ($1.50/1000 pages), faster, better for forms/tables
 - **bedrock:** Bedrock vision models (variable cost), slower, better for complex layouts
