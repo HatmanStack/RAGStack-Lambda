@@ -1,4 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 
@@ -17,3 +18,27 @@ export const backend = defineBackend({
   auth,
   data,
 });
+
+// Grant Conversation Lambda access to DynamoDB config table and Bedrock Knowledge Base
+const conversationLambda = backend.data.resources.functions.conversation;
+
+// DynamoDB config table permissions (wildcard pattern to support any deployment)
+conversationLambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
+    resources: ['arn:aws:dynamodb:*:*:table/*-config-*'],
+  })
+);
+
+// Bedrock Knowledge Base permissions
+conversationLambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'bedrock:InvokeModel',
+      'bedrock:Retrieve',
+      'bedrock:RetrieveAndGenerate',
+      'bedrock:GetInferenceProfile', // Required for inference profiles
+    ],
+    resources: ['*'], // Bedrock requires wildcard for some actions
+  })
+);

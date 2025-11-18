@@ -14,7 +14,6 @@
 import type { Schema } from '../resource';
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
-import { KNOWLEDGE_BASE_CONFIG } from '../config';
 
 /**
  * Config cache (60s TTL to minimize DynamoDB reads)
@@ -91,8 +90,8 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       message,
       conversationId,
       selectedModel,
-      KNOWLEDGE_BASE_CONFIG.knowledgeBaseId,
-      KNOWLEDGE_BASE_CONFIG.region
+      process.env.KNOWLEDGE_BASE_ID!,
+      process.env.AWS_REGION!
     );
 
     // Step 6: Return response
@@ -124,12 +123,12 @@ export async function getChatConfig(): Promise<ChatConfig> {
 
   console.log('Fetching config from DynamoDB...');
 
-  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION! });
 
   try {
     const result = await dynamodb.send(
       new GetItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        TableName: process.env.CONFIGURATION_TABLE_NAME!,
         Key: { Configuration: { S: 'Default' } },
       })
     );
@@ -179,7 +178,7 @@ export async function atomicQuotaCheckAndIncrement(
   config: ChatConfig,
   isAuthenticated: boolean
 ): Promise<string> {
-  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION! });
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const ttl = Math.floor(Date.now() / 1000) + (86400 * 2); // 2 days from now
 
@@ -190,7 +189,7 @@ export async function atomicQuotaCheckAndIncrement(
     try {
       const globalResult = await dynamodb.send(
         new UpdateItemCommand({
-          TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+          TableName: process.env.CONFIGURATION_TABLE_NAME!,
           Key: { Configuration: { S: globalKey } },
           UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
           ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
@@ -226,7 +225,7 @@ export async function atomicQuotaCheckAndIncrement(
       try {
         const userResult = await dynamodb.send(
           new UpdateItemCommand({
-            TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+            TableName: process.env.CONFIGURATION_TABLE_NAME!,
             Key: { Configuration: { S: userKey } },
             UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
             ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
@@ -252,7 +251,7 @@ export async function atomicQuotaCheckAndIncrement(
           // Need to decrement global quota since user quota failed
           await dynamodb.send(
             new UpdateItemCommand({
-              TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+              TableName: process.env.CONFIGURATION_TABLE_NAME!,
               Key: { Configuration: { S: globalKey } },
               UpdateExpression: 'ADD #count :dec',
               ExpressionAttributeNames: {
@@ -310,7 +309,7 @@ export async function queryKnowledgeBase(
             modelArn: modelArn,
           },
         },
-        sessionId: conversationId,
+        // sessionId: conversationId, // Disabled - causes validation errors when KB ID changes
       })
     );
 

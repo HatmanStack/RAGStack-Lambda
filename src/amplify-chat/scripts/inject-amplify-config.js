@@ -16,15 +16,26 @@ const fs = require('fs');
 const path = require('path');
 
 // Paths relative to src/amplify-chat/scripts/
-const AMPLIFY_OUTPUTS_PATH = path.join(__dirname, '../../../amplify_outputs.json');
+// Try local directory first (for CodeBuild), then repo root (for local dev)
+const LOCAL_OUTPUTS_PATH = path.join(__dirname, '../amplify_outputs.json');
+const REPO_ROOT_OUTPUTS_PATH = path.join(__dirname, '../../../amplify_outputs.json');
 const GENERATED_CONFIG_PATH = path.join(__dirname, '../src/amplify-config.generated.ts');
 
 function main() {
   console.log('🔧 Injecting Amplify configuration into web component...');
 
-  // Check if amplify_outputs.json exists
-  if (!fs.existsSync(AMPLIFY_OUTPUTS_PATH)) {
-    console.error('❌ Error: amplify_outputs.json not found at', AMPLIFY_OUTPUTS_PATH);
+  // Check if amplify_outputs.json exists (try local first, then repo root)
+  let AMPLIFY_OUTPUTS_PATH;
+  if (fs.existsSync(LOCAL_OUTPUTS_PATH)) {
+    AMPLIFY_OUTPUTS_PATH = LOCAL_OUTPUTS_PATH;
+    console.log('✓ Found amplify_outputs.json at local path:', LOCAL_OUTPUTS_PATH);
+  } else if (fs.existsSync(REPO_ROOT_OUTPUTS_PATH)) {
+    AMPLIFY_OUTPUTS_PATH = REPO_ROOT_OUTPUTS_PATH;
+    console.log('✓ Found amplify_outputs.json at repo root:', REPO_ROOT_OUTPUTS_PATH);
+  } else {
+    console.error('❌ Error: amplify_outputs.json not found at either:');
+    console.error('   Local:', LOCAL_OUTPUTS_PATH);
+    console.error('   Repo root:', REPO_ROOT_OUTPUTS_PATH);
     console.error('   Run `npx ampx deploy` first to generate Amplify configuration.');
     process.exit(1);
   }

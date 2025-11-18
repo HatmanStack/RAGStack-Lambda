@@ -993,6 +993,9 @@ def package_amplify_chat_source(bucket_name, region):
     Creates a zip file of src/amplify-chat/ (excluding node_modules and dist),
     uploads it to the provided S3 bucket, and returns the S3 key for CodeBuild.
 
+    IMPORTANT: Copies amplify_outputs.json from root into src/amplify-chat/ before packaging
+    so that the web component build has access to the correct Amplify configuration.
+
     Args:
         bucket_name: S3 bucket name to upload to
         region: AWS region for bucket operations
@@ -1005,6 +1008,17 @@ def package_amplify_chat_source(bucket_name, region):
         IOError: If packaging or upload fails
     """
     log_info("Packaging web component source...")
+
+    # Copy amplify_outputs.json from root to web component directory
+    amplify_outputs_src = Path('amplify_outputs.json')
+    amplify_outputs_dest = Path('src/amplify-chat/amplify_outputs.json')
+
+    if amplify_outputs_src.exists():
+        import shutil
+        shutil.copy2(amplify_outputs_src, amplify_outputs_dest)
+        log_info("Copied amplify_outputs.json to web component directory")
+    else:
+        log_warning("amplify_outputs.json not found in root - web component may not have correct config")
 
     key = _package_source_to_s3(
         source_dir='src/amplify-chat',
@@ -1466,6 +1480,62 @@ AWS_REGION={region}
     log_success(f"Amplify environment written to {env_file}")
 
 
+def write_amplify_outputs(
+    graphql_endpoint, region, user_pool_id, user_pool_client_id, identity_pool_id
+):
+    """
+    Generate amplify_outputs.json for web component Amplify configuration.
+
+    This file is used by the web component build process to configure Amplify
+    with the correct GraphQL endpoint, auth settings, and Identity Pool for guest access.
+
+    Args:
+        graphql_endpoint: AppSync GraphQL API endpoint
+        region: AWS region
+        user_pool_id: Cognito User Pool ID
+        user_pool_client_id: Cognito User Pool Client ID
+        identity_pool_id: Cognito Identity Pool ID (for guest access)
+
+    Raises:
+        IOError: If file creation fails
+    """
+    amplify_outputs = {
+        "version": "1",
+        "auth": {
+            "aws_region": region,
+            "user_pool_id": user_pool_id,
+            "user_pool_client_id": user_pool_client_id,
+            "identity_pool_id": identity_pool_id,
+            "unauthenticated_identities_enabled": True,
+            "mfa_methods": [],
+            "standard_required_attributes": [],
+            "username_attributes": ["email"],
+            "user_verification_types": ["email"],
+            "mfa_configuration": "NONE",
+            "password_policy": {
+                "min_length": 8,
+                "require_lowercase": True,
+                "require_numbers": True,
+                "require_symbols": True,
+                "require_uppercase": True,
+            },
+        },
+        "data": {
+            "url": graphql_endpoint,
+            "aws_region": region,
+            "api_key": "",
+            "default_authorization_type": "AWS_IAM",
+            "authorization_types": ["AWS_IAM", "AWS_LAMBDA"],
+        },
+    }
+
+    outputs_file = Path("amplify_outputs.json")
+    outputs_file.write_text(json.dumps(amplify_outputs, indent=2))
+    log_success(f"Amplify outputs written to {outputs_file}")
+    log_info(f"  GraphQL Endpoint: {graphql_endpoint}")
+    log_info(f"  Auth: AWS_IAM (guest access enabled via Identity Pool)")
+
+
 def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name):
     """
     Deploy Amplify chat backend via CodeBuild with web component CDN.
@@ -1514,16 +1584,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             "Ensure you're in the correct directory."
         )
 
-    # Step 1: Package web component source
-    log_info("Packaging web component source...")
-    try:
-        chat_source_key = package_amplify_chat_source(artifact_bucket, region)
-        log_success(f"Web component source uploaded: s3://{artifact_bucket}/{chat_source_key}")
-    except (FileNotFoundError, IOError) as e:
-        log_error(f"Failed to package web component: {e}")
-        raise
-
-    # Step 2: Generate amplify/data/config.ts with all parameters
+    # Step 1: Generate amplify/data/config.ts with all parameters
     log_info("Generating Amplify backend configuration...")
     try:
         write_amplify_config(
@@ -1531,7 +1592,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             region,
             config_table_name,
             artifact_bucket,
-            chat_source_key,
+            '',  # chat_source_key will be set later after amplify_outputs.json exists
             user_pool_id,
             user_pool_client_id
         )
@@ -1541,7 +1602,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_error(f"Failed to generate Amplify configuration: {e}")
         raise IOError(f"Config generation failed: {e}") from e
 
-    # Step 2.5: Package Amplify backend source (after config.ts is generated)
+    # Step 2: Package Amplify backend source (after config.ts is generated)
     log_info("Packaging Amplify backend source...")
     try:
         amplify_source_key = package_amplify_source(artifact_bucket, region)
@@ -1567,8 +1628,6 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
             {'name': 'USER_POOL_CLIENT_ID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
             {'name': 'KNOWLEDGE_BASE_ID', 'value': kb_id, 'type': 'PLAINTEXT'},
             {'name': 'CONFIGURATION_TABLE_NAME', 'value': config_table_name, 'type': 'PLAINTEXT'},
-            {'name': 'WEB_COMPONENT_SOURCE_BUCKET', 'value': artifact_bucket, 'type': 'PLAINTEXT'},
-            {'name': 'WEB_COMPONENT_SOURCE_KEY', 'value': chat_source_key, 'type': 'PLAINTEXT'},
         ]
 
         # Trigger CodeBuild deployment with Amplify source
@@ -1586,6 +1645,55 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
 
         log_success("Amplify stack deployed successfully via CodeBuild")
 
+        # Generate amplify_outputs.json for web component
+        log_info("Generating amplify_outputs.json for web component...")
+        try:
+            # Get Amplify GraphQL endpoint (NOT SAM - Amplify has the conversation query)
+            appsync_client = boto3.client('appsync', region_name=region)
+            apis_response = appsync_client.list_graphql_apis()
+
+            # Find Amplify API by name pattern
+            amplify_api_name = f'amplify-{project_name}-backend-api'
+            amplify_api = next(
+                (api for api in apis_response['graphqlApis'] if api['name'] == amplify_api_name),
+                None
+            )
+
+            if not amplify_api:
+                raise ValueError(f"Amplify GraphQL API '{amplify_api_name}' not found")
+
+            graphql_endpoint = amplify_api['uris']['GRAPHQL']
+            log_info(f"Found Amplify GraphQL API: {amplify_api['name']} ({amplify_api['apiId']})")
+
+            # Get Identity Pool ID from SAM outputs
+            sam_outputs = get_stack_outputs(sam_stack_name, region)
+            identity_pool_id = sam_outputs.get('IdentityPoolId')
+
+            if not identity_pool_id:
+                log_warning("IdentityPoolId not found in SAM outputs - guest access may not work")
+                identity_pool_id = ""  # Use empty string as fallback
+
+            write_amplify_outputs(
+                graphql_endpoint,
+                region,
+                user_pool_id,
+                user_pool_client_id,
+                identity_pool_id
+            )
+            log_success("amplify_outputs.json generated successfully")
+        except Exception as e:
+            log_warning(f"Failed to generate amplify_outputs.json: {e}")
+            log_warning("Web component may need manual configuration")
+
+        # Step 4: Package web component source (NOW that amplify_outputs.json exists)
+        log_info("Packaging web component source...")
+        try:
+            chat_source_key = package_amplify_chat_source(artifact_bucket, region)
+            log_success(f"Web component source uploaded: s3://{artifact_bucket}/{chat_source_key}")
+        except (FileNotFoundError, IOError) as e:
+            log_error(f"Failed to package web component: {e}")
+            raise
+
     except (TimeoutError, RuntimeError) as e:
         log_error(f"Amplify deployment via CodeBuild failed: {e}")
         log_warning("SAM stack deployed successfully, but Amplify deployment failed")
@@ -1593,7 +1701,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_warning(f"Or trigger CodeBuild manually: aws codebuild start-build --project-name {codebuild_project}")
         raise
 
-    # Step 4: Get web component outputs from SAM stack
+    # Step 5: Get web component outputs from SAM stack
     # Note: Web component CDN is now managed via SAM, not Amplify
     log_info("Retrieving web component outputs from SAM stack...")
     try:
@@ -1612,7 +1720,7 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         log_error(f"Failed to retrieve SAM stack outputs: {e}")
         raise IOError(f"Output retrieval failed: {e}") from e
 
-    # Step 5: Trigger CodeBuild to build and deploy web component
+    # Step 6: Trigger CodeBuild to build and deploy web component
     log_info("Triggering web component build and deployment...")
     build_id = None
     try:
@@ -1680,6 +1788,38 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
     log_success(f"Amplify deployment complete! CDN URL: {cdn_url}")
     log_warning("Note: Web component may not be available at CDN URL until CodeBuild completes")
     return cdn_url
+
+
+def get_existing_chat_config(table_name, region):
+    """
+    Get existing chat configuration from DynamoDB table.
+
+    Args:
+        table_name: DynamoDB table name
+        region: AWS region
+
+    Returns:
+        tuple: (chat_deployed: bool, chat_cdn_url: str)
+               Returns (False, '') if configuration doesn't exist
+    """
+    try:
+        dynamodb = boto3.resource('dynamodb', region_name=region)
+        table = dynamodb.Table(table_name)
+
+        # Get Default configuration item
+        response = table.get_item(Key={'Configuration': 'Default'})
+
+        if 'Item' in response:
+            item = response['Item']
+            chat_deployed = item.get('chat_deployed', False)
+            chat_cdn_url = item.get('chat_cdn_url', '')
+            log_info(f"Found existing chat config: deployed={chat_deployed}, cdn_url={chat_cdn_url[:50] if chat_cdn_url else 'none'}")
+            return (chat_deployed, chat_cdn_url)
+
+    except Exception as e:
+        log_info(f"No existing chat config found: {e}")
+
+    return (False, '')
 
 
 def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_url=''):
@@ -2119,8 +2259,29 @@ Examples:
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
 
-        # Seed configuration table
-        seed_configuration_table(stack_name, args.region)
+        # Seed configuration table (preserve existing chat config if it exists)
+        config_table_name = outputs.get('ConfigurationTableName')
+        if config_table_name:
+            # Check for existing chat configuration
+            existing_chat_deployed, existing_chat_cdn = get_existing_chat_config(
+                config_table_name, args.region
+            )
+
+            # Preserve existing chat config during SAM-only deploy
+            if existing_chat_deployed:
+                log_info("Preserving existing chat configuration during SAM deployment")
+                seed_configuration_table(
+                    stack_name,
+                    args.region,
+                    chat_deployed=existing_chat_deployed,
+                    chat_cdn_url=existing_chat_cdn
+                )
+            else:
+                # No existing chat config, use defaults
+                seed_configuration_table(stack_name, args.region)
+        else:
+            # Fallback if table name not in outputs
+            seed_configuration_table(stack_name, args.region)
 
         # Configure UI
         if not args.skip_ui:

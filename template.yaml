@@ -886,6 +886,33 @@ Resources:
                 - aws-marketplace:Subscribe
               Resource: '*'
 
+  SearchKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-search-${DeploymentSuffix}'
+      CodeUri: src/lambda/search_kb/
+      Handler: index.lambda_handler
+      Description: Search Bedrock Knowledge Base (raw vector search)
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Tracing: Active
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:Retrieve
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+
   ##########################################################################
   # Configuration Resolver Lambda
   ##########################################################################
@@ -1248,7 +1275,7 @@ Resources:
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: !Sub '${ProjectName}Identity'
-      AllowUnauthenticatedIdentities: false
+      AllowUnauthenticatedIdentities: true  # Enable guest access for chat widget
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
           ProviderName: !GetAtt UserPool.ProviderName
@@ -1259,6 +1286,33 @@ Resources:
       IdentityPoolId: !Ref IdentityPool
       Roles:
         authenticated: !GetAtt AuthenticatedRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedRole.Arn
+
+  UnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: unauthenticated
+      Policies:
+        - PolicyName: UnauthenticatedAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - appsync:GraphQL
+                Resource:
+                  - !Sub '${GraphQLApi.Arn}/*'
 
   AuthenticatedRole:
     Type: AWS::IAM::Role
@@ -1319,6 +1373,8 @@ Resources:
         UserPoolId: !Ref UserPool
         AwsRegion: !Ref AWS::Region
         DefaultAction: ALLOW
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AWS_IAM
       LogConfig:
         CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
         FieldLogLevel: ERROR
@@ -1457,6 +1513,7 @@ Resources:
                 Resource:
                   - !GetAtt AppSyncResolverFunction.Arn
                   - !GetAtt QueryKBFunction.Arn
+                  - !GetAtt SearchKBFunction.Arn
                   - !GetAtt ConfigurationResolverFunction.Arn
 
   # Data source for KB queries
@@ -1469,6 +1526,17 @@ Resources:
       ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
       LambdaConfig:
         LambdaFunctionArn: !GetAtt QueryKBFunction.Arn
+
+  # Data source for KB search
+  KBSearchDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: KBSearchDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt SearchKBFunction.Arn
 
   # Data source for Configuration Resolver
   ConfigurationResolverDataSource:
@@ -1526,6 +1594,15 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
+
+  SearchKBResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: searchKnowledgeBase
+      DataSourceName: !GetAtt KBSearchDataSource.Name
 
   # Configuration Resolvers
   GetConfigurationResolver:
@@ -2315,6 +2392,8 @@ Resources:
             Value: !Ref UserPool
           - Name: USERPOOLCLIENTID
             Value: !Ref UserPoolClient
+          - Name: IDENTITYPOOLID
+            Value: !Ref IdentityPool
           - Name: DEPLOYMENT_SUFFIX
             Value: !Ref DeploymentSuffix
           - Name: ARTIFACT_BUCKET
@@ -2422,7 +2501,8 @@ Resources:
                       "aws_region": "$REGION",
                       "user_pool_id": "$USERPOOLID",
                       "user_pool_client_id": "$USERPOOLCLIENTID",
-                      "identity_pool_id": "",
+                      "identity_pool_id": "$IDENTITYPOOLID",
+                      "unauthenticated_identities_enabled": true,
                       "password_policy": {
                         "min_length": 8,
                         "require_numbers": true,
@@ -2440,8 +2520,8 @@ Resources:
                       "aws_region": "$REGION",
                       "url": "$API_ENDPOINT",
                       "api_id": "$API_ID",
-                      "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
-                      "authorization_types": ["AWS_LAMBDA"]
+                      "default_authorization_type": "AWS_IAM",
+                      "authorization_types": ["AWS_IAM", "AWS_LAMBDA"]
                     }
                   }
                   EOF
@@ -2564,6 +2644,12 @@ Outputs:
     Value: !GetAtt QueryKBFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-QueryKBFunction'
+
+  SearchKBFunctionArn:
+    Description: Search Knowledge Base Lambda ARN
+    Value: !GetAtt SearchKBFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SearchKBFunction'
 
   # Step Functions
   StateMachineArn:

@@ -19,6 +19,11 @@ export const Navigation = () => {
     },
     {
       type: 'link',
+      text: 'Search',
+      href: '/search'
+    },
+    {
+      type: 'link',
       text: 'Chat',
       href: '/chat'
     },

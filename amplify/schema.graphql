@@ -1,10 +1,10 @@
-type Source {
+type Source @aws_iam {
   title: String!
   location: String
   snippet: String!
 }
 
-type ConversationResponse {
+type ConversationResponse @aws_iam {
   content: String!
   sources: [Source]
   modelUsed: String
@@ -16,7 +16,7 @@ type Query {
     conversationId: String!
     userId: String
     userToken: String
-  ): ConversationResponse
+  ): ConversationResponse @aws_iam
 }
 
 schema {

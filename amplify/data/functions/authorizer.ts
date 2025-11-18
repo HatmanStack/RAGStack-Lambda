@@ -13,21 +13,20 @@
 
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { KNOWLEDGE_BASE_CONFIG } from '../config';
 
 /**
  * Create verifier instance (reused across invocations)
  */
 const verifier = CognitoJwtVerifier.create({
-  userPoolId: KNOWLEDGE_BASE_CONFIG.userPoolId,
-  clientId: KNOWLEDGE_BASE_CONFIG.userPoolClientId,
+  userPoolId: process.env.USER_POOL_ID!,
+  clientId: process.env.USER_POOL_CLIENT_ID!,
   tokenUse: 'access',
 });
 
 /**
  * DynamoDB client for reading configuration
  */
-const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION! });
 
 /**
  * Config cache (60s TTL to minimize DynamoDB reads)
@@ -51,7 +50,7 @@ async function getAuthRequired(): Promise<boolean> {
   try {
     const result = await dynamodb.send(
       new GetItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        TableName: process.env.CONFIGURATION_TABLE_NAME!,
         Key: { Configuration: { S: 'Default' } },
       })
     );
