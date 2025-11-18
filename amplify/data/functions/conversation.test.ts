@@ -38,6 +38,7 @@ describe('Conversation Handler', () => {
           chat_fallback_model: { S: 'us.amazon.nova-micro-v1:0' },
           chat_global_quota_daily: { N: '10000' },
           chat_per_user_quota_daily: { N: '100' },
+          chat_allow_document_access: { BOOL: true },
         },
       });
 
@@ -48,6 +49,7 @@ describe('Conversation Handler', () => {
       expect(config.fallbackModel).toBe('us.amazon.nova-micro-v1:0');
       expect(config.globalQuotaDaily).toBe(10000);
       expect(config.perUserQuotaDaily).toBe(100);
+      expect(config.allowDocumentAccess).toBe(true);
     });
 
     it('should use default values for missing config fields', async () => {
@@ -62,6 +64,7 @@ describe('Conversation Handler', () => {
       expect(config.fallbackModel).toBe('us.amazon.nova-micro-v1:0');
       expect(config.globalQuotaDaily).toBe(10000);
       expect(config.perUserQuotaDaily).toBe(100);
+      expect(config.allowDocumentAccess).toBe(false);
     });
   });
 

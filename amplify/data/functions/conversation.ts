@@ -31,6 +31,8 @@ interface ChatConfig {
   fallbackModel: string;
   globalQuotaDaily: number;
   perUserQuotaDaily: number;
+  /** Allow users to download original source documents via presigned URLs */
+  allowDocumentAccess: boolean;
 }
 
 /**
@@ -144,6 +146,7 @@ export async function getChatConfig(): Promise<ChatConfig> {
       fallbackModel: result.Item.chat_fallback_model?.S ?? 'us.amazon.nova-micro-v1:0',
       globalQuotaDaily: parseInt(result.Item.chat_global_quota_daily?.N ?? '10000'),
       perUserQuotaDaily: parseInt(result.Item.chat_per_user_quota_daily?.N ?? '100'),
+      allowDocumentAccess: result.Item.chat_allow_document_access?.BOOL ?? false,
     };
 
     // Update cache
