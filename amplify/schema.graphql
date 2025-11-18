@@ -16,7 +16,7 @@ type Query {
     conversationId: String!
     userId: String
     userToken: String
-  ): ConversationResponse
+  ): ConversationResponse @aws_iam
 }
 
 schema {

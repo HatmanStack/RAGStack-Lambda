@@ -129,7 +129,7 @@ export async function getChatConfig(): Promise<ChatConfig> {
   try {
     const result = await dynamodb.send(
       new GetItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        TableName: process.env.CONFIGURATION_TABLE_NAME || KNOWLEDGE_BASE_CONFIG.configurationTableName,
         Key: { Configuration: { S: 'Default' } },
       })
     );
@@ -190,7 +190,7 @@ export async function atomicQuotaCheckAndIncrement(
     try {
       const globalResult = await dynamodb.send(
         new UpdateItemCommand({
-          TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+          TableName: process.env.CONFIGURATION_TABLE_NAME || KNOWLEDGE_BASE_CONFIG.configurationTableName,
           Key: { Configuration: { S: globalKey } },
           UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
           ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
@@ -226,7 +226,7 @@ export async function atomicQuotaCheckAndIncrement(
       try {
         const userResult = await dynamodb.send(
           new UpdateItemCommand({
-            TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+            TableName: process.env.CONFIGURATION_TABLE_NAME || KNOWLEDGE_BASE_CONFIG.configurationTableName,
             Key: { Configuration: { S: userKey } },
             UpdateExpression: 'ADD #count :inc SET #ttl = :ttl',
             ConditionExpression: '#count < :limit OR attribute_not_exists(#count)',
@@ -252,7 +252,7 @@ export async function atomicQuotaCheckAndIncrement(
           // Need to decrement global quota since user quota failed
           await dynamodb.send(
             new UpdateItemCommand({
-              TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+              TableName: process.env.CONFIGURATION_TABLE_NAME || KNOWLEDGE_BASE_CONFIG.configurationTableName,
               Key: { Configuration: { S: globalKey } },
               UpdateExpression: 'ADD #count :dec',
               ExpressionAttributeNames: {

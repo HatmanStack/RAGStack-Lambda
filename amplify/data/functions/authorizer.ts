@@ -51,7 +51,7 @@ async function getAuthRequired(): Promise<boolean> {
   try {
     const result = await dynamodb.send(
       new GetItemCommand({
-        TableName: KNOWLEDGE_BASE_CONFIG.configurationTableName,
+        TableName: process.env.CONFIGURATION_TABLE_NAME || KNOWLEDGE_BASE_CONFIG.configurationTableName,
         Key: { Configuration: { S: 'Default' } },
       })
     );

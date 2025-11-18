@@ -6,15 +6,29 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../../../amplify/data/resource';
+import { generateClient } from 'aws-amplify/api';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import styles from '../styles/ChatWithSources.module.css';
 
+// GraphQL query for conversation
+const CONVERSATION_QUERY = `
+  query Conversation($message: String!, $conversationId: String!, $userId: String, $userToken: String) {
+    conversation(message: $message, conversationId: $conversationId, userId: $userId, userToken: $userToken) {
+      content
+      sources {
+        title
+        location
+        snippet
+      }
+      modelUsed
+    }
+  }
+`;
+
 // Initialize GraphQL client at module level (reused across instances)
-const client = generateClient<Schema>();
+const client = generateClient();
 
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
@@ -140,17 +154,33 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setError(null);
 
       try {
+        // Debug logging for authentication
+        console.log('[ChatInterface] Sending conversation query', {
+          conversationId,
+          isAuthenticated,
+          hasUserId: !!userId,
+          hasUserToken: !!userToken,
+        });
+
         // Call GraphQL conversation query
-        const response = await client.queries.conversation({
-          message: messageText,
-          conversationId: conversationId,
-          userId: userId || undefined,
-          userToken: userToken || undefined,
+        const response = await client.graphql({
+          query: CONVERSATION_QUERY,
+          variables: {
+            message: messageText,
+            conversationId: conversationId,
+            userId: userId || undefined,
+            userToken: userToken || undefined,
+          },
+        });
+
+        console.log('[ChatInterface] Query successful', {
+          hasData: !!response.data,
+          hasConversation: !!response.data?.conversation,
         });
 
         // Check for response data
-        if (response.data) {
-          const { content, sources, modelUsed } = response.data;
+        if (response.data?.conversation) {
+          const { content, sources, modelUsed } = response.data.conversation;
 
           // Create assistant message from response
           const assistantMessage: ChatMessage = {
@@ -174,7 +204,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         }
       } catch (err) {
         // Error classification and handling
-        console.error('Conversation query error:', err);
+        console.error('[ChatInterface] Conversation query error:', err);
+        console.error('[ChatInterface] Error details:', JSON.stringify(err, null, 2));
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
 
         // Classify error type based on message patterns
