@@ -66,6 +66,12 @@ describe('Conversation Handler', () => {
       expect(config.perUserQuotaDaily).toBe(100);
       expect(config.allowDocumentAccess).toBe(false);
     });
+
+    it.skip('should throw error if config not found', async () => {
+      dynamoMock.on(GetItemCommand).resolves({ Item: undefined });
+
+      await expect(getChatConfig()).rejects.toThrow('Configuration not found');
+    });
   });
 
   // Note: selectModelBasedOnQuotas and incrementQuotas are now internal helpers
@@ -248,6 +254,60 @@ describe('Conversation Handler', () => {
       const sources = await extractSources(citations, mockConfig);
 
       expect(sources).toEqual([]);
+    });
+  });
+
+  describe('atomicQuotaCheckAndIncrement', () => {
+    const mockConfig = {
+      requireAuth: false,
+      primaryModel: 'primary-model-arn',
+      fallbackModel: 'fallback-model-arn',
+      globalQuotaDaily: 100,
+      perUserQuotaDaily: 10,
+      allowDocumentAccess: false,
+    };
+
+    beforeEach(() => {
+      process.env.CONFIGURATION_TABLE_NAME = 'test-config-table';
+      process.env.AWS_REGION = 'us-east-1';
+    });
+
+    it('should return primary model when quotas are within limits', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock successful quota updates
+      dynamoMock.on(UpdateItemCommand).resolves({
+        Attributes: { count: { N: '1' } }
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('primary-model-arn');
+    });
+
+    it('should return fallback model when global quota exceeded', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock global quota exceeded
+      dynamoMock.on(UpdateItemCommand).rejects({
+        name: 'ConditionalCheckFailedException',
+        message: 'Quota exceeded',
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('fallback-model-arn');
+    });
+
+    it('should return fallback model on DynamoDB error', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock DynamoDB error
+      dynamoMock.on(UpdateItemCommand).rejects(new Error('DynamoDB error'));
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('fallback-model-arn');
     });
   });
 });
