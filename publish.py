@@ -1807,6 +1807,12 @@ def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_u
                     'order': 11,
                     'description': 'Web component CDN URL (read-only)',
                     'readOnly': True
+                },
+                'chat_allow_document_access': {
+                    'type': 'boolean',
+                    'order': 12,
+                    'description': 'Allow users to download original source documents via presigned URLs',
+                    'default': False
                 }
             }
         }
@@ -1826,7 +1832,8 @@ def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_u
         'chat_global_quota_daily': 10000,
         'chat_per_user_quota_daily': 100,
         'chat_theme_preset': 'light',
-        'chat_theme_overrides': {}
+        'chat_theme_overrides': {},
+        'chat_allow_document_access': False
     }
 
     try:
