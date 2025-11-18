@@ -439,6 +439,50 @@
 }
 
 /* ============================================================================
+   DOCUMENT LINKS
+   ============================================================================ */
+
+.documentLink {
+  display: inline-block;
+  margin-top: var(--chat-spacing-sm);
+  padding: var(--chat-spacing-xs) var(--chat-spacing-sm);
+  color: var(--chat-color-source-accent);
+  text-decoration: underline;
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  transition: color var(--chat-transition-fast),
+              background-color var(--chat-transition-fast);
+  border-radius: var(--chat-radius-sm);
+  cursor: pointer;
+}
+
+.documentLink:hover {
+  color: var(--chat-color-user-bg);
+  background-color: rgba(9, 114, 211, 0.08);
+  text-decoration: none;
+}
+
+.documentLink:focus-visible {
+  outline: 2px solid var(--chat-color-source-accent);
+  outline-offset: 2px;
+}
+
+.documentLink:active {
+  color: var(--chat-color-user-bg);
+  background-color: rgba(9, 114, 211, 0.15);
+}
+
+.documentLinkDisabled {
+  display: inline-block;
+  margin-top: var(--chat-spacing-sm);
+  padding: var(--chat-spacing-xs) var(--chat-spacing-sm);
+  color: var(--chat-color-text-secondary);
+  font-size: var(--chat-font-size-xs);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* ============================================================================
    FOOTER
    ============================================================================ */
 

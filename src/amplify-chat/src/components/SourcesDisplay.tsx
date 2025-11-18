@@ -61,6 +61,26 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
                 <span className={styles.quoteIcon}>❞</span>
               </div>
             )}
+
+            {/* Document download link (when available) */}
+            {source.documentUrl && (
+              <a
+                href={source.documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.documentLink}
+                aria-label={`View source document: ${source.title}`}
+              >
+                View Document →
+              </a>
+            )}
+
+            {/* Disabled state (when access explicitly disabled) */}
+            {source.documentAccessAllowed === false && !source.documentUrl && (
+              <span className={styles.documentLinkDisabled}>
+                Document access disabled
+              </span>
+            )}
           </div>
         ))}
       </div>
