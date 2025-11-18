@@ -17,7 +17,11 @@ export const SearchInterface = () => {
   const { results, loading, error, query, search, clearResults } = useSearch();
 
   const handleSearch = () => {
-    search(inputValue);
+    const trimmedValue = inputValue.trim();
+    if (!trimmedValue) {
+      return;
+    }
+    search(trimmedValue);
   };
 
   const handleKeyPress = (e) => {

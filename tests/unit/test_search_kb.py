@@ -53,7 +53,9 @@ def mock_bedrock_retrieve_response():
     return {
         "retrievalResults": [
             {
-                "content": {"text": "This document discusses cloud architecture and best practices."},
+                "content": {
+                    "text": "This document discusses cloud architecture and best practices."
+                },
                 "location": {"s3Location": {"uri": "s3://bucket/doc1.pdf/pages/page-1.json"}},
                 "score": 0.95,
             },
@@ -92,7 +94,10 @@ def test_lambda_handler_success(
     assert result["query"] == "What is the main topic of this document?"
     assert result["total"] == 3
     assert len(result["results"]) == 3
-    assert result["results"][0]["content"] == "This document discusses cloud architecture and best practices."
+    assert (
+        result["results"][0]["content"]
+        == "This document discusses cloud architecture and best practices."
+    )
     assert result["results"][0]["source"] == "s3://bucket/doc1.pdf/pages/page-1.json"
     assert result["results"][0]["score"] == 0.95
 
@@ -101,7 +106,10 @@ def test_lambda_handler_success(
     call_args = mock_bedrock_agent.retrieve.call_args
     assert call_args[1]["knowledgeBaseId"] == "test-kb-123"
     assert call_args[1]["retrievalQuery"]["text"] == "What is the main topic of this document?"
-    assert call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+    assert (
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 5
+    )
 
 
 @patch.dict(
@@ -164,7 +172,10 @@ def test_lambda_handler_default_max_results(
 
     # Verify default maxResults of 5
     call_args = mock_bedrock_agent.retrieve.call_args
-    assert call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+    assert (
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 5
+    )
     assert result["query"] == "test query"
     assert result["total"] == 3
 
@@ -184,11 +195,14 @@ def test_lambda_handler_custom_max_results(
     mock_bedrock_agent.retrieve.return_value = mock_bedrock_retrieve_response
 
     # Execute
-    result = index.lambda_handler(event, lambda_context)
+    index.lambda_handler(event, lambda_context)
 
     # Verify custom maxResults
     call_args = mock_bedrock_agent.retrieve.call_args
-    assert call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 10
+    assert (
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 10
+    )
 
 
 @patch.dict(
@@ -206,20 +220,26 @@ def test_lambda_handler_invalid_max_results(
     mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve.return_value = mock_bedrock_retrieve_response
 
-    result = index.lambda_handler(event, lambda_context)
+    index.lambda_handler(event, lambda_context)
 
     # Should use default of 5
     call_args = mock_bedrock_agent.retrieve.call_args
-    assert call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+    assert (
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 5
+    )
 
     # Test with too large number
     event = {"query": "test", "maxResults": 101}
     mock_bedrock_agent.retrieve.reset_mock()
-    result = index.lambda_handler(event, lambda_context)
+    index.lambda_handler(event, lambda_context)
 
     # Should use default of 5
     call_args = mock_bedrock_agent.retrieve.call_args
-    assert call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
+    assert (
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
+        == 5
+    )
 
 
 @patch.dict(

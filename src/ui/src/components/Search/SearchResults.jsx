@@ -11,8 +11,11 @@ import {
 
 export const SearchResults = ({ results, query }) => {
   const getDocumentIdFromSource = (source) => {
-    // Extract document ID from S3 URI
-    const match = source?.match(/([^/]+)\/[^/]+$/);
+    // Extract document ID from S3 URI (format: s3://bucket/document-id/filename)
+    if (!source || typeof source !== 'string') {
+      return 'Unknown';
+    }
+    const match = source.match(/([^/]+)\/[^/]+$/);
     return match ? match[1] : 'Unknown';
   };
 
