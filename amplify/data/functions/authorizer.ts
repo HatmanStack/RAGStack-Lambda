@@ -19,15 +19,15 @@ import { KNOWLEDGE_BASE_CONFIG } from '../config';
  * Create verifier instance (reused across invocations)
  */
 const verifier = CognitoJwtVerifier.create({
-  userPoolId: KNOWLEDGE_BASE_CONFIG.userPoolId,
-  clientId: KNOWLEDGE_BASE_CONFIG.userPoolClientId,
+  userPoolId: process.env.USER_POOL_ID || KNOWLEDGE_BASE_CONFIG.userPoolId,
+  clientId: process.env.USER_POOL_CLIENT_ID || KNOWLEDGE_BASE_CONFIG.userPoolClientId,
   tokenUse: 'access',
 });
 
 /**
  * DynamoDB client for reading configuration
  */
-const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION || KNOWLEDGE_BASE_CONFIG.region });
 
 /**
  * Config cache (60s TTL to minimize DynamoDB reads)

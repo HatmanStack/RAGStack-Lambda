@@ -91,8 +91,8 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       message,
       conversationId,
       selectedModel,
-      KNOWLEDGE_BASE_CONFIG.knowledgeBaseId,
-      KNOWLEDGE_BASE_CONFIG.region
+      process.env.KNOWLEDGE_BASE_ID || KNOWLEDGE_BASE_CONFIG.knowledgeBaseId,
+      process.env.AWS_REGION || KNOWLEDGE_BASE_CONFIG.region
     );
 
     // Step 6: Return response
@@ -124,7 +124,7 @@ export async function getChatConfig(): Promise<ChatConfig> {
 
   console.log('Fetching config from DynamoDB...');
 
-  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION || KNOWLEDGE_BASE_CONFIG.region });
 
   try {
     const result = await dynamodb.send(
@@ -179,7 +179,7 @@ export async function atomicQuotaCheckAndIncrement(
   config: ChatConfig,
   isAuthenticated: boolean
 ): Promise<string> {
-  const dynamodb = new DynamoDBClient({ region: KNOWLEDGE_BASE_CONFIG.region });
+  const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION || KNOWLEDGE_BASE_CONFIG.region });
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const ttl = Math.floor(Date.now() / 1000) + (86400 * 2); // 2 days from now
 
@@ -310,7 +310,7 @@ export async function queryKnowledgeBase(
             modelArn: modelArn,
           },
         },
-        sessionId: conversationId,
+        // sessionId: conversationId, // Disabled - causes validation errors when KB ID changes
       })
     );
 

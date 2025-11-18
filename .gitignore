@@ -40,3 +40,4 @@ TEST_FIXES_NEEDED.md
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+amplify/data/config.ts

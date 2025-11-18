@@ -10,6 +10,9 @@ type Query {
   # Query Knowledge Base with optional session for conversation continuity
   queryKnowledgeBase(query: String!, sessionId: String): ChatResponse
 
+  # Search Knowledge Base and return raw vector search results
+  searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult
+
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
 }
@@ -78,6 +81,21 @@ type Source {
   pageNumber: Int
   s3Uri: String!
   snippet: String
+}
+
+# Knowledge Base search result (raw vector search)
+type KBQueryResult {
+  query: String!
+  results: [KBResult!]!
+  total: Int
+  error: String
+}
+
+# Individual KB search result
+type KBResult {
+  content: String!
+  source: String
+  score: Float
 }
 
 # Configuration response containing Schema, Default, and Custom configs
