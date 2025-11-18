@@ -39,7 +39,7 @@ Implement backend infrastructure to support collapsible sources with document ac
 **Goal:** Add `chat_allow_document_access` to DynamoDB configuration schema and seed default values
 
 **Files to Modify:**
-- `publish.py` (lines ~1740-1830) - Update `seed_configuration_table()` function
+- `publish.py` (line 1666+) - Update `seed_configuration_table()` function
 - `tests/unit/test_seed_configuration.py` - Add test assertions for new config key
 
 **Prerequisites:**
@@ -376,34 +376,64 @@ feat(backend): add document URLs to source citations
 **Goal:** Grant conversation Lambda permissions to read TrackingTable and generate presigned URLs for InputBucket
 
 **Files to Modify:**
-- `amplify/lib/backend-stack.ts` - Update conversation Lambda IAM role
+- `amplify/lib/backend-stack.ts` (lines 104-160) - Update conversation Lambda IAM role and environment variables
+- `publish.py` - Pass TrackingTable and InputBucket names to Amplify CDK deploy
 
 **Prerequisites:**
-- Understand current IAM role structure for conversation Lambda
-- Know ARNs of TrackingTable and InputBucket (passed as parameters to Amplify stack)
+- Understand current IAM role structure for conversation Lambda (see backend-stack.ts:154-160)
+- TrackingTable and InputBucket names are available from SAM stack outputs
 
 **Implementation Steps:**
 
-1. **Locate Conversation Lambda Role**
-   - Find where conversation Lambda's execution role is defined
-   - Should be using CDK's `PolicyStatement` class
+1. **Add Environment Variables to Backend Stack**
+   - Locate environment variable reading in backend-stack.ts constructor (lines 13-23)
+   - Add reading of `TRACKING_TABLE_NAME` and `INPUT_BUCKET` from process.env:
+     ```typescript
+     const trackingTableName = process.env.TRACKING_TABLE_NAME;
+     const inputBucket = process.env.INPUT_BUCKET;
+     ```
+   - Add validation check in the error throw block
 
-2. **Add DynamoDB Permission**
-   - Create new `PolicyStatement` for TrackingTable
-   - Actions: `['dynamodb:GetItem']` (read-only)
-   - Resource: ARN of TrackingTable (from SAM stack parameter)
-   - Add policy to conversation Lambda role
+2. **Pass Environment Variables to Conversation Lambda**
+   - Locate conversation Lambda environment section (lines 135-139)
+   - Add two new environment variables:
+     ```typescript
+     TRACKING_TABLE_NAME: trackingTableName,
+     INPUT_BUCKET: inputBucket,
+     ```
 
-3. **Add S3 Permission**
-   - Create new `PolicyStatement` for InputBucket
-   - Actions: `['s3:GetObject']` (read-only, needed for presigned URLs)
-   - Resource: `${InputBucketArn}/*` (all objects in bucket)
-   - Add policy to conversation Lambda role
+3. **Add DynamoDB GetItem Permission**
+   - After existing DynamoDB permissions (line 154-160)
+   - Add new `PolicyStatement`:
+     ```typescript
+     conversationFunction.addToRolePolicy(
+       new iam.PolicyStatement({
+         actions: ['dynamodb:GetItem'],
+         resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/${trackingTableName}`],
+       })
+     );
+     ```
 
-4. **Add Environment Variable**
-   - Locate environment variables section for conversation Lambda
-   - Add `TRACKING_TABLE_NAME` with value from stack parameter
-   - This allows runtime lookup without hardcoding
+4. **Add S3 GetObject Permission**
+   - After DynamoDB permissions
+   - Add new `PolicyStatement` for InputBucket:
+     ```typescript
+     conversationFunction.addToRolePolicy(
+       new iam.PolicyStatement({
+         actions: ['s3:GetObject'],
+         resources: [`arn:aws:s3:::${inputBucket}/*`],
+       })
+     );
+     ```
+
+5. **Update publish.py to Pass Environment Variables**
+   - Locate where SAM outputs are extracted (around line 2200+)
+   - Add extraction of TrackingTable and InputBucket names:
+     ```python
+     tracking_table_name = sam_outputs.get('TrackingTableName')
+     input_bucket_name = sam_outputs.get('InputBucketName')
+     ```
+   - Pass these to CodeBuild environment or CDK context
 
 **Verification Checklist:**
 - [ ] Conversation Lambda can read from TrackingTable (GetItem)
