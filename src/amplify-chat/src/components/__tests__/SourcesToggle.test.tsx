@@ -159,35 +159,41 @@ describe('SourcesToggle', () => {
     it('handles sessionStorage errors gracefully when reading', () => {
       // Mock sessionStorage.getItem to throw error
       const originalGetItem = sessionStorage.getItem;
-      sessionStorage.getItem = vi.fn(() => {
-        throw new Error('Storage error');
-      });
 
-      // Should not crash, should use defaultExpanded
-      const { container } = render(<SourcesToggle sources={mockSources} defaultExpanded={true} />);
-      expect(container.firstChild).toBeTruthy();
+      try {
+        sessionStorage.getItem = vi.fn(() => {
+          throw new Error('Storage error');
+        });
 
-      // Restore
-      sessionStorage.getItem = originalGetItem;
+        // Should not crash, should use defaultExpanded
+        const { container } = render(<SourcesToggle sources={mockSources} defaultExpanded={true} />);
+        expect(container.firstChild).toBeTruthy();
+      } finally {
+        // Always restore, even if assertions fail
+        sessionStorage.getItem = originalGetItem;
+      }
     });
 
     it('handles sessionStorage errors gracefully when writing', () => {
       // Mock sessionStorage.setItem to throw error
       const originalSetItem = sessionStorage.setItem;
-      sessionStorage.setItem = vi.fn(() => {
-        throw new Error('Quota exceeded');
-      });
 
-      render(<SourcesToggle sources={mockSources} />);
+      try {
+        sessionStorage.setItem = vi.fn(() => {
+          throw new Error('Quota exceeded');
+        });
 
-      const button = screen.getByRole('button');
+        render(<SourcesToggle sources={mockSources} />);
 
-      // Should not crash when clicking
-      expect(() => fireEvent.click(button)).not.toThrow();
-      expect(button).toHaveAttribute('aria-expanded', 'true');
+        const button = screen.getByRole('button');
 
-      // Restore
-      sessionStorage.setItem = originalSetItem;
+        // Should not crash when clicking
+        expect(() => fireEvent.click(button)).not.toThrow();
+        expect(button).toHaveAttribute('aria-expanded', 'true');
+      } finally {
+        // Always restore, even if assertions fail
+        sessionStorage.setItem = originalSetItem;
+      }
     });
   });
 
