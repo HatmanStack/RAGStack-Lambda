@@ -51,6 +51,7 @@ def test_chat_schema_has_required_fields():
         assert "chat_per_user_quota_daily" in props
         assert "chat_theme_preset" in props
         assert "chat_theme_overrides" in props
+        assert "chat_allow_document_access" in props
 
 
 def test_chat_default_values():
@@ -88,6 +89,7 @@ def test_chat_default_values():
         assert default_item["chat_per_user_quota_daily"] == 100
         assert default_item["chat_theme_preset"] == "light"
         assert default_item["chat_theme_overrides"] == {}
+        assert default_item["chat_allow_document_access"] is False
 
 
 def test_chat_theme_preset_enum():

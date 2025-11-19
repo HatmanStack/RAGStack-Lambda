@@ -9,6 +9,10 @@ export interface Source {
   title: string;
   location: string;
   snippet: string;
+  /** Presigned URL for downloading the original document (optional) */
+  documentUrl?: string | null;
+  /** Whether document access is allowed by admin configuration (optional) */
+  documentAccessAllowed?: boolean;
 }
 
 /**

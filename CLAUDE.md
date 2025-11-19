@@ -138,7 +138,7 @@ cd src/ui && npm run dev
 - **QueryKB Lambda:** Retrieves relevant documents from KB with source attribution
 - **Step Functions:** Orchestrates document processing workflow
 - **AppSync:** GraphQL API for UI and chat (queries, mutations, subscriptions)
-- **Amplify backend.ts:** CDK constructs for auth, data, and web component CDN (CloudFront + S3 + CodeBuild)
+- **Amplify backend:** Custom CDK stack for chat API (AppSync GraphQL, Lambda authorizers, conversation handler)
 
 ## Testing Architecture
 
@@ -182,7 +182,7 @@ The `publish.py` script orchestrates:
 1. **Validation:** Email format, project name (2-32 chars, lowercase alphanumeric + hyphens)
 2. **SAM build/deploy:** Builds Lambda layers (Docker), packages, deploys via CloudFormation
 3. **UI build/upload:** Builds React UI (Vite), uploads to S3, invalidates CloudFront cache
-4. **Amplify deploy (optional):** Runs `npx ampx sandbox` or `npx ampx pipeline-deploy` for chat stack
+4. **Amplify deploy (optional):** Deploys custom CDK stack via `npx cdk deploy` for chat API
 5. **Outputs:** Knowledge Base ID, GraphQL API endpoint, CloudFront URLs, Cognito user pool
 
 **Parameters:**
@@ -204,6 +204,16 @@ pwd
 
 ### Configuration Management
 Runtime configuration is stored in DynamoDB (table: `{ProjectName}-config-{Suffix}`). Changes apply immediately without redeployment. Access via `ConfigurationManager` class in `lib/ragstack_common/config.py`.
+
+**Chat Configuration Options:**
+- `chat_require_auth` - Enable/disable authentication (default: false)
+- `chat_primary_model` - Primary chat model ARN
+- `chat_fallback_model` - Fallback chat model ARN
+- `chat_global_quota_daily` - Daily query limit for all users (default: 10000)
+- `chat_per_user_quota_daily` - Daily query limit per user (default: 100)
+- `chat_allow_document_access` - Enable/disable source document downloads (default: false)
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed configuration guide.
 
 ### OCR Backends
 - **textract (default):** AWS Textract ($1.50/1000 pages), faster, better for forms/tables

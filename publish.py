@@ -325,70 +325,6 @@ def check_sam_cli():
     return True
 
 
-def check_amplify_cli():
-    """
-    [DEPRECATED] Check if Amplify CLI is installed, auto-install if missing.
-
-    This function is no longer used since we switched to direct CDK deployment.
-    The CodeBuild environment uses 'npx cdk deploy' instead of 'ampx pipeline-deploy'.
-    Kept for backward compatibility but not called in the deployment flow.
-
-    Original purpose:
-    Uses `npx ampx` to check/use latest Amplify CLI. If not available,
-    installs @aws-amplify/cli globally via npm.
-
-    Returns:
-        bool: True if Amplify CLI is available
-
-    Raises:
-        SystemExit: If installation fails
-    """
-    log_info("Checking Amplify CLI...")
-
-    # Check if Amplify CLI is available via npx
-    check_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
-                                 capture_output=True,
-                                 text=True)
-
-    if check_result.returncode == 0:
-        version_output = check_result.stdout.strip()
-        log_success(f"Found Amplify CLI: {version_output}")
-        return True
-
-    # Not found, attempt auto-installation
-    log_warning("Amplify CLI not found, installing globally...")
-    try:
-        install_result = subprocess.run(
-            ['npm', 'install', '-g', '@aws-amplify/cli'],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-
-        if install_result.returncode != 0:
-            log_error("Failed to install Amplify CLI")
-            log_info("Error output: " + install_result.stderr)
-            log_info("Install manually: npm install -g @aws-amplify/cli")
-            sys.exit(1)
-
-        log_success("Amplify CLI installed successfully")
-
-        # Verify installation
-        verify_result = subprocess.run(['npx', '--yes', 'ampx', '--version'],
-                                      capture_output=True,
-                                      text=True)
-        if verify_result.returncode == 0:
-            log_success(f"Verified: {verify_result.stdout.strip()}")
-            return True
-        else:
-            log_error("Installation succeeded but verification failed")
-            sys.exit(1)
-
-    except Exception as e:
-        log_error(f"Failed to install Amplify CLI: {e}")
-        sys.exit(1)
-
-
 def get_codebuild_project_name(stack_name, region):
     """
     Get CodeBuild project name from SAM stack outputs.
@@ -566,57 +502,6 @@ def cleanup_failed_amplify_stacks(project_name, region):
 
     log_success(f"Cleanup initiated for {len(stacks_to_delete)} stack(s)")
     log_info("Monitor deletion in CloudFormation console")
-
-
-def check_docker():
-    """
-    Check if Docker is installed and the daemon is running.
-
-    Docker is required for SAM to build Lambda layers with native dependencies.
-    The layers need to be compiled for Amazon Linux (Lambda's runtime environment).
-
-    Returns:
-        bool: True if Docker is available and running
-
-    Raises:
-        SystemExit: If Docker not found or not running
-    """
-    log_info("Checking Docker...")
-
-    # Check if docker command exists
-    docker_check = subprocess.run(['docker', '--version'],
-                                 capture_output=True,
-                                 text=True)
-
-    if docker_check.returncode != 0:
-        log_error("Docker not found")
-        log_info("Docker is required to build Lambda layers for Amazon Linux")
-        log_info("Install Docker: https://docs.docker.com/get-docker/")
-        log_info("After install, start Docker daemon:")
-        log_info("  macOS: Open Docker Desktop application")
-        log_info("  Linux: sudo systemctl start docker")
-        log_info("  Windows: Open Docker Desktop application")
-        sys.exit(1)
-
-    version_output = docker_check.stdout.strip()
-    log_success(f"Found {version_output}")
-
-    # Check if Docker daemon is running
-    daemon_check = subprocess.run(['docker', 'ps'],
-                                 capture_output=True,
-                                 text=True)
-
-    if daemon_check.returncode != 0:
-        log_error("Docker daemon is not running")
-        log_info("Start Docker daemon:")
-        log_info("  macOS: Open Docker Desktop application")
-        log_info("  Linux: sudo systemctl start docker")
-        log_info("  Windows: Open Docker Desktop application")
-        log_info("\nError details: " + daemon_check.stderr)
-        sys.exit(1)
-
-    log_success("Docker daemon is running")
-    return True
 
 
 def sam_build():
@@ -1125,50 +1010,6 @@ def package_amplify_source(bucket_name, region):
         raise IOError(f"Unexpected error packaging Amplify source: {e}") from e
 
 
-def create_amplify_placeholder(bucket_name, region):
-    """
-    Create empty placeholder zip for CodeBuild project creation.
-
-    CloudFormation validates that S3 source locations exist during stack creation.
-    This creates a minimal placeholder that will be overridden at build time.
-
-    Args:
-        bucket_name: S3 bucket name
-        region: AWS region
-
-    Returns:
-        str: S3 key of placeholder file
-    """
-    import zipfile
-    from io import BytesIO
-
-    log_info("Creating Amplify placeholder for CloudFormation validation...")
-
-    # Create minimal empty zip in memory
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Add a minimal README so zip is not completely empty
-        zipf.writestr('README.txt', 'Placeholder for CodeBuild - will be overridden at build time')
-
-    zip_buffer.seek(0)
-
-    # Upload to S3 with fixed key (matches template.yaml placeholder)
-    s3 = boto3.client('s3', region_name=region)
-    key = 'amplify-placeholder.zip'
-
-    try:
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=key,
-            Body=zip_buffer.getvalue(),
-            ContentType='application/zip'
-        )
-        log_success(f"Amplify placeholder created: s3://{bucket_name}/{key}")
-        return key
-    except Exception as e:
-        raise IOError(f"Failed to upload placeholder: {e}") from e
-
-
 def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
@@ -1536,7 +1377,7 @@ def write_amplify_outputs(
     log_info(f"  Auth: AWS_IAM (guest access enabled via Identity Pool)")
 
 
-def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name):
+def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_name, user_pool_id, user_pool_client_id, sam_stack_name, tracking_table_name, input_bucket):
     """
     Deploy Amplify chat backend via CodeBuild with web component CDN.
 
@@ -1564,6 +1405,8 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         user_pool_id: Cognito User Pool ID (from SAM stack)
         user_pool_client_id: Cognito User Pool Client ID (from SAM stack)
         sam_stack_name: SAM CloudFormation stack name (to get CodeBuild project)
+        tracking_table_name: DynamoDB TrackingTable name (from SAM stack)
+        input_bucket: S3 InputBucket name (from SAM stack)
 
     Returns:
         str: CDN URL for web component (https://d123.cloudfront.net/amplify-chat.js)
@@ -1624,10 +1467,12 @@ def amplify_deploy(project_name, region, kb_id, artifact_bucket, config_table_na
         env_overrides = [
             {'name': 'PROJECT_NAME', 'value': project_name, 'type': 'PLAINTEXT'},
             {'name': 'AWS_REGION', 'value': region, 'type': 'PLAINTEXT'},
-            {'name': 'USER_POOL_ID', 'value': user_pool_id, 'type': 'PLAINTEXT'},
-            {'name': 'USER_POOL_CLIENT_ID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
+            {'name': 'USERPOOLID', 'value': user_pool_id, 'type': 'PLAINTEXT'},
+            {'name': 'USERPOOLCLIENTID', 'value': user_pool_client_id, 'type': 'PLAINTEXT'},
             {'name': 'KNOWLEDGE_BASE_ID', 'value': kb_id, 'type': 'PLAINTEXT'},
             {'name': 'CONFIGURATION_TABLE_NAME', 'value': config_table_name, 'type': 'PLAINTEXT'},
+            {'name': 'TRACKING_TABLE_NAME', 'value': tracking_table_name, 'type': 'PLAINTEXT'},
+            {'name': 'INPUT_BUCKET', 'value': input_bucket, 'type': 'PLAINTEXT'},
         ]
 
         # Trigger CodeBuild deployment with Amplify source
@@ -1966,6 +1811,12 @@ def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_u
                     'order': 11,
                     'description': 'Web component CDN URL (read-only)',
                     'readOnly': True
+                },
+                'chat_allow_document_access': {
+                    'type': 'boolean',
+                    'order': 12,
+                    'description': 'Allow users to download original source documents via presigned URLs',
+                    'default': False
                 }
             }
         }
@@ -1985,7 +1836,8 @@ def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_u
         'chat_global_quota_daily': 10000,
         'chat_per_user_quota_daily': 100,
         'chat_theme_preset': 'light',
-        'chat_theme_overrides': {}
+        'chat_theme_overrides': {},
+        'chat_allow_document_access': False
     }
 
     try:
@@ -2144,6 +1996,8 @@ Examples:
                 artifact_bucket = sam_outputs.get('ArtifactBucketName')
                 user_pool_id = sam_outputs.get('UserPoolId')
                 user_pool_client_id = sam_outputs.get('UserPoolClientId')
+                tracking_table_name = sam_outputs.get('TrackingTableName')
+                input_bucket = sam_outputs.get('InputBucketName')
 
                 if not config_table_name:
                     log_error("ConfigurationTableName not found in SAM stack outputs")
@@ -2157,10 +2011,20 @@ Examples:
                     log_error("UserPoolId or UserPoolClientId not found in SAM stack outputs")
                     sys.exit(1)
 
+                if not tracking_table_name:
+                    log_error("TrackingTableName not found in SAM stack outputs")
+                    sys.exit(1)
+
+                if not input_bucket:
+                    log_error("InputBucketName not found in SAM stack outputs")
+                    sys.exit(1)
+
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
                 log_info(f"Artifact Bucket: {artifact_bucket}")
                 log_info(f"User Pool ID: {user_pool_id}")
+                log_info(f"Tracking Table: {tracking_table_name}")
+                log_info(f"Input Bucket: {input_bucket}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -2176,7 +2040,9 @@ Examples:
                     config_table_name,
                     user_pool_id,
                     user_pool_client_id,
-                    stack_name  # SAM stack name for CodeBuild project lookup
+                    stack_name,  # SAM stack name for CodeBuild project lookup
+                    tracking_table_name,
+                    input_bucket
                 )
 
                 # Update chat_deployed flag and CDN URL
@@ -2306,18 +2172,32 @@ Examples:
                 # Get ConfigurationTable name and User Pool from SAM outputs
                 sam_outputs = get_stack_outputs(stack_name, args.region)
                 config_table_name = sam_outputs.get('ConfigurationTableName')
+                artifact_bucket = sam_outputs.get('ArtifactBucketName')
                 user_pool_id = sam_outputs.get('UserPoolId')
                 user_pool_client_id = sam_outputs.get('UserPoolClientId')
+                tracking_table_name = sam_outputs.get('TrackingTableName')
+                input_bucket = sam_outputs.get('InputBucketName')
 
                 if not config_table_name:
                     raise ValueError("ConfigurationTableName not found in SAM stack outputs")
 
+                if not artifact_bucket:
+                    raise ValueError("ArtifactBucketName not found in SAM stack outputs")
+
                 if not user_pool_id or not user_pool_client_id:
                     raise ValueError("UserPoolId or UserPoolClientId not found in SAM stack outputs")
+
+                if not tracking_table_name:
+                    raise ValueError("TrackingTableName not found in SAM stack outputs")
+
+                if not input_bucket:
+                    raise ValueError("InputBucketName not found in SAM stack outputs")
 
                 log_info(f"Knowledge Base ID: {kb_id}")
                 log_info(f"Configuration Table: {config_table_name}")
                 log_info(f"User Pool ID: {user_pool_id}")
+                log_info(f"Tracking Table: {tracking_table_name}")
+                log_info(f"Input Bucket: {input_bucket}")
 
             except ValueError as e:
                 log_error(str(e))
@@ -2339,7 +2219,9 @@ Examples:
                     config_table_name,
                     user_pool_id,
                     user_pool_client_id,
-                    stack_name  # SAM stack name for CodeBuild project lookup
+                    stack_name,  # SAM stack name for CodeBuild project lookup
+                    tracking_table_name,
+                    input_bucket
                 )
 
                 # Update configuration with CDN URL now that deployment succeeded

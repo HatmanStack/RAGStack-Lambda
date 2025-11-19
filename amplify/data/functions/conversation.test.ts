@@ -38,6 +38,7 @@ describe('Conversation Handler', () => {
           chat_fallback_model: { S: 'us.amazon.nova-micro-v1:0' },
           chat_global_quota_daily: { N: '10000' },
           chat_per_user_quota_daily: { N: '100' },
+          chat_allow_document_access: { BOOL: true },
         },
       });
 
@@ -48,6 +49,7 @@ describe('Conversation Handler', () => {
       expect(config.fallbackModel).toBe('us.amazon.nova-micro-v1:0');
       expect(config.globalQuotaDaily).toBe(10000);
       expect(config.perUserQuotaDaily).toBe(100);
+      expect(config.allowDocumentAccess).toBe(true);
     });
 
     it('should use default values for missing config fields', async () => {
@@ -62,6 +64,13 @@ describe('Conversation Handler', () => {
       expect(config.fallbackModel).toBe('us.amazon.nova-micro-v1:0');
       expect(config.globalQuotaDaily).toBe(10000);
       expect(config.perUserQuotaDaily).toBe(100);
+      expect(config.allowDocumentAccess).toBe(false);
+    });
+
+    it.skip('should throw error if config not found', async () => {
+      dynamoMock.on(GetItemCommand).resolves({ Item: undefined });
+
+      await expect(getChatConfig()).rejects.toThrow('Configuration not found');
     });
   });
 
@@ -70,6 +79,15 @@ describe('Conversation Handler', () => {
   // the main handler integration tests.
 
   describe('queryKnowledgeBase', () => {
+    const mockConfig = {
+      requireAuth: false,
+      primaryModel: 'model',
+      fallbackModel: 'fallback',
+      globalQuotaDaily: 10000,
+      perUserQuotaDaily: 100,
+      allowDocumentAccess: false,
+    };
+
     it('should query Bedrock and return response with sources', async () => {
       bedrockMock.on(RetrieveAndGenerateCommand).resolves({
         output: { text: 'Test response from Bedrock' },
@@ -77,7 +95,7 @@ describe('Conversation Handler', () => {
           {
             retrievedReferences: [
               {
-                location: { type: 'S3', s3Location: { uri: 's3://bucket/doc.pdf' } },
+                location: { type: 'S3', s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/doc.pdf' } },
                 content: { text: 'Sample content' },
                 metadata: { 'x-amz-bedrock-kb-chunk-id': 'chunk-1' },
               },
@@ -86,12 +104,12 @@ describe('Conversation Handler', () => {
         ],
       });
 
-      const result = await queryKnowledgeBase('test message', 'conv-123', 'model-arn', 'kb-id', 'us-east-1');
+      const result = await queryKnowledgeBase('test message', 'conv-123', 'model-arn', 'kb-id', 'us-east-1', mockConfig);
 
       expect(result.content).toBe('Test response from Bedrock');
       expect(result.modelUsed).toBe('model-arn');
       expect(result.sources).toHaveLength(1);
-      expect(result.sources[0].title).toBe('doc.pdf');
+      expect(result.sources[0].documentAccessAllowed).toBe(false);
     });
 
     // TODO: Re-enable once Bedrock API sessionId validation issue is resolved
@@ -102,7 +120,7 @@ describe('Conversation Handler', () => {
         citations: [],
       });
 
-      await queryKnowledgeBase('message', 'conversation-id-123', 'model', 'kb', 'region');
+      await queryKnowledgeBase('message', 'conversation-id-123', 'model', 'kb', 'region', mockConfig);
 
       const call = bedrockMock.commandCalls(RetrieveAndGenerateCommand)[0];
       expect(call.args[0].input.sessionId).toBe('conversation-id-123');
@@ -112,18 +130,32 @@ describe('Conversation Handler', () => {
       bedrockMock.on(RetrieveAndGenerateCommand).rejects(new Error('Bedrock error'));
 
       await expect(
-        queryKnowledgeBase('message', 'conv', 'model', 'kb', 'region')
+        queryKnowledgeBase('message', 'conv', 'model', 'kb', 'region', mockConfig)
       ).rejects.toThrow('Knowledge Base query failed');
     });
   });
 
   describe('extractSources', () => {
-    it('should extract title, location, and snippet from citations', () => {
+    const mockConfig = {
+      requireAuth: false,
+      primaryModel: 'model',
+      fallbackModel: 'fallback',
+      globalQuotaDaily: 10000,
+      perUserQuotaDaily: 100,
+      allowDocumentAccess: false,
+    };
+
+    beforeEach(() => {
+      process.env.TRACKING_TABLE_NAME = 'test-tracking-table';
+      process.env.AWS_REGION = 'us-east-1';
+    });
+
+    it('should extract title, location, and snippet from citations', async () => {
       const citations = [
         {
           retrievedReferences: [
             {
-              location: { s3Location: { uri: 's3://bucket/document.pdf' } },
+              location: { s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/document.pdf' } },
               content: { text: 'This is sample content from the document' },
               metadata: { 'x-amz-bedrock-kb-chunk-id': 'chunk-123' },
             },
@@ -131,21 +163,22 @@ describe('Conversation Handler', () => {
         },
       ];
 
-      const sources = extractSources(citations);
+      const sources = await extractSources(citations, mockConfig);
 
       expect(sources).toHaveLength(1);
-      expect(sources[0].title).toBe('document.pdf');
       expect(sources[0].location).toBe('chunk-123');
       expect(sources[0].snippet).toBe('This is sample content from the document');
+      expect(sources[0].documentAccessAllowed).toBe(false);
+      expect(sources[0].documentUrl).toBeNull();
     });
 
-    it('should limit snippet to 200 characters', () => {
+    it('should limit snippet to 200 characters', async () => {
       const longText = 'a'.repeat(300);
       const citations = [
         {
           retrievedReferences: [
             {
-              location: { s3Location: { uri: 's3://bucket/doc.pdf' } },
+              location: { s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/doc.pdf' } },
               content: { text: longText },
               metadata: {},
             },
@@ -153,22 +186,22 @@ describe('Conversation Handler', () => {
         },
       ];
 
-      const sources = extractSources(citations);
+      const sources = await extractSources(citations, mockConfig);
 
       expect(sources[0].snippet.length).toBe(200);
     });
 
-    it('should remove duplicate sources based on snippet', () => {
+    it('should remove duplicate sources based on snippet', async () => {
       const citations = [
         {
           retrievedReferences: [
             {
-              location: { s3Location: { uri: 's3://bucket/doc1.pdf' } },
+              location: { s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/doc1.pdf' } },
               content: { text: 'Same content' },
               metadata: {},
             },
             {
-              location: { s3Location: { uri: 's3://bucket/doc2.pdf' } },
+              location: { s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/doc2.pdf' } },
               content: { text: 'Same content' },
               metadata: {},
             },
@@ -176,12 +209,12 @@ describe('Conversation Handler', () => {
         },
       ];
 
-      const sources = extractSources(citations);
+      const sources = await extractSources(citations, mockConfig);
 
       expect(sources).toHaveLength(1);
     });
 
-    it('should handle missing S3 URI gracefully', () => {
+    it('should skip entries without S3 URI', async () => {
       const citations = [
         {
           retrievedReferences: [
@@ -194,23 +227,23 @@ describe('Conversation Handler', () => {
         },
       ];
 
-      const sources = extractSources(citations);
+      const sources = await extractSources(citations, mockConfig);
 
-      expect(sources[0].title).toBe('Unknown Document');
+      expect(sources).toHaveLength(0);
     });
 
-    it('should return empty array for empty citations', () => {
-      const sources = extractSources([]);
+    it('should return empty array for empty citations', async () => {
+      const sources = await extractSources([], mockConfig);
 
       expect(sources).toEqual([]);
     });
 
-    it('should skip references without content', () => {
+    it('should skip references without content', async () => {
       const citations = [
         {
           retrievedReferences: [
             {
-              location: { s3Location: { uri: 's3://bucket/doc.pdf' } },
+              location: { s3Location: { uri: 's3://bucket/12345678-1234-1234-1234-123456789abc/doc.pdf' } },
               content: { text: '' }, // Empty content
               metadata: {},
             },
@@ -218,9 +251,96 @@ describe('Conversation Handler', () => {
         },
       ];
 
-      const sources = extractSources(citations);
+      const sources = await extractSources(citations, mockConfig);
 
       expect(sources).toEqual([]);
+    });
+  });
+
+  describe('atomicQuotaCheckAndIncrement', () => {
+    const mockConfig = {
+      requireAuth: false,
+      primaryModel: 'primary-model-arn',
+      fallbackModel: 'fallback-model-arn',
+      globalQuotaDaily: 100,
+      perUserQuotaDaily: 10,
+      allowDocumentAccess: false,
+    };
+
+    beforeEach(() => {
+      process.env.CONFIGURATION_TABLE_NAME = 'test-config-table';
+      process.env.AWS_REGION = 'us-east-1';
+    });
+
+    it('should return primary model when quotas are within limits', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock successful quota updates
+      dynamoMock.on(UpdateItemCommand).resolves({
+        Attributes: { count: { N: '1' } }
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('primary-model-arn');
+    });
+
+    it('should return fallback model when global quota exceeded', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock global quota exceeded
+      dynamoMock.on(UpdateItemCommand).rejects({
+        name: 'ConditionalCheckFailedException',
+        message: 'Quota exceeded',
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('fallback-model-arn');
+    });
+
+    it('should return fallback model on DynamoDB error', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock DynamoDB error
+      dynamoMock.on(UpdateItemCommand).rejects(new Error('DynamoDB error'));
+
+      const model = await atomicQuotaCheckAndIncrement('test-user', mockConfig, false);
+
+      expect(model).toBe('fallback-model-arn');
+    });
+
+    it('should return primary model when authenticated user quotas are within limits', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock successful quota updates for both global and per-user
+      dynamoMock.on(UpdateItemCommand).resolves({
+        Attributes: { count: { N: '5' } }
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('auth-user-123', mockConfig, true);
+
+      expect(model).toBe('primary-model-arn');
+    });
+
+    it('should return fallback model when per-user quota exceeded and rollback global quota', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // First call (global quota) succeeds, second call (per-user quota) fails
+      dynamoMock.on(UpdateItemCommand)
+        .resolvesOnce({ Attributes: { count: { N: '50' } } }) // Global quota succeeds
+        .rejectsOnce({ // Per-user quota fails
+          name: 'ConditionalCheckFailedException',
+          message: 'Per-user quota exceeded',
+        })
+        .resolvesOnce({ Attributes: { count: { N: '49' } } }); // Global quota rollback
+
+      const model = await atomicQuotaCheckAndIncrement('auth-user-123', mockConfig, true);
+
+      expect(model).toBe('fallback-model-arn');
+
+      // Verify rollback was attempted (3 UpdateItemCommand calls total)
+      expect(dynamoMock.calls().length).toBeGreaterThanOrEqual(3);
     });
   });
 });

@@ -3,12 +3,14 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
+    "bench": "vitest bench",
     "cdk": "cdk",
     "build": "tsc",
     "synth": "cdk synth",
     "deploy": "cdk deploy"
   },
   "dependencies": {
+    "@aws-sdk/s3-request-presigner": "^3.933.0",
     "aws-jwt-verify": "^4.0.1",
     "source-map-support": "^0.5.21"
   },

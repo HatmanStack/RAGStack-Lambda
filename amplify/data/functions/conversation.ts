@@ -14,6 +14,8 @@
 import type { Schema } from '../resource';
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
+import { mapToOriginalDocument } from './mapToOriginalDocument';
+import type { ChatConfig } from './types';
 
 /**
  * Config cache (60s TTL to minimize DynamoDB reads)
@@ -21,17 +23,6 @@ import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/
 let cachedConfig: ChatConfig | null = null;
 let cacheTime = 0;
 const CACHE_TTL_MS = 60000; // 60 seconds
-
-/**
- * Chat configuration structure
- */
-interface ChatConfig {
-  requireAuth: boolean;
-  primaryModel: string;
-  fallbackModel: string;
-  globalQuotaDaily: number;
-  perUserQuotaDaily: number;
-}
 
 /**
  * Main handler function
@@ -91,7 +82,8 @@ export const handler: Schema['conversation']['functionHandler'] = async (event) 
       conversationId,
       selectedModel,
       process.env.KNOWLEDGE_BASE_ID!,
-      process.env.AWS_REGION!
+      process.env.AWS_REGION!,
+      config
     );
 
     // Step 6: Return response
@@ -144,6 +136,7 @@ export async function getChatConfig(): Promise<ChatConfig> {
       fallbackModel: result.Item.chat_fallback_model?.S ?? 'us.amazon.nova-micro-v1:0',
       globalQuotaDaily: parseInt(result.Item.chat_global_quota_daily?.N ?? '10000'),
       perUserQuotaDaily: parseInt(result.Item.chat_per_user_quota_daily?.N ?? '100'),
+      allowDocumentAccess: result.Item.chat_allow_document_access?.BOOL ?? false,
     };
 
     // Update cache
@@ -288,7 +281,8 @@ export async function queryKnowledgeBase(
   conversationId: string,
   modelArn: string,
   kbId: string,
-  region: string
+  region: string,
+  config: ChatConfig
 ): Promise<{ content: string; sources: any[]; modelUsed: string }> {
   const bedrock = new BedrockAgentRuntimeClient({ region });
 
@@ -316,8 +310,8 @@ export async function queryKnowledgeBase(
     // Extract content
     const content = response.output?.text || 'No response generated';
 
-    // Extract and format sources
-    const sources = extractSources(response.citations || []);
+    // Extract and format sources (now async with document URL mapping)
+    const sources = await extractSources(response.citations || [], config);
 
     console.log('KB query successful:', {
       contentLength: content.length,
@@ -340,27 +334,27 @@ export async function queryKnowledgeBase(
  * Extract sources from Bedrock citations
  *
  * Converts Bedrock citation format to our Source type.
+ * Optionally includes presigned URLs for original documents when access is enabled.
  */
-export function extractSources(citations: any[]): any[] {
+export async function extractSources(citations: any[], config: ChatConfig): Promise<any[]> {
   const sources: any[] = [];
 
   for (const citation of citations) {
     if (!citation.retrievedReferences) continue;
 
     for (const ref of citation.retrievedReferences) {
-      // Extract document title from S3 URI
-      const s3Uri = ref.location?.s3Location?.uri;
-      const title = s3Uri ? s3Uri.split('/').pop() || 'Unknown Document' : 'Unknown Document';
+      // Extract S3 URI for document mapping
+      const s3Uri = ref.location?.s3Location?.uri || '';
 
-      // Extract location (page number or metadata)
+      // Extract location (chunk ID or metadata)
       const location = ref.metadata?.['x-amz-bedrock-kb-chunk-id'] || 'Page unknown';
 
       // Extract snippet
       const snippet = ref.content?.text || '';
 
-      if (snippet) {
+      if (snippet && s3Uri) {
         sources.push({
-          title,
+          s3Uri,
           location,
           snippet: snippet.substring(0, 200), // Limit snippet length
         });
@@ -373,5 +367,19 @@ export function extractSources(citations: any[]): any[] {
     index === self.findIndex((s) => s.snippet === source.snippet)
   );
 
-  return uniqueSources;
+  // Map to original documents and add presigned URLs (parallel execution)
+  const enrichedSources = await Promise.all(
+    uniqueSources.map(async (source) => {
+      const { documentUrl, filename } = await mapToOriginalDocument(source.s3Uri, config);
+      return {
+        title: filename,
+        location: source.location,
+        snippet: source.snippet,
+        documentUrl,
+        documentAccessAllowed: config.allowDocumentAccess,
+      };
+    })
+  );
+
+  return enrichedSources;
 }
