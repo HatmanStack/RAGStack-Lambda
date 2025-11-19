@@ -14,7 +14,6 @@
 import { describe, bench, beforeEach, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { S3Client } from '@aws-sdk/client-s3';
 import { mapToOriginalDocument } from '../mapToOriginalDocument';
 
 // Mock the presigner module
@@ -23,12 +22,10 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 }));
 
 const dynamoMock = mockClient(DynamoDBClient);
-const s3Mock = mockClient(S3Client);
 
 describe('Document Mapping Performance', () => {
   beforeEach(() => {
     dynamoMock.reset();
-    s3Mock.reset();
     process.env.TRACKING_TABLE_NAME = 'test-tracking-table';
     process.env.AWS_REGION = 'us-east-1';
 

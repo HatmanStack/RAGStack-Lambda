@@ -8,11 +8,11 @@
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { ChatConfig } from './types';
 
-interface ChatConfig {
-  allowDocumentAccess: boolean;
-  [key: string]: any;
-}
+// Reuse AWS clients across Lambda invocations for better performance
+const dynamodbClient = new DynamoDBClient({ region: process.env.AWS_REGION! });
+const s3Client = new S3Client({ region: process.env.AWS_REGION! });
 
 interface DocumentMapping {
   documentUrl: string | null;
@@ -94,10 +94,8 @@ async function queryTrackingTable(documentId: string): Promise<{ inputS3Uri: str
     return null;
   }
 
-  const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION! });
-
   try {
-    const result = await dynamodb.send(
+    const result = await dynamodbClient.send(
       new GetItemCommand({
         TableName: tableName,
         Key: { document_id: { S: documentId } },
@@ -144,8 +142,6 @@ function parseS3Uri(s3Uri: string): { bucket: string; key: string } | null {
  * Generates presigned URL for S3 object with 1-hour expiry
  */
 async function generatePresignedUrl(bucket: string, key: string): Promise<string> {
-  const s3Client = new S3Client({ region: process.env.AWS_REGION! });
-
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: key,

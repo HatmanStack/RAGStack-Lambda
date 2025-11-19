@@ -237,19 +237,7 @@ describe('SourcesToggle', () => {
     });
   });
 
-  describe('Memoization', () => {
-    it('does not re-render when props have not changed', () => {
-      const { rerender } = render(<SourcesToggle sources={mockSources} />);
-
-      const button = screen.getByRole('button');
-      const initialButton = button;
-
-      // Re-render with same props
-      rerender(<SourcesToggle sources={mockSources} />);
-
-      // Component should be memoized, button reference should be the same
-      const newButton = screen.getByRole('button');
-      expect(newButton).toBe(initialButton);
-    });
-  });
+  // Note: Memoization behavior is tested implicitly through observable behavior tests.
+  // DOM node identity tests don't prove React.memo works since React preserves
+  // nodes even without memoization in many cases.
 });

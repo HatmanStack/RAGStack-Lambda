@@ -309,5 +309,38 @@ describe('Conversation Handler', () => {
 
       expect(model).toBe('fallback-model-arn');
     });
+
+    it('should return primary model when authenticated user quotas are within limits', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // Mock successful quota updates for both global and per-user
+      dynamoMock.on(UpdateItemCommand).resolves({
+        Attributes: { count: { N: '5' } }
+      });
+
+      const model = await atomicQuotaCheckAndIncrement('auth-user-123', mockConfig, true);
+
+      expect(model).toBe('primary-model-arn');
+    });
+
+    it('should return fallback model when per-user quota exceeded and rollback global quota', async () => {
+      const { atomicQuotaCheckAndIncrement } = await import('./conversation');
+
+      // First call (global quota) succeeds, second call (per-user quota) fails
+      dynamoMock.on(UpdateItemCommand)
+        .resolvesOnce({ Attributes: { count: { N: '50' } } }) // Global quota succeeds
+        .rejectsOnce({ // Per-user quota fails
+          name: 'ConditionalCheckFailedException',
+          message: 'Per-user quota exceeded',
+        })
+        .resolvesOnce({ Attributes: { count: { N: '49' } } }); // Global quota rollback
+
+      const model = await atomicQuotaCheckAndIncrement('auth-user-123', mockConfig, true);
+
+      expect(model).toBe('fallback-model-arn');
+
+      // Verify rollback was attempted (3 UpdateItemCommand calls total)
+      expect(dynamoMock.calls().length).toBeGreaterThanOrEqual(3);
+    });
   });
 });

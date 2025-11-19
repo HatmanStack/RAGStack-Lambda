@@ -27,6 +27,12 @@ npm-debug.log
 .env.local
 .env.amplify
 
+# Test coverage
+coverage/
+htmlcov/
+.nyc_output/
+*.lcov
+
 # IDEs
 .vscode/
 .idea/

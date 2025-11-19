@@ -212,17 +212,10 @@ test.describe('Admin Configuration', () => {
     await expect(page.getByText(/saved|updated successfully/i)).toBeVisible();
     await expect(documentAccessToggle).toBeChecked();
 
-    // Verify in chat
-    await page.goto(`${STAGING_URL}/chat`);
-    await page.getByRole('textbox', { name: /type your message/i }).fill('Test query');
-    await page.getByRole('button', { name: /send/i }).click();
-    await page.getByRole('button', { name: /show.*sources/i }).click();
-
-    // Document links should appear after 60s cache delay
-    // For testing, we just verify the UI updated
-    await expect(page.getByRole('link', { name: /view document/i }).first()).toBeVisible({
-      timeout: 65000 // Wait for cache to clear
-    });
+    // NOTE: We don't verify chat propagation here because Lambda config cache
+    // is per-instance and only refreshes when getChatConfig() is invoked AFTER
+    // the 60s TTL expires. Waiting doesn't trigger invocation, and earlier tests
+    // may have warmed the cache. Cache behavior is covered by unit/integration tests.
   });
 });
 

@@ -15,6 +15,7 @@ import type { Schema } from '../resource';
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
 import { mapToOriginalDocument } from './mapToOriginalDocument';
+import type { ChatConfig } from './types';
 
 /**
  * Config cache (60s TTL to minimize DynamoDB reads)
@@ -22,19 +23,6 @@ import { mapToOriginalDocument } from './mapToOriginalDocument';
 let cachedConfig: ChatConfig | null = null;
 let cacheTime = 0;
 const CACHE_TTL_MS = 60000; // 60 seconds
-
-/**
- * Chat configuration structure
- */
-interface ChatConfig {
-  requireAuth: boolean;
-  primaryModel: string;
-  fallbackModel: string;
-  globalQuotaDaily: number;
-  perUserQuotaDaily: number;
-  /** Allow users to download original source documents via presigned URLs */
-  allowDocumentAccess: boolean;
-}
 
 /**
  * Main handler function
