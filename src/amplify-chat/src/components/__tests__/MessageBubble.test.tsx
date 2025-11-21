@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MessageBubble } from '../MessageBubble';
 import { ChatMessage } from '../../types';
 
@@ -50,8 +50,14 @@ describe('MessageBubble', () => {
     // Check that message content is present
     expect(screen.getByText('This is an assistant message with sources')).toBeInTheDocument();
 
-    // Check that sources section is rendered (SourcesDisplay component shows "Sources" label)
-    expect(screen.getByText('Sources')).toBeInTheDocument();
+    // Check that sources section header is rendered
+    const sourcesHeader = screen.getByText('Sources');
+    expect(sourcesHeader).toBeInTheDocument();
+
+    // Click header to expand
+    fireEvent.click(sourcesHeader);
+
+    // Check that source content is visible after expansion
     expect(screen.getByText('Document 1')).toBeInTheDocument();
     expect(screen.getByText('This is a snippet from the document')).toBeInTheDocument();
   });
