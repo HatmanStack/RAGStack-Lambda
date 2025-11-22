@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { KNOWLEDGE_BASE_CONFIG } from './config';
+import { KNOWLEDGE_BASE_CONFIG } from './config.template';
 
 describe('Amplify Knowledge Base Config', () => {
   const originalEnv = process.env;
