@@ -15,18 +15,18 @@ export function SourceList({ sources }) {
       <Box variant="small">
         {sources.map((source, index) => (
           <Box
-            key={`${source.documentId || source.title}-${source.pageNumber || 0}-${index}`}
+            key={`${source.documentId || source.title}-${source.pageNumber ?? 'no-page'}-${index}`}
             padding={{ bottom: 's' }}
           >
             <Box variant="strong">{source.title || source.documentId}</Box>
 
-            {source.pageNumber && (
+            {source.pageNumber != null && (
               <Box variant="small" color="text-body-secondary">
                 Page {source.pageNumber}
               </Box>
             )}
 
-            {source.location && !source.pageNumber && (
+            {source.location && source.pageNumber == null && (
                <Box variant="small" color="text-body-secondary">
                  {source.location}
                </Box>

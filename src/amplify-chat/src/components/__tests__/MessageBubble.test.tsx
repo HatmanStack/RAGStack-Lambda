@@ -54,8 +54,19 @@ describe('MessageBubble', () => {
     const sourcesHeader = screen.getByText('Sources');
     expect(sourcesHeader).toBeInTheDocument();
 
+    // Verify sources are collapsed by default
+    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('This is a snippet from the document')).not.toBeInTheDocument();
+
+    // Verify aria-expanded is false by default
+    const sourcesButton = sourcesHeader.closest('[role="button"]');
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
+
     // Click header to expand
     fireEvent.click(sourcesHeader);
+
+    // Verify aria-expanded is now true
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
 
     // Check that source content is visible after expansion
     expect(screen.getByText('Document 1')).toBeInTheDocument();
@@ -113,5 +124,41 @@ describe('MessageBubble', () => {
     render(<MessageBubble message={assistantMessageWithSources} showSources={true} />);
 
     expect(screen.getByText('Model: claude-haiku')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation for collapsible sources (Enter key)', () => {
+    render(<MessageBubble message={assistantMessageWithSources} showSources={true} />);
+
+    const sourcesHeader = screen.getByText('Sources');
+    const sourcesButton = sourcesHeader.closest('[role="button"]');
+
+    // Verify sources are collapsed by default
+    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
+
+    // Press Enter to expand
+    fireEvent.keyDown(sourcesButton!, { key: 'Enter' });
+
+    // Verify sources are now expanded
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Document 1')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation for collapsible sources (Space key)', () => {
+    render(<MessageBubble message={assistantMessageWithSources} showSources={true} />);
+
+    const sourcesHeader = screen.getByText('Sources');
+    const sourcesButton = sourcesHeader.closest('[role="button"]');
+
+    // Verify sources are collapsed by default
+    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
+
+    // Press Space to expand
+    fireEvent.keyDown(sourcesButton!, { key: ' ' });
+
+    // Verify sources are now expanded
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Document 1')).toBeInTheDocument();
   });
 });

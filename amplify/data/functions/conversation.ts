@@ -56,8 +56,8 @@ export async function getChatConfig(): Promise<ChatConfig> {
       requireAuth: getVal('chat_require_auth', 'BOOL') ?? false,
       primaryModel: getVal('chat_primary_model', 'S') ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       fallbackModel: getVal('chat_fallback_model', 'S') ?? 'us.amazon.nova-micro-v1:0',
-      globalQuotaDaily: parseInt(getVal('chat_global_quota_daily', 'N') ?? '10000'),
-      perUserQuotaDaily: parseInt(getVal('chat_per_user_quota_daily', 'N') ?? '100'),
+      globalQuotaDaily: parseInt(getVal('chat_global_quota_daily', 'N') ?? '10000', 10),
+      perUserQuotaDaily: parseInt(getVal('chat_per_user_quota_daily', 'N') ?? '100', 10),
       allowDocumentAccess: getVal('chat_allow_document_access', 'BOOL') ?? false,
     };
 
