@@ -14,6 +14,7 @@
 import { describe, bench, beforeEach, vi } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
+import { createMockChatConfig } from '../types';
 import { mapToOriginalDocument } from '../mapToOriginalDocument';
 
 // Mock the presigner module
@@ -40,14 +41,14 @@ describe('Document Mapping Performance', () => {
   });
 
   bench('Map 1 citation to original document', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     await mapToOriginalDocument(citationUri, config);
   });
 
   bench('Map 5 citations in parallel', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citations = Array.from({ length: 5 }, (_, i) =>
       `s3://output-bucket/12345678-1234-1234-1234-12345678${String(i).padStart(4, '0')}/chunks/chunk-001.json`
     );
@@ -56,7 +57,7 @@ describe('Document Mapping Performance', () => {
   });
 
   bench('Map 10 citations in parallel', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citations = Array.from({ length: 10 }, (_, i) =>
       `s3://output-bucket/12345678-1234-1234-1234-12345678${String(i).padStart(4, '0')}/chunks/chunk-001.json`
     );
@@ -65,7 +66,7 @@ describe('Document Mapping Performance', () => {
   });
 
   bench('Map with access disabled (should be fast - no DB query)', async () => {
-    const config = { allowDocumentAccess: false };
+    const config = createMockChatConfig({ allowDocumentAccess: false });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     await mapToOriginalDocument(citationUri, config);
@@ -88,7 +89,7 @@ describe('DynamoDB Query Performance', () => {
       },
     });
 
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     await mapToOriginalDocument(citationUri, config);
@@ -97,7 +98,7 @@ describe('DynamoDB Query Performance', () => {
   bench('Handle missing document gracefully', async () => {
     dynamoMock.on(GetItemCommand).resolves({ Item: undefined });
 
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/99999999-9999-9999-9999-999999999999/chunks/chunk-001.json';
 
     await mapToOriginalDocument(citationUri, config);

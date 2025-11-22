@@ -256,7 +256,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setIsLoading(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
     // to prevent handleSend recreation when parent passes new callback references.
     // These are optional side-effect callbacks that don't affect core functionality.

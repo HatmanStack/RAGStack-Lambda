@@ -4,7 +4,7 @@ This Lambda function handles GraphQL queries and mutations for configuration man
 - getConfiguration: Returns Schema, Default, and Custom configurations
 - updateConfiguration: Updates Custom configuration
 """
-print('hello')
+
 import json
 import logging
 import os

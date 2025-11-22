@@ -107,8 +107,7 @@ def test_lambda_handler_success(
     assert call_args[1]["knowledgeBaseId"] == "test-kb-123"
     assert call_args[1]["retrievalQuery"]["text"] == "What is the main topic of this document?"
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
-        == 5
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
     )
 
 
@@ -173,8 +172,7 @@ def test_lambda_handler_default_max_results(
     # Verify default maxResults of 5
     call_args = mock_bedrock_agent.retrieve.call_args
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
-        == 5
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
     )
     assert result["query"] == "test query"
     assert result["total"] == 3
@@ -200,8 +198,7 @@ def test_lambda_handler_custom_max_results(
     # Verify custom maxResults
     call_args = mock_bedrock_agent.retrieve.call_args
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
-        == 10
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 10
     )
 
 
@@ -225,8 +222,7 @@ def test_lambda_handler_invalid_max_results(
     # Should use default of 5
     call_args = mock_bedrock_agent.retrieve.call_args
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
-        == 5
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
     )
 
     # Test with too large number
@@ -237,8 +233,7 @@ def test_lambda_handler_invalid_max_results(
     # Should use default of 5
     call_args = mock_bedrock_agent.retrieve.call_args
     assert (
-        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"]
-        == 5
+        call_args[1]["retrievalConfiguration"]["vectorSearchConfiguration"]["numberOfResults"] == 5
     )
 
 

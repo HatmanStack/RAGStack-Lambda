@@ -11,7 +11,7 @@
  * 7. Returns response with content, sources, modelUsed
  */
 
-import type { Schema } from '../resource';
+// import type { Schema } from '../resource';  // Generated at build time
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
 import { mapToOriginalDocument } from './mapToOriginalDocument';
@@ -27,7 +27,7 @@ const CACHE_TTL_MS = 60000; // 60 seconds
 /**
  * Main handler function
  */
-export const handler: Schema['conversation']['functionHandler'] = async (event) => {
+export const handler = async (event: any) => {
   const { message, conversationId, userId, userToken } = event.arguments;
 
   // Get authenticated user context from Lambda Authorizer (if auth enabled)
@@ -134,8 +134,8 @@ export async function getChatConfig(): Promise<ChatConfig> {
       requireAuth: result.Item.chat_require_auth?.BOOL ?? false,
       primaryModel: result.Item.chat_primary_model?.S ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       fallbackModel: result.Item.chat_fallback_model?.S ?? 'us.amazon.nova-micro-v1:0',
-      globalQuotaDaily: parseInt(result.Item.chat_global_quota_daily?.N ?? '10000'),
-      perUserQuotaDaily: parseInt(result.Item.chat_per_user_quota_daily?.N ?? '100'),
+      globalQuotaDaily: parseInt(result.Item.chat_global_quota_daily?.N ?? '10000', 10),
+      perUserQuotaDaily: parseInt(result.Item.chat_per_user_quota_daily?.N ?? '100', 10),
       allowDocumentAccess: result.Item.chat_allow_document_access?.BOOL ?? false,
     };
 

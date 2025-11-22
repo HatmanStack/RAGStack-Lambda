@@ -105,9 +105,7 @@ def lambda_handler(event, context):
         response = bedrock_agent.retrieve(
             knowledgeBaseId=knowledge_base_id,
             retrievalQuery={"text": query},
-            retrievalConfiguration={
-                "vectorSearchConfiguration": {"numberOfResults": max_results}
-            },
+            retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": max_results}},
         )
 
         # Parse results

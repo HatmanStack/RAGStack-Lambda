@@ -29,3 +29,20 @@ export interface ChatConfig {
   /** Allow users to download original source documents via presigned URLs */
   allowDocumentAccess: boolean;
 }
+
+/**
+ * Create a mock ChatConfig for testing
+ *
+ * Provides default values for all required fields, with optional overrides.
+ */
+export function createMockChatConfig(overrides?: Partial<ChatConfig>): ChatConfig {
+  return {
+    requireAuth: false,
+    primaryModel: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    fallbackModel: 'us.amazon.nova-micro-v1:0',
+    globalQuotaDaily: 10000,
+    perUserQuotaDaily: 100,
+    allowDocumentAccess: false,
+    ...overrides,
+  };
+}
