@@ -6,6 +6,7 @@ import { mockClient } from 'aws-sdk-client-mock';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { mapToOriginalDocument } from './mapToOriginalDocument';
+import { createMockChatConfig } from './types';
 
 // Mock the presigner module
 vi.mock('@aws-sdk/s3-request-presigner', () => ({
@@ -24,7 +25,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should return null when access is disabled', async () => {
-    const config = { allowDocumentAccess: false };
+    const config = createMockChatConfig({ allowDocumentAccess: false });
     const result = await mapToOriginalDocument('s3://output-bucket/abc-123-def/chunks/chunk-001.json', config);
 
     expect(result.documentUrl).toBeNull();
@@ -32,7 +33,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should extract document_id from citation URI', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     dynamoMock.on(GetItemCommand).resolves({
@@ -50,7 +51,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should generate presigned URL when access enabled', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/chunks/chunk-005.json';
 
     dynamoMock.on(GetItemCommand).resolves({
@@ -68,7 +69,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should handle missing documents gracefully', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/99999999-9999-9999-9999-999999999999/chunks/chunk-001.json';
 
     // Mock DynamoDB to return no item
@@ -83,7 +84,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should handle invalid citation URI format', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const invalidUri = 's3://output-bucket/not-a-uuid/chunks/chunk-001.json';
 
     const result = await mapToOriginalDocument(invalidUri, config);
@@ -93,7 +94,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should handle DynamoDB errors gracefully', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     // Mock DynamoDB to throw error
@@ -106,7 +107,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should handle invalid S3 URI format from TrackingTable', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     dynamoMock.on(GetItemCommand).resolves({
@@ -126,7 +127,7 @@ describe('mapToOriginalDocument', () => {
   it('should handle missing TRACKING_TABLE_NAME env var', async () => {
     delete process.env.TRACKING_TABLE_NAME;
 
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     const result = await mapToOriginalDocument(citationUri, config);
@@ -136,7 +137,7 @@ describe('mapToOriginalDocument', () => {
   });
 
   it('should handle missing filename in TrackingTable', async () => {
-    const config = { allowDocumentAccess: true };
+    const config = createMockChatConfig({ allowDocumentAccess: true });
     const citationUri = 's3://output-bucket/12345678-1234-1234-1234-123456789abc/chunks/chunk-001.json';
 
     dynamoMock.on(GetItemCommand).resolves({

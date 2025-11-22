@@ -11,7 +11,7 @@
  * 7. Returns response with content, sources, modelUsed
  */
 
-import type { Schema } from '../resource';
+// import type { Schema } from '../resource';  // Generated at build time
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand } from '@aws-sdk/client-bedrock-agent-runtime';
 import { mapToOriginalDocument } from './mapToOriginalDocument';
@@ -27,7 +27,7 @@ const CACHE_TTL_MS = 60000; // 60 seconds
 /**
  * Main handler function
  */
-export const handler: Schema['conversation']['functionHandler'] = async (event) => {
+export const handler = async (event: any) => {
   const { message, conversationId, userId, userToken } = event.arguments;
 
   // Get authenticated user context from Lambda Authorizer (if auth enabled)
