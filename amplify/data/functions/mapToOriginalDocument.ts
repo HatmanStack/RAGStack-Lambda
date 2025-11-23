@@ -30,9 +30,11 @@ export async function mapToOriginalDocument(
   citationS3Uri: string,
   config: ChatConfig
 ): Promise<DocumentMapping> {
+  console.log('[mapToOriginalDocument] Called with:', { citationS3Uri, allowDocumentAccess: config.allowDocumentAccess });
+
   // Early return if document access is disabled
   if (!config.allowDocumentAccess) {
-    console.log('Document access disabled, skipping URL generation');
+    console.log('[mapToOriginalDocument] Document access disabled, skipping URL generation');
     return { documentUrl: null, filename: 'Unknown Document' };
   }
 
@@ -66,7 +68,13 @@ export async function mapToOriginalDocument(
     // Step 4: Generate presigned URL
     const documentUrl = await generatePresignedUrl(s3Location.bucket, s3Location.key);
 
-    console.log('Presigned URL generated for document:', { documentId, filename });
+    console.log('[mapToOriginalDocument] Presigned URL generated:', {
+      documentId,
+      filename,
+      bucket: s3Location.bucket,
+      key: s3Location.key,
+      urlLength: documentUrl?.length || 0
+    });
     return { documentUrl, filename };
 
   } catch (error) {

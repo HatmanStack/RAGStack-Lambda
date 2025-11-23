@@ -37,7 +37,7 @@ export class AmplifyBackendStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'functions/authorizer.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
-        assetHash: 'v2-parent-dir-bundling', // Force new asset hash to bypass caching
+        // Let CDK calculate asset hash from source files to detect changes
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
@@ -108,7 +108,7 @@ export class AmplifyBackendStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'functions/conversation.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../data'), {
-        assetHash: 'v2-parent-dir-bundling', // Force new asset hash to bypass caching
+        // Let CDK calculate asset hash from source files to detect changes
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
@@ -150,6 +150,7 @@ export class AmplifyBackendStack extends cdk.Stack {
           'bedrock:InvokeModel',
           'bedrock:RetrieveAndGenerate',
           'bedrock:Retrieve',
+          'bedrock:GetInferenceProfile', // Required for cross-region inference profiles
         ],
         resources: ['*'],
       })

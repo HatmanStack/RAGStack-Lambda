@@ -28,6 +28,8 @@ const CACHE_TTL_MS = 60000; // 60 seconds
  * Main handler function
  */
 export const handler = async (event: any) => {
+  console.log('[ConversationHandler] Raw event:', JSON.stringify(event, null, 2));
+
   const { message, conversationId, userId, userToken } = event.arguments;
 
   // Get authenticated user context from Lambda Authorizer (if auth enabled)
@@ -35,7 +37,7 @@ export const handler = async (event: any) => {
   const authenticatedUserId = authContext?.userId;
   const username = authContext?.username;
 
-  console.log('Conversation request:', {
+  console.log('[ConversationHandler] Conversation request:', {
     conversationId,
     requestedUserId: userId || 'anonymous',
     authenticatedUserId: authenticatedUserId || 'none',
@@ -118,32 +120,47 @@ export async function getChatConfig(): Promise<ChatConfig> {
   const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION! });
 
   try {
-    const result = await dynamodb.send(
+    // Get Default configuration
+    const defaultResult = await dynamodb.send(
       new GetItemCommand({
         TableName: process.env.CONFIGURATION_TABLE_NAME!,
         Key: { Configuration: { S: 'Default' } },
       })
     );
 
-    if (!result.Item) {
-      throw new Error('Configuration not found in ConfigurationTable');
+    if (!defaultResult.Item) {
+      throw new Error('Default configuration not found in ConfigurationTable');
     }
 
-    // Parse config from DynamoDB item
+    // Get Custom configuration (may not exist)
+    const customResult = await dynamodb.send(
+      new GetItemCommand({
+        TableName: process.env.CONFIGURATION_TABLE_NAME!,
+        Key: { Configuration: { S: 'Custom' } },
+      })
+    );
+
+    console.log('Retrieved configs:', {
+      hasDefault: !!defaultResult.Item,
+      hasCustom: !!customResult.Item,
+      customKeys: customResult.Item ? Object.keys(customResult.Item).filter(k => k !== 'Configuration') : []
+    });
+
+    // Parse config from DynamoDB items, with Custom overriding Default
     const config: ChatConfig = {
-      requireAuth: result.Item.chat_require_auth?.BOOL ?? false,
-      primaryModel: result.Item.chat_primary_model?.S ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-      fallbackModel: result.Item.chat_fallback_model?.S ?? 'us.amazon.nova-micro-v1:0',
-      globalQuotaDaily: parseInt(result.Item.chat_global_quota_daily?.N ?? '10000', 10),
-      perUserQuotaDaily: parseInt(result.Item.chat_per_user_quota_daily?.N ?? '100', 10),
-      allowDocumentAccess: result.Item.chat_allow_document_access?.BOOL ?? false,
+      requireAuth: (customResult.Item?.chat_require_auth?.BOOL ?? defaultResult.Item.chat_require_auth?.BOOL ?? false),
+      primaryModel: (customResult.Item?.chat_primary_model?.S ?? defaultResult.Item.chat_primary_model?.S ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0'),
+      fallbackModel: (customResult.Item?.chat_fallback_model?.S ?? defaultResult.Item.chat_fallback_model?.S ?? 'us.amazon.nova-micro-v1:0'),
+      globalQuotaDaily: parseInt(customResult.Item?.chat_global_quota_daily?.N ?? defaultResult.Item.chat_global_quota_daily?.N ?? '10000', 10),
+      perUserQuotaDaily: parseInt(customResult.Item?.chat_per_user_quota_daily?.N ?? defaultResult.Item.chat_per_user_quota_daily?.N ?? '100', 10),
+      allowDocumentAccess: (customResult.Item?.chat_allow_document_access?.BOOL ?? defaultResult.Item.chat_allow_document_access?.BOOL ?? false),
     };
 
     // Update cache
     cachedConfig = config;
     cacheTime = now;
 
-    console.log('Config loaded:', config);
+    console.log('Config loaded (Custom merged with Default):', config);
     return config;
 
   } catch (error) {
@@ -313,9 +330,14 @@ export async function queryKnowledgeBase(
     // Extract and format sources (now async with document URL mapping)
     const sources = await extractSources(response.citations || [], config);
 
-    console.log('KB query successful:', {
+    console.log('[ConversationHandler] KB query successful:', {
       contentLength: content.length,
       sourcesCount: sources.length,
+      sources: sources.map(s => ({
+        title: s.title,
+        hasDocumentUrl: !!s.documentUrl,
+        documentAccessAllowed: s.documentAccessAllowed
+      }))
     });
 
     return {
@@ -338,6 +360,7 @@ export async function queryKnowledgeBase(
  */
 export async function extractSources(citations: any[], config: ChatConfig): Promise<any[]> {
   const sources: any[] = [];
+  const documentMap = new Map<string, any>(); // Group by document ID
 
   for (const citation of citations) {
     if (!citation.retrievedReferences) continue;
@@ -346,26 +369,32 @@ export async function extractSources(citations: any[], config: ChatConfig): Prom
       // Extract S3 URI for document mapping
       const s3Uri = ref.location?.s3Location?.uri || '';
 
+      // Extract document ID from S3 URI (UUID pattern)
+      const docIdMatch = s3Uri.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      const documentId = docIdMatch ? docIdMatch[1] : null;
+
       // Extract location (chunk ID or metadata)
       const location = ref.metadata?.['x-amz-bedrock-kb-chunk-id'] || 'Page unknown';
 
       // Extract snippet
       const snippet = ref.content?.text || '';
 
-      if (snippet && s3Uri) {
-        sources.push({
-          s3Uri,
-          location,
-          snippet: snippet.substring(0, 200), // Limit snippet length
-        });
+      if (snippet && s3Uri && documentId) {
+        // Group by document ID - only keep first occurrence of each document
+        if (!documentMap.has(documentId)) {
+          documentMap.set(documentId, {
+            s3Uri,
+            documentId,
+            location,
+            snippet: snippet.substring(0, 200), // Limit snippet length
+          });
+        }
       }
     }
   }
 
-  // Remove duplicates based on snippet
-  const uniqueSources = sources.filter((source, index, self) =>
-    index === self.findIndex((s) => s.snippet === source.snippet)
-  );
+  // Convert map to array
+  const uniqueSources = Array.from(documentMap.values());
 
   // Map to original documents and add presigned URLs (parallel execution)
   const enrichedSources = await Promise.all(

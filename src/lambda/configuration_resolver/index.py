@@ -76,6 +76,8 @@ def lambda_handler(event, context):
 
         if operation == "updateConfiguration":
             custom_config = event["arguments"].get("customConfig")
+            logger.info(f"updateConfiguration called with customConfig type: {type(custom_config)}")
+            logger.info(f"updateConfiguration customConfig value: {custom_config}")
             return handle_update_configuration(custom_config)
 
         raise ValueError(f"Unsupported operation: {operation}")
@@ -127,6 +129,10 @@ def handle_get_configuration():
         }
 
         logger.info("Returning configuration to client")
+        logger.info(f"[getConfiguration] Default keys: {list(default_config.keys())}")
+        logger.info(f"[getConfiguration] Custom keys: {list(custom_config.keys())}")
+        logger.info(f"[getConfiguration] Default.chat_allow_document_access: {default_config.get('chat_allow_document_access')}")
+        logger.info(f"[getConfiguration] Custom.chat_allow_document_access: {custom_config.get('chat_allow_document_access')}")
         return result
 
     except Exception:
@@ -145,12 +151,18 @@ def handle_update_configuration(custom_config):
         Boolean indicating success
     """
     try:
+        logger.info(f"[handleUpdate] Received custom_config: {custom_config}")
+
         # Parse JSON if it's a string
         if isinstance(custom_config, str):
+            logger.info(f"[handleUpdate] Parsing custom_config from string")
             custom_config_obj = json.loads(custom_config)
+            logger.info(f"[handleUpdate] Parsed object: {custom_config_obj}")
         else:
+            logger.info(f"[handleUpdate] custom_config is already object: {type(custom_config)}")
             custom_config_obj = custom_config
 
+        logger.info(f"[handleUpdate] Final config object: {custom_config_obj}")
         # Validate that config is a dictionary BEFORE logging
         if not isinstance(custom_config_obj, dict) or custom_config_obj is None:
             raise ValueError(
@@ -181,10 +193,30 @@ def handle_update_configuration(custom_config):
         # Remove 'Configuration' key to prevent partition key override
         safe_config = {k: v for k, v in custom_config_obj.items() if k != "Configuration"}
 
-        # Write to DynamoDB with protected partition key
-        configuration_table.put_item(Item={"Configuration": "Custom", **safe_config})
+        logger.info(f"[handleUpdate] Safe config to write: {safe_config}")
+        logger.info(f"[handleUpdate] Writing to DynamoDB table: {configuration_table.table_name}")
 
-        logger.info("Custom configuration updated successfully")
+        # Get existing Custom configuration to merge with new values
+        existing_custom = get_configuration_item("Custom")
+        logger.info(f"[handleUpdate] Existing Custom config: {existing_custom}")
+
+        # Merge: start with existing config, then apply new values
+        merged_config = {}
+        if existing_custom:
+            # Copy all existing fields except the partition key
+            merged_config = {k: v for k, v in existing_custom.items() if k != "Configuration"}
+            logger.info(f"[handleUpdate] Existing fields: {list(merged_config.keys())}")
+
+        # Apply new values (overwriting any existing ones)
+        merged_config.update(safe_config)
+        logger.info(f"[handleUpdate] Merged config after update: {merged_config}")
+
+        # Write merged config to DynamoDB
+        item_to_write = {"Configuration": "Custom", **merged_config}
+        logger.info(f"[handleUpdate] Full item to write: {item_to_write}")
+        configuration_table.put_item(Item=item_to_write)
+
+        logger.info("[handleUpdate] Custom configuration updated successfully")
         return True
 
     except json.JSONDecodeError as e:
