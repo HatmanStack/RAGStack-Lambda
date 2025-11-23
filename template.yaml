@@ -866,6 +866,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
+        - S3ReadPolicy:
+            BucketName: !Ref InputBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1308,11 +1310,13 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              # Allow access to both SAM AppSync API and Amplify AppSync API
               - Effect: Allow
                 Action:
                   - appsync:GraphQL
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
+                  - !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/*/fields/*'
 
   AuthenticatedRole:
     Type: AWS::IAM::Role
@@ -2435,9 +2439,11 @@ Resources:
                 - rm -rf .amplify/ amplify/.amplify/ amplify/cdk.out/
                 - echo "Deploying Amplify backend via CDK..."
                 - |
-                  # Export environment variables needed by CDK stack
-                  export KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID}
-                  export CONFIGURATION_TABLE_NAME=${CONFIGURATION_TABLE_NAME}
+                  # CodeBuild environment variables are already available in the shell
+                  # No need to export them again - just verify they're set
+                  echo "KB_ID=$KNOWLEDGE_BASE_ID"
+                  echo "CONFIG_TABLE=$CONFIGURATION_TABLE_NAME"
+                  echo "TRACKING_TABLE=$TRACKING_TABLE_NAME"
 
                   # Deploy CDK stack
                   cd amplify

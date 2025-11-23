@@ -21,6 +21,8 @@ const CONVERSATION_QUERY = `
         title
         location
         snippet
+        documentUrl
+        documentAccessAllowed
       }
       modelUsed
     }
@@ -181,6 +183,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         // Check for response data
         if (response.data?.conversation) {
           const { content, sources, modelUsed } = response.data.conversation;
+
+          // Debug: Log full conversation response
+          console.log('[ChatInterface] Full conversation response:', response.data.conversation);
+          console.log('[ChatInterface] Sources received:', sources?.map(s => ({
+            title: s.title,
+            hasDocumentUrl: !!s.documentUrl,
+            documentUrl: s.documentUrl?.substring(0, 50) + '...',
+            documentAccessAllowed: s.documentAccessAllowed
+          })));
 
           // Create assistant message from response
           const assistantMessage: ChatMessage = {

@@ -81,6 +81,8 @@ type Source {
   pageNumber: Int
   s3Uri: String!
   snippet: String
+  documentUrl: String
+  documentAccessAllowed: Boolean
 }
 
 # Knowledge Base search result (raw vector search)

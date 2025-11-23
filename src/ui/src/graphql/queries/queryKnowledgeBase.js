@@ -9,6 +9,8 @@ export const queryKnowledgeBase = /* GraphQL */ `
         pageNumber
         s3Uri
         snippet
+        documentUrl
+        documentAccessAllowed
       }
     }
   }

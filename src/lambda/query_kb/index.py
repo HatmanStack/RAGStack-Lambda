@@ -36,11 +36,37 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.config import ConfigurationManager
 
+# Initialize AWS clients
+s3_client = boto3.client("s3")
+dynamodb = boto3.resource("dynamodb")
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
+
+
+def generate_presigned_url(bucket, key, expiration=3600):
+    """
+    Generate presigned URL for S3 object download.
+
+    Args:
+        bucket (str): S3 bucket name
+        key (str): S3 object key
+        expiration (int): URL expiration time in seconds (default 1 hour)
+
+    Returns:
+        str: Presigned URL or None if generation fails
+    """
+    try:
+        presigned_url = s3_client.generate_presigned_url(
+            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
+        )
+        return presigned_url
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
+        return None
 
 
 def extract_sources(citations):
@@ -79,23 +105,33 @@ def extract_sources(citations):
                 logger.debug("No URI found in reference")
                 continue
 
-            # Parse S3 URI: s3://bucket/document-id/pages/page-1.json
-            # OR: s3://bucket/document-id/text_embedding.json (vector bucket format)
+            # Parse S3 URI from output bucket to construct input bucket URI
+            # Output URI: s3://project-output-suffix/doc-id/filename.pdf/doc-id/extracted_text.txt
+            # Input URI:  s3://project-input-suffix/doc-id/filename.pdf
             try:
                 parts = uri.replace("s3://", "").split("/")
-                if len(parts) < 2:
-                    logger.warning("Invalid S3 URI format (too few parts)")
+                if len(parts) < 3:
+                    logger.warning(f"Invalid S3 URI format (too few parts): {len(parts)}")
                     continue
 
-                # Decode document ID (may have URL encoding)
-                document_id = unquote(parts[1])
-                page_num = None
+                # Extract components
+                output_bucket = parts[0]  # e.g., "chat-fix-output-mvm4c"
+                document_id = unquote(parts[1])  # e.g., "f8e9d9fc-..."
+                original_filename = unquote(parts[2]) if len(parts) > 2 else None  # e.g., "doc.pdf"
 
-                # Extract page number if available
+                # Construct input bucket URI (replace -output- with -input-)
+                input_bucket = output_bucket.replace("-output-", "-input-")
+                if original_filename:
+                    document_s3_uri = f"s3://{input_bucket}/{document_id}/{original_filename}"
+                else:
+                    # Fallback if filename missing
+                    document_s3_uri = uri
+
+                # Extract page number if available (from metadata or filename)
+                page_num = None
                 if "pages" in parts and len(parts) > 3:
                     page_file = parts[-1]  # e.g., "page-3.json"
                     try:
-                        # Extract number from "page-3.json" -> 3
                         page_num = int(page_file.split("-")[1].split(".")[0])
                     except (IndexError, ValueError):
                         logger.debug(f"Could not extract page number from: {page_file}")
@@ -107,16 +143,33 @@ def extract_sources(citations):
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"
                 if source_key not in seen:
-                    sources.append(
-                        {
-                            "documentId": document_id,
-                            "pageNumber": page_num,
-                            "s3Uri": uri,
-                            "snippet": snippet,
-                        }
+                    # Check if document access is allowed
+                    allow_document_access = config_manager.get_parameter(
+                        "chat_allow_document_access", default=False
                     )
-                    seen.add(source_key)
+
+                    # Generate presigned URL if access is enabled
+                    document_url = None
+                    if allow_document_access and document_s3_uri:
+                        # Parse S3 URI to get bucket and key
+                        s3_match = document_s3_uri.replace("s3://", "").split("/", 1)
+                        if len(s3_match) == 2:
+                            bucket = s3_match[0]
+                            key = s3_match[1]
+                            document_url = generate_presigned_url(bucket, key)
+                            logger.debug(f"Generated presigned URL for {document_id}")
+
+                    source_obj = {
+                        "documentId": document_id,
+                        "pageNumber": page_num,
+                        "s3Uri": document_s3_uri,  # Use input bucket URI, not output
+                        "snippet": snippet,
+                        "documentUrl": document_url,
+                        "documentAccessAllowed": allow_document_access,
+                    }
                     logger.debug(f"Added source: {source_key}")
+                    sources.append(source_obj)
+                    seen.add(source_key)
                 else:
                     logger.debug(f"Skipping duplicate source: {source_key}")
 

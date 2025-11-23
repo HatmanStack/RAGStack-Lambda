@@ -79,12 +79,23 @@ export function Settings() {
       const parsedDefault = JSON.parse(config.Default);
       const parsedCustom = JSON.parse(config.Custom || '{}');
 
+      console.log('[Settings] Config loaded from GraphQL:', {
+        defaultKeys: Object.keys(parsedDefault),
+        customKeys: Object.keys(parsedCustom),
+        default_allowDocAccess: parsedDefault.chat_allow_document_access,
+        custom_allowDocAccess: parsedCustom.chat_allow_document_access
+      });
+
       setSchema(parsedSchema);
       setDefaultConfig(parsedDefault);
       setCustomConfig(parsedCustom);
 
       // Initialize form with custom values overriding defaults
       const initialValues = { ...parsedDefault, ...parsedCustom };
+      console.log('[Settings] Initial form values after merge:', {
+        chat_allow_document_access: initialValues.chat_allow_document_access,
+        chat_theme_preset: initialValues.chat_theme_preset
+      });
       setFormValues(initialValues);
 
       setLoading(false);
@@ -101,52 +112,72 @@ export function Settings() {
   }, [loadConfiguration]);
 
   const handleSave = async () => {
+    console.log('[Settings] Save clicked');
+    console.log('[Settings] Form values:', formValues);
+    console.log('[Settings] Default config:', defaultConfig);
+    console.log('[Settings] Validation errors:', validationErrors);
+
     try {
       // Block save if there are validation errors
       if (Object.keys(validationErrors).length > 0) {
+        console.error('[Settings] Blocked by validation errors:', validationErrors);
         setError('Please fix validation errors before saving');
         return;
       }
 
+      console.log('[Settings] Calling saveConfiguration...');
       await saveConfiguration(formValues);
     } catch (err) {
-      console.error('Error in handleSave:', err);
+      console.error('[Settings] Error in handleSave:', err);
       setError('Failed to save configuration. Please try again.');
     }
   };
 
   const saveConfiguration = async (values) => {
     try {
+      console.log('[Settings] saveConfiguration called with values:', values);
       setSaving(true);
       setError(null);
       setSuccess(false);
 
-      // Only save values that differ from defaults
+      // Only save values that differ from current merged config (Default + Custom)
+      const currentMergedValues = { ...defaultConfig, ...customConfig };
       const changedValues = {};
       Object.keys(values).forEach(key => {
-        if (values[key] !== defaultConfig[key]) {
-          changedValues[key] = values[key];
+        const currentValue = currentMergedValues[key];
+        const newValue = values[key];
+        const isDifferent = newValue !== currentValue;
+        console.log(`[Settings] ${key}: formValue=${newValue}, currentMerged=${currentValue}, different=${isDifferent}`);
+        if (isDifferent) {
+          changedValues[key] = newValue;
         }
       });
 
-      await client.graphql({
+      console.log('[Settings] Changed values to save:', changedValues);
+      console.log('[Settings] Changed values JSON:', JSON.stringify(changedValues));
+
+      const response = await client.graphql({
         query: updateConfiguration,
         variables: {
           customConfig: JSON.stringify(changedValues)
         }
       });
 
+      console.log('[Settings] Mutation response:', response);
+
       setSuccess(true);
       setSaving(false);
 
       // Reload configuration
       setTimeout(() => {
+        console.log('[Settings] Reloading configuration...');
         loadConfiguration();
         setSuccess(false);
       }, 2000);
 
     } catch (err) {
-      console.error('Error saving configuration:', err);
+      console.error('[Settings] Error saving configuration:', err);
+      console.error('[Settings] Error details:', err.errors || err.message || err);
       setError('Failed to save configuration. Please try again.');
       setSaving(false);
     }
@@ -169,7 +200,19 @@ export function Settings() {
 
     // Hide chat fields if chat is not deployed
     if (key.startsWith('chat_') && key !== 'chat_model_id' && !formValues.chat_deployed) {
+      console.log(`[Settings] Hiding field ${key} because chat_deployed=${formValues.chat_deployed}`);
       return null;
+    }
+
+    // Log when rendering chat_allow_document_access
+    if (key === 'chat_allow_document_access') {
+      console.log(`[Settings] Rendering chat_allow_document_access toggle:`, {
+        value,
+        isCustomized,
+        formValues_value: formValues[key],
+        customConfig_value: customConfig[key],
+        defaultConfig_value: defaultConfig[key]
+      });
     }
 
     // Special handling for chat_cdn_url - display with embed code
@@ -244,6 +287,11 @@ export function Settings() {
           <Toggle
             checked={value === true}
             onChange={({ detail }) => {
+              console.log(`[Settings] Toggle changed for ${key}:`, {
+                oldValue: value,
+                newValue: detail.checked,
+                field: key
+              });
               setFormValues({ ...formValues, [key]: detail.checked });
             }}
           >
