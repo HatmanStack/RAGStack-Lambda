@@ -31,8 +31,20 @@ export const AuthProvider = ({ children }) => {
         tokens: session.tokens
       });
     } catch (err) {
-      // User not signed in
-      console.log('[AuthProvider] No authenticated user:', err.name);
+      // Distinguish between expected "not authenticated" vs actual errors in logs
+      const errorName = err?.name || 'Unknown';
+      const isAuthError = errorName.includes('NotAuthorizedException') ||
+                         errorName.includes('UserUnAuthenticatedException') ||
+                         errorName === 'UserNotFoundException';
+
+      if (isAuthError) {
+        console.log('[AuthProvider] No authenticated user:', errorName);
+      } else {
+        // Network, config, or unexpected errors
+        console.error('[AuthProvider] Error checking auth status:', errorName, err.message || err);
+      }
+
+      // Always set user to null on any error (same UI behavior)
       setUser(null);
     } finally {
       setLoading(false);

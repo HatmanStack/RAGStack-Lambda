@@ -60,10 +60,9 @@ def generate_presigned_url(bucket, key, expiration=3600):
         str: Presigned URL or None if generation fails
     """
     try:
-        presigned_url = s3_client.generate_presigned_url(
+        return s3_client.generate_presigned_url(
             "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
         )
-        return presigned_url
     except Exception as e:
         logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
         return None

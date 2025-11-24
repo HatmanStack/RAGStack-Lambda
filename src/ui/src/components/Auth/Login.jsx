@@ -10,9 +10,10 @@ import { useAuth } from './AuthProvider';
 const RedirectOnAuth = ({ user, from, navigate }) => {
   const { checkUser } = useAuth();
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
 
   useEffect(() => {
-    if (user && !syncing) {
+    if (user && !syncing && !syncError) {
       console.log('[Login] Authenticator detected user, syncing with AuthProvider...');
       setSyncing(true);
       // Update AuthProvider state before navigating
@@ -21,10 +22,23 @@ const RedirectOnAuth = ({ user, from, navigate }) => {
         navigate(from, { replace: true });
       }).catch((err) => {
         console.error('[Login] Failed to sync AuthProvider:', err);
+        setSyncError(err);  // Prevent infinite retry loop
         setSyncing(false);
       });
     }
-  }, [user, from, navigate, checkUser, syncing]);
+  }, [user, from, navigate, checkUser, syncing, syncError]);
+
+  if (syncError) {
+    return (
+      <Box textAlign="center" padding="l">
+        <SpaceBetween size="s">
+          <Box variant="p" color="text-status-error">
+            Failed to complete sign in. Please try refreshing the page.
+          </Box>
+        </SpaceBetween>
+      </Box>
+    );
+  }
 
   if (syncing) {
     return (
