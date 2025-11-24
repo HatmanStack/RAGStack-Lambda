@@ -18,25 +18,30 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const checkUser = useCallback(async () => {
+    console.log('[AuthProvider] checkUser() called');
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
 
+      console.log('[AuthProvider] User authenticated:', currentUser.username);
       setUser({
         username: currentUser.username,
         userId: currentUser.userId,
         signInDetails: currentUser.signInDetails,
         tokens: session.tokens
       });
-    } catch {  
+    } catch (err) {
       // User not signed in
+      console.log('[AuthProvider] No authenticated user:', err.name);
       setUser(null);
     } finally {
       setLoading(false);
+      console.log('[AuthProvider] checkUser() complete, loading set to false');
     }
   }, []);
 
   useEffect(() => {
+    console.log('[AuthProvider] Initial mount - calling checkUser()');
     checkUser();
   }, [checkUser]);
 

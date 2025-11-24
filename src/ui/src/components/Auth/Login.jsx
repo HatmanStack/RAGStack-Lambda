@@ -1,17 +1,43 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box, Container, Header, SpaceBetween } from '@cloudscape-design/components';
+import { Box, Container, Header, SpaceBetween, Spinner } from '@cloudscape-design/components';
+import { useAuth } from './AuthProvider';
 
 // Component to handle redirect after authentication
 // Extracted to comply with Rules of Hooks (hooks must be at top level)
 const RedirectOnAuth = ({ user, from, navigate }) => {
+  const { checkUser } = useAuth();
+  const [syncing, setSyncing] = useState(false);
+
   useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
+    if (user && !syncing) {
+      console.log('[Login] Authenticator detected user, syncing with AuthProvider...');
+      setSyncing(true);
+      // Update AuthProvider state before navigating
+      checkUser().then(() => {
+        console.log('[Login] AuthProvider synced, navigating to:', from);
+        navigate(from, { replace: true });
+      }).catch((err) => {
+        console.error('[Login] Failed to sync AuthProvider:', err);
+        setSyncing(false);
+      });
     }
-  }, [user, from, navigate]);
+  }, [user, from, navigate, checkUser, syncing]);
+
+  if (syncing) {
+    return (
+      <Box textAlign="center" padding="l">
+        <SpaceBetween size="s">
+          <Spinner size="large" />
+          <Box variant="p" color="text-body-secondary">
+            Signing you in...
+          </Box>
+        </SpaceBetween>
+      </Box>
+    );
+  }
 
   return null;
 };
