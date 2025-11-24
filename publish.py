@@ -1667,6 +1667,39 @@ def get_existing_chat_config(table_name, region):
     return (False, '')
 
 
+def update_debug_html(cdn_url):
+    """
+    Update test-web-component-debug.html with new CDN URL.
+
+    Args:
+        cdn_url: CloudFront CDN URL for web component
+    """
+    debug_html = Path('test-web-component-debug.html')
+
+    if not debug_html.exists():
+        log_warning("test-web-component-debug.html not found, skipping update")
+        return
+
+    try:
+        content = debug_html.read_text()
+
+        # Find and replace the CloudFront script src
+        # Pattern: <script src="https://d*.cloudfront.net/amplify-chat.js"
+        import re
+        pattern = r'<script src="https://[a-z0-9]+\.cloudfront\.net/amplify-chat\.js"'
+        replacement = f'<script src="{cdn_url}"'
+
+        if re.search(pattern, content):
+            updated_content = re.sub(pattern, replacement, content)
+            debug_html.write_text(updated_content)
+            log_success(f"Updated test-web-component-debug.html with new CDN URL: {cdn_url}")
+        else:
+            log_warning("Could not find CloudFront script tag in test-web-component-debug.html")
+
+    except Exception as e:
+        log_warning(f"Failed to update debug HTML: {e}")
+
+
 def seed_configuration_table(stack_name, region, chat_deployed=False, chat_cdn_url=''):
     """
     Seed ConfigurationTable with Schema and Default configurations.
@@ -2048,6 +2081,9 @@ Examples:
                 # Update chat_deployed flag and CDN URL
                 seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
 
+                # Update debug HTML with new CDN URL
+                update_debug_html(cdn_url)
+
                 log_success(f"Chat CDN URL: {cdn_url}")
             except Exception as e:
                 log_error(f"Amplify deployment failed: {e}")
@@ -2227,6 +2263,9 @@ Examples:
                 # Update configuration with CDN URL now that deployment succeeded
                 log_info("Updating configuration with CDN URL...")
                 seed_configuration_table(stack_name, args.region, chat_deployed=True, chat_cdn_url=cdn_url)
+
+                # Update debug HTML with new CDN URL
+                update_debug_html(cdn_url)
 
                 log_success("Amplify chat backend deployed successfully!")
                 log_success(f"Chat CDN URL: {cdn_url}")

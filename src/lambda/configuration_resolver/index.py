@@ -131,8 +131,14 @@ def handle_get_configuration():
         logger.info("Returning configuration to client")
         logger.info(f"[getConfiguration] Default keys: {list(default_config.keys())}")
         logger.info(f"[getConfiguration] Custom keys: {list(custom_config.keys())}")
-        logger.info(f"[getConfiguration] Default.chat_allow_document_access: {default_config.get('chat_allow_document_access')}")
-        logger.info(f"[getConfiguration] Custom.chat_allow_document_access: {custom_config.get('chat_allow_document_access')}")
+        logger.info(
+            f"[getConfiguration] Default.chat_allow_document_access: "
+            f"{default_config.get('chat_allow_document_access')}"
+        )
+        logger.info(
+            f"[getConfiguration] Custom.chat_allow_document_access: "
+            f"{custom_config.get('chat_allow_document_access')}"
+        )
         return result
 
     except Exception:
@@ -155,7 +161,7 @@ def handle_update_configuration(custom_config):
 
         # Parse JSON if it's a string
         if isinstance(custom_config, str):
-            logger.info(f"[handleUpdate] Parsing custom_config from string")
+            logger.info("[handleUpdate] Parsing custom_config from string")
             custom_config_obj = json.loads(custom_config)
             logger.info(f"[handleUpdate] Parsed object: {custom_config_obj}")
         else:
