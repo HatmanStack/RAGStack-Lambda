@@ -4,10 +4,23 @@
  * A custom HTML element that wraps the ChatWithSources React component.
  * This allows the chat component to be used in any framework or vanilla JavaScript.
  *
+ * **Auto-Theming:** The component automatically fetches theme configuration from
+ * the Settings API (stored in DynamoDB). No manual theme setup required!
+ *
  * Usage:
  * ```html
  * <script src="https://your-cdn.com/amplify-chat.js"></script>
+ * <!-- Theme automatically applied from Settings -->
  * <amplify-chat conversation-id="my-chat"></amplify-chat>
+ * ```
+ *
+ * Override theme per instance:
+ * ```html
+ * <amplify-chat
+ *   conversation-id="my-chat"
+ *   theme-preset="dark"
+ *   theme-overrides='{"primaryColor": "#9c27b0"}'
+ * ></amplify-chat>
  * ```
  *
  * Attributes:
@@ -19,8 +32,8 @@
  * - max-width: Component max-width (default: "100%")
  * - user-id: User ID for authenticated mode (optional)
  * - user-token: Authentication token for authenticated mode (optional)
- * - theme-preset: Theme preset - light, dark, or brand (default: "light")
- * - theme-overrides: JSON string with theme overrides (optional)
+ * - theme-preset: Theme preset - light, dark, or brand (auto-fetched if not provided)
+ * - theme-overrides: JSON string with theme overrides (auto-fetched if not provided)
  *
  * Events:
  * - amplify-chat:send-message: Fired when user sends a message
@@ -31,6 +44,7 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ChatWithSources } from './ChatWithSources';
 import type { ChatWithSourcesProps, ChatMessage } from '../types';
+import { fetchThemeConfig } from '../utils/fetchThemeConfig';
 
 /**
  * AmplifyChat Web Component
@@ -40,6 +54,9 @@ import type { ChatWithSourcesProps, ChatMessage } from '../types';
  */
 class AmplifyChat extends HTMLElement {
   private root: Root | null = null;
+  private themeFetched = false;
+  private fetchedThemePreset: string | null = null;
+  private fetchedThemeOverrides: Record<string, unknown> | null = null;
 
   /**
    * Observed attributes for reactivity
@@ -65,11 +82,49 @@ class AmplifyChat extends HTMLElement {
   connectedCallback(): void {
     try {
       console.log('[AmplifyChat] connectedCallback - element added to DOM');
-      this.render();
+
+      // Fetch theme configuration if not provided via attributes
+      const hasThemeAttrs = this.hasAttribute('theme-preset') ||
+                           this.hasAttribute('theme-overrides');
+
+      if (!hasThemeAttrs && !this.themeFetched) {
+        console.log('[AmplifyChat] No theme attributes provided, fetching from API...');
+        this.fetchAndApplyTheme();
+      } else {
+        this.render();
+      }
+
       console.log('[AmplifyChat] render() completed successfully');
     } catch (error) {
       console.error('[AmplifyChat] Error in connectedCallback:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch theme configuration from Settings API and apply it
+   */
+  private async fetchAndApplyTheme(): Promise<void> {
+    try {
+      const theme = await fetchThemeConfig();
+
+      if (theme) {
+        this.themeFetched = true;
+        this.fetchedThemePreset = theme.themePreset;
+        this.fetchedThemeOverrides = theme.themeOverrides || null;
+
+        console.log('[AmplifyChat] Theme fetched successfully:', {
+          preset: this.fetchedThemePreset,
+          hasOverrides: !!this.fetchedThemeOverrides
+        });
+      } else {
+        console.log('[AmplifyChat] No theme fetched, using defaults');
+      }
+    } catch (error) {
+      console.warn('[AmplifyChat] Theme fetch failed, using defaults:', error);
+    } finally {
+      // Always render, even if theme fetch failed
+      this.render();
     }
   }
 
@@ -136,6 +191,14 @@ class AmplifyChat extends HTMLElement {
       }
 
       // Build props from attributes
+      // Use fetched theme if no attributes provided
+      const themePreset = super.getAttribute('theme-preset') ||
+                         this.fetchedThemePreset ||
+                         'light';
+      const themeOverrides = this.getThemeOverrides() ||
+                            this.fetchedThemeOverrides ||
+                            undefined;
+
       const props: ChatWithSourcesProps = {
         conversationId: this.getAttributeWithFallback(
           'conversation-id',
@@ -157,8 +220,8 @@ class AmplifyChat extends HTMLElement {
         maxWidth: this.getAttributeWithFallback('max-width', '100%'),
         userId: super.getAttribute('user-id') || null,
         userToken: super.getAttribute('user-token') || null,
-        themePreset: (super.getAttribute('theme-preset') || 'light') as 'light' | 'dark' | 'brand',
-        themeOverrides: this.getThemeOverrides(),
+        themePreset: themePreset as 'light' | 'dark' | 'brand',
+        themeOverrides: themeOverrides,
         onSendMessage: (message: string, conversationId: string) => {
           this.dispatchEvent(
             new CustomEvent('amplify-chat:send-message', {
