@@ -15,6 +15,10 @@ type Query {
 
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
+
+  # Get theme configuration (public, no auth required)
+  # Returns only theme-related settings for the chat web component
+  getThemeConfig: ThemeConfigResponse @aws_api_key @aws_iam
 }
 
 type Mutation {
@@ -119,6 +123,14 @@ type ConfigurationResponse @aws_cognito_user_pools {
   Schema: AWSJSON
   Default: AWSJSON
   Custom: AWSJSON
+}
+
+# Theme configuration for chat web component (public access)
+type ThemeConfigResponse @aws_api_key @aws_iam {
+  themePreset: String!
+  primaryColor: String
+  fontFamily: String
+  spacing: String
 }
 
 schema {

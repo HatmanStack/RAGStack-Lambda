@@ -1,11 +1,14 @@
 /**
- * Fetch theme configuration from the Settings API
+ * Fetch theme configuration from the SAM AppSync API
  *
- * This utility automatically fetches theme settings configured in the
- * Settings UI (stored in DynamoDB) and returns them for the web component.
+ * This utility fetches theme settings from the public getThemeConfig endpoint.
+ * It uses the SAM stack's GraphQL API (not the Amplify API) because theme
+ * config is stored in the SAM stack's DynamoDB table.
+ *
+ * The API endpoint and key are embedded at build time via inject-amplify-config.js
  */
 
-import { generateClient } from 'aws-amplify/api';
+import { THEME_API_CONFIG } from '../amplify-config.generated';
 
 export interface ThemeConfig {
   themePreset: 'light' | 'dark' | 'brand';
@@ -16,46 +19,79 @@ export interface ThemeConfig {
   };
 }
 
-const GET_CONFIG_QUERY = `
-  query GetConfiguration {
-    getConfiguration {
-      Schema
-      Default
-      Custom
+const GET_THEME_CONFIG_QUERY = `
+  query GetThemeConfig {
+    getThemeConfig {
+      themePreset
+      primaryColor
+      fontFamily
+      spacing
     }
   }
 `;
 
 /**
- * Fetch theme configuration from the GraphQL API
+ * Fetch theme configuration from the SAM GraphQL API
  *
  * @returns Promise<ThemeConfig | null> - Theme config or null if fetch fails
  */
 export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
   try {
-    console.log('[ThemeConfig] Fetching configuration from API...');
+    console.log('[ThemeConfig] Fetching theme from SAM API...');
 
-    const client = generateClient();
-    const response = await client.graphql({
-      query: GET_CONFIG_QUERY,
+    // Check if theme API config is available
+    if (!THEME_API_CONFIG?.endpoint || !THEME_API_CONFIG?.apiKey) {
+      console.warn('[ThemeConfig] Theme API config not available, using defaults');
+      return null;
+    }
+
+    // Set up timeout to prevent hanging in poor network conditions
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(THEME_API_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': THEME_API_CONFIG.apiKey,
+      },
+      body: JSON.stringify({
+        query: GET_THEME_CONFIG_QUERY,
+      }),
+      signal: controller.signal,
     });
 
-    // Parse the response
-    const configData = response.data.getConfiguration;
-    const defaultConfig = JSON.parse(configData.Default);
-    const customConfig = JSON.parse(configData.Custom || '{}');
+    clearTimeout(timeoutId);
 
-    // Merge custom over default (same logic as Settings UI)
-    const mergedConfig = { ...defaultConfig, ...customConfig };
+    if (!response.ok) {
+      console.warn(`[ThemeConfig] API returned ${response.status}`);
+      return null;
+    }
 
-    console.log('[ThemeConfig] Configuration loaded:', {
-      preset: mergedConfig.chat_theme_preset,
-      hasOverrides: !!mergedConfig.chat_theme_overrides,
-    });
+    const result = await response.json();
+
+    if (result.errors) {
+      console.warn('[ThemeConfig] GraphQL errors:', result.errors);
+      return null;
+    }
+
+    const themeData = result.data?.getThemeConfig;
+    if (!themeData) {
+      console.warn('[ThemeConfig] No theme data in response');
+      return null;
+    }
+
+    console.log('[ThemeConfig] Theme loaded:', themeData);
+
+    // Build theme config with overrides
+    const themeOverrides: ThemeConfig['themeOverrides'] = {};
+    if (themeData.primaryColor) themeOverrides.primaryColor = themeData.primaryColor;
+    if (themeData.fontFamily) themeOverrides.fontFamily = themeData.fontFamily;
+    if (themeData.spacing) themeOverrides.spacing = themeData.spacing;
 
     return {
-      themePreset: mergedConfig.chat_theme_preset || 'light',
-      themeOverrides: mergedConfig.chat_theme_overrides || {},
+      themePreset: themeData.themePreset || 'light',
+      themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : undefined,
     };
   } catch (err) {
     console.warn('[ThemeConfig] Failed to fetch theme configuration:', err);

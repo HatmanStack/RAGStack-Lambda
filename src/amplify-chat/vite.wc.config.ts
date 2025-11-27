@@ -26,7 +26,7 @@ export default defineConfig({
       entry: path.resolve(__dirname, 'src/wc.ts'),
       name: 'AmplifyChat',
       fileName: (format) => `wc.${format === 'es' ? 'esm.' : ''}js`,
-      formats: ['iife', 'es'],  // Changed from ['umd', 'es'] to ['iife', 'es']
+      formats: ['iife', 'es'],
     },
     cssCodeSplit: false,  // Inline all CSS into the JS bundle
     rollupOptions: {
