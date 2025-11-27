@@ -325,6 +325,140 @@ def check_sam_cli():
     return True
 
 
+def ensure_cdk_bootstrap(region):
+    """
+    Ensure CDK is bootstrapped in the target region.
+
+    CDK bootstrap creates the CDKToolkit stack with:
+    - S3 bucket for assets (cdk-hnb659fds-assets-{account}-{region})
+    - IAM roles for deployment
+    - SSM parameters for version tracking
+
+    This handles several cases:
+    - CDK not bootstrapped: runs bootstrap
+    - CDK bootstrapped and healthy: no action needed
+    - CDK stack exists but bucket deleted: deletes broken stack and re-bootstraps
+
+    Args:
+        region: AWS region to bootstrap
+
+    Returns:
+        bool: True if bootstrap is ready
+
+    Raises:
+        SystemExit: If bootstrap fails
+    """
+    log_info(f"Checking CDK bootstrap status in {region}...")
+
+    cf_client = boto3.client('cloudformation', region_name=region)
+    s3_client = boto3.client('s3', region_name=region)
+    sts_client = boto3.client('sts', region_name=region)
+
+    account_id = sts_client.get_caller_identity()['Account']
+    expected_bucket = f'cdk-hnb659fds-assets-{account_id}-{region}'
+
+    needs_bootstrap = False
+    needs_cleanup = False
+
+    # Check if CDKToolkit stack exists
+    try:
+        response = cf_client.describe_stacks(StackName='CDKToolkit')
+        stack_status = response['Stacks'][0]['StackStatus']
+
+        if stack_status in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
+            # Stack exists - verify bucket actually exists (may have been manually deleted)
+            try:
+                s3_client.head_bucket(Bucket=expected_bucket)
+                log_success(f"CDK bootstrapped in {region} (bucket verified)")
+                return True
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', '')
+                if error_code in ['404', 'NoSuchBucket']:
+                    log_warning(f"CDKToolkit stack exists but bucket {expected_bucket} is missing")
+                    log_warning("Stack is in inconsistent state - will delete and re-bootstrap")
+                    needs_cleanup = True
+                    needs_bootstrap = True
+                else:
+                    raise
+
+        elif stack_status in ['CREATE_IN_PROGRESS', 'UPDATE_IN_PROGRESS']:
+            log_info("CDK bootstrap in progress, waiting...")
+            waiter = cf_client.get_waiter('stack_create_complete')
+            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
+            log_success("CDK bootstrap complete")
+            return True
+
+        elif stack_status in ['DELETE_IN_PROGRESS']:
+            log_info("CDK stack being deleted, waiting...")
+            waiter = cf_client.get_waiter('stack_delete_complete')
+            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
+            needs_bootstrap = True
+
+        else:
+            log_warning(f"CDKToolkit stack in state: {stack_status}")
+            needs_cleanup = True
+            needs_bootstrap = True
+
+    except cf_client.exceptions.ClientError as e:
+        if 'does not exist' in str(e):
+            log_info(f"CDK not bootstrapped in {region}")
+            needs_bootstrap = True
+        else:
+            raise
+
+    # Clean up broken stack if needed
+    if needs_cleanup:
+        log_info("Deleting broken CDKToolkit stack...")
+        try:
+            cf_client.delete_stack(StackName='CDKToolkit')
+            waiter = cf_client.get_waiter('stack_delete_complete')
+            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
+            log_success("Broken CDKToolkit stack deleted")
+        except Exception as e:
+            log_error(f"Failed to delete CDKToolkit stack: {e}")
+            log_error("Please manually delete:")
+            log_error("  aws cloudformation delete-stack --stack-name CDKToolkit")
+            sys.exit(1)
+
+    # Run CDK bootstrap
+    if needs_bootstrap:
+        log_info(f"Bootstrapping CDK in {region}...")
+
+        bootstrap_cmd = [
+            'npx', 'cdk', 'bootstrap',
+            f'aws://{account_id}/{region}'
+        ]
+
+        log_info(f"Running: {' '.join(bootstrap_cmd)}")
+
+        try:
+            result = subprocess.run(
+                bootstrap_cmd,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+
+            if result.returncode != 0:
+                log_error("CDK bootstrap failed")
+                if result.stdout:
+                    log_error(f"stdout: {result.stdout}")
+                if result.stderr:
+                    log_error(f"stderr: {result.stderr}")
+                sys.exit(1)
+
+            log_success(f"CDK bootstrapped in {region}")
+
+        except subprocess.TimeoutExpired:
+            log_error("CDK bootstrap timed out after 5 minutes")
+            sys.exit(1)
+        except FileNotFoundError:
+            log_error("npx not found - ensure Node.js is installed")
+            sys.exit(1)
+
+    return True
+
+
 def get_codebuild_project_name(stack_name, region):
     """
     Get CodeBuild project name from SAM stack outputs.
@@ -2018,6 +2152,9 @@ Examples:
             # Note: No longer checking Amplify CLI since we use direct CDK deployment
             log_success("Prerequisites met")
 
+            # Ensure CDK is bootstrapped (required for Amplify deployment)
+            ensure_cdk_bootstrap(args.region)
+
             # Get KB ID and ConfigurationTable name from existing SAM stack
             stack_name = f"RAGStack-{args.project_name}"
             try:
@@ -2105,6 +2242,9 @@ Examples:
         # Docker check skipped for now
         # check_docker()
         log_success("All prerequisites met")
+
+        # Ensure CDK is bootstrapped (required for Amplify deployment)
+        ensure_cdk_bootstrap(args.region)
 
         # Create artifact bucket first
         try:

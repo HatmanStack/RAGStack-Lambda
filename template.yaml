@@ -569,6 +569,12 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*'
                   - !Sub 'arn:aws:s3:::${ProjectName}-artifacts-*/*'
+              # DynamoDB access for reading theme configuration
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !GetAtt ConfigurationTable.Arn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -601,10 +607,11 @@ Resources:
                 - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json ../../amplify_outputs.json
                 - echo "✓ amplify_outputs.json downloaded successfully"
                 - ls -lh ../../amplify_outputs.json
+                - echo "✓ SAM API endpoint for runtime theme fetching - $SAM_API_ENDPOINT"
             build:
               commands:
-                - echo "Building web component..."
-                - npm run build:wc
+                - echo "Building web component with runtime theme API..."
+                - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" SAM_GRAPHQL_API_KEY="$SAM_API_KEY" npm run build:wc
                 - ls -lh dist/
             post_build:
               commands:
@@ -625,6 +632,12 @@ Resources:
             Value: !Ref WebComponentDistribution
           - Name: ARTIFACT_BUCKET
             Value: !Ref UISourceBucket
+          - Name: CONFIG_TABLE
+            Value: !Ref ConfigurationTable
+          - Name: SAM_API_ENDPOINT
+            Value: !GetAtt GraphQLApi.GraphQLUrl
+          - Name: SAM_API_KEY
+            Value: !GetAtt GraphQLApiKey.ApiKey
       TimeoutInMinutes: 15
       Tags:
         - Key: Project
@@ -1379,6 +1392,7 @@ Resources:
         DefaultAction: ALLOW
       AdditionalAuthenticationProviders:
         - AuthenticationType: AWS_IAM
+        - AuthenticationType: API_KEY
       LogConfig:
         CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
         FieldLogLevel: ERROR
@@ -1388,6 +1402,16 @@ Resources:
     Properties:
       ApiId: !GetAtt GraphQLApi.ApiId
       DefinitionS3Location: ./src/api/schema.graphql
+
+  # API Key for public access (theme config)
+  # Expires Nov 2026. Redeploy to refresh the key.
+  GraphQLApiKey:
+    Type: AWS::AppSync::ApiKey
+    DependsOn: GraphQLApi
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Description: Public API key for theme configuration
+      Expires: 1795791181
 
   AppSyncLogsRole:
     Type: AWS::IAM::Role
@@ -1625,6 +1649,15 @@ Resources:
       ApiId: !GetAtt GraphQLApi.ApiId
       TypeName: Mutation
       FieldName: updateConfiguration
+      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  GetThemeConfigResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getThemeConfig
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
   # =========================================================================
@@ -2089,33 +2122,33 @@ Resources:
                   codebuild_role_arn = event['ResourceProperties']['CodeBuildRoleArn']
 
                   if request_type in ['Create', 'Update']:
-                      # Get existing bucket policy
+                      # Get existing bucket policy (handle bucket not existing or no access)
                       try:
                           response = s3.get_bucket_policy(Bucket=bucket_name)
                           policy = json.loads(response['Policy'])
-                      except s3.exceptions.from_code('NoSuchBucketPolicy'):
-                          # No existing policy, create new one
-                          policy = {
-                              'Version': '2012-10-17',
-                              'Statement': []
-                          }
+                      except s3.exceptions.ClientError as e:
+                          error_code = e.response.get('Error', {}).get('Code', '')
+                          if error_code == 'NoSuchBucketPolicy':
+                              # No existing policy, create new one
+                              policy = {'Version': '2012-10-17', 'Statement': []}
+                          elif error_code in ['NoSuchBucket', '404']:
+                              print(f"CDK bucket {bucket_name} does not exist - skipping")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'NoSuchBucket'})
+                              return
+                          elif error_code in ['AccessDenied', '403']:
+                              print(f"No access to CDK bucket {bucket_name} - skipping (CDK manages its own policy)")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'AccessDenied'})
+                              return
+                          else:
+                              raise
 
                       # Add statement to allow CodeBuild role
                       new_statement = {
                           'Sid': 'AllowCodeBuildAccess',
                           'Effect': 'Allow',
-                          'Principal': {
-                              'AWS': codebuild_role_arn
-                          },
-                          'Action': [
-                              's3:GetObject',
-                              's3:PutObject',
-                              's3:ListBucket'
-                          ],
-                          'Resource': [
-                              f'arn:aws:s3:::{bucket_name}/*',
-                              f'arn:aws:s3:::{bucket_name}'
-                          ]
+                          'Principal': {'AWS': codebuild_role_arn},
+                          'Action': ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+                          'Resource': [f'arn:aws:s3:::{bucket_name}/*', f'arn:aws:s3:::{bucket_name}']
                       }
 
                       # Remove any existing statement with same Sid
@@ -2123,12 +2156,17 @@ Resources:
                       policy['Statement'].append(new_statement)
 
                       # Update bucket policy
-                      s3.put_bucket_policy(
-                          Bucket=bucket_name,
-                          Policy=json.dumps(policy)
-                      )
+                      try:
+                          s3.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+                          print(f"Updated bucket policy for {bucket_name}")
+                      except s3.exceptions.ClientError as e:
+                          error_code = e.response.get('Error', {}).get('Code', '')
+                          if error_code in ['AccessDenied', '403']:
+                              print(f"Cannot update CDK bucket policy - skipping (CDK manages its own policy)")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'AccessDenied'})
+                              return
+                          raise
 
-                      print(f"Updated bucket policy for {bucket_name}")
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
 
                   elif request_type == 'Delete':
@@ -2210,25 +2248,36 @@ Resources:
                   policy_name = 'AllowPassCodeBuildRole'
 
                   if request_type in ['Create', 'Update']:
+                      # Check if CDK deploy role exists (CDK bootstrap may not have run yet)
+                      try:
+                          iam.get_role(RoleName=deploy_role_name)
+                      except iam.exceptions.NoSuchEntityException:
+                          print(f"CDK deploy role {deploy_role_name} does not exist yet - skipping")
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'RoleNotFound'})
+                          return
+                      except iam.exceptions.ClientError as e:
+                          if e.response.get('Error', {}).get('Code') == 'AccessDenied':
+                              print(f"No access to CDK role {deploy_role_name} - skipping")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'AccessDenied'})
+                              return
+                          raise
+
                       # Create or update inline policy on CDK deploy role
                       policy_document = {
                           'Version': '2012-10-17',
-                          'Statement': [
-                              {
-                                  'Effect': 'Allow',
-                                  'Action': 'iam:PassRole',
-                                  'Resource': codebuild_role_arn
-                              }
-                          ]
+                          'Statement': [{'Effect': 'Allow', 'Action': 'iam:PassRole', 'Resource': codebuild_role_arn}]
                       }
 
-                      iam.put_role_policy(
-                          RoleName=deploy_role_name,
-                          PolicyName=policy_name,
-                          PolicyDocument=json.dumps(policy_document)
-                      )
+                      try:
+                          iam.put_role_policy(RoleName=deploy_role_name, PolicyName=policy_name, PolicyDocument=json.dumps(policy_document))
+                          print(f"Updated {deploy_role_name} with iam:PassRole for {codebuild_role_arn}")
+                      except iam.exceptions.ClientError as e:
+                          if e.response.get('Error', {}).get('Code') == 'AccessDenied':
+                              print(f"Cannot update CDK role policy - skipping")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Skipped': 'AccessDenied'})
+                              return
+                          raise
 
-                      print(f"Updated {deploy_role_name} with iam:PassRole for {codebuild_role_arn}")
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
 
                   elif request_type == 'Delete':
@@ -2269,6 +2318,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - iam:GetRole
                   - iam:PutRolePolicy
                   - iam:DeleteRolePolicy
                   - iam:GetRolePolicy
@@ -2695,6 +2745,12 @@ Outputs:
     Value: !GetAtt GraphQLApi.ApiId
     Export:
       Name: !Sub '${AWS::StackName}-GraphQLApiId'
+
+  GraphQLApiKey:
+    Description: GraphQL API Key for public theme config access
+    Value: !GetAtt GraphQLApiKey.ApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-GraphQLApiKey'
 
   UserPoolId:
     Description: Cognito User Pool ID

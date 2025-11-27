@@ -16,7 +16,10 @@
 console.log('[AmplifyChat] Bundle loading...');
 
 import { Amplify } from 'aws-amplify';
-import { AMPLIFY_OUTPUTS } from './amplify-config.generated';
+import { AMPLIFY_OUTPUTS, THEME_CONFIG } from './amplify-config.generated';
+
+// Export theme config for use by web component
+export { THEME_CONFIG };
 
 // Configure Amplify with bundled config (zero-config embedding)
 try {

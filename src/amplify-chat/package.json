@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "tsc && npm run build:wc",
-    "build:wc": "node scripts/inject-amplify-config.js && vite build --config vite.wc.config.ts",
+    "build:wc": "node scripts/inject-amplify-config.js && vite build --config vite.wc.config.ts && node scripts/inject-css-to-bundle.js",
     "build:watch": "tsc --watch",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
