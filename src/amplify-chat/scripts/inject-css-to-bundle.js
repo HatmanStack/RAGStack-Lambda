@@ -27,7 +27,7 @@ function main() {
   }
 
   if (!fs.existsSync(CSS_FILE)) {
-    console.warn('⚠ Warning: dist/style.css not found. Skipping CSS injection.');
+    console.log('ℹ CSS file not found (styles may be inlined by bundler). Skipping CSS injection.');
     return;
   }
 

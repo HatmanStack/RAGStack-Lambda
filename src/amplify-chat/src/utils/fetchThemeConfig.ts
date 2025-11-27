@@ -45,6 +45,10 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
       return null;
     }
 
+    // Set up timeout to prevent hanging in poor network conditions
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(THEME_API_CONFIG.endpoint, {
       method: 'POST',
       headers: {
@@ -54,7 +58,10 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
       body: JSON.stringify({
         query: GET_THEME_CONFIG_QUERY,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.warn(`[ThemeConfig] API returned ${response.status}`);

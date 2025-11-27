@@ -1404,14 +1404,60 @@ Resources:
       DefinitionS3Location: ./src/api/schema.graphql
 
   # API Key for public access (theme config)
-  # Expires Nov 2026. Redeploy to refresh the key.
+  # Initial key - will be auto-rotated by RotateApiKeyFunction
   GraphQLApiKey:
     Type: AWS::AppSync::ApiKey
-    DependsOn: GraphQLApi
     Properties:
       ApiId: !GetAtt GraphQLApi.ApiId
       Description: Public API key for theme configuration
       Expires: 1795791181
+
+  # API Key Rotation Lambda
+  RotateApiKeyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-rotate-api-key-${DeploymentSuffix}'
+      CodeUri: src/lambda/rotate_api_key/
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          APPSYNC_API_ID: !GetAtt GraphQLApi.ApiId
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - appsync:ListApiKeys
+                - appsync:CreateApiKey
+                - appsync:DeleteApiKey
+              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
+  # EventBridge rule to rotate API key monthly (ensures rotation before 365-day expiry)
+  ApiKeyRotationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-api-key-rotation-${DeploymentSuffix}'
+      Description: Monthly rotation of AppSync API key for theme config
+      ScheduleExpression: 'rate(30 days)'
+      State: ENABLED
+      Targets:
+        - Id: RotateApiKeyTarget
+          Arn: !GetAtt RotateApiKeyFunction.Arn
+
+  # Permission for EventBridge to invoke the rotation Lambda
+  ApiKeyRotationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RotateApiKeyFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ApiKeyRotationSchedule.Arn
 
   AppSyncLogsRole:
     Type: AWS::IAM::Role

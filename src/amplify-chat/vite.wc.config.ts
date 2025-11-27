@@ -1,43 +1,6 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-
-/**
- * Custom plugin to inject CSS into IIFE bundle
- * Vite doesn't automatically inject CSS in library mode IIFE builds,
- * so we need to do it manually.
- */
-function injectCssPlugin(): Plugin {
-  let cssContent = '';
-
-  return {
-    name: 'inject-css',
-    apply: 'build',
-    generateBundle(options, bundle) {
-      // Collect CSS from any .css files
-      for (const fileName in bundle) {
-        const chunk = bundle[fileName];
-        if (chunk.type === 'asset' && fileName.endsWith('.css')) {
-          cssContent += chunk.source;
-          // Remove the CSS file from the bundle (we'll inline it)
-          delete bundle[fileName];
-        }
-      }
-
-      // Inject CSS into the JS bundle
-      if (cssContent) {
-        for (const fileName in bundle) {
-          const chunk = bundle[fileName];
-          if (chunk.type === 'chunk' && chunk.isEntry) {
-            // Prepend CSS injection code to the bundle
-            const cssInjection = `(function(){var s=document.createElement('style');s.textContent=${JSON.stringify(cssContent)};document.head.appendChild(s);})();`;
-            chunk.code = cssInjection + chunk.code;
-          }
-        }
-      }
-    },
-  };
-}
 
 /**
  * Vite configuration for building the Web Component as an IIFE bundle
@@ -51,7 +14,7 @@ function injectCssPlugin(): Plugin {
  */
 
 export default defineConfig({
-  plugins: [react(), injectCssPlugin()],
+  plugins: [react()],
   define: {
     // Replace Node.js globals with browser-compatible values
     'process.env.NODE_ENV': JSON.stringify('production'),

@@ -110,15 +110,23 @@ def handle_get_theme_config():
         custom_item = get_configuration_item("Custom")
         custom_config = remove_partition_key(custom_item) if custom_item else {}
 
-        # Merge: Custom overrides Default
+        # Theme overrides are nested under chat_theme_overrides object
+        default_overrides = default_config.get("chat_theme_overrides") or {}
+        custom_overrides = custom_config.get("chat_theme_overrides") or {}
+
+        # Custom overrides Default for top-level fields
         def get_value(key, default=None):
             return custom_config.get(key) or default_config.get(key) or default
 
+        # Custom overrides Default for nested override fields
+        def get_override(key, default=None):
+            return custom_overrides.get(key) or default_overrides.get(key) or default
+
         result = {
             "themePreset": get_value("chat_theme_preset", "light"),
-            "primaryColor": get_value("chat_primary_color"),
-            "fontFamily": get_value("chat_font_family"),
-            "spacing": get_value("chat_spacing"),
+            "primaryColor": get_override("primaryColor"),
+            "fontFamily": get_override("fontFamily"),
+            "spacing": get_override("spacing"),
         }
 
         logger.info(f"Returning theme config: {result}")
