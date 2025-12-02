@@ -1,0 +1,15 @@
+{
+  "arguments": {
+    "url": "https://docs.example.com",
+    "config": {
+      "maxPages": 100,
+      "maxDepth": 3,
+      "scope": "subpages",
+      "requestDelayMs": 500
+    }
+  },
+  "info": {
+    "fieldName": "startScrapeJob",
+    "parentTypeName": "Mutation"
+  }
+}
