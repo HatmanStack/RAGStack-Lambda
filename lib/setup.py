@@ -26,6 +26,11 @@ setup(
         "boto3>=1.34.0",
         "PyMuPDF>=1.23.0",
         "Pillow>=10.0.0",
+        # Scraping dependencies
+        "httpx>=0.27.0",
+        "beautifulsoup4>=4.12.0",
+        "markdownify>=0.13.0",
+        "lxml>=5.0.0",
     ],
     author="Development Team",
     license="MIT-0",
