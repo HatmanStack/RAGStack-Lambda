@@ -1,0 +1,237 @@
+{
+  "Comment": "Web scraping workflow - manages discovery and processing phases",
+  "StartAt": "InitializeJob",
+  "States": {
+    "InitializeJob": {
+      "Type": "Pass",
+      "Comment": "Initialize job state from input",
+      "Parameters": {
+        "job_id.$": "$.job_id",
+        "base_url.$": "$.base_url",
+        "config.$": "$.config"
+      },
+      "Next": "WaitForDiscovery"
+    },
+
+    "WaitForDiscovery": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "CheckDiscoveryStatus"
+    },
+
+    "CheckDiscoveryStatus": {
+      "Type": "Task",
+      "Resource": "${ScrapeStatusFunctionArn}",
+      "Parameters": {
+        "job_id.$": "$.job_id"
+      },
+      "ResultPath": "$.status",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "IsDiscoveryComplete"
+    },
+
+    "IsDiscoveryComplete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status.failure_threshold_exceeded",
+          "BooleanEquals": true,
+          "Next": "FailJob"
+        },
+        {
+          "Variable": "$.status.discovery_complete",
+          "BooleanEquals": false,
+          "Next": "WaitForDiscovery"
+        }
+      ],
+      "Default": "TransitionToProcessing"
+    },
+
+    "TransitionToProcessing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ScrapeJobsTable}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, updated_at = :ts",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "processing"
+          },
+          ":ts": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "WaitForProcessing"
+    },
+
+    "WaitForProcessing": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "CheckProcessingStatus"
+    },
+
+    "CheckProcessingStatus": {
+      "Type": "Task",
+      "Resource": "${ScrapeStatusFunctionArn}",
+      "Parameters": {
+        "job_id.$": "$.job_id"
+      },
+      "ResultPath": "$.status",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "IsProcessingComplete"
+    },
+
+    "IsProcessingComplete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status.failure_threshold_exceeded",
+          "BooleanEquals": true,
+          "Next": "FailJob"
+        },
+        {
+          "Variable": "$.status.is_complete",
+          "BooleanEquals": false,
+          "Next": "WaitForProcessing"
+        }
+      ],
+      "Default": "EvaluateResults"
+    },
+
+    "EvaluateResults": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status.failed_count",
+          "NumericGreaterThan": 0,
+          "Next": "CompleteWithErrors"
+        }
+      ],
+      "Default": "CompleteJob"
+    },
+
+    "CompleteJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ScrapeJobsTable}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, updated_at = :ts",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "completed"
+          },
+          ":ts": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "SuccessState"
+    },
+
+    "CompleteWithErrors": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ScrapeJobsTable}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, updated_at = :ts",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "completed_with_errors"
+          },
+          ":ts": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "SuccessState"
+    },
+
+    "FailJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ScrapeJobsTable}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, updated_at = :ts",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "failed"
+          },
+          ":ts": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "FailState"
+    },
+
+    "SuccessState": {
+      "Type": "Pass",
+      "Parameters": {
+        "job_id.$": "$.job_id",
+        "status.$": "$.status.status",
+        "total_urls.$": "$.status.total_urls",
+        "processed_count.$": "$.status.processed_count",
+        "failed_count.$": "$.status.failed_count",
+        "message": "Scrape job completed successfully"
+      },
+      "End": true
+    },
+
+    "FailState": {
+      "Type": "Fail",
+      "Error": "ScrapeJobFailed",
+      "Cause": "Scrape job failed due to excessive errors"
+    }
+  }
+}

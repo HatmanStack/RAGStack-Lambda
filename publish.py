@@ -2089,6 +2089,28 @@ Examples:
         help="Remove Amplify stacks for the specified project (leaves SAM stack intact)"
     )
 
+    # Scrape configuration arguments
+    parser.add_argument(
+        "--scrape-max-pages",
+        type=int,
+        default=1000,
+        help="Default maximum pages per scrape job (default: 1000)"
+    )
+
+    parser.add_argument(
+        "--scrape-max-depth",
+        type=int,
+        default=3,
+        help="Default crawl depth for scrape jobs (default: 3)"
+    )
+
+    parser.add_argument(
+        "--scrape-request-delay",
+        type=int,
+        default=500,
+        help="Delay between requests in milliseconds (default: 500)"
+    )
+
     args = parser.parse_args()
 
     # Handle cleanup mode
