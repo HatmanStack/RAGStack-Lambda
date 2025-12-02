@@ -14,13 +14,13 @@ This shared library provides utilities for Lambda functions including:
 - Data models and schemas
 """
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="ragstack_common",
     version="0.1.0",
     description="Shared utilities for Lambda functions",
-    packages=["ragstack_common"],
+    packages=find_packages(),
     python_requires=">=3.12",
     install_requires=[
         "boto3>=1.34.0",
