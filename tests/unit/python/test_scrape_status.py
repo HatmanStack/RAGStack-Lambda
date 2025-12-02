@@ -19,8 +19,8 @@ def _load_scrape_status_module():
 
 
 @pytest.fixture
-def mock_env(monkeypatch):
-    """Set up environment variables for tests."""
+def _mock_env(monkeypatch):
+    """Set up environment variables for tests (underscore prefix for side-effect fixture)."""
     monkeypatch.setenv("SCRAPE_JOBS_TABLE", "test-jobs-table")
     monkeypatch.setenv("SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/disc")
     monkeypatch.setenv("SCRAPE_PROCESSING_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/proc")
@@ -39,14 +39,14 @@ class TestScrapeStatusHandler:
         with pytest.raises(ValueError, match="SCRAPE_JOBS_TABLE"):
             module.lambda_handler({"job_id": "test-job"}, None)
 
-    def test_missing_job_id(self, mock_env):
+    def test_missing_job_id(self, _mock_env):
         """Test error when job_id is missing."""
         module = _load_scrape_status_module()
 
         with pytest.raises(ValueError, match="job_id is required"):
             module.lambda_handler({}, None)
 
-    def test_job_not_found(self, mock_env):
+    def test_job_not_found(self, _mock_env):
         """Test error when job doesn't exist."""
         with patch("boto3.resource") as mock_resource:
             mock_table = MagicMock()
@@ -60,7 +60,7 @@ class TestScrapeStatusHandler:
             with pytest.raises(ValueError, match="Job not found"):
                 module.lambda_handler({"job_id": "nonexistent-job"}, None)
 
-    def test_successful_status_check(self, mock_env):
+    def test_successful_status_check(self, _mock_env):
         """Test successful status check."""
         with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
             mock_table = MagicMock()
@@ -99,7 +99,7 @@ class TestScrapeStatusHandler:
             assert result["discovery_complete"] is True
             assert result["processing_complete"] is True
 
-    def test_failure_threshold_exceeded(self, mock_env):
+    def test_failure_threshold_exceeded(self, _mock_env):
         """Test failure threshold detection."""
         with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
             mock_table = MagicMock()
@@ -131,7 +131,7 @@ class TestScrapeStatusHandler:
 
             assert result["failure_threshold_exceeded"] is True
 
-    def test_queues_not_empty(self, mock_env):
+    def test_queues_not_empty(self, _mock_env):
         """Test detection of non-empty queues."""
         with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
             mock_table = MagicMock()

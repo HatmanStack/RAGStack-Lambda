@@ -802,7 +802,7 @@ def create_sam_artifact_bucket(project_name, region):
     return bucket_name
 
 
-def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
+def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False, scrape_config=None):
     """
     Deploy SAM application with project-based naming.
 
@@ -867,6 +867,17 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     if wc_source_key:
         log_info("Web component will be deployed via CodeBuild during stack creation")
         param_overrides.append(f"WebComponentSourceKey={wc_source_key}")
+
+    # Add scrape configuration if provided
+    if scrape_config:
+        if scrape_config.get("max_pages"):
+            param_overrides.append(f"ScrapeMaxPages={scrape_config['max_pages']}")
+        if scrape_config.get("max_depth"):
+            param_overrides.append(f"ScrapeMaxDepth={scrape_config['max_depth']}")
+        if scrape_config.get("request_delay"):
+            param_overrides.append(f"ScrapeRequestDelayMs={scrape_config['request_delay']}")
+        if scrape_config.get("playwright_layer_arn"):
+            param_overrides.append(f"PlaywrightLayerArn={scrape_config['playwright_layer_arn']}")
 
     cmd = [
         "sam", "deploy",
@@ -2111,6 +2122,13 @@ Examples:
         help="Delay between requests in milliseconds (default: 500)"
     )
 
+    parser.add_argument(
+        "--playwright-layer-arn",
+        type=str,
+        default="",
+        help="ARN of Playwright/Chromium Lambda layer (optional, for Phase 2)"
+    )
+
     args = parser.parse_args()
 
     # Handle cleanup mode
@@ -2310,6 +2328,12 @@ Examples:
             sys.exit(1)
 
         # SAM deploy with UI and web component parameters
+        scrape_config = {
+            "max_pages": args.scrape_max_pages,
+            "max_depth": args.scrape_max_depth,
+            "request_delay": args.scrape_request_delay,
+            "playwright_layer_arn": args.playwright_layer_arn if args.playwright_layer_arn else None,
+        }
         stack_name = sam_deploy(
             args.project_name,
             args.admin_email,
@@ -2317,7 +2341,8 @@ Examples:
             artifact_bucket,
             ui_source_key=ui_source_key,
             wc_source_key=wc_source_key,
-            skip_ui=args.skip_ui
+            skip_ui=args.skip_ui,
+            scrape_config=scrape_config
         )
 
         # Get outputs

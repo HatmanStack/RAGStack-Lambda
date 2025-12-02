@@ -1,7 +1,6 @@
 """Unit tests for scrape_start Lambda handler."""
 
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -20,8 +19,8 @@ def _load_scrape_start_module():
 
 
 @pytest.fixture
-def mock_env(monkeypatch):
-    """Set up environment variables for tests."""
+def _mock_env(monkeypatch):
+    """Set up environment variables for tests (underscore prefix for side-effect fixture)."""
     monkeypatch.setenv("SCRAPE_JOBS_TABLE", "test-jobs-table")
     monkeypatch.setenv("SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/queue")
     monkeypatch.setenv("SCRAPE_STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
@@ -42,21 +41,21 @@ class TestScrapeStartHandler:
         with pytest.raises(ValueError, match="SCRAPE_JOBS_TABLE"):
             module.lambda_handler({"base_url": "https://example.com"}, None)
 
-    def test_missing_base_url(self, mock_env):
+    def test_missing_base_url(self, _mock_env):
         """Test error when base_url is missing."""
         module = _load_scrape_start_module()
 
         with pytest.raises(ValueError, match="base_url is required"):
             module.lambda_handler({}, None)
 
-    def test_invalid_url_format(self, mock_env):
+    def test_invalid_url_format(self, _mock_env):
         """Test error when URL doesn't start with http/https."""
         module = _load_scrape_start_module()
 
         with pytest.raises(ValueError, match="must start with http"):
             module.lambda_handler({"base_url": "ftp://example.com"}, None)
 
-    def test_successful_job_creation(self, mock_env):
+    def test_successful_job_creation(self, _mock_env):
         """Test successful job creation."""
         with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
             # Mock DynamoDB
@@ -102,7 +101,7 @@ class TestScrapeStartHandler:
 class TestConfigParsing:
     """Tests for config parsing."""
 
-    def test_default_config_values(self, mock_env):
+    def test_default_config_values(self, _mock_env):
         """Test that default config values are used."""
         with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
             mock_table = MagicMock()

@@ -21,8 +21,8 @@ def _load_process_document_module():
 
 
 @pytest.fixture
-def mock_env(monkeypatch):
-    """Set up environment variables for tests."""
+def _mock_env(monkeypatch):
+    """Set up environment variables for tests (underscore prefix for side-effect fixture)."""
     monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
 
@@ -30,7 +30,7 @@ def mock_env(monkeypatch):
 class TestMarkdownPassthrough:
     """Tests for scraped markdown passthrough logic."""
 
-    def test_parse_s3_uri(self, mock_env):
+    def test_parse_s3_uri(self, _mock_env):
         """Test S3 URI parsing."""
         module = _load_process_document_module()
 
@@ -38,14 +38,14 @@ class TestMarkdownPassthrough:
         assert bucket == "my-bucket"
         assert key == "path/to/file.txt"
 
-    def test_parse_s3_uri_invalid(self, mock_env):
+    def test_parse_s3_uri_invalid(self, _mock_env):
         """Test S3 URI parsing with invalid URI."""
         module = _load_process_document_module()
 
         with pytest.raises(ValueError, match="Invalid S3 URI"):
             module._parse_s3_uri("http://not-s3/path/file.txt")
 
-    def test_scraped_md_passthrough(self, mock_env):
+    def test_scraped_md_passthrough(self, _mock_env):
         """Test that .scraped.md files skip OCR."""
         with patch("boto3.client") as mock_boto3_client:
             # Mock S3
@@ -87,7 +87,7 @@ class TestMarkdownPassthrough:
 class TestS3UriParsing:
     """Tests for S3 URI parsing edge cases."""
 
-    def test_parse_uri_with_nested_path(self, mock_env):
+    def test_parse_uri_with_nested_path(self, _mock_env):
         """Test parsing URI with deeply nested path."""
         module = _load_process_document_module()
 
@@ -95,7 +95,7 @@ class TestS3UriParsing:
         assert bucket == "bucket"
         assert key == "a/b/c/d/file.txt"
 
-    def test_parse_uri_with_special_chars(self, mock_env):
+    def test_parse_uri_with_special_chars(self, _mock_env):
         """Test parsing URI with special characters."""
         module = _load_process_document_module()
 
