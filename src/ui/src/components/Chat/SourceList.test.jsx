@@ -94,4 +94,70 @@ describe('SourceList', () => {
     expect(screen.getByText('doc.pdf')).toBeInTheDocument();
     expect(screen.getByText(/Page 1/i)).toBeInTheDocument();
   });
+
+  it('displays source URL as external link for scraped content', () => {
+    const sources = [
+      {
+        documentId: 'abc123',
+        isScraped: true,
+        sourceUrl: 'https://docs.example.com/page1',
+        snippet: 'Some content from scraped page',
+        documentUrl: 'https://s3.example.com/abc123.scraped.md'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show the source URL as text
+    expect(screen.getByText(/docs\.example\.com\/page1/i)).toBeInTheDocument();
+  });
+
+  it('shows download markdown link for scraped content', () => {
+    const sources = [
+      {
+        documentId: 'abc123',
+        isScraped: true,
+        sourceUrl: 'https://docs.example.com/page1',
+        snippet: 'Content',
+        documentUrl: 'https://s3.example.com/abc123.scraped.md'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    expect(screen.getByText('Download markdown')).toBeInTheDocument();
+  });
+
+  it('does not show page number for scraped content', () => {
+    const sources = [
+      {
+        documentId: 'abc123',
+        pageNumber: 1,
+        isScraped: true,
+        sourceUrl: 'https://docs.example.com/page1',
+        snippet: 'Content'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Page number should not be shown for scraped content
+    expect(screen.queryByText(/Page 1/i)).not.toBeInTheDocument();
+  });
+
+  it('falls back to documentId when scraped source has no sourceUrl', () => {
+    const sources = [
+      {
+        documentId: 'abc123',
+        isScraped: true,
+        sourceUrl: null,
+        snippet: 'Content'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show documentId when sourceUrl is missing
+    expect(screen.getByText('abc123')).toBeInTheDocument();
+  });
 });

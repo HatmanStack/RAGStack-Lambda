@@ -88,7 +88,7 @@ export const useScrape = () => {
         variables: { url }
       });
       return response.data.checkScrapeUrl;
-    } catch (err) {
+    } catch {
       return null; // Ignore errors, proceed with scrape
     }
   }, []);
