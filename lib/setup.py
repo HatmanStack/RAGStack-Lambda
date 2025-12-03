@@ -14,18 +14,23 @@ This shared library provides utilities for Lambda functions including:
 - Data models and schemas
 """
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="ragstack_common",
     version="0.1.0",
     description="Shared utilities for Lambda functions",
-    packages=["ragstack_common"],
+    packages=find_packages(exclude=["tests*", "*.tests*"]),
     python_requires=">=3.12",
     install_requires=[
         "boto3>=1.34.0",
         "PyMuPDF>=1.23.0",
         "Pillow>=10.0.0",
+        # Scraping dependencies
+        "httpx>=0.27.0",
+        "beautifulsoup4>=4.12.0",
+        "markdownify>=0.13.0",
+        "lxml>=5.0.0",
     ],
     author="Development Team",
     license="MIT-0",

@@ -19,6 +19,15 @@ type Query {
   # Get theme configuration (public, no auth required)
   # Returns only theme-related settings for the chat web component
   getThemeConfig: ThemeConfigResponse @aws_api_key @aws_iam
+
+  # Get scrape job by ID with pages
+  getScrapeJob(jobId: ID!): ScrapeJobDetail
+
+  # List all scrape jobs (paginated)
+  listScrapeJobs(limit: Int, nextToken: String): ScrapeJobConnection
+
+  # Check if a URL has been scraped before
+  checkScrapeUrl(url: String!): ScrapeUrlCheck
 }
 
 type Mutation {
@@ -30,6 +39,12 @@ type Mutation {
 
   # Update custom configuration
   updateConfiguration(customConfig: AWSJSON!): Boolean
+
+  # Start a new web scraping job
+  startScrape(input: StartScrapeInput!): ScrapeJob
+
+  # Cancel an in-progress scrape job
+  cancelScrape(jobId: ID!): ScrapeJob
 }
 
 # Document type
@@ -131,6 +146,103 @@ type ThemeConfigResponse @aws_api_key @aws_iam {
   primaryColor: String
   fontFamily: String
   spacing: String
+}
+
+# =========================================================================
+# Scrape Types
+# =========================================================================
+
+# Scrape job status enum
+enum ScrapeStatus {
+  PENDING
+  DISCOVERING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+# URL scope enforcement for crawling
+enum ScrapeScope {
+  SUBPAGES   # Only URLs under the base path
+  HOSTNAME   # Any URL on the same hostname
+  DOMAIN     # Any URL on the same domain (includes subdomains)
+}
+
+# Scrape mode for content fetching
+enum ScrapeMode {
+  FAST   # HTTP fetch only
+  FULL   # Always use Playwright
+  AUTO   # Auto-detect based on content
+}
+
+# Scrape job configuration
+type ScrapeConfig {
+  maxPages: Int!
+  maxDepth: Int!
+  scope: ScrapeScope!
+  includePatterns: [String!]
+  excludePatterns: [String!]
+  scrapeMode: ScrapeMode
+  cookies: String
+}
+
+# Input for starting a scrape job
+input StartScrapeInput {
+  url: String!
+  maxPages: Int
+  maxDepth: Int
+  scope: ScrapeScope
+  includePatterns: [String!]
+  excludePatterns: [String!]
+  scrapeMode: ScrapeMode
+  cookies: String
+}
+
+# Scrape job type
+type ScrapeJob {
+  jobId: ID!
+  baseUrl: String!
+  title: String
+  status: ScrapeStatus!
+  config: ScrapeConfig!
+  totalUrls: Int!
+  processedCount: Int!
+  failedCount: Int!
+  failedUrls: [String!]
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Scrape job with pages
+type ScrapeJobDetail {
+  job: ScrapeJob!
+  pages: [ScrapePage!]!
+}
+
+# Individual scraped page
+type ScrapePage {
+  url: String!
+  title: String
+  status: String!
+  documentId: ID
+  error: String
+  depth: Int!
+}
+
+# Paginated scrape job list
+type ScrapeJobConnection {
+  items: [ScrapeJob!]!
+  nextToken: String
+}
+
+# URL check result for duplicate detection
+type ScrapeUrlCheck {
+  exists: Boolean!
+  lastScrapedAt: AWSDateTime
+  jobId: ID
+  title: String
 }
 
 schema {

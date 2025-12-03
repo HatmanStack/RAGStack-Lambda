@@ -19,6 +19,11 @@ export const Navigation = () => {
     },
     {
       type: 'link',
+      text: 'Scrape',
+      href: '/scrape'
+    },
+    {
+      type: 'link',
       text: 'Search',
       href: '/search'
     },

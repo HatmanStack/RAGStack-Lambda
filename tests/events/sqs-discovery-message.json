@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "msg-12345",
+      "receiptHandle": "receipt-abc",
+      "body": "{\"job_id\":\"job-uuid-123\",\"url\":\"https://docs.example.com/getting-started\",\"depth\":1}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1704067200000",
+        "SenderId": "AROAXXXXXXXXXXXXXX",
+        "ApproximateFirstReceiveTimestamp": "1704067200100"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b3",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:scrape-discovery-queue",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}

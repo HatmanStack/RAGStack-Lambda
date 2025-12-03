@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
+import { listScrapeJobs } from '../graphql/queries/listScrapeJobs';
 
 const LIST_DOCUMENTS = gql`
   query ListDocuments($limit: Int, $nextToken: String) {
@@ -44,6 +45,7 @@ const client = generateClient();
 
 export const useDocuments = () => {
   const [documents, setDocuments] = useState([]);
+  const [scrapeJobs, setScrapeJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [nextToken, setNextToken] = useState(null);
@@ -55,6 +57,32 @@ export const useDocuments = () => {
   useEffect(() => {
     nextTokenRef.current = nextToken;
   }, [nextToken]);
+
+  const fetchScrapeJobs = useCallback(async () => {
+    try {
+      const { data } = await client.graphql({
+        query: listScrapeJobs,
+        variables: { limit: 50 }
+      });
+      // Transform scrape jobs to match document structure for unified display
+      const transformedJobs = (data.listScrapeJobs?.items || []).map(job => ({
+        documentId: job.jobId,
+        filename: job.title || job.baseUrl,
+        status: job.status,
+        totalPages: job.totalUrls,
+        processedCount: job.processedCount,
+        failedCount: job.failedCount,
+        createdAt: job.createdAt,
+        updatedAt: job.createdAt,
+        type: 'scrape',
+        baseUrl: job.baseUrl
+      }));
+      setScrapeJobs(transformedJobs);
+    } catch (err) {
+      // Silently fail - scrape API may not be deployed yet
+      console.debug('Failed to fetch scrape jobs:', err);
+    }
+  }, []);
 
   const fetchDocuments = useCallback(async (reset = false) => {
     setLoading(true);
@@ -69,10 +97,16 @@ export const useDocuments = () => {
         }
       });
 
-      const newDocs = data.listDocuments.items;
+      const newDocs = data.listDocuments.items.map(doc => ({
+        ...doc,
+        type: 'document'
+      }));
 
       setDocuments(prev => reset ? newDocs : [...prev, ...newDocs]);
       setNextToken(data.listDocuments.nextToken);
+
+      // Also fetch scrape jobs
+      await fetchScrapeJobs();
 
     } catch (err) {
       console.error('Failed to fetch documents:', err);
@@ -80,7 +114,7 @@ export const useDocuments = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // Empty deps - uses ref for nextToken
+  }, [fetchScrapeJobs]); // Empty deps - uses ref for nextToken
 
   const refreshDocuments = useCallback(() => {
     fetchDocuments(true);
@@ -112,8 +146,15 @@ export const useDocuments = () => {
     return () => clearInterval(interval);
   }, [fetchDocuments]);
 
+  // Merge documents and scrape jobs, sorted by createdAt (guard against missing dates)
+  const allItems = [...documents, ...scrapeJobs].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
+  });
+
   return {
-    documents,
+    documents: allItems,
     loading,
     error,
     hasMore: !!nextToken,

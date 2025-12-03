@@ -27,6 +27,8 @@ import logging
 import os
 from datetime import datetime
 
+import boto3
+
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.models import Document, Status
 
@@ -49,6 +51,80 @@ def _get_config_manager():
     return _config_manager
 
 
+def _parse_s3_uri(s3_uri):
+    """Parse S3 URI into bucket and key."""
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Invalid S3 URI: {s3_uri}")
+    path = s3_uri[5:]  # Remove 's3://'
+    bucket, key = path.split("/", 1)
+    return bucket, key
+
+
+def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, tracking_table):
+    """
+    Process scraped markdown files by copying directly to output bucket.
+
+    Scraped markdown (.scraped.md) files are already text and don't need OCR.
+    They are copied directly from input to output bucket.
+    """
+    logger.info(f"Processing scraped markdown: {input_s3_uri}")
+
+    s3 = boto3.client("s3")
+
+    # Parse input S3 URI
+    input_bucket, input_key = _parse_s3_uri(input_s3_uri)
+
+    # Read content from input bucket
+    response = s3.get_object(Bucket=input_bucket, Key=input_key)
+    content = response["Body"].read().decode("utf-8")
+
+    # Parse output prefix to get bucket and key prefix
+    output_bucket, output_prefix = _parse_s3_uri(output_s3_prefix)
+
+    # Write to output bucket as full_text.txt
+    output_key = f"{output_prefix}full_text.txt".replace("//", "/")
+    s3.put_object(
+        Bucket=output_bucket,
+        Key=output_key,
+        Body=content.encode("utf-8"),
+        ContentType="text/plain",
+    )
+
+    output_s3_uri = f"s3://{output_bucket}/{output_key}"
+    logger.info(f"Copied scraped markdown to: {output_s3_uri}")
+
+    # Update tracking table
+    update_item(
+        tracking_table,
+        {"document_id": document_id},
+        {
+            "status": Status.OCR_COMPLETE.value,
+            "total_pages": 1,
+            "is_text_native": True,
+            "output_s3_uri": output_s3_uri,
+            "ocr_backend": "passthrough",
+            "updated_at": datetime.now().isoformat(),
+        },
+    )
+
+    # Return result for Step Functions
+    return {
+        "document_id": document_id,
+        "status": Status.OCR_COMPLETE.value,
+        "total_pages": 1,
+        "is_text_native": True,
+        "output_s3_uri": output_s3_uri,
+        "pages": [
+            {
+                "page_number": 1,
+                "text": content[:500] if content else "",
+                "image_s3_uri": None,
+                "ocr_backend": "passthrough",
+            }
+        ],
+    }
+
+
 def lambda_handler(event, context):
     """
     Main Lambda handler.
@@ -66,6 +142,12 @@ def lambda_handler(event, context):
         input_s3_uri = event["input_s3_uri"]
         output_s3_prefix = event["output_s3_prefix"]
         filename = event.get("filename", "document.pdf")
+
+        # Check for scraped markdown passthrough (.scraped.md files skip OCR)
+        if input_s3_uri.endswith(".scraped.md"):
+            return _process_scraped_markdown(
+                document_id, input_s3_uri, output_s3_prefix, tracking_table
+            )
 
         # Read configuration from ConfigurationManager (runtime configuration)
         config_mgr = _get_config_manager()

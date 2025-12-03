@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-lint:
+    name: Backend Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+
+      - name: Run ruff check
+        run: uv run ruff check .
+
+      - name: Run ruff format check
+        run: uv run ruff format . --check
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+
+      - name: Run pytest
+        run: uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+          PYTHONPATH: ${{ github.workspace }}/lib
+
+  frontend-lint:
+    name: Frontend Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: src/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./src/ui
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./src/ui
+        run: npm run lint
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: src/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./src/ui
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./src/ui
+        run: npm test -- --run
+
+  status-check:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [backend-lint, backend-tests, frontend-lint, frontend-tests]
+    if: always()
+
+    steps:
+      - name: Check if all jobs passed
+        run: |
+          if [ "${{ needs.backend-lint.result }}" != "success" ] || \
+             [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.frontend-lint.result }}" != "success" ] || \
+             [ "${{ needs.frontend-tests.result }}" != "success" ]; then
+            echo "❌ Some checks failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"
