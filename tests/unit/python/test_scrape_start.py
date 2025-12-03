@@ -22,7 +22,9 @@ def _load_scrape_start_module():
 def _mock_env(monkeypatch):
     """Set up environment variables for tests (underscore prefix for side-effect fixture)."""
     monkeypatch.setenv("SCRAPE_JOBS_TABLE", "test-jobs-table")
-    monkeypatch.setenv("SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/queue")
+    monkeypatch.setenv(
+        "SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/queue"
+    )
     monkeypatch.setenv("SCRAPE_STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
 

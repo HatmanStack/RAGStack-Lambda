@@ -19,16 +19,23 @@ Output:
 }
 """
 
-import hashlib
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime
 
 import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.scraper import ScrapePage, ScrapeStatus, UrlStatus
+from ragstack_common.scraper.discovery import (
+    extract_links,
+    filter_discovered_urls,
+    normalize_url,
+)
+from ragstack_common.scraper.fetcher import HttpFetcher
+from ragstack_common.scraper.models import ScrapeConfig
 
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -43,6 +50,7 @@ def lambda_handler(event, context):
     urls_table = os.environ.get("SCRAPE_URLS_TABLE")
     discovery_queue_url = os.environ.get("SCRAPE_DISCOVERY_QUEUE_URL")
     processing_queue_url = os.environ.get("SCRAPE_PROCESSING_QUEUE_URL")
+    request_delay_ms = int(os.environ.get("REQUEST_DELAY_MS", "500"))
 
     if not jobs_table:
         raise ValueError("SCRAPE_JOBS_TABLE environment variable required")
@@ -90,48 +98,74 @@ def lambda_handler(event, context):
                 skipped += 1
                 continue
 
-            # Compute URL hash for deduplication
-            url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
+            # Normalize URL for deduplication
+            normalized_url = normalize_url(url)
 
             # Check if URL already visited
-            existing = urls_tbl.get_item(Key={"job_id": job_id, "url": url})
+            existing = urls_tbl.get_item(Key={"job_id": job_id, "url": normalized_url})
             if existing.get("Item"):
-                logger.info(f"URL already visited: {url}")
+                logger.info(f"URL already visited: {normalized_url}")
                 skipped += 1
                 continue
 
             # Create page record (mark as discovered)
             page = ScrapePage(
                 job_id=job_id,
-                url=url,
+                url=normalized_url,
                 status=UrlStatus.PENDING,
                 depth=depth,
             )
 
             page_data = page.to_dict()
-            page_data["url_hash"] = url_hash
-
             urls_tbl.put_item(Item=page_data)
 
-            # TODO: Phase 2 - Actual link extraction
-            # For now, just send URL to processing queue (placeholder)
-            discovered_urls = []
+            # Get job config
+            config_data = job_item.get("config", {})
+            config = ScrapeConfig.from_dict(config_data)
+            base_url = job_item.get("base_url", url)
 
-            logger.info(f"Placeholder: Would discover links from {url}")
+            # Fetch the page to extract links
+            fetcher = HttpFetcher(
+                delay_ms=request_delay_ms,
+                cookies=config.cookies,
+                headers=config.headers,
+            )
+            result = fetcher.fetch(normalized_url)
+
+            if result.error:
+                logger.warning(f"Fetch failed during discovery: {normalized_url} - {result.error}")
+                # Mark URL as failed but continue - processing will retry
+                urls_tbl.update_item(
+                    Key={"job_id": job_id, "url": normalized_url},
+                    UpdateExpression="SET #status = :status, error = :err",
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": UrlStatus.FAILED.value,
+                        ":err": result.error,
+                    },
+                )
+                # Update job failed count
+                jobs_tbl.update_item(
+                    Key={"job_id": job_id},
+                    UpdateExpression="SET failed_count = failed_count + :inc, updated_at = :ts",
+                    ExpressionAttributeValues={
+                        ":inc": 1,
+                        ":ts": datetime.now(UTC).isoformat(),
+                    },
+                )
+                continue
 
             # Send URL to processing queue
             sqs.send_message(
                 QueueUrl=processing_queue_url,
-                MessageBody=json.dumps(
-                    {
-                        "job_id": job_id,
-                        "url": url,
-                        "depth": depth,
-                    }
-                ),
+                MessageBody=json.dumps({
+                    "job_id": job_id,
+                    "url": normalized_url,
+                    "depth": depth,
+                }),
             )
 
-            # Update job counters
+            # Update job total URLs count
             jobs_tbl.update_item(
                 Key={"job_id": job_id},
                 UpdateExpression="SET total_urls = total_urls + :inc, updated_at = :ts",
@@ -141,25 +175,53 @@ def lambda_handler(event, context):
                 },
             )
 
-            # Send discovered URLs back to discovery queue
-            config = job_item.get("config", {})
-            max_depth = config.get("max_depth", 3)
+            # Extract and filter links if within depth limit
+            max_depth = config.max_depth
+            max_pages = config.max_pages
 
-            for discovered_url in discovered_urls:
-                if depth + 1 <= max_depth:
+            if depth < max_depth and result.is_html:
+                links = extract_links(result.content, normalized_url)
+
+                # Get visited URLs for this job (for filtering)
+                # Note: This is a simplified approach; for large jobs,
+                # we rely on the DynamoDB check in subsequent invocations
+                visited = set()
+
+                filtered = filter_discovered_urls(
+                    urls=links,
+                    base_url=base_url,
+                    config=config,
+                    visited=visited,
+                )
+
+                logger.info(f"Discovered {len(filtered)} new URLs from {normalized_url}")
+
+                # Check max pages limit
+                job_refresh = jobs_tbl.get_item(Key={"job_id": job_id})
+                total_discovered = int(job_refresh.get("Item", {}).get("total_urls", 0))
+                remaining = max_pages - total_discovered
+
+                # Queue new URLs for discovery
+                urls_to_queue = filtered[:remaining] if remaining > 0 else []
+
+                for link in urls_to_queue:
                     sqs.send_message(
                         QueueUrl=discovery_queue_url,
-                        MessageBody=json.dumps(
-                            {
-                                "job_id": job_id,
-                                "url": discovered_url,
-                                "depth": depth + 1,
-                            }
-                        ),
+                        MessageBody=json.dumps({
+                            "job_id": job_id,
+                            "url": link,
+                            "depth": depth + 1,
+                        }),
                     )
                     discovered += 1
 
+                if remaining <= 0:
+                    logger.info(f"Max pages limit ({max_pages}) reached for job {job_id}")
+
             processed += 1
+
+            # Respect rate limit between pages
+            time.sleep(request_delay_ms / 1000.0)
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
