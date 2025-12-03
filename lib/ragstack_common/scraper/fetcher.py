@@ -208,7 +208,7 @@ def is_spa(html: str) -> bool:
         "window.__NUXT__" in html,
         "ng-app" in html,
         "data-reactroot" in html and len(text_content) < 1000,
-        "id=\"__next\"" in html and len(text_content) < 1000,
+        'id="__next"' in html and len(text_content) < 1000,
     ]
 
     # SPA if at least 2 indicators match
@@ -248,10 +248,7 @@ def fetch_with_playwright(url: str, cookies: dict[str, str] | None = None) -> Fe
 
             if cookies:
                 # Convert cookies dict to Playwright format
-                cookie_list = [
-                    {"name": k, "value": v, "url": url}
-                    for k, v in cookies.items()
-                ]
+                cookie_list = [{"name": k, "value": v, "url": url} for k, v in cookies.items()]
                 context.add_cookies(cookie_list)
 
             page = context.new_page()
@@ -322,8 +319,7 @@ def fetch_auto(
 
         # Fall back to HTTP result if Playwright fails
         logger.warning(
-            f"Playwright fallback failed for {url}, using HTTP result: "
-            f"{playwright_result.error}"
+            f"Playwright fallback failed for {url}, using HTTP result: {playwright_result.error}"
         )
 
     return result

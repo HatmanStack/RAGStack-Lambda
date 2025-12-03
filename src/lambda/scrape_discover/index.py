@@ -158,11 +158,13 @@ def lambda_handler(event, context):
             # Send URL to processing queue
             sqs.send_message(
                 QueueUrl=processing_queue_url,
-                MessageBody=json.dumps({
-                    "job_id": job_id,
-                    "url": normalized_url,
-                    "depth": depth,
-                }),
+                MessageBody=json.dumps(
+                    {
+                        "job_id": job_id,
+                        "url": normalized_url,
+                        "depth": depth,
+                    }
+                ),
             )
 
             # Update job total URLs count
@@ -207,11 +209,13 @@ def lambda_handler(event, context):
                 for link in urls_to_queue:
                     sqs.send_message(
                         QueueUrl=discovery_queue_url,
-                        MessageBody=json.dumps({
-                            "job_id": job_id,
-                            "url": link,
-                            "depth": depth + 1,
-                        }),
+                        MessageBody=json.dumps(
+                            {
+                                "job_id": job_id,
+                                "url": link,
+                                "depth": depth + 1,
+                            }
+                        ),
                     )
                     discovered += 1
 

@@ -16,7 +16,7 @@ class TestScrapeDiscoveryIntegration:
 
     def test_discovery_extracts_links_from_live_page(self):
         """Test that discovery correctly extracts links from a test page."""
-        from ragstack_common.scraper.discovery import extract_links, normalize_url
+        from ragstack_common.scraper.discovery import extract_links
         from ragstack_common.scraper.fetcher import HttpFetcher
 
         # Use a stable public page for testing

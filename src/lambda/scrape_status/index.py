@@ -81,9 +81,7 @@ def lambda_handler(event, context):
         return _handle_api_request(event, jobs_tbl, urls_tbl)
 
     # Step Functions invocation
-    return _handle_step_functions(
-        event, jobs_tbl, discovery_queue_url, processing_queue_url
-    )
+    return _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queue_url)
 
 
 def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queue_url):
@@ -259,23 +257,24 @@ def _get_status_api(jobs_tbl, job_id: str) -> dict:
     }
 
     if total_urls > 0:
-        progress["percent_complete"] = round(
-            (processed_count + failed_count) / total_urls * 100, 1
-        )
+        progress["percent_complete"] = round((processed_count + failed_count) / total_urls * 100, 1)
     else:
         progress["percent_complete"] = 0
 
-    return _response(200, {
-        "job_id": job_id,
-        "status": job.get("status"),
-        "base_url": job.get("base_url"),
-        "created_at": job.get("created_at"),
-        "updated_at": job.get("updated_at"),
-        "completed_at": job.get("completed_at"),
-        "progress": progress,
-        "config": job.get("config", {}),
-        "failed_urls": job.get("failed_urls", [])[:10],
-    })
+    return _response(
+        200,
+        {
+            "job_id": job_id,
+            "status": job.get("status"),
+            "base_url": job.get("base_url"),
+            "created_at": job.get("created_at"),
+            "updated_at": job.get("updated_at"),
+            "completed_at": job.get("completed_at"),
+            "progress": progress,
+            "config": job.get("config", {}),
+            "failed_urls": job.get("failed_urls", [])[:10],
+        },
+    )
 
 
 def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
@@ -305,15 +304,17 @@ def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
 
     urls = []
     for item in response.get("Items", []):
-        urls.append({
-            "url": item.get("url"),
-            "status": item.get("status"),
-            "depth": int(item.get("depth", 0)),
-            "title": item.get("title"),
-            "document_id": item.get("document_id"),
-            "processed_at": item.get("processed_at"),
-            "error": item.get("error"),
-        })
+        urls.append(
+            {
+                "url": item.get("url"),
+                "status": item.get("status"),
+                "depth": int(item.get("depth", 0)),
+                "title": item.get("title"),
+                "document_id": item.get("document_id"),
+                "processed_at": item.get("processed_at"),
+                "error": item.get("error"),
+            }
+        )
 
     result = {
         "job_id": job_id,
@@ -342,9 +343,7 @@ def _cancel_job(jobs_tbl, job_id: str) -> dict:
         ScrapeStatus.DISCOVERING.value,
         ScrapeStatus.PROCESSING.value,
     ]:
-        return _response(400, {
-            "error": f"Cannot cancel job with status: {current_status}"
-        })
+        return _response(400, {"error": f"Cannot cancel job with status: {current_status}"})
 
     jobs_tbl.update_item(
         Key={"job_id": job_id},
@@ -356,11 +355,14 @@ def _cancel_job(jobs_tbl, job_id: str) -> dict:
         },
     )
 
-    return _response(200, {
-        "job_id": job_id,
-        "status": ScrapeStatus.CANCELLED.value,
-        "message": "Job cancelled successfully",
-    })
+    return _response(
+        200,
+        {
+            "job_id": job_id,
+            "status": ScrapeStatus.CANCELLED.value,
+            "message": "Job cancelled successfully",
+        },
+    )
 
 
 def _response(status_code: int, body: dict) -> dict:

@@ -250,11 +250,13 @@ def add_frontmatter(content: str, source_url: str, title: str | None = None) -> 
         escaped_title = title.replace('"', '\\"')
         frontmatter_lines.append(f'title: "{escaped_title}"')
 
-    frontmatter_lines.extend([
-        f"scraped_at: {scraped_at}",
-        "---",
-        "",
-    ])
+    frontmatter_lines.extend(
+        [
+            f"scraped_at: {scraped_at}",
+            "---",
+            "",
+        ]
+    )
 
     return "\n".join(frontmatter_lines) + content
 
