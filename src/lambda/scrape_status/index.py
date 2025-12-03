@@ -163,11 +163,12 @@ def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queu
             ScrapeStatus.DISCOVERING.value,
             ScrapeStatus.PROCESSING.value,
         ]:
-            new_status = (
-                ScrapeStatus.FAILED.value
-                if failure_threshold_exceeded
-                else ScrapeStatus.COMPLETED.value
-            )
+            if failure_threshold_exceeded:
+                new_status = ScrapeStatus.FAILED.value
+            elif failed_count > 0:
+                new_status = ScrapeStatus.COMPLETED_WITH_ERRORS.value
+            else:
+                new_status = ScrapeStatus.COMPLETED.value
             jobs_tbl.update_item(
                 Key={"job_id": job_id},
                 UpdateExpression="SET #status = :status, completed_at = :ts",

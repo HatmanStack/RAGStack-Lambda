@@ -193,12 +193,14 @@ def is_spa(html: str) -> bool:
     """
     soup = BeautifulSoup(html, "lxml")
 
+    # Count scripts before removing them
+    script_count = len(soup.find_all("script"))
+
     # Remove script/style for content measurement
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
     text_content = soup.get_text(strip=True)
-    script_count = len(BeautifulSoup(html, "lxml").find_all("script"))
 
     # Framework indicators in original HTML
     indicators = [

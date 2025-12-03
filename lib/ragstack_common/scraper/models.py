@@ -82,10 +82,15 @@ class ScrapeConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ScrapeConfig":
         """Create ScrapeConfig from dictionary."""
+        # Handle invalid scope values gracefully
+        try:
+            scope = ScrapeScope(data.get("scope", "subpages"))
+        except ValueError:
+            scope = ScrapeScope.SUBPAGES
         return cls(
             max_pages=data.get("max_pages", 1000),
             max_depth=data.get("max_depth", 3),
-            scope=ScrapeScope(data.get("scope", "subpages")),
+            scope=scope,
             request_delay_ms=data.get("request_delay_ms", 500),
             include_patterns=data.get("include_patterns", []),
             exclude_patterns=data.get("exclude_patterns", []),

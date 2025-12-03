@@ -52,11 +52,7 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
   };
 
   const handleProceedAnyway = () => {
-    if (onProceedAnyway) {
-      onProceedAnyway();
-    } else {
-      onSubmit({ ...getFormData(), force: true });
-    }
+    onProceedAnyway?.();
   };
 
   return (

@@ -24,6 +24,8 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.scraper import ScrapeStatus
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -565,7 +567,13 @@ def cancel_scrape(args):
 
         # Check if job can be cancelled
         status = item.get("status", "")
-        if status in ("completed", "completed_with_errors", "failed", "cancelled"):
+        terminal_statuses = (
+            ScrapeStatus.COMPLETED.value,
+            ScrapeStatus.COMPLETED_WITH_ERRORS.value,
+            ScrapeStatus.FAILED.value,
+            ScrapeStatus.CANCELLED.value,
+        )
+        if status in terminal_statuses:
             raise ValueError(f"Cannot cancel job with status: {status}")
 
         # Stop Step Functions execution if running
@@ -586,7 +594,7 @@ def cancel_scrape(args):
             UpdateExpression="SET #status = :status, updated_at = :ts",
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
-                ":status": "cancelled",
+                ":status": ScrapeStatus.CANCELLED.value,
                 ":ts": datetime.now().isoformat(),
             },
         )

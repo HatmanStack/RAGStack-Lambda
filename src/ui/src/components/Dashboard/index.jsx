@@ -26,8 +26,12 @@ export const Dashboard = () => {
   };
 
   const handleCancelScrape = async (jobId) => {
-    await cancelScrape(jobId);
-    refreshDocuments();
+    try {
+      await cancelScrape(jobId);
+      refreshDocuments();
+    } catch (err) {
+      console.error('Failed to cancel scrape:', err);
+    }
   };
 
   return (

@@ -69,6 +69,7 @@ def lambda_handler(event, context):
     processed = 0
     discovered = 0
     skipped = 0
+    batch_item_failures = []
 
     # Process SQS records
     for record in event.get("Records", []):
@@ -184,10 +185,9 @@ def lambda_handler(event, context):
             if depth < max_depth and result.is_html:
                 links = extract_links(result.content, normalized_url)
 
-                # Get visited URLs for this job (for filtering)
-                # Note: This is a simplified approach; for large jobs,
-                # we rely on the DynamoDB check in subsequent invocations
-                visited = set()
+                # Track URLs we've already seen (including current URL)
+                # DynamoDB provides cross-invocation dedup; this handles within-batch
+                visited = {normalized_url}
 
                 filtered = filter_discovered_urls(
                     urls=links,
@@ -230,13 +230,14 @@ def lambda_handler(event, context):
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             logger.error(f"AWS error processing record: {error_code} - {e}")
-            raise
+            batch_item_failures.append({"itemIdentifier": record["messageId"]})
         except Exception as e:
             logger.error(f"Error processing record: {e}", exc_info=True)
-            raise
+            batch_item_failures.append({"itemIdentifier": record["messageId"]})
 
     return {
         "processed": processed,
         "discovered": discovered,
         "skipped": skipped,
+        "batchItemFailures": batch_item_failures,
     }

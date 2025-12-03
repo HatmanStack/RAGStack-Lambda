@@ -35,6 +35,7 @@ export const useScrape = () => {
 
   const cancelScrape = useCallback(async (jobId) => {
     setLoading(true);
+    setError(null);
     try {
       await client.graphql({
         query: cancelScrapeMutation,
@@ -52,6 +53,7 @@ export const useScrape = () => {
 
   const fetchJobs = useCallback(async (limit = 20) => {
     setLoading(true);
+    setError(null);
     try {
       const response = await client.graphql({
         query: listScrapeJobsQuery,
@@ -67,6 +69,7 @@ export const useScrape = () => {
 
   const fetchJobDetail = useCallback(async (jobId) => {
     setLoading(true);
+    setError(null);
     try {
       const response = await client.graphql({
         query: getScrapeJobQuery,

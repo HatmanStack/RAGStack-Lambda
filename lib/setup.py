@@ -20,7 +20,7 @@ setup(
     name="ragstack_common",
     version="0.1.0",
     description="Shared utilities for Lambda functions",
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests*", "*.tests*"]),
     python_requires=">=3.12",
     install_requires=[
         "boto3>=1.34.0",

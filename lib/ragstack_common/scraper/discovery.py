@@ -55,6 +55,7 @@ def extract_links(html: str, page_url: str) -> list[str]:
         List of absolute URLs found in the page
     """
     soup = BeautifulSoup(html, "lxml")
+    seen = set()
     links = []
 
     for a in soup.find_all("a", href=True):
@@ -76,9 +77,10 @@ def extract_links(html: str, page_url: str) -> list[str]:
         if parsed.scheme not in ("http", "https"):
             continue
 
-        # Normalize and add
+        # Normalize and add (use set for O(1) dedup)
         normalized = normalize_url(absolute)
-        if normalized not in links:
+        if normalized not in seen:
+            seen.add(normalized)
             links.append(normalized)
 
     return links

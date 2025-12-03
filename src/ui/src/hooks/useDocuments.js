@@ -146,10 +146,12 @@ export const useDocuments = () => {
     return () => clearInterval(interval);
   }, [fetchDocuments]);
 
-  // Merge documents and scrape jobs, sorted by createdAt
-  const allItems = [...documents, ...scrapeJobs].sort((a, b) =>
-    new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  // Merge documents and scrape jobs, sorted by createdAt (guard against missing dates)
+  const allItems = [...documents, ...scrapeJobs].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
+  });
 
   return {
     documents: allItems,

@@ -18,6 +18,10 @@ export const CookieHelp = () => {
         </li>
       </ol>
       <Box variant="p" color="text-status-warning">
+        <strong>Security:</strong> Cookies are sensitive like passwords. Only use them with trusted tools
+        and never share them with others.
+      </Box>
+      <Box variant="p" color="text-status-info">
         Note: Cookies expire. If scraping fails with auth errors, get fresh cookies.
       </Box>
     </ExpandableSection>

@@ -397,8 +397,8 @@ class TestFetchWithPlaywright:
         # For unit tests, we verify the error handling path
         assert result is not None
 
-    def test_playwright_with_cookies(self):
-        """Test that cookies are passed to Playwright context (structural test)."""
+    def test_handles_unavailable_playwright_with_cookies_arg(self):
+        """Test graceful handling when Playwright unavailable, even with cookies passed."""
         # Since Playwright import happens inside the function and we can't easily mock it,
         # just verify the function handles the unavailable case gracefully
         result = fetch_with_playwright("https://example.com", cookies={"session": "xyz789"})
