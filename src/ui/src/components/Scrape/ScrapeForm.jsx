@@ -12,7 +12,7 @@ import {
 } from '@cloudscape-design/components';
 import { CookieHelp } from './CookieHelp';
 
-export const ScrapeForm = ({ onSubmit, loading, duplicateWarning, onDismissWarning }) => {
+export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarning, onDismissWarning }) => {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState('100');
   const [maxDepth, setMaxDepth] = useState('3');
@@ -52,7 +52,11 @@ export const ScrapeForm = ({ onSubmit, loading, duplicateWarning, onDismissWarni
   };
 
   const handleProceedAnyway = () => {
-    onSubmit({ ...getFormData(), force: true });
+    if (onProceedAnyway) {
+      onProceedAnyway();
+    } else {
+      onSubmit({ ...getFormData(), force: true });
+    }
   };
 
   return (
