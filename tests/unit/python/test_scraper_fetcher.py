@@ -60,7 +60,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_successful_fetch(self, mock_sleep, mock_client_class):
+    def test_successful_fetch(self, _mock_sleep, mock_client_class):
         """Test successful HTTP fetch."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -85,7 +85,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_handles_404(self, mock_sleep, mock_client_class):
+    def test_handles_404(self, _mock_sleep, mock_client_class):
         """Test that 404 returns error in FetchResult."""
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -108,7 +108,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_retries_on_500(self, mock_sleep, mock_client_class):
+    def test_retries_on_500(self, _mock_sleep, mock_client_class):
         """Test that 500 triggers retry."""
         mock_response = MagicMock()
         mock_response.status_code = 500
@@ -146,7 +146,7 @@ class TestHttpFetcher:
         mock_client_class.return_value = mock_client
 
         fetcher = HttpFetcher(delay_ms=0, max_retries=2)
-        result = fetcher.fetch("https://example.com/ratelimit")
+        _result = fetcher.fetch("https://example.com/ratelimit")  # noqa: F841
 
         assert mock_client.get.call_count == 2
         # Verify longer backoff was used (2x normal backoff for 429)
@@ -155,7 +155,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_timeout_handling(self, mock_sleep, mock_client_class):
+    def test_timeout_handling(self, _mock_sleep, mock_client_class):
         """Test timeout handling with retry."""
         mock_client = MagicMock()
         mock_client.get.side_effect = httpx.TimeoutException("Connection timed out")
@@ -172,7 +172,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_cookies_passed(self, mock_sleep, mock_client_class):
+    def test_cookies_passed(self, _mock_sleep, mock_client_class):
         """Test that cookies are passed to client."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -198,7 +198,7 @@ class TestHttpFetcher:
 
     @patch("ragstack_common.scraper.fetcher.httpx.Client")
     @patch("ragstack_common.scraper.fetcher.time.sleep")
-    def test_headers_passed(self, mock_sleep, mock_client_class):
+    def test_headers_passed(self, _mock_sleep, mock_client_class):
         """Test that custom headers are passed."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -376,21 +376,21 @@ class TestFetchWithPlaywright:
         mock_sync_playwright.return_value.__exit__.return_value = None
 
         # Patch at the module where it's imported dynamically
-        with patch.dict(
-            "sys.modules",
-            {"playwright": MagicMock(), "playwright.sync_api": MagicMock()},
+        with (
+            patch.dict(
+                "sys.modules",
+                {"playwright": MagicMock(), "playwright.sync_api": MagicMock()},
+            ),
+            patch("playwright.sync_api.sync_playwright", mock_sync_playwright),
         ):
-            with patch(
-                "playwright.sync_api.sync_playwright", mock_sync_playwright
-            ):
-                # Need to reimport to pick up the mock
-                import importlib
+            # Need to reimport to pick up the mock
+            import importlib
 
-                from ragstack_common.scraper import fetcher
+            from ragstack_common.scraper import fetcher
 
-                importlib.reload(fetcher)
+            importlib.reload(fetcher)
 
-                result = fetcher.fetch_with_playwright("https://example.com")
+            result = fetcher.fetch_with_playwright("https://example.com")
 
         # With mocking complexity, just test the error case works
         # The actual Playwright behavior is better tested in integration tests

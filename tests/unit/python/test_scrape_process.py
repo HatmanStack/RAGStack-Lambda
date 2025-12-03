@@ -33,8 +33,7 @@ def _mock_env(monkeypatch):
 @pytest.fixture
 def mock_aws(_mock_env):
     """Set up AWS mocks for DynamoDB and S3."""
-    with patch("boto3.resource") as mock_resource, \
-         patch("boto3.client") as mock_client:
+    with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
         # Mock DynamoDB tables
         mock_jobs_table = MagicMock()
         mock_urls_table = MagicMock()
@@ -57,21 +56,25 @@ def mock_aws(_mock_env):
 
 
 @pytest.fixture
-def mock_fetcher():
-    """Mock the fetch_auto function."""
+def _mock_fetcher():
+    """Mock the fetch_auto function (fixture provides side-effect patching)."""
     with patch("ragstack_common.scraper.fetcher.fetch_auto") as mock_fetch:
+        test_html = (
+            "<html><head><title>Test Page</title></head>"
+            "<body><h1>Test</h1><p>Content here</p></body></html>"
+        )
         mock_fetch.return_value = MagicMock(
             error=None,
             is_html=True,
-            content="<html><head><title>Test Page</title></head><body><h1>Test</h1><p>Content here</p></body></html>",
+            content=test_html,
             status_code=200,
         )
         yield mock_fetch
 
 
 @pytest.fixture
-def mock_dedup():
-    """Mock the deduplication service."""
+def _mock_dedup():
+    """Mock the deduplication service (fixture provides side-effect patching)."""
     with patch("ragstack_common.scraper.dedup.DeduplicationService") as mock_cls:
         mock_service = MagicMock()
         mock_service.is_content_changed.return_value = True  # Content is new
@@ -95,7 +98,7 @@ class TestScrapeProcessHandler:
         with pytest.raises(ValueError, match="SCRAPE_JOBS_TABLE"):
             module.lambda_handler({"Records": []}, None)
 
-    def test_sqs_message_parsing(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_sqs_message_parsing(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test SQS message parsing from event."""
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {
@@ -110,11 +113,13 @@ class TestScrapeProcessHandler:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }
@@ -125,7 +130,7 @@ class TestScrapeProcessHandler:
         assert result["failed"] == 0
         mock_aws["s3"].put_object.assert_called_once()
 
-    def test_processed_count_increment(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_processed_count_increment(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that processed_count is incremented on success."""
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {
@@ -140,11 +145,13 @@ class TestScrapeProcessHandler:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }
@@ -156,7 +163,7 @@ class TestScrapeProcessHandler:
         found_processed_update = any("processed_count" in str(call) for call in update_calls)
         assert found_processed_update
 
-    def test_job_cancelled_skips_processing(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_job_cancelled_skips_processing(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that cancelled jobs skip URL processing."""
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {"job_id": "test-job-123", "status": "cancelled"}
@@ -167,11 +174,13 @@ class TestScrapeProcessHandler:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }
@@ -181,7 +190,7 @@ class TestScrapeProcessHandler:
         assert result["processed"] == 0
         mock_aws["s3"].put_object.assert_not_called()
 
-    def test_s3_write_creates_markdown_file(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_s3_write_creates_markdown_file(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that S3 write creates .scraped.md file."""
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {
@@ -196,11 +205,13 @@ class TestScrapeProcessHandler:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }
@@ -218,7 +229,7 @@ class TestScrapeProcessHandler:
 class TestUrlStatusUpdates:
     """Tests for URL status updates."""
 
-    def test_updates_url_status_to_completed(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_updates_url_status_to_completed(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that URL status is updated to completed on success."""
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {
@@ -233,11 +244,13 @@ class TestUrlStatusUpdates:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }
@@ -253,9 +266,9 @@ class TestUrlStatusUpdates:
 class TestDeduplication:
     """Tests for content deduplication."""
 
-    def test_skips_unchanged_content(self, mock_aws, mock_fetcher, mock_dedup):
+    def test_skips_unchanged_content(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that unchanged content is skipped."""
-        mock_dedup.is_content_changed.return_value = False  # Content unchanged
+        _mock_dedup.is_content_changed.return_value = False  # Content unchanged
 
         mock_aws["jobs_table"].get_item.return_value = {
             "Item": {
@@ -270,11 +283,13 @@ class TestDeduplication:
         event = {
             "Records": [
                 {
-                    "body": json.dumps({
-                        "job_id": "test-job-123",
-                        "url": "https://example.com/page1",
-                        "depth": 0,
-                    })
+                    "body": json.dumps(
+                        {
+                            "job_id": "test-job-123",
+                            "url": "https://example.com/page1",
+                            "depth": 0,
+                        }
+                    )
                 }
             ]
         }

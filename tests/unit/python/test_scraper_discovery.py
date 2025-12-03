@@ -237,10 +237,13 @@ class TestGetUrlDepth:
         assert get_url_depth("https://example.com/docs/page", "https://example.com/") == 2
 
     def test_depth_relative_to_base(self):
-        assert get_url_depth(
-            "https://example.com/docs/api/v1",
-            "https://example.com/docs",
-        ) == 2
+        assert (
+            get_url_depth(
+                "https://example.com/docs/api/v1",
+                "https://example.com/docs",
+            )
+            == 2
+        )
 
     def test_different_hostname_zero_depth(self):
         assert get_url_depth("https://other.com/page", "https://example.com/") == 0

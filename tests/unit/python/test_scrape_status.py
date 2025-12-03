@@ -25,7 +25,9 @@ def _mock_env(monkeypatch):
     monkeypatch.setenv("SCRAPE_JOBS_TABLE", "test-jobs-table")
     monkeypatch.setenv("SCRAPE_URLS_TABLE", "test-urls-table")
     monkeypatch.setenv("SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/disc")
-    monkeypatch.setenv("SCRAPE_PROCESSING_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/proc")
+    monkeypatch.setenv(
+        "SCRAPE_PROCESSING_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/proc"
+    )
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
 
@@ -33,8 +35,7 @@ def _mock_env(monkeypatch):
 @pytest.fixture
 def mock_aws(_mock_env):
     """Set up AWS mocks for DynamoDB and SQS."""
-    with patch("boto3.resource") as mock_resource, \
-         patch("boto3.client") as mock_client:
+    with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
         mock_jobs_table = MagicMock()
         mock_urls_table = MagicMock()
 
@@ -73,7 +74,7 @@ class TestScrapeStatusHandler:
         with pytest.raises(ValueError, match="SCRAPE_JOBS_TABLE"):
             module.lambda_handler({"job_id": "test-job"}, None)
 
-    def test_missing_job_id(self, mock_aws):
+    def test_missing_job_id(self, mock_aws):  # noqa: ARG002
         """Test error when job_id is missing from Step Functions event."""
         module = _load_scrape_status_module()
 
@@ -241,7 +242,7 @@ class TestApiGatewayRequests:
         assert body["status"] == "cancelled"
         mock_aws["jobs_table"].update_item.assert_called_once()
 
-    def test_api_missing_job_id(self, mock_aws):
+    def test_api_missing_job_id(self, mock_aws):  # noqa: ARG002
         """Test API request missing job_id."""
         module = _load_scrape_status_module()
 

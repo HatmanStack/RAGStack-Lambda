@@ -141,7 +141,7 @@ class TestDeduplicationService:
         mock_dynamodb.Table.return_value = mock_table
         mock_boto3.resource.return_value = mock_dynamodb
 
-        service = DeduplicationService("test-table")
+        _service = DeduplicationService("test-table")  # noqa: F841
 
         mock_boto3.resource.assert_called_once_with("dynamodb", region_name=None)
         mock_dynamodb.Table.assert_called_once_with("test-table")
@@ -149,9 +149,7 @@ class TestDeduplicationService:
     @patch("ragstack_common.scraper.dedup.boto3")
     def test_get_existing_hash_returns_hash(self, mock_boto3):
         mock_table = MagicMock()
-        mock_table.query.return_value = {
-            "Items": [{"content_hash": "abc123"}]
-        }
+        mock_table.query.return_value = {"Items": [{"content_hash": "abc123"}]}
         mock_dynamodb = MagicMock()
         mock_dynamodb.Table.return_value = mock_table
         mock_boto3.resource.return_value = mock_dynamodb
@@ -184,10 +182,7 @@ class TestDeduplicationService:
         mock_boto3.resource.return_value = mock_dynamodb
 
         service = DeduplicationService("test-table")
-        result = service.is_content_changed(
-            "https://example.com/new",
-            "# New content\n\nSome text"
-        )
+        result = service.is_content_changed("https://example.com/new", "# New content\n\nSome text")
 
         assert result is True
 
@@ -198,35 +193,27 @@ class TestDeduplicationService:
         existing_hash = compute_content_hash(normalized)
 
         mock_table = MagicMock()
-        mock_table.query.return_value = {
-            "Items": [{"content_hash": existing_hash}]
-        }
+        mock_table.query.return_value = {"Items": [{"content_hash": existing_hash}]}
         mock_dynamodb = MagicMock()
         mock_dynamodb.Table.return_value = mock_table
         mock_boto3.resource.return_value = mock_dynamodb
 
         service = DeduplicationService("test-table")
-        result = service.is_content_changed(
-            "https://example.com/page",
-            content
-        )
+        result = service.is_content_changed("https://example.com/page", content)
 
         assert result is False
 
     @patch("ragstack_common.scraper.dedup.boto3")
     def test_is_content_changed_different_content(self, mock_boto3):
         mock_table = MagicMock()
-        mock_table.query.return_value = {
-            "Items": [{"content_hash": "old_hash_value"}]
-        }
+        mock_table.query.return_value = {"Items": [{"content_hash": "old_hash_value"}]}
         mock_dynamodb = MagicMock()
         mock_dynamodb.Table.return_value = mock_table
         mock_boto3.resource.return_value = mock_dynamodb
 
         service = DeduplicationService("test-table")
         result = service.is_content_changed(
-            "https://example.com/page",
-            "# New content\n\nDifferent text"
+            "https://example.com/page", "# New content\n\nDifferent text"
         )
 
         assert result is True
@@ -239,18 +226,11 @@ class TestDeduplicationService:
         mock_boto3.resource.return_value = mock_dynamodb
 
         service = DeduplicationService("test-table")
-        service.store_hash(
-            "job-123",
-            "https://example.com/page",
-            "# Content\n\nBody text"
-        )
+        service.store_hash("job-123", "https://example.com/page", "# Content\n\nBody text")
 
         mock_table.update_item.assert_called_once()
         call_kwargs = mock_table.update_item.call_args[1]
-        assert call_kwargs["Key"] == {
-            "job_id": "job-123",
-            "url": "https://example.com/page"
-        }
+        assert call_kwargs["Key"] == {"job_id": "job-123", "url": "https://example.com/page"}
         assert "content_hash" in call_kwargs["UpdateExpression"]
         assert "url_hash" in call_kwargs["UpdateExpression"]
 
