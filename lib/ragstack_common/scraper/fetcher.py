@@ -88,8 +88,7 @@ class HttpFetcher:
 
         for attempt in range(self.max_retries):
             try:
-                result = self._do_fetch(url)
-                return result
+                return self._do_fetch(url)
             except httpx.HTTPStatusError as e:
                 last_status = e.response.status_code
                 last_error = str(e)

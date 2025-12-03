@@ -225,11 +225,10 @@ def _handle_api_request(event, jobs_tbl, urls_tbl):
                 return _list_urls(urls_tbl, job_id, query_params)
             return _get_status_api(jobs_tbl, job_id)
 
-        elif http_method == "DELETE":
+        if http_method == "DELETE":
             return _cancel_job(jobs_tbl, job_id)
 
-        else:
-            return _response(405, {"error": f"Method {http_method} not allowed"})
+        return _response(405, {"error": f"Method {http_method} not allowed"})
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")

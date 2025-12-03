@@ -56,9 +56,7 @@ class TestMarkdownPassthrough:
             mock_boto3_client.return_value = mock_s3
 
             # Mock update_item at module level
-            with patch(
-                "ragstack_common.storage.update_item"
-            ) as mock_update:
+            with patch("ragstack_common.storage.update_item") as mock_update:
                 module = _load_process_document_module()
 
                 event = {

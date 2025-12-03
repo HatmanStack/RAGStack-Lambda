@@ -101,16 +101,11 @@ def should_crawl(url: str, base_url: str, config: ScrapeConfig) -> bool:
         return False
 
     # Check include patterns (if specified, URL must match at least one)
-    if config.include_patterns:
-        if not matches_patterns(url, config.include_patterns):
-            return False
+    if config.include_patterns and not matches_patterns(url, config.include_patterns):
+        return False
 
     # Check exclude patterns (URL must not match any)
-    if config.exclude_patterns:
-        if matches_patterns(url, config.exclude_patterns):
-            return False
-
-    return True
+    return not (config.exclude_patterns and matches_patterns(url, config.exclude_patterns))
 
 
 def _is_in_scope(url: str, base_url: str, scope: ScrapeScope) -> bool:
@@ -144,11 +139,11 @@ def _is_in_scope(url: str, base_url: str, scope: ScrapeScope) -> bool:
             return url_path == base_path or url_path.startswith(f"{base_path}/")
         return True
 
-    elif scope == ScrapeScope.HOSTNAME:
+    if scope == ScrapeScope.HOSTNAME:
         # URL hostname must exactly match base hostname
         return url_host == base_host
 
-    elif scope == ScrapeScope.DOMAIN:
+    if scope == ScrapeScope.DOMAIN:
         # URL hostname must be same domain or subdomain
         # Extract domain (last two parts, e.g., example.com from sub.example.com)
         base_domain = _get_domain(base_host)
@@ -181,10 +176,7 @@ def matches_patterns(url: str, patterns: list[str]) -> bool:
     Returns:
         True if URL matches at least one pattern
     """
-    for pattern in patterns:
-        if fnmatch.fnmatch(url, pattern):
-            return True
-    return False
+    return any(fnmatch.fnmatch(url, pattern) for pattern in patterns)
 
 
 def get_url_depth(url: str, base_url: str) -> int:

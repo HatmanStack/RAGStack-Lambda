@@ -77,7 +77,8 @@ def lambda_handler(event, context):
             message = json.loads(record["body"])
             job_id = message["job_id"]
             url = message["url"]
-            depth = message.get("depth", 0)
+            # depth is available for potential future use (e.g., prioritization)
+            _ = message.get("depth", 0)
 
             logger.info(f"Processing URL: job={job_id}, url={url}")
 
@@ -143,7 +144,9 @@ def lambda_handler(event, context):
                 # Still count as processed for job completion
                 jobs_tbl.update_item(
                     Key={"job_id": job_id},
-                    UpdateExpression="SET processed_count = processed_count + :one, updated_at = :ts",
+                    UpdateExpression=(
+                        "SET processed_count = processed_count + :one, updated_at = :ts"
+                    ),
                     ExpressionAttributeValues={
                         ":one": 1,
                         ":ts": datetime.now(UTC).isoformat(),
