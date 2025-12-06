@@ -49,11 +49,19 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     Returns:
         Tuple of (bucket, key)
 
+    Raises:
+        ValueError: If s3_uri is empty, None, or not a valid S3 URI
+
     Example:
         bucket, key = parse_s3_uri("s3://my-bucket/docs/file.pdf")
         # bucket = "my-bucket"
         # key = "docs/file.pdf"
     """
+    # CORRECTNESS: Check for None/empty before calling string methods to prevent
+    # AttributeError on None or misleading "Invalid S3 URI: " error on empty string.
+    # Type hint says str but callers may pass None from optional fields.
+    if not s3_uri:
+        raise ValueError("S3 URI cannot be empty or None")
     if not s3_uri.startswith("s3://"):
         raise ValueError(f"Invalid S3 URI: {s3_uri}")
 

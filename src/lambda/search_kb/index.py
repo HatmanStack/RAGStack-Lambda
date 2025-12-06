@@ -90,8 +90,11 @@ def lambda_handler(event, context):
             }
 
         if len(query) > 10000:
+            # SECURITY: Return truncated query (first 100 chars) in error response instead of
+            # the full query. This prevents potential data leakage if error responses are logged
+            # or returned to clients - a 10,000+ character query could contain sensitive content.
             return {
-                "query": query,
+                "query": query[:100] + "...",
                 "results": [],
                 "total": 0,
                 "error": "Query exceeds maximum length of 10000 characters",

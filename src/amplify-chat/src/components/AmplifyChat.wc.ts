@@ -254,14 +254,22 @@ class AmplifyChat extends HTMLElement {
       console.log('[AmplifyChat] React.createElement() completed');
     } catch (error) {
       console.error('[AmplifyChat] Error in render():', error);
-      // Display error in the element
-      this.innerHTML = `
-        <div style="padding: 20px; border: 2px solid red; background: #fee; color: #c00;">
-          <h3>AmplifyChat Error</h3>
-          <p>Failed to render chat component. Check console for details.</p>
-          <pre>${error instanceof Error ? error.message : String(error)}</pre>
-        </div>
-      `;
+      // SECURITY: Use DOM construction with textContent instead of innerHTML template literals.
+      // The previous implementation used innerHTML with ${error.message} which is vulnerable
+      // to XSS if an attacker can control the error message content (e.g., through malformed
+      // configuration or crafted API responses). textContent automatically escapes HTML entities.
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'padding: 20px; border: 2px solid red; background: #fee; color: #c00;';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'AmplifyChat Error';
+      const p = document.createElement('p');
+      p.textContent = 'Failed to render chat component. Check console for details.';
+      const pre = document.createElement('pre');
+      // textContent safely escapes any HTML in the error message
+      pre.textContent = error instanceof Error ? error.message : String(error);
+      errorDiv.append(h3, p, pre);
+      this.innerHTML = '';  // Clear existing content before appending
+      this.appendChild(errorDiv);
       throw error;
     }
   }

@@ -773,6 +773,7 @@ Resources:
       Runtime: python3.13
       Timeout: 900  # 15 minutes for large documents
       MemorySize: 3008  # Max memory for OCR processing
+      ReservedConcurrentExecutions: 50  # Limit to prevent account exhaustion
       Tracing: Active
       DeadLetterQueue:
         Type: SQS
@@ -825,6 +826,7 @@ Resources:
       Runtime: python3.13
       Timeout: 300
       MemorySize: 256
+      ReservedConcurrentExecutions: 25  # Limit to prevent account exhaustion
       Tracing: Active
       Environment:
         Variables:
@@ -867,6 +869,7 @@ Resources:
       Runtime: python3.13
       Timeout: 60
       MemorySize: 512
+      ReservedConcurrentExecutions: 100  # Higher limit for user-facing queries
       Tracing: Active
       Environment:
         Variables:
@@ -2012,19 +2015,29 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # CloudFormation - for CDK stack deployment
+              # CloudFormation - for CDK stack deployment (scoped to project stacks)
+              # SECURITY: cloudformation:* is required because CDK uses DescribeStacks, CreateChangeSet,
+              # ExecuteChangeSet, DeleteStack, and other actions dynamically. Scoped to project prefix
+              # and CDKToolkit to prevent access to unrelated stacks.
               - Effect: Allow
                 Action:
                   - cloudformation:*
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProjectName}*/*'
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/CDKToolkit/*'
 
-              # AppSync - for GraphQL API
+              # AppSync - for GraphQL API (scoped to region APIs)
+              # SECURITY: appsync:* is required because CDK dynamically manages schema, resolvers,
+              # data sources, and API keys. Cannot scope to specific API ID because it doesn't exist
+              # until after deployment. Scoped to account/region to prevent cross-account access.
               - Effect: Allow
                 Action:
                   - appsync:*
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/*'
+                  - !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:/v1/apis/*'
 
-              # Lambda - for AppSync resolvers
+              # Lambda - for AppSync resolvers (scoped to project functions)
               - Effect: Allow
                 Action:
                   - lambda:CreateFunction
@@ -2042,9 +2055,14 @@ Resources:
                   - lambda:UpdateAlias
                   - lambda:AddPermission
                   - lambda:RemovePermission
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}*'
 
-              # IAM - for Lambda execution roles created by CDK
+              # IAM - for Lambda execution roles created by CDK (scoped to project roles)
+              # SECURITY: IAM role management is required for CDK to create Lambda execution roles.
+              # Strictly scoped to roles with project prefix or amplify- prefix. Does not include
+              # iam:PassRole (handled separately with service conditions) or iam:CreatePolicy
+              # (uses managed policies only).
               - Effect: Allow
                 Action:
                   - iam:CreateRole
@@ -2057,7 +2075,9 @@ Resources:
                   - iam:GetRolePolicy
                   - iam:TagRole
                   - iam:UntagRole
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}*'
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/amplify-*'
 
               # IAM PassRole - scoped to Amplify and Lambda roles only
               - Effect: Allow
@@ -2072,7 +2092,7 @@ Resources:
                       - lambda.amazonaws.com
                       - appsync.amazonaws.com
 
-              # S3 - for CDK assets and web component storage
+              # S3 - for CDK assets and web component storage (scoped to project/cdk buckets)
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
@@ -2088,9 +2108,15 @@ Resources:
                   - s3:PutBucketVersioning
                   - s3:PutBucketPublicAccessBlock
                   - s3:PutEncryptionConfiguration
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cdk-*-assets-${AWS::AccountId}-${AWS::Region}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cdk-*-assets-${AWS::AccountId}-${AWS::Region}/*'
 
-              # CloudFront - for web component CDN
+              # CloudFront - for web component CDN (global service, scoped to account)
+              # SECURITY: CloudFront is a global service without region scoping. Resource ARNs are
+              # scoped to this AWS account only. Distribution IDs are unpredictable UUIDs, so we
+              # cannot further restrict. Project tagging provides audit trail.
               - Effect: Allow
                 Action:
                   - cloudfront:CreateDistribution
@@ -2100,20 +2126,24 @@ Resources:
                   - cloudfront:TagResource
                   - cloudfront:CreateOriginAccessControl
                   - cloudfront:DeleteOriginAccessControl
+                  - cloudfront:GetOriginAccessControl
                   - cloudfront:CreateCloudFrontOriginAccessIdentity
                   - cloudfront:DeleteCloudFrontOriginAccessIdentity
                   - cloudfront:GetCloudFrontOriginAccessIdentity
                   - cloudfront:UpdateCloudFrontOriginAccessIdentity
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*'
+                  - !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*'
 
-              # CodeBuild - for nested web component build project
+              # CodeBuild - for nested web component build project (scoped to project)
               - Effect: Allow
                 Action:
                   - codebuild:CreateProject
                   - codebuild:UpdateProject
                   - codebuild:DeleteProject
                   - codebuild:BatchGetProjects
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${ProjectName}*'
 
               # Cognito - read-only to verify User Pool
               - Effect: Allow

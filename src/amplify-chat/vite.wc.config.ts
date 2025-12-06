@@ -21,6 +21,13 @@ export default defineConfig({
     'process.env': '{}',
     'global': 'globalThis',
   },
+  esbuild: {
+    // SECURITY: Always strip console.log and debugger in web component builds.
+    // Unlike the main UI (which has dev/prod modes), the web component is always
+    // built for production distribution via CDN. Removing console statements
+    // prevents third-party embedders from seeing internal debugging info.
+    drop: ['console', 'debugger'],
+  },
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
