@@ -164,6 +164,27 @@ jobs:
         working-directory: ./src/amplify-chat
         run: npm test -- --run
 
+  amplify-backend-lint:
+    name: Amplify Backend Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: amplify/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./amplify
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./amplify
+        run: npm run lint
+
   amplify-backend-typecheck:
     name: Amplify Backend Typecheck
     runs-on: ubuntu-latest
@@ -217,6 +238,7 @@ jobs:
       - amplify-chat-lint
       - amplify-chat-typecheck
       - amplify-chat-tests
+      - amplify-backend-lint
       - amplify-backend-typecheck
       - amplify-backend-tests
     if: always()
@@ -230,6 +252,7 @@ jobs:
              [ "${{ needs.amplify-chat-lint.result }}" != "success" ] || \
              [ "${{ needs.amplify-chat-typecheck.result }}" != "success" ] || \
              [ "${{ needs.amplify-chat-tests.result }}" != "success" ] || \
+             [ "${{ needs.amplify-backend-lint.result }}" != "success" ] || \
              [ "${{ needs.amplify-backend-typecheck.result }}" != "success" ] || \
              [ "${{ needs.amplify-backend-tests.result }}" != "success" ]; then
             echo "❌ Some checks failed"
