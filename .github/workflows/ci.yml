@@ -95,6 +95,27 @@ jobs:
         working-directory: ./src/ui
         run: npm test -- --run
 
+  amplify-chat-lint:
+    name: Amplify Chat Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: src/amplify-chat/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./src/amplify-chat
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./src/amplify-chat
+        run: npm run lint
+
   amplify-chat-typecheck:
     name: Amplify Chat Typecheck
     runs-on: ubuntu-latest
@@ -193,6 +214,7 @@ jobs:
       - backend-tests
       - frontend-lint
       - frontend-tests
+      - amplify-chat-lint
       - amplify-chat-typecheck
       - amplify-chat-tests
       - amplify-backend-typecheck
@@ -205,6 +227,7 @@ jobs:
              [ "${{ needs.backend-tests.result }}" != "success" ] || \
              [ "${{ needs.frontend-lint.result }}" != "success" ] || \
              [ "${{ needs.frontend-tests.result }}" != "success" ] || \
+             [ "${{ needs.amplify-chat-lint.result }}" != "success" ] || \
              [ "${{ needs.amplify-chat-typecheck.result }}" != "success" ] || \
              [ "${{ needs.amplify-chat-tests.result }}" != "success" ] || \
              [ "${{ needs.amplify-backend-typecheck.result }}" != "success" ] || \
