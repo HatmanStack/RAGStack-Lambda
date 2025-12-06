@@ -9,7 +9,8 @@
  */
 
 import { describe, bench, beforeEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render } from '@testing-library/react';
+import { fireEvent } from '@testing-library/dom';
 import { SourcesToggle } from '../../SourcesToggle';
 import type { Source } from '../../../types';
 
