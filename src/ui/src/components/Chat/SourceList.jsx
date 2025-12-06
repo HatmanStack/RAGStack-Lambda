@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, ExpandableSection, Link } from '@cloudscape-design/components';
+import { Box, ExpandableSection, Link, SpaceBetween, Icon } from '@cloudscape-design/components';
 
 export function SourceList({ sources }) {
   // Early return if no sources
@@ -18,9 +18,19 @@ export function SourceList({ sources }) {
             key={`${source.documentId || source.title}-${source.pageNumber ?? 'no-page'}-${index}`}
             padding={{ bottom: 's' }}
           >
-            <Box variant="strong">{source.title || source.documentId}</Box>
+            {/* For scraped content with source URL, show the original web link */}
+            {source.isScraped && source.sourceUrl ? (
+              <SpaceBetween direction="horizontal" size="xs">
+                <Icon name="external" size="small" />
+                <Link href={source.sourceUrl} external>
+                  {source.sourceUrl}
+                </Link>
+              </SpaceBetween>
+            ) : (
+              <Box variant="strong">{source.title || source.documentId}</Box>
+            )}
 
-            {source.pageNumber != null && (
+            {source.pageNumber != null && !source.isScraped && (
               <Box variant="small" color="text-body-secondary">
                 Page {source.pageNumber}
               </Box>
@@ -38,7 +48,17 @@ export function SourceList({ sources }) {
               </Box>
             )}
 
-            {source.documentUrl && (
+            {/* For scraped content, show download link for markdown file */}
+            {source.isScraped && source.documentUrl && (
+               <Box variant="small" padding={{ top: 'xs' }}>
+                 <Link href={source.documentUrl} external>
+                   Download markdown
+                 </Link>
+               </Box>
+            )}
+
+            {/* For regular documents, show view document link */}
+            {!source.isScraped && source.documentUrl && (
                <Box variant="small" padding={{ top: 'xs' }}>
                  <Link href={source.documentUrl} external>
                    View Document

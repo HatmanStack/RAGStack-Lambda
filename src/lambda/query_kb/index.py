@@ -68,6 +68,32 @@ def generate_presigned_url(bucket, key, expiration=3600):
         return None
 
 
+def extract_source_url_from_content(content_text):
+    """
+    Extract source_url from scraped markdown frontmatter.
+
+    Args:
+        content_text (str): Content text that may contain frontmatter
+
+    Returns:
+        str or None: Source URL if found, None otherwise
+    """
+    if not content_text:
+        return None
+
+    # Look for source_url in YAML frontmatter
+    if "source_url:" in content_text:
+        for line in content_text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("source_url:"):
+                url = stripped.split(":", 1)[1].strip()
+                # Remove quotes if present
+                if url.startswith(("'", '"')) and url.endswith(("'", '"')):
+                    url = url[1:-1]
+                return url
+    return None
+
+
 def extract_sources(citations):
     """
     Parse Bedrock citations into structured sources.
@@ -118,6 +144,9 @@ def extract_sources(citations):
                 document_id = unquote(parts[1])  # e.g., "f8e9d9fc-..."
                 original_filename = unquote(parts[2]) if len(parts) > 2 else None  # e.g., "doc.pdf"
 
+                # Check if this is scraped content (ends with .scraped.md)
+                is_scraped = original_filename and original_filename.endswith(".scraped.md")
+
                 # Construct input bucket URI (replace -output- with -input-)
                 input_bucket = output_bucket.replace("-output-", "-input-")
                 if original_filename:
@@ -135,9 +164,15 @@ def extract_sources(citations):
                     except (IndexError, ValueError):
                         logger.debug(f"Could not extract page number from: {page_file}")
 
-                # Extract snippet (first 200 chars)
+                # Extract snippet and source URL (for scraped content)
                 content_text = ref.get("content", {}).get("text", "")
                 snippet = content_text[:200] if content_text else ""
+
+                # For scraped content, try to extract source URL from frontmatter
+                source_url = None
+                if is_scraped:
+                    source_url = extract_source_url_from_content(content_text)
+                    logger.debug(f"Scraped content detected, source_url: {source_url}")
 
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"
@@ -165,6 +200,8 @@ def extract_sources(citations):
                         "snippet": snippet,
                         "documentUrl": document_url,
                         "documentAccessAllowed": allow_document_access,
+                        "isScraped": is_scraped,
+                        "sourceUrl": source_url,  # Original web URL for scraped content
                     }
                     logger.debug(f"Added source: {source_key}")
                     sources.append(source_obj)

@@ -742,6 +742,82 @@ Resources:
         - Key: Purpose
           Value: Runtime Configuration Storage
 
+  ##########################################################################
+  # Scrape Jobs Table - Tracks web scraping job state
+  ##########################################################################
+
+  ScrapeJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-scrape-jobs-${DeploymentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: base_url
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: BaseUrlIndex
+          KeySchema:
+            - AttributeName: base_url
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: Web Scraping Job Tracking
+
+  ##########################################################################
+  # Scrape URLs Table - Tracks individual URLs within scrape jobs
+  ##########################################################################
+
+  ScrapeUrlsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-scrape-urls-${DeploymentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: url
+          AttributeType: S
+        - AttributeName: url_hash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+        - AttributeName: url
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UrlHashIndex
+          KeySchema:
+            - AttributeName: url_hash
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: Web Scraping URL Tracking
+
   # =========================================================================
   # Lambda Layers
   # =========================================================================
@@ -980,6 +1056,147 @@ Resources:
               Resource: !Ref ProcessingStateMachine
 
   # =========================================================================
+  # Scrape Workflow Lambda Functions
+  # =========================================================================
+
+  ScrapeStartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-scrape-start-${DeploymentSuffix}'
+      CodeUri: src/lambda/scrape_start/
+      Handler: index.lambda_handler
+      Description: Initiate web scraping job
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
+          SCRAPE_STATE_MACHINE_ARN: !Ref ScrapeStateMachine
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeJobsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ScrapeDiscoveryQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref ScrapeStateMachine
+
+  ScrapeDiscoverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-scrape-discover-${DeploymentSuffix}'
+      CodeUri: src/lambda/scrape_discover/
+      Handler: index.lambda_handler
+      Description: Discover URLs during web scraping
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
+          SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ScrapeDiscoveryQueue.Arn
+            BatchSize: 1
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeJobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeUrlsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ScrapeDiscoveryQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ScrapeProcessingQueue.QueueName
+
+  ScrapeProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-scrape-process-${DeploymentSuffix}'
+      CodeUri: src/lambda/scrape_process/
+      Handler: index.lambda_handler
+      Description: Process scraped pages and save to S3
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 1024
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
+          INPUT_BUCKET: !Ref InputBucket
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ScrapeProcessingQueue.Arn
+            BatchSize: 1
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeJobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeUrlsTable
+        - S3CrudPolicy:
+            BucketName: !Ref InputBucket
+
+  ScrapeStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-scrape-status-${DeploymentSuffix}'
+      CodeUri: src/lambda/scrape_status/
+      Handler: index.lambda_handler
+      Description: Return scrape job status for Step Functions polling
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScrapeJobsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:GetQueueAttributes
+              Resource:
+                - !GetAtt ScrapeDiscoveryQueue.Arn
+                - !GetAtt ScrapeProcessingQueue.Arn
+
+  # =========================================================================
   # Step Functions State Machine
   # =========================================================================
 
@@ -1041,6 +1258,78 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vendedlogs/states/${ProjectName}-Pipeline'
+      RetentionInDays: 30
+
+  # =========================================================================
+  # Scrape Workflow State Machine
+  # =========================================================================
+
+  ScrapeStateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ScrapeStatusFunction.Arn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt ScrapeJobsTable.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  ScrapeStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${ProjectName}-ScrapeWorkflow'
+      DefinitionUri: src/statemachine/scrape.asl.json
+      DefinitionSubstitutions:
+        ScrapeStatusFunctionArn: !GetAtt ScrapeStatusFunction.Arn
+        ScrapeJobsTable: !Ref ScrapeJobsTable
+      Role: !GetAtt ScrapeStateMachineExecutionRole.Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt ScrapeStateMachineLogGroup.Arn
+
+  ScrapeStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vendedlogs/states/${ProjectName}-ScrapeWorkflow'
       RetentionInDays: 30
 
   # =========================================================================
@@ -1490,6 +1779,10 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           INPUT_BUCKET: !Ref InputBucket
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+          # Scrape environment variables
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
+          SCRAPE_START_FUNCTION_ARN: !GetAtt ScrapeStartFunction.Arn
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -1503,6 +1796,21 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !GetAtt ProcessingStateMachine.Arn
+        # Scrape policies
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeJobsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScrapeUrlsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt ScrapeStartFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StopExecution
+              Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${ProjectName}-ScrapeWorkflow:*'
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function
@@ -1720,6 +2028,58 @@ Resources:
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
+
+  # =========================================================================
+  # Scrape Workflow SQS Queues
+  # =========================================================================
+
+  ScrapeDiscoveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-scrape-discovery-dlq-${DeploymentSuffix}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ScrapeDiscoveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-scrape-discovery-${DeploymentSuffix}'
+      VisibilityTimeout: 300  # 5 minutes - matches Lambda timeout
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ScrapeDiscoveryDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ScrapeProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-scrape-processing-dlq-${DeploymentSuffix}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ScrapeProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-scrape-processing-${DeploymentSuffix}'
+      VisibilityTimeout: 900  # 15 minutes - matches Lambda timeout for Playwright
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ScrapeProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
 
   # =========================================================================
   # SNS Topic for Alarm Notifications
@@ -2764,6 +3124,56 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ConfigurationTableArn'
 
+  # Scrape DynamoDB Tables
+  ScrapeJobsTableName:
+    Description: DynamoDB table for scrape job tracking
+    Value: !Ref ScrapeJobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeJobsTable'
+
+  ScrapeJobsTableArn:
+    Description: DynamoDB table ARN for scrape job tracking
+    Value: !GetAtt ScrapeJobsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeJobsTableArn'
+
+  ScrapeUrlsTableName:
+    Description: DynamoDB table for scrape URL tracking
+    Value: !Ref ScrapeUrlsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeUrlsTable'
+
+  ScrapeUrlsTableArn:
+    Description: DynamoDB table ARN for scrape URL tracking
+    Value: !GetAtt ScrapeUrlsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeUrlsTableArn'
+
+  # Scrape SQS Queues
+  ScrapeDiscoveryQueueUrl:
+    Description: SQS queue URL for scrape URL discovery
+    Value: !Ref ScrapeDiscoveryQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeDiscoveryQueueUrl'
+
+  ScrapeDiscoveryQueueArn:
+    Description: SQS queue ARN for scrape URL discovery
+    Value: !GetAtt ScrapeDiscoveryQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeDiscoveryQueueArn'
+
+  ScrapeProcessingQueueUrl:
+    Description: SQS queue URL for scrape page processing
+    Value: !Ref ScrapeProcessingQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeProcessingQueueUrl'
+
+  ScrapeProcessingQueueArn:
+    Description: SQS queue ARN for scrape page processing
+    Value: !GetAtt ScrapeProcessingQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeProcessingQueueArn'
+
   # Lambda Functions
   ProcessDocumentFunctionArn:
     Description: Process document Lambda ARN
@@ -2789,6 +3199,25 @@ Outputs:
     Value: !GetAtt ProcessingStateMachine.Arn
     Export:
       Name: !Sub '${AWS::StackName}-StateMachine'
+
+  ScrapeStateMachineArn:
+    Description: Scrape workflow Step Functions state machine ARN
+    Value: !GetAtt ScrapeStateMachine.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeStateMachine'
+
+  # Scrape Lambda Functions
+  ScrapeStartFunctionArn:
+    Description: Scrape start Lambda ARN
+    Value: !GetAtt ScrapeStartFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeStartFunction'
+
+  ScrapeStatusFunctionArn:
+    Description: Scrape status Lambda ARN
+    Value: !GetAtt ScrapeStatusFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScrapeStatusFunction'
 
   # Knowledge Base
   KnowledgeBaseId:

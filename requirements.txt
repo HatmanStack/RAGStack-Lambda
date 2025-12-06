@@ -8,6 +8,12 @@ Pillow>=10.0.1,<11
 # PDF processing (for ragstack_common.ocr)
 PyMuPDF>=1.26.0,<2.0
 
+# Web scraping (for ragstack_common.scraper)
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+markdownify>=0.13.0
+lxml>=5.0.0
+
 # Development Dependencies
 # Testing
 pytest>=7.4.0,<9
