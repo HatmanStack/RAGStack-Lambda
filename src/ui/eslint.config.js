@@ -6,8 +6,19 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
+  // Node.js config files (vite, vitest, etc.) need Node globals like `process`
+  {
+    files: ['vite.config.js', 'vitest.config.js', '*.config.js'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.node,
+      sourceType: 'module',
+    },
+  },
+  // Browser code (React app)
   {
     files: ['**/*.{js,jsx}'],
+    ignores: ['*.config.js'],
     extends: [
       js.configs.recommended,
       reactHooks.configs['recommended-latest'],

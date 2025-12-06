@@ -249,28 +249,44 @@ def handle_update_configuration(custom_config):
         # Remove 'Configuration' key to prevent partition key override
         safe_config = {k: v for k, v in custom_config_obj.items() if k != "Configuration"}
 
-        logger.info(f"[handleUpdate] Safe config to write: {safe_config}")
+        logger.info(f"[handleUpdate] Safe config to write: {list(safe_config.keys())}")
         logger.info(f"[handleUpdate] Writing to DynamoDB table: {configuration_table.table_name}")
 
-        # Get existing Custom configuration to merge with new values
-        existing_custom = get_configuration_item("Custom")
-        logger.info(f"[handleUpdate] Existing Custom config: {existing_custom}")
+        # Use UpdateItem with SET to atomically update fields.
+        # CORRECTNESS: This replaces the previous read-modify-write pattern which had a race
+        # condition: if two concurrent requests read the same config, modified different fields,
+        # and wrote back, the second write would overwrite the first's changes. UpdateItem with
+        # SET expressions atomically updates only the specified fields without reading first.
+        if not safe_config:
+            logger.info("[handleUpdate] No configuration fields to update")
+            return True
 
-        # Merge: start with existing config, then apply new values
-        merged_config = {}
-        if existing_custom:
-            # Copy all existing fields except the partition key
-            merged_config = {k: v for k, v in existing_custom.items() if k != "Configuration"}
-            logger.info(f"[handleUpdate] Existing fields: {list(merged_config.keys())}")
+        # Build update expression dynamically from validated keys.
+        # SECURITY: Keys are validated against the schema (valid_fields) above, so we're not
+        # accepting arbitrary user input in the expression. The #{key} and :{key} placeholders
+        # use DynamoDB's expression attribute names/values which prevent injection attacks -
+        # user values never become part of the expression syntax itself.
+        update_expr_parts = []
+        expr_attr_names = {}
+        expr_attr_values = {}
 
-        # Apply new values (overwriting any existing ones)
-        merged_config.update(safe_config)
-        logger.info(f"[handleUpdate] Merged config after update: {merged_config}")
+        for key, value in safe_config.items():
+            # Use # prefix for attribute names (handles reserved words like "status", "name")
+            # Use : prefix for attribute values (parameterized to prevent injection)
+            update_expr_parts.append(f"#{key} = :{key}")
+            expr_attr_names[f"#{key}"] = key
+            expr_attr_values[f":{key}"] = value
 
-        # Write merged config to DynamoDB
-        item_to_write = {"Configuration": "Custom", **merged_config}
-        logger.info(f"[handleUpdate] Full item to write: {item_to_write}")
-        configuration_table.put_item(Item=item_to_write)
+        update_expression = "SET " + ", ".join(update_expr_parts)
+        logger.info(f"[handleUpdate] Update expression: {update_expression}")
+
+        # Atomic update - DynamoDB handles concurrency internally
+        configuration_table.update_item(
+            Key={"Configuration": "Custom"},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expr_attr_names,
+            ExpressionAttributeValues=expr_attr_values,
+        )
 
         logger.info("[handleUpdate] Custom configuration updated successfully")
         return True

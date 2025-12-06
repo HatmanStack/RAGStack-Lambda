@@ -2,6 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content Security Policy (CSP) - Security Justification:
+      - 'unsafe-inline' (script/style): Required by Vite dev server HMR and Cloudscape Design System
+        which injects dynamic styles. In production, Vite bundles eliminate most inline scripts.
+      - 'unsafe-eval': Required by Vite dev server for HMR. Could be removed in production-only builds
+        but kept for consistency. AWS Amplify libraries may also use eval for dynamic config.
+      - connect-src wildcards: Required for AWS SDK calls to dynamic regional endpoints.
+        Cognito, AppSync, and S3 endpoints vary by region and cannot be hardcoded.
+      - data: URIs: Required for inline SVG icons and base64-encoded images from Cloudscape.
+    -->
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' 'unsafe-inline' 'unsafe-eval';
+               style-src 'self' 'unsafe-inline';
+               connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com wss://*.appsync-api.*.amazonaws.com;
+               img-src 'self' data: blob:;
+               font-src 'self' data:;">
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Serverless document processing and knowledge base search" />

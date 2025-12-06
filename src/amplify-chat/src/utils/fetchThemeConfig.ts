@@ -8,7 +8,12 @@
  * The API endpoint and key are embedded at build time via inject-amplify-config.js
  */
 
-import { THEME_API_CONFIG } from '../amplify-config.generated';
+// THEME_API_CONFIG is generated at build time by inject-amplify-config.js
+// It may not exist in development or if the SAM stack hasn't been deployed
+import * as generatedConfig from '../amplify-config.generated';
+
+// Type-safe access to optional THEME_API_CONFIG export
+const THEME_API_CONFIG = (generatedConfig as { THEME_API_CONFIG?: { endpoint?: string; apiKey?: string } }).THEME_API_CONFIG;
 
 export interface ThemeConfig {
   themePreset: 'light' | 'dark' | 'brand';

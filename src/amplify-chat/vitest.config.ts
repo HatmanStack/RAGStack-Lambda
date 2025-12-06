@@ -11,5 +11,11 @@ export default defineConfig({
       'src/**/__tests__/**/*.test.ts',
       'src/**/__tests__/**/*.test.tsx',
     ],
+    // Exclude integration tests from default run - they require deployed backend
+    // Run integration tests separately with: npm test -- --include '**/integration/**'
+    exclude: [
+      'node_modules/**',
+      '**/integration/**',
+    ],
   },
 });

@@ -8,17 +8,15 @@ import { ChatInterface } from '../ChatInterface';
 import { mockScrollIntoView, mockSessionStorage, cleanupTestUtils } from '../../test-utils';
 
 // Mock the GraphQL client using vi.hoisted to avoid hoisting issues
-const { mockConversationQuery } = vi.hoisted(() => {
+const { mockGraphql } = vi.hoisted(() => {
   return {
-    mockConversationQuery: vi.fn(),
+    mockGraphql: vi.fn(),
   };
 });
 
-vi.mock('aws-amplify/data', () => ({
+vi.mock('aws-amplify/api', () => ({
   generateClient: () => ({
-    queries: {
-      conversation: mockConversationQuery,
-    },
+    graphql: mockGraphql,
   }),
 }));
 
@@ -29,21 +27,23 @@ describe('ChatInterface', () => {
     mockSessionStorage();
 
     // Reset and configure the GraphQL mock
-    mockConversationQuery.mockReset();
+    mockGraphql.mockReset();
 
     // Default mock response - resolves after a short delay
-    mockConversationQuery.mockImplementation(({ message }) => {
+    mockGraphql.mockImplementation(({ variables }) => {
       return Promise.resolve({
         data: {
-          content: `Mock response to: ${message}`,
-          sources: [
-            {
-              title: 'Test Document',
-              location: 'Page 1',
-              snippet: 'Test snippet from document',
-            },
-          ],
-          modelUsed: 'test-model',
+          conversation: {
+            content: `Mock response to: ${variables?.message || 'unknown'}`,
+            sources: [
+              {
+                title: 'Test Document',
+                location: 'Page 1',
+                snippet: 'Test snippet from document',
+              },
+            ],
+            modelUsed: 'test-model',
+          },
         },
         errors: null,
       });
@@ -83,7 +83,7 @@ describe('ChatInterface', () => {
 
     // Wait for async GraphQL call to complete to avoid act() warnings
     await waitFor(() => {
-      expect(mockConversationQuery).toHaveBeenCalled();
+      expect(mockGraphql).toHaveBeenCalled();
     });
   });
 
@@ -193,7 +193,7 @@ describe('ChatInterface', () => {
 
     // Wait for async operations to complete
     await waitFor(() => {
-      expect(mockConversationQuery).toHaveBeenCalled();
+      expect(mockGraphql).toHaveBeenCalled();
     });
   });
 

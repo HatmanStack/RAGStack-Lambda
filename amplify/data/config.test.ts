@@ -64,7 +64,7 @@ describe('Amplify Knowledge Base Config', () => {
 
   it('should have valid format KB ID and region', () => {
     // KB IDs are typically alphanumeric
-    expect(/^[a-zA-Z0-9\-]+$/.test(KNOWLEDGE_BASE_CONFIG.knowledgeBaseId)).toBe(true);
+    expect(/^[a-zA-Z0-9-]+$/.test(KNOWLEDGE_BASE_CONFIG.knowledgeBaseId)).toBe(true);
 
     // Region should be in format like us-east-1, eu-west-1, etc
     expect(/^[a-z]{2}-[a-z]+-\d$/.test(KNOWLEDGE_BASE_CONFIG.region)).toBe(true);

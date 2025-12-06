@@ -165,6 +165,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         });
 
         // Call GraphQL conversation query
+        // Type assertion needed because generateClient returns a union type that includes
+        // subscription results, but we're using a query which always returns GraphQLResult
         const response = await client.graphql({
           query: CONVERSATION_QUERY,
           variables: {
@@ -173,7 +175,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             userId: userId || undefined,
             userToken: userToken || undefined,
           },
-        });
+        }) as { data?: { conversation?: { content: string; sources?: Array<{ title: string; location: string; snippet: string; documentUrl?: string; documentAccessAllowed?: boolean }>; modelUsed?: string } }; errors?: Array<{ message: string }> };
 
         console.log('[ChatInterface] Query successful', {
           hasData: !!response.data,
@@ -186,7 +188,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
           // Debug: Log full conversation response
           console.log('[ChatInterface] Full conversation response:', response.data.conversation);
-          console.log('[ChatInterface] Sources received:', sources?.map(s => ({
+          console.log('[ChatInterface] Sources received:', sources?.map((s: { title: string; documentUrl?: string; documentAccessAllowed?: boolean }) => ({
             title: s.title,
             hasDocumentUrl: !!s.documentUrl,
             documentUrl: s.documentUrl?.substring(0, 50) + '...',
