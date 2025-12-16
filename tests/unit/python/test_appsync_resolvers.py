@@ -261,3 +261,160 @@ class TestCreateImageUploadUrl:
 
         result = module.lambda_handler(event, None)
         assert "imageId" in result
+
+
+# =============================================================================
+# Generate Caption Resolver Tests
+# =============================================================================
+
+
+class TestGenerateCaption:
+    """Tests for generateCaption resolver."""
+
+    def test_generate_caption_success(self, mock_env, mock_boto3):
+        """Test successful caption generation."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Mock S3 get_object
+        mock_body = MagicMock()
+        mock_body.read.return_value = b"\x89PNG\r\n\x1a\n" + b"fake image data"
+        mock_boto3["s3"].get_object.return_value = {
+            "Body": mock_body,
+            "ContentType": "image/png",
+        }
+
+        # Mock bedrock_runtime.converse
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.return_value = {
+            "output": {
+                "message": {
+                    "content": [{"text": "A beautiful sunset over the ocean with clouds."}]
+                }
+            }
+        }
+        module.bedrock_runtime = mock_bedrock
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] == "A beautiful sunset over the ocean with clouds."
+        assert result["error"] is None
+
+        # Verify S3 was called correctly
+        mock_boto3["s3"].get_object.assert_called_once_with(
+            Bucket="test-data-bucket", Key="images/123/image.png"
+        )
+
+        # Verify Bedrock Converse was called
+        mock_bedrock.converse.assert_called_once()
+
+    def test_generate_caption_invalid_s3_uri_format(self, mock_env, mock_boto3):
+        """Test rejection of invalid S3 URI format."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": "https://example.com/image.png"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] is None
+        assert "Invalid S3 URI" in result["error"]
+
+    def test_generate_caption_empty_s3_uri(self, mock_env, mock_boto3):
+        """Test rejection of empty S3 URI."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": ""},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] is None
+        assert "Invalid S3 URI" in result["error"]
+
+    def test_generate_caption_wrong_bucket(self, mock_env, mock_boto3):
+        """Test rejection of image from unauthorized bucket."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": "s3://other-bucket/images/123/image.png"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] is None
+        assert "configured data bucket" in result["error"]
+
+    def test_generate_caption_s3_not_found(self, mock_env, mock_boto3):
+        """Test handling of S3 NoSuchKey error."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Mock S3 to raise NoSuchKey
+        from botocore.exceptions import ClientError
+
+        mock_boto3["s3"].get_object.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}, "GetObject"
+        )
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] is None
+        assert "not found" in result["error"]
+
+    def test_generate_caption_bedrock_error(self, mock_env, mock_boto3):
+        """Test handling of Bedrock API error."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Mock S3 get_object
+        mock_body = MagicMock()
+        mock_body.read.return_value = b"\x89PNG\r\n\x1a\n" + b"fake image data"
+        mock_boto3["s3"].get_object.return_value = {
+            "Body": mock_body,
+            "ContentType": "image/png",
+        }
+
+        # Mock bedrock_runtime to raise error
+        from botocore.exceptions import ClientError
+
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.side_effect = ClientError(
+            {"Error": {"Code": "ValidationException", "Message": "Model error"}},
+            "Converse",
+        )
+        module.bedrock_runtime = mock_bedrock
+
+        event = {
+            "info": {"fieldName": "generateCaption"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["caption"] is None
+        assert "Model error" in result["error"]

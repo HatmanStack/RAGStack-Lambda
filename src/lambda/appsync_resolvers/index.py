@@ -30,6 +30,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.scraper import ScrapeStatus
 
@@ -48,6 +49,12 @@ STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 SCRAPE_JOBS_TABLE = os.environ.get("SCRAPE_JOBS_TABLE")
 SCRAPE_URLS_TABLE = os.environ.get("SCRAPE_URLS_TABLE")
 SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
+
+# Configuration table (optional, for caption generation)
+CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
+
+# Initialize Bedrock runtime client for caption generation
+bedrock_runtime = boto3.client("bedrock-runtime")
 
 # Validation constants
 MAX_FILENAME_LENGTH = 255
@@ -77,6 +84,7 @@ def lambda_handler(event, context):
         "cancelScrape": cancel_scrape,
         # Image resolvers
         "createImageUploadUrl": create_image_upload_url,
+        "generateCaption": generate_caption,
     }
 
     resolver = resolvers.get(field_name)
@@ -768,3 +776,146 @@ def create_image_upload_url(args):
     except Exception as e:
         logger.error(f"Unexpected error in create_image_upload_url: {e}")
         raise
+
+
+def generate_caption(args):
+    """
+    Generate an AI caption for an image using Bedrock Converse API with vision.
+
+    Args:
+        args: Dictionary containing:
+            - imageS3Uri: S3 URI of the image to caption (s3://bucket/key)
+
+    Returns:
+        CaptionResult with caption or error field
+    """
+    image_s3_uri = args.get("imageS3Uri", "")
+    logger.info(f"Generating caption for image: {image_s3_uri[:50]}...")
+
+    try:
+        # Validate S3 URI format
+        if not image_s3_uri or not image_s3_uri.startswith("s3://"):
+            return {"caption": None, "error": "Invalid S3 URI format. Must start with s3://"}
+
+        # Parse S3 URI
+        uri_path = image_s3_uri.replace("s3://", "")
+        parts = uri_path.split("/", 1)
+        if len(parts) != 2 or not parts[1]:
+            return {"caption": None, "error": "Invalid S3 URI format. Must be s3://bucket/key"}
+
+        bucket = parts[0]
+        key = parts[1]
+
+        # Validate bucket matches DATA_BUCKET for security
+        if bucket != DATA_BUCKET:
+            logger.warning(f"Attempted caption for unauthorized bucket: {bucket}")
+            return {"caption": None, "error": "Image must be in the configured data bucket"}
+
+        # Get image from S3
+        logger.info(f"Retrieving image from S3: bucket={bucket}, key={key}")
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            image_bytes = response["Body"].read()
+            content_type = response.get("ContentType", "image/jpeg")
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "NoSuchKey":
+                return {"caption": None, "error": "Image not found in S3"}
+            if error_code == "AccessDenied":
+                return {"caption": None, "error": "Access denied to image in S3"}
+            logger.error(f"S3 error retrieving image: {e}")
+            return {"caption": None, "error": f"Failed to retrieve image: {error_code}"}
+
+        # Get configured chat model from ConfigurationManager
+        if CONFIGURATION_TABLE_NAME:
+            try:
+                config_manager = ConfigurationManager(CONFIGURATION_TABLE_NAME)
+                chat_model_id = config_manager.get_parameter(
+                    "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get config, using default model: {e}")
+                chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        else:
+            chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+        logger.info(f"Using model for caption: {chat_model_id}")
+
+        # Determine image media type for Converse API
+        media_type_mapping = {
+            "image/png": "png",
+            "image/jpeg": "jpeg",
+            "image/gif": "gif",
+            "image/webp": "webp",
+        }
+        media_type = media_type_mapping.get(content_type)
+        if not media_type:
+            # Try to infer from file extension
+            ext = key.lower().split(".")[-1] if "." in key else ""
+            media_type = {"png": "png", "jpg": "jpeg", "jpeg": "jpeg", "gif": "gif", "webp": "webp"}.get(ext, "jpeg")
+
+        # Build Converse API request with image
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "image": {
+                            "format": media_type,
+                            "source": {"bytes": image_bytes},
+                        }
+                    },
+                    {
+                        "text": "Generate a descriptive caption for this image. "
+                        "The caption should be concise (1-2 sentences) and describe "
+                        "the main subject, context, and any notable details. "
+                        "This caption will be used for searching and retrieving the image."
+                    },
+                ],
+            }
+        ]
+
+        system_prompt = (
+            "You are an image captioning assistant. Generate concise, descriptive captions "
+            "that are suitable for use as search keywords. Focus on the main subject, "
+            "setting, and any notable visual elements. Keep captions under 200 characters."
+        )
+
+        # Call Bedrock Converse API
+        logger.info("Calling Bedrock Converse API for caption generation")
+        try:
+            converse_response = bedrock_runtime.converse(
+                modelId=chat_model_id,
+                messages=messages,
+                system=[{"text": system_prompt}],
+                inferenceConfig={
+                    "maxTokens": 500,
+                    "temperature": 0.3,  # Lower temperature for more consistent captions
+                },
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", "")
+            logger.error(f"Bedrock error: {error_code} - {error_msg}")
+            return {"caption": None, "error": f"Failed to generate caption: {error_msg}"}
+
+        # Extract caption from response
+        output = converse_response.get("output", {})
+        output_message = output.get("message", {})
+        content_blocks = output_message.get("content", [])
+
+        caption = ""
+        for block in content_blocks:
+            if isinstance(block, dict) and "text" in block:
+                caption += block["text"]
+
+        caption = caption.strip()
+        if not caption:
+            return {"caption": None, "error": "Model returned empty caption"}
+
+        logger.info(f"Generated caption: {caption[:100]}...")
+        return {"caption": caption, "error": None}
+
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_caption: {e}", exc_info=True)
+        return {"caption": None, "error": "Failed to generate caption. Please try again."}
