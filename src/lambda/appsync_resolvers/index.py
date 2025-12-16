@@ -34,7 +34,7 @@ dynamodb = boto3.resource("dynamodb")
 sfn = boto3.client("stepfunctions")
 
 TRACKING_TABLE = os.environ["TRACKING_TABLE"]
-INPUT_BUCKET = os.environ["INPUT_BUCKET"]
+DATA_BUCKET = os.environ["DATA_BUCKET"]
 STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 
 # Scrape-related environment variables (optional, only available when scraping is enabled)
@@ -194,13 +194,13 @@ def create_upload_url(args):
         document_id = str(uuid4())
         logger.info(f"Generated document ID: {document_id}")
 
-        # Generate S3 key
-        s3_key = f"{document_id}/{filename}"
+        # Generate S3 key with input/ prefix for DataBucket
+        s3_key = f"input/{document_id}/{filename}"
 
         # Create presigned POST
         logger.info(f"Generating presigned POST for S3 key: {s3_key}")
         presigned = s3.generate_presigned_post(
-            Bucket=INPUT_BUCKET,
+            Bucket=DATA_BUCKET,
             Key=s3_key,
             ExpiresIn=3600,  # 1 hour
         )
@@ -213,7 +213,7 @@ def create_upload_url(args):
             Item={
                 "document_id": document_id,
                 "filename": filename,
-                "input_s3_uri": f"s3://{INPUT_BUCKET}/{s3_key}",
+                "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
                 "status": "uploaded",
                 "created_at": now,
                 "updated_at": now,

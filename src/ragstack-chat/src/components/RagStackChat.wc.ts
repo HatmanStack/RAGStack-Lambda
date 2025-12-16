@@ -1,5 +1,5 @@
 /**
- * AmplifyChat Web Component
+ * RagStackChat Web Component
  *
  * A custom HTML element that wraps the ChatWithSources React component.
  * This allows the chat component to be used in any framework or vanilla JavaScript.
@@ -9,18 +9,18 @@
  *
  * Usage:
  * ```html
- * <script src="https://your-cdn.com/amplify-chat.js"></script>
+ * <script src="https://your-cdn.com/ragstack-chat.js"></script>
  * <!-- Uses theme from Settings (embedded at build time) -->
- * <amplify-chat conversation-id="my-chat"></amplify-chat>
+ * <ragstack-chat conversation-id="my-chat"></ragstack-chat>
  * ```
  *
  * Override theme per instance:
  * ```html
- * <amplify-chat
+ * <ragstack-chat
  *   conversation-id="my-chat"
  *   theme-preset="dark"
  *   theme-overrides='{"primaryColor": "#9c27b0"}'
- * ></amplify-chat>
+ * ></ragstack-chat>
  * ```
  *
  * Attributes:
@@ -36,8 +36,8 @@
  * - theme-overrides: JSON string with theme overrides (default from build config)
  *
  * Events:
- * - amplify-chat:send-message: Fired when user sends a message
- * - amplify-chat:response-received: Fired when AI responds
+ * - ragstack-chat:send-message: Fired when user sends a message
+ * - ragstack-chat:response-received: Fired when AI responds
  */
 
 import React from 'react';
@@ -48,12 +48,12 @@ import { THEME_CONFIG } from '../amplify-config.generated';
 import { fetchThemeConfig, ThemeConfig } from '../utils/fetchThemeConfig';
 
 /**
- * AmplifyChat Web Component
+ * RagStackChat Web Component
  *
  * Extends HTMLElement to provide a custom element interface to the
  * ChatWithSources React component.
  */
-class AmplifyChat extends HTMLElement {
+class RagStackChat extends HTMLElement {
   private root: Root | null = null;
   private fetchedTheme: ThemeConfig | null = null;
   private themeFetched = false;
@@ -81,7 +81,7 @@ class AmplifyChat extends HTMLElement {
    */
   connectedCallback(): void {
     try {
-      console.log('[AmplifyChat] connectedCallback - element added to DOM');
+      console.log('[RagStackChat] connectedCallback - element added to DOM');
 
       // Check if theme attributes are provided
       const hasThemeAttrs = this.hasAttribute('theme-preset') ||
@@ -89,19 +89,19 @@ class AmplifyChat extends HTMLElement {
 
       if (hasThemeAttrs) {
         // Use provided attributes, don't fetch
-        console.log('[AmplifyChat] Using theme from attributes');
+        console.log('[RagStackChat] Using theme from attributes');
         this.render();
       } else if (!this.themeFetched) {
         // No attributes provided, fetch theme from SAM API
-        console.log('[AmplifyChat] Fetching theme from API...');
+        console.log('[RagStackChat] Fetching theme from API...');
         this.fetchAndApplyTheme();
       } else {
         this.render();
       }
 
-      console.log('[AmplifyChat] render() completed successfully');
+      console.log('[RagStackChat] render() completed successfully');
     } catch (error) {
-      console.error('[AmplifyChat] Error in connectedCallback:', error);
+      console.error('[RagStackChat] Error in connectedCallback:', error);
       throw error;
     }
   }
@@ -116,12 +116,12 @@ class AmplifyChat extends HTMLElement {
       if (theme) {
         this.themeFetched = true;
         this.fetchedTheme = theme;
-        console.log('[AmplifyChat] Theme fetched successfully:', theme);
+        console.log('[RagStackChat] Theme fetched successfully:', theme);
       } else {
-        console.log('[AmplifyChat] No theme fetched, using defaults');
+        console.log('[RagStackChat] No theme fetched, using defaults');
       }
     } catch (error) {
-      console.warn('[AmplifyChat] Theme fetch failed, using defaults:', error);
+      console.warn('[RagStackChat] Theme fetch failed, using defaults:', error);
     } finally {
       // Always render, even if theme fetch failed
       this.render();
@@ -181,13 +181,13 @@ class AmplifyChat extends HTMLElement {
    */
   private render(): void {
     try {
-      console.log('[AmplifyChat] render() called');
+      console.log('[RagStackChat] render() called');
 
       // Create root if it doesn't exist
       if (!this.root) {
-        console.log('[AmplifyChat] Creating React root...');
+        console.log('[RagStackChat] Creating React root...');
         this.root = createRoot(this);
-        console.log('[AmplifyChat] React root created');
+        console.log('[RagStackChat] React root created');
       }
 
       // Build props from attributes
@@ -226,7 +226,7 @@ class AmplifyChat extends HTMLElement {
         themeOverrides: themeOverrides,
         onSendMessage: (message: string, conversationId: string) => {
           this.dispatchEvent(
-            new CustomEvent('amplify-chat:send-message', {
+            new CustomEvent('ragstack-chat:send-message', {
               detail: { message, conversationId },
               bubbles: true,
               composed: true,
@@ -235,7 +235,7 @@ class AmplifyChat extends HTMLElement {
         },
         onResponseReceived: (response: ChatMessage) => {
           this.dispatchEvent(
-            new CustomEvent('amplify-chat:response-received', {
+            new CustomEvent('ragstack-chat:response-received', {
               detail: response,
               bubbles: true,
               composed: true,
@@ -244,16 +244,16 @@ class AmplifyChat extends HTMLElement {
         },
       };
 
-      console.log('[AmplifyChat] Rendering with props:', props);
+      console.log('[RagStackChat] Rendering with props:', props);
 
       // Render the component
       this.root.render(
         React.createElement(ChatWithSources, props)
       );
 
-      console.log('[AmplifyChat] React.createElement() completed');
+      console.log('[RagStackChat] React.createElement() completed');
     } catch (error) {
-      console.error('[AmplifyChat] Error in render():', error);
+      console.error('[RagStackChat] Error in render():', error);
       // SECURITY: Use DOM construction with textContent instead of innerHTML template literals.
       // The previous implementation used innerHTML with ${error.message} which is vulnerable
       // to XSS if an attacker can control the error message content (e.g., through malformed
@@ -261,7 +261,7 @@ class AmplifyChat extends HTMLElement {
       const errorDiv = document.createElement('div');
       errorDiv.style.cssText = 'padding: 20px; border: 2px solid red; background: #fee; color: #c00;';
       const h3 = document.createElement('h3');
-      h3.textContent = 'AmplifyChat Error';
+      h3.textContent = 'RagStackChat Error';
       const p = document.createElement('p');
       p.textContent = 'Failed to render chat component. Check console for details.';
       const pre = document.createElement('pre');
@@ -292,8 +292,8 @@ class AmplifyChat extends HTMLElement {
 /**
  * Register the custom element
  */
-if (!customElements.get('amplify-chat')) {
-  customElements.define('amplify-chat', AmplifyChat);
+if (!customElements.get('ragstack-chat')) {
+  customElements.define('ragstack-chat', RagStackChat);
 }
 
-export { AmplifyChat };
+export { RagStackChat };

@@ -190,31 +190,32 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         raise
 
-    # Step 5: Create Data Source for S3 Output bucket
-    # This allows Bedrock KB to ingest documents from the output bucket
+    # Step 5: Create Data Source for S3 data bucket (output/ prefix)
+    # This allows Bedrock KB to ingest documents from the output prefix
     project_name = properties.get("ProjectName", "default")
-    output_bucket = properties.get("OutputBucket")
-    if not output_bucket:
-        raise ValueError("OutputBucket property is required")
+    data_bucket = properties.get("DataBucket")
+    if not data_bucket:
+        raise ValueError("DataBucket property is required")
 
     data_source_name = f"{kb_name}-datasource"
-    logger.info(f"Creating Data Source: {data_source_name} for bucket {output_bucket}")
+    logger.info(f"Creating Data Source: {data_source_name} for bucket {data_bucket}/output/")
 
     try:
-        # Get the S3 bucket ARN for the output bucket
+        # Get the S3 bucket ARN for the data bucket
         sts_client = boto3.client("sts")
         account_id = sts_client.get_caller_identity()["Account"]
-        output_bucket_arn = f"arn:aws:s3:::{output_bucket}"
+        data_bucket_arn = f"arn:aws:s3:::{data_bucket}"
 
         ds_response = bedrock_agent.create_data_source(
             knowledgeBaseId=kb_id,
             name=data_source_name,
-            description=f"S3 data source for {project_name} (output bucket)",
+            description=f"S3 data source for {project_name} (output prefix)",
             dataSourceConfiguration={
                 "type": "S3",
                 "s3Configuration": {
-                    "bucketArn": output_bucket_arn,
+                    "bucketArn": data_bucket_arn,
                     "bucketOwnerAccountId": account_id,
+                    "inclusionPrefixes": ["output/"],
                 },
             },
         )

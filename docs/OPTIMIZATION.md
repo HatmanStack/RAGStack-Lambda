@@ -165,28 +165,31 @@ Lifecycle policies automatically transition or delete objects to reduce storage 
 
 ### Current Configuration
 
-| Bucket | Lifecycle Policy | Rationale |
-|--------|------------------|-----------|
-| **InputBucket** | No expiration | Source documents |
-| **OutputBucket** | No expiration | Extracted text |
-| **VectorBucket** | No expiration | Vector embeddings for KB |
-| **UIBucket** | No expiration | React UI assets |
+| Bucket | Prefix | Lifecycle Policy | Rationale |
+|--------|--------|------------------|-----------|
+| **DataBucket** | `input/` | No expiration | Source documents |
+| **DataBucket** | `output/` | No expiration | Extracted text |
+| **DataBucket** | `working/` | 7-day expiration | Temporary processing files |
+| **VectorBucket** | - | No expiration | Vector embeddings for KB |
+| **UIBucket** | - | No expiration | React UI assets |
 
 ### Customizing Retention Periods
 
 Edit `template.yaml` to adjust retention based on your requirements:
 
 ```yaml
-InputBucket:
+DataBucket:
   Properties:
     LifecycleConfiguration:
       Rules:
-        - Id: TransitionToIA
+        - Id: TransitionInputToIA
           Status: Enabled
+          Filter:
+            Prefix: input/
           Transitions:
             - StorageClass: STANDARD_IA
               TransitionInDays: 30  # Move to Infrequent Access after 30 days
-        - Id: DeleteOldDocuments
+        - Id: DeleteOldInputDocuments
           Status: Enabled
           ExpirationInDays: 365  # Delete after 1 year
 ```

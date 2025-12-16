@@ -97,11 +97,15 @@ def lambda_handler(event, context):
             "depth": 0,
         }
 
-        sqs.send_message(
-            QueueUrl=discovery_queue_url,
-            MessageBody=json.dumps(message),
-            MessageGroupId=job_id if discovery_queue_url.endswith(".fifo") else None,
-        )
+        send_params = {
+            "QueueUrl": discovery_queue_url,
+            "MessageBody": json.dumps(message),
+        }
+        # Only add MessageGroupId for FIFO queues
+        if discovery_queue_url.endswith(".fifo"):
+            send_params["MessageGroupId"] = job_id
+
+        sqs.send_message(**send_params)
         logger.info(f"Sent initial URL to discovery queue: {base_url}")
 
         # Start Step Functions execution

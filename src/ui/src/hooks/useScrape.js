@@ -17,16 +17,48 @@ export const useScrape = () => {
   const startScrape = useCallback(async (input) => {
     setLoading(true);
     setError(null);
+    console.log('[useScrape] Starting scrape with input:', JSON.stringify(input, null, 2));
     try {
       const response = await client.graphql({
         query: startScrapeMutation,
         variables: { input }
       });
-      const job = response.data.startScrape;
+      console.log('[useScrape] Scrape response:', JSON.stringify(response, null, 2));
+
+      // Check for GraphQL errors in the response
+      if (response.errors && response.errors.length > 0) {
+        const errorDetails = response.errors.map(e => e.message).join('; ');
+        console.error('[useScrape] GraphQL errors:', response.errors);
+        throw new Error(errorDetails);
+      }
+
+      const job = response.data?.startScrape;
+      if (!job) {
+        console.error('[useScrape] No job returned in response');
+        throw new Error('No job data returned from server');
+      }
+
       setJobs(prev => [job, ...prev]);
       return job;
     } catch (err) {
-      setError(err.message || 'Failed to start scrape');
+      // Log full error details
+      console.error('[useScrape] Error starting scrape:', err);
+      console.error('[useScrape] Error details:', {
+        message: err.message,
+        errors: err.errors,
+        data: err.data,
+        stack: err.stack
+      });
+
+      // Extract the most useful error message
+      let errorMessage = 'Failed to start scrape';
+      if (err.errors && err.errors.length > 0) {
+        errorMessage = err.errors.map(e => e.message).join('; ');
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
       throw err;
     } finally {
       setLoading(false);

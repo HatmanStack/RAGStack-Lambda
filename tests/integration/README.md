@@ -7,7 +7,7 @@ Tests for the RAGStack-Lambda processing pipeline against a deployed AWS stack.
 ```bash
 # Set environment variables
 export STACK_NAME=RAGStack-dev
-export INPUT_BUCKET=ragstack-dev-input-xxxxx
+export DATA_BUCKET=ragstack-dev-data-xxxxx
 export TRACKING_TABLE=RAGStack-dev-Tracking
 
 # Run tests

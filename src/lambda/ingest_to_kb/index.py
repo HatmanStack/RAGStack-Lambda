@@ -13,7 +13,7 @@ Input event:
 Output:
 {
     "document_id": "abc123",
-    "status": "completed",
+    "status": "indexed",
     "ingestion_status": "STARTING"
 }
 """
@@ -82,18 +82,18 @@ def lambda_handler(event, context):
         if doc_details:
             ingestion_status = doc_details[0].get("status", "UNKNOWN")
 
-        # Update document status in DynamoDB to 'completed'
+        # Update document status in DynamoDB to 'indexed'
         try:
             tracking_table.update_item(
                 Key={"document_id": document_id},
                 UpdateExpression="SET #status = :status, updatedAt = :updated_at",
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
-                    ":status": "completed",
+                    ":status": "indexed",
                     ":updated_at": datetime.utcnow().isoformat() + "Z",
                 },
             )
-            logger.info(f"Updated document {document_id} status to 'completed'")
+            logger.info(f"Updated document {document_id} status to 'indexed'")
         except ClientError as e:
             logger.error(f"Failed to update DynamoDB status for {document_id}: {str(e)}")
             # Log the error but don't fail the ingestion - the document was successfully ingested
@@ -101,7 +101,7 @@ def lambda_handler(event, context):
 
         return {
             "document_id": document_id,
-            "status": "completed",
+            "status": "indexed",
             "ingestion_status": ingestion_status,
             "knowledge_base_id": kb_id,
         }

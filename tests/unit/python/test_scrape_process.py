@@ -24,7 +24,7 @@ def _mock_env(monkeypatch):
     """Set up environment variables for tests."""
     monkeypatch.setenv("SCRAPE_JOBS_TABLE", "test-jobs-table")
     monkeypatch.setenv("SCRAPE_URLS_TABLE", "test-urls-table")
-    monkeypatch.setenv("INPUT_BUCKET", "test-input-bucket")
+    monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
     monkeypatch.setenv("REQUEST_DELAY_MS", "0")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -90,7 +90,7 @@ class TestScrapeProcessHandler:
         """Test error when SCRAPE_JOBS_TABLE is missing."""
         monkeypatch.delenv("SCRAPE_JOBS_TABLE", raising=False)
         monkeypatch.setenv("SCRAPE_URLS_TABLE", "test-urls-table")
-        monkeypatch.setenv("INPUT_BUCKET", "test-input-bucket")
+        monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
         monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
 
         module = _load_scrape_process_module()

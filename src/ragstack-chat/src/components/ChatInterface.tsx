@@ -2,35 +2,38 @@
  * ChatInterface Component
  *
  * Main chat component that orchestrates message state management.
- * Phase 2: Integrated with GraphQL backend via generateClient.
+ * Uses direct fetch to SAM AppSync API.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { generateClient } from 'aws-amplify/api';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import styles from '../styles/ChatWithSources.module.css';
 
-// GraphQL query for conversation
-const CONVERSATION_QUERY = `
-  query Conversation($message: String!, $conversationId: String!, $userId: String, $userToken: String) {
-    conversation(message: $message, conversationId: $conversationId, userId: $userId, userToken: $userToken) {
-      content
+// GraphQL query for SAM AppSync queryKnowledgeBase
+const QUERY_KB_QUERY = `
+  query QueryKnowledgeBase($query: String!, $conversationId: String) {
+    queryKnowledgeBase(query: $query, conversationId: $conversationId) {
+      answer
+      conversationId
       sources {
-        title
-        location
+        documentId
+        pageNumber
+        s3Uri
         snippet
         documentUrl
         documentAccessAllowed
       }
-      modelUsed
+      error
     }
   }
 `;
 
-// Initialize GraphQL client at module level (reused across instances)
-const client = generateClient();
+// Get SAM API endpoint and key from build-time config
+// These are injected by the inject-amplify-config.js script
+declare const SAM_GRAPHQL_ENDPOINT: string | undefined;
+declare const SAM_GRAPHQL_API_KEY: string | undefined;
 
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
@@ -39,14 +42,78 @@ const MESSAGE_LIMIT = 50;
 const MAX_RETRIES = 3;
 
 /**
+ * Query SAM AppSync API directly using fetch
+ */
+async function queryKnowledgeBase(
+  message: string,
+  conversationId: string
+): Promise<{
+  answer: string;
+  conversationId: string | null;
+  sources: Array<{
+    documentId: string;
+    pageNumber?: number;
+    s3Uri: string;
+    snippet?: string;
+    documentUrl?: string;
+    documentAccessAllowed?: boolean;
+  }>;
+  error?: string;
+}> {
+  const endpoint = typeof SAM_GRAPHQL_ENDPOINT !== 'undefined' ? SAM_GRAPHQL_ENDPOINT : '';
+  const apiKey = typeof SAM_GRAPHQL_API_KEY !== 'undefined' ? SAM_GRAPHQL_API_KEY : '';
+
+  if (!endpoint) {
+    throw new Error('SAM_GRAPHQL_ENDPOINT not configured. Check web component build configuration.');
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'x-api-key': apiKey } : {}),
+    },
+    body: JSON.stringify({
+      query: QUERY_KB_QUERY,
+      variables: {
+        query: message,
+        conversationId: conversationId,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+
+  if (result.errors && result.errors.length > 0) {
+    throw new Error(result.errors[0].message);
+  }
+
+  if (!result.data?.queryKnowledgeBase) {
+    throw new Error('No response data received');
+  }
+
+  const kbResponse = result.data.queryKnowledgeBase;
+
+  if (kbResponse.error) {
+    throw new Error(kbResponse.error);
+  }
+
+  return kbResponse;
+}
+
+/**
  * ChatInterface Component
  *
  * Manages conversation state, message persistence, and orchestrates child components.
- * Integrated with GraphQL backend via generateClient<Schema>().
+ * Uses direct fetch to SAM AppSync API.
  *
  * @param conversationId - Unique conversation identifier
- * @param userId - User ID for authenticated mode (optional)
- * @param userToken - Auth token for authenticated mode (optional)
+ * @param userId - User ID for authenticated mode (optional, for future use)
+ * @param userToken - Auth token for authenticated mode (optional, for future use)
  * @param onSendMessage - Callback when message is sent
  * @param onResponseReceived - Callback when response is received
  * @param showSources - Whether to show sources for assistant messages
@@ -64,20 +131,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
-
-  // Determine authentication mode
-  const isAuthenticated = Boolean(userId && userToken);
-  const hasPartialCredentials = Boolean(userId && !userToken) || Boolean(!userId && userToken);
-
-  // Warn about partial credentials
-  useEffect(() => {
-    if (hasPartialCredentials) {
-      console.warn(
-        'ChatInterface: Both userId and userToken must be provided for authenticated mode. ' +
-          'Currently in invalid state - messages may fail.'
-      );
-    }
-  }, [hasPartialCredentials]);
 
   // SessionStorage key with userId and conversationId for isolation
   const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
@@ -121,19 +174,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [messages, storageKey]);
 
-  // Clear conversation from sessionStorage and component state
-  const clearConversation = useCallback(() => {
-    try {
-      sessionStorage.removeItem(storageKey);
-      setMessages([]);
-      setError(null);
-      console.log(`ChatInterface: Cleared conversation "${storageKey}"`);
-    } catch (err) {
-      console.error('ChatInterface: Failed to clear conversation:', err);
-    }
-  }, [storageKey]);
-
-  // Handle send message (Phase 2: real GraphQL query)
+  // Handle send message
   const handleSend = useCallback(
     async (messageText: string) => {
       // Create user message
@@ -156,69 +197,46 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setError(null);
 
       try {
-        // Debug logging for authentication
-        console.log('[ChatInterface] Sending conversation query', {
+        console.log('[RagStackChat] Sending query to SAM API', {
           conversationId,
-          isAuthenticated,
-          hasUserId: !!userId,
-          hasUserToken: !!userToken,
+          messageLength: messageText.length,
         });
 
-        // Call GraphQL conversation query
-        // Type assertion needed because generateClient returns a union type that includes
-        // subscription results, but we're using a query which always returns GraphQLResult
-        const response = await client.graphql({
-          query: CONVERSATION_QUERY,
-          variables: {
-            message: messageText,
-            conversationId: conversationId,
-            userId: userId || undefined,
-            userToken: userToken || undefined,
-          },
-        }) as { data?: { conversation?: { content: string; sources?: Array<{ title: string; location: string; snippet: string; documentUrl?: string; documentAccessAllowed?: boolean }>; modelUsed?: string } }; errors?: Array<{ message: string }> };
+        // Call SAM AppSync API directly
+        const response = await queryKnowledgeBase(messageText, conversationId);
 
-        console.log('[ChatInterface] Query successful', {
-          hasData: !!response.data,
-          hasConversation: !!response.data?.conversation,
+        console.log('[RagStackChat] Query successful', {
+          hasAnswer: !!response.answer,
+          sourcesCount: response.sources?.length || 0,
         });
 
-        // Check for response data
-        if (response.data?.conversation) {
-          const { content, sources, modelUsed } = response.data.conversation;
+        // Map sources to the format expected by the UI
+        const mappedSources = (response.sources || []).map((s) => ({
+          title: s.documentId,
+          location: s.pageNumber ? `Page ${s.pageNumber}` : undefined,
+          snippet: s.snippet || '',
+          documentUrl: s.documentUrl,
+          documentAccessAllowed: s.documentAccessAllowed,
+        }));
 
-          // Debug: Log full conversation response
-          console.log('[ChatInterface] Full conversation response:', response.data.conversation);
-          console.log('[ChatInterface] Sources received:', sources?.map((s: { title: string; documentUrl?: string; documentAccessAllowed?: boolean }) => ({
-            title: s.title,
-            hasDocumentUrl: !!s.documentUrl,
-            documentUrl: s.documentUrl?.substring(0, 50) + '...',
-            documentAccessAllowed: s.documentAccessAllowed
-          })));
+        // Create assistant message from response
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: response.answer || 'No response from assistant',
+          timestamp: new Date().toISOString(),
+          sources: mappedSources,
+        };
 
-          // Create assistant message from response
-          const assistantMessage: ChatMessage = {
-            role: 'assistant',
-            content: content || 'No response from assistant',
-            timestamp: new Date().toISOString(),
-            sources: sources || [],
-            modelUsed: modelUsed || undefined,
-          };
+        // Add assistant message
+        setMessages((prev) => [...prev, assistantMessage]);
 
-          // Add assistant message
-          setMessages((prev) => [...prev, assistantMessage]);
-
-          // Call onResponseReceived callback if provided
-          if (onResponseReceived) {
-            onResponseReceived(assistantMessage);
-          }
-        } else {
-          // Handle case where response.data is null/undefined
-          throw new Error(response.errors?.[0]?.message || 'No response data received');
+        // Call onResponseReceived callback if provided
+        if (onResponseReceived) {
+          onResponseReceived(assistantMessage);
         }
       } catch (err) {
         // Error classification and handling
-        console.error('[ChatInterface] Conversation query error:', err);
-        console.error('[ChatInterface] Error details:', JSON.stringify(err, null, 2));
+        console.error('[RagStackChat] Query error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
 
         // Classify error type based on message patterns
@@ -236,7 +254,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           retryable = true;
         } else if (
           errorMessage.toLowerCase().includes('network') ||
-          errorMessage.toLowerCase().includes('fetch')
+          errorMessage.toLowerCase().includes('fetch') ||
+          errorMessage.toLowerCase().includes('http')
         ) {
           errorType = 'network';
           retryable = true;
@@ -272,26 +291,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
     // to prevent handleSend recreation when parent passes new callback references.
     // These are optional side-effect callbacks that don't affect core functionality.
-    [conversationId, userId, userToken]
+    [conversationId, error]
   );
 
   return (
     <div className={styles.chatContainer}>
-      {/* Authentication status indicator */}
-      {(isAuthenticated || hasPartialCredentials) && (
-        <div className={styles.authStatus}>
-          {isAuthenticated && (
-            <span className={styles.authBadge} title={`Authenticated as: ${userId}`}>
-              🔐 Authenticated
-            </span>
-          )}
-          {hasPartialCredentials && (
-            <span className={styles.authWarning} title="Incomplete credentials">
-              ⚠️ Invalid Auth
-            </span>
-          )}
-        </div>
-      )}
       <MessageList
         messages={messages}
         isLoading={isLoading}

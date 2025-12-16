@@ -9,8 +9,8 @@ import path from 'path';
  * that auto-executes when loaded via script tag, ensuring customElements.define() runs.
  *
  * Usage:
- * <script src="path/to/amplify-chat.js"></script>
- * <amplify-chat conversation-id="my-chat"></amplify-chat>
+ * <script src="path/to/ragstack-chat.js"></script>
+ * <ragstack-chat conversation-id="my-chat"></ragstack-chat>
  */
 
 export default defineConfig({
@@ -20,6 +20,9 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify('production'),
     'process.env': '{}',
     'global': 'globalThis',
+    // SAM GraphQL API configuration (injected from environment variables)
+    'SAM_GRAPHQL_ENDPOINT': JSON.stringify(process.env.SAM_GRAPHQL_ENDPOINT || ''),
+    'SAM_GRAPHQL_API_KEY': JSON.stringify(process.env.SAM_GRAPHQL_API_KEY || ''),
   },
   esbuild: {
     // SECURITY: Always strip console.log and debugger in web component builds.
@@ -31,7 +34,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/wc.ts'),
-      name: 'AmplifyChat',
+      name: 'RagStackChat',
       fileName: (format) => `wc.${format === 'es' ? 'esm.' : ''}js`,
       formats: ['iife', 'es'],
     },
@@ -41,7 +44,7 @@ export default defineConfig({
         // IIFE format for <script> tag usage (auto-executes)
         {
           format: 'iife',
-          name: 'AmplifyChat',
+          name: 'RagStackChat',
           // Don't externalize dependencies - bundle everything for standalone use
           inlineDynamicImports: true,
         },

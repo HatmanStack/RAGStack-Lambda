@@ -1,7 +1,7 @@
 {
-  "name": "@ragstack/amplify-chat",
+  "name": "@ragstack/ragstack-chat",
   "version": "1.0.0",
-  "description": "Reusable React component for AI chat with source attribution using AWS Amplify AI Kit and Bedrock",
+  "description": "Reusable React component for AI chat with source attribution using AWS Bedrock Knowledge Base",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "module": "dist/index.esm.js",
@@ -34,7 +34,7 @@
     "test": "vitest"
   },
   "keywords": [
-    "amplify",
+    "ragstack",
     "bedrock",
     "chat",
     "ai",
@@ -47,17 +47,10 @@
   "author": "",
   "license": "MIT",
   "peerDependencies": {
-    "aws-amplify": "^6.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
-  "peerDependenciesMeta": {
-    "aws-amplify": {
-      "optional": false
-    }
-  },
   "devDependencies": {
-    "@aws-amplify/ui-react-ai": "^1.0.0",
     "@testing-library/jest-dom": "^6.1.0",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
@@ -75,16 +68,14 @@
     "vite": "^5.0.0",
     "vitest": "^0.34.0"
   },
-  "dependencies": {
-    "aws-amplify": "^6.0.0"
-  },
+  "dependencies": {},
   "repository": {
     "type": "git",
     "url": "https://github.com/your-org/RAGStack-Lambda.git",
-    "directory": "src/amplify-chat"
+    "directory": "src/ragstack-chat"
   },
   "bugs": {
     "url": "https://github.com/your-org/RAGStack-Lambda/issues"
   },
-  "homepage": "https://github.com/your-org/RAGStack-Lambda/tree/main/src/amplify-chat#readme"
+  "homepage": "https://github.com/your-org/RAGStack-Lambda/tree/main/src/ragstack-chat#readme"
 }

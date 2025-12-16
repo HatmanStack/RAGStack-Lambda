@@ -7,8 +7,10 @@ type Query {
   # List all documents (paginated)
   listDocuments(limit: Int, nextToken: String): DocumentConnection
 
-  # Query Knowledge Base with optional session for conversation continuity
-  queryKnowledgeBase(query: String!, sessionId: String): ChatResponse
+  # Query Knowledge Base with optional conversation ID for multi-turn chat
+  # Note: sessionId is deprecated, use conversationId instead
+  # Accessible via API key for web component, or Cognito for admin UI
+  queryKnowledgeBase(query: String!, sessionId: String, conversationId: String): ChatResponse @aws_api_key @aws_cognito_user_pools
 
   # Search Knowledge Base and return raw vector search results
   searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult
@@ -86,16 +88,17 @@ type UploadUrl {
   fields: AWSJSON
 }
 
-# Chat response with session support for conversation continuity
-type ChatResponse {
+# Chat response with conversation support for multi-turn context
+type ChatResponse @aws_api_key @aws_cognito_user_pools {
   answer: String!
-  sessionId: String
+  sessionId: String  # Deprecated, use conversationId
+  conversationId: String
   sources: [Source!]!
   error: String
 }
 
 # Source citation from Knowledge Base retrieval
-type Source {
+type Source @aws_api_key @aws_cognito_user_pools {
   documentId: String!
   pageNumber: Int
   s3Uri: String!
@@ -164,17 +167,23 @@ enum ScrapeStatus {
 }
 
 # URL scope enforcement for crawling
+# - SUBPAGES: Only URLs under the base path
+# - HOSTNAME: Any URL on the same hostname
+# - DOMAIN: Any URL on the same domain (includes subdomains)
 enum ScrapeScope {
-  SUBPAGES   # Only URLs under the base path
-  HOSTNAME   # Any URL on the same hostname
-  DOMAIN     # Any URL on the same domain (includes subdomains)
+  SUBPAGES
+  HOSTNAME
+  DOMAIN
 }
 
 # Scrape mode for content fetching
+# - FAST: HTTP fetch only
+# - FULL: Always use Playwright
+# - AUTO: Auto-detect based on content
 enum ScrapeMode {
-  FAST   # HTTP fetch only
-  FULL   # Always use Playwright
-  AUTO   # Auto-detect based on content
+  FAST
+  FULL
+  AUTO
 }
 
 # Scrape job configuration
@@ -243,9 +252,4 @@ type ScrapeUrlCheck {
   lastScrapedAt: AWSDateTime
   jobId: ID
   title: String
-}
-
-schema {
-  query: Query
-  mutation: Mutation
 }

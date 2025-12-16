@@ -60,12 +60,22 @@ export const useDocuments = () => {
 
   const fetchScrapeJobs = useCallback(async () => {
     try {
-      const { data } = await client.graphql({
+      const response = await client.graphql({
         query: listScrapeJobs,
         variables: { limit: 50 }
       });
+
+      // Check for errors in response
+      if (response.errors) {
+        console.error('GraphQL errors fetching scrape jobs:', response.errors);
+        return;
+      }
+
+      const { data } = response;
+      const items = data?.listScrapeJobs?.items || [];
+
       // Transform scrape jobs to match document structure for unified display
-      const transformedJobs = (data.listScrapeJobs?.items || []).map(job => ({
+      const transformedJobs = items.map(job => ({
         documentId: job.jobId,
         filename: job.title || job.baseUrl,
         status: job.status,
@@ -79,8 +89,7 @@ export const useDocuments = () => {
       }));
       setScrapeJobs(transformedJobs);
     } catch (err) {
-      // Silently fail - scrape API may not be deployed yet
-      console.debug('Failed to fetch scrape jobs:', err);
+      console.error('Failed to fetch scrape jobs:', err);
     }
   }, []);
 

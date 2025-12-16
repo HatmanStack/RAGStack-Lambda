@@ -1,8 +1,8 @@
 /**
- * Amplify Chat Component Library
+ * RagStack Chat Component Library
  *
  * A reusable, embeddable React component for AI chat with source attribution.
- * Integrates with AWS Amplify AI Kit and Bedrock Knowledge Base.
+ * Integrates with AWS Bedrock Knowledge Base.
  *
  * Supports both React imports and Web Component usage.
  *
@@ -10,24 +10,22 @@
  *
  * @example React Usage
  * ```tsx
- * import { ChatWithSources } from '@ragstack/amplify-chat';
+ * import { ChatWithSources } from '@ragstack/ragstack-chat';
  *
  * export function MyApp() {
  *   return (
- *     <Authenticator>
- *       <ChatWithSources
- *         conversationId="my-chat"
- *         headerText="Ask a Question"
- *       />
- *     </Authenticator>
+ *     <ChatWithSources
+ *       conversationId="my-chat"
+ *       headerText="Ask a Question"
+ *     />
  *   );
  * }
  * ```
  *
  * @example Web Component Usage
  * ```html
- * <script src="https://your-cdn.com/amplify-chat.js"></script>
- * <amplify-chat conversation-id="my-chat"></amplify-chat>
+ * <script src="https://your-cdn.com/ragstack-chat.js"></script>
+ * <ragstack-chat conversation-id="my-chat"></ragstack-chat>
  * ```
  */
 
@@ -36,7 +34,7 @@ export { ChatWithSources } from './components/ChatWithSources';
 export { SourcesDisplay } from './components/SourcesDisplay';
 
 // Export Web Component
-export { AmplifyChat } from './components/AmplifyChat.wc';
+export { RagStackChat } from './components/RagStackChat.wc';
 
 // Export types
 export type {

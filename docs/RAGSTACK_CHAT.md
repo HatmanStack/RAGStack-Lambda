@@ -1,4 +1,4 @@
-# Amplify Chat Component
+# RagStack Chat Component
 
 AI chat with source attribution for **any web framework**. Integrates with AWS Bedrock Knowledge Base.
 
@@ -8,68 +8,64 @@ Use the chat in Vue, Angular, Svelte, or vanilla JavaScript:
 
 ```html
 <!-- Include the web component (from CDN after deployment) -->
-<script src="https://your-cdn-url/amplify-chat.js"></script>
+<script src="https://your-cdn-url/ragstack-chat.js"></script>
 
 <!-- Add chat to your page -->
-<amplify-chat
+<ragstack-chat
   conversation-id="my-app"
   header-text="Ask About Documents"
   show-sources="true"
-></amplify-chat>
+></ragstack-chat>
 
 <script>
   // Listen for events
-  document.querySelector('amplify-chat')
-    .addEventListener('amplify-chat:send-message', (e) => {
+  document.querySelector('ragstack-chat')
+    .addEventListener('ragstack-chat:send-message', (e) => {
       console.log('User asked:', e.detail.message);
     });
 </script>
 ```
 
-**Get CDN URL:** Deployment outputs this URL after running `publish.py --deploy-chat`
+**Get CDN URL:** Deployment outputs this URL after running `publish.py`
 
 ## Quick Start - React Component
 
 For React applications:
 
 ```bash
-npm install @ragstack/amplify-chat aws-amplify @aws-amplify/ui-react-ai
+npm install @ragstack/ragstack-chat
 ```
 
 ```tsx
-import { ChatWithSources } from '@ragstack/amplify-chat';
-import { Authenticator } from '@aws-amplify/ui-react';
+import { ChatWithSources } from '@ragstack/ragstack-chat';
 
 export function App() {
   return (
-    <Authenticator>
-      <ChatWithSources
-        conversationId="main"
-        headerText="Document Q&A"
-      />
-    </Authenticator>
+    <ChatWithSources
+      conversationId="main"
+      headerText="Document Q&A"
+    />
   );
 }
 ```
 
 ## Features
 
-- ✨ **Embeddable** - Use in any React app
-- 🤖 **AI-Powered** - Integrates with Bedrock and Claude
-- 📚 **Source Attribution** - Shows document sources with collapsible UI
-- 📎 **Document Access** - Download original source documents (admin-configurable)
-- 🎨 **Styled** - Compatible with Cloudscape
-- ♿ **Accessible** - WCAG 2.1 AA compliant (keyboard nav, screen readers)
-- 📱 **Responsive** - Desktop, tablet, mobile
-- 🌙 **Dark Mode** - System preference support
-- ✅ **Tested** - Comprehensive test suite
+- Web component embeddable in any framework
+- AI-Powered - Integrates with Bedrock and Claude
+- Source Attribution - Shows document sources with collapsible UI
+- Document Access - Download original source documents (admin-configurable)
+- Styled - Compatible with Cloudscape
+- Accessible - WCAG 2.1 AA compliant (keyboard nav, screen readers)
+- Responsive - Desktop, tablet, mobile
+- Dark Mode - System preference support
+- Tested - Comprehensive test suite
 
 ## Prerequisites
 
-- React 18+
-- AWS Amplify backend with chat route (from SAM deployment)
+- React 18+ (for React component)
+- RAGStack-Lambda SAM deployment
 - Bedrock Knowledge Base
-- AWS credentials configured
 
 ## Configuration
 
@@ -124,7 +120,7 @@ Source citations appear below each AI response in a collapsible UI:
 
 ### Document Downloads
 
-When `chat_allow_document_access` is enabled (admin UI → Configuration):
+When `chat_allow_document_access` is enabled (admin UI -> Configuration):
 
 - **"View Document" links** appear in source citations
 - **Presigned S3 URLs** for original uploaded files (not vector chunks)
@@ -132,9 +128,9 @@ When `chat_allow_document_access` is enabled (admin UI → Configuration):
 - **Read-only access** (no modification)
 
 **User experience:**
-1. User sends query → AI responds with sources
-2. User expands sources → sees snippets + "View Document" links
-3. User clicks link → original PDF/image/doc downloads
+1. User sends query -> AI responds with sources
+2. User expands sources -> sees snippets + "View Document" links
+3. User clicks link -> original PDF/image/doc downloads
 4. URL expires after 1 hour
 
 **Admin controls:**
@@ -212,17 +208,17 @@ export function ConnectedChat() {
 Use the component in any framework via Web Components:
 
 ```html
-<script src="https://your-cdn.com/amplify-chat@1.0.0.js"></script>
+<script src="https://your-cdn.com/ragstack-chat.js"></script>
 
-<amplify-chat
+<ragstack-chat
   conversation-id="my-chat"
   header-text="Ask a Question"
   show-sources="true"
-></amplify-chat>
+></ragstack-chat>
 
 <script>
-  document.querySelector('amplify-chat')
-    .addEventListener('amplify-chat:send-message', (e) => {
+  document.querySelector('ragstack-chat')
+    .addEventListener('ragstack-chat:send-message', (e) => {
       console.log('Message:', e.detail.message);
     });
 </script>
@@ -233,21 +229,21 @@ Use the component in any framework via Web Components:
 **Vue 3:**
 ```vue
 <template>
-  <amplify-chat
+  <ragstack-chat
     conversation-id="vue-chat"
-    @amplify-chat:send-message="handleMessage"
+    @ragstack-chat:send-message="handleMessage"
   />
 </template>
 
 <script setup>
-import '@ragstack/amplify-chat/wc';
+import '@ragstack/ragstack-chat/wc';
 </script>
 ```
 
 **Angular:**
 ```typescript
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import '@ragstack/amplify-chat/wc';
+import '@ragstack/ragstack-chat/wc';
 
 @NgModule({ schemas: [CUSTOM_ELEMENTS_SCHEMA] })
 export class AppModule {}
@@ -256,20 +252,19 @@ export class AppModule {}
 **Svelte:**
 ```svelte
 <script>
-  import '@ragstack/amplify-chat/wc';
+  import '@ragstack/ragstack-chat/wc';
 </script>
 
-<amplify-chat on:amplify-chat:send-message={handleMessage} />
+<ragstack-chat on:ragstack-chat:send-message={handleMessage} />
 ```
 
 ## Backend Setup
 
 The component requires:
 
-1. **SAM deployment** - Creates Bedrock Knowledge Base and Cognito User Pool
-2. **Amplify backend** - Defines chat route with Lambda Authorizer for JWT validation
-3. **Knowledge Base ID** - From SAM outputs, set in environment
-4. **Authentication** - Cognito user pool from SAM stack (shared with admin UI)
+1. **SAM deployment** - Creates Bedrock Knowledge Base, Cognito User Pool, and AppSync GraphQL API
+2. **Knowledge Base ID** - From SAM outputs, configured in web component build
+3. **AppSync GraphQL** - Query endpoint injected during build
 
 ## Performance Optimization
 
@@ -291,7 +286,7 @@ return <ChatWithSources {...chatProps} />;
 import { lazy, Suspense } from 'react';
 
 const ChatWithSources = lazy(() =>
-  import('@ragstack/amplify-chat').then(m => ({
+  import('@ragstack/ragstack-chat').then(m => ({
     default: m.ChatWithSources,
   }))
 );
@@ -304,29 +299,23 @@ const ChatWithSources = lazy(() =>
 ## Troubleshooting
 
 **Component doesn't render:**
-- Verify `amplify_outputs.json` exists
 - Check browser console for errors
-- Ensure Authenticator wraps component
+- Verify CDN URL is correct
 
-**"Knowledge Base not found":**
-- Verify SAM deployment created KB
-- Check `KNOWLEDGE_BASE_ID` environment variable
-- Verify Amplify Lambda has Bedrock permissions
+**"No response from API":**
+- Verify SAM deployment completed successfully
+- Check GraphQL endpoint is configured
+- Verify Bedrock Knowledge Base has content
 
 **Styling conflicts:**
 - Check CSS specificity
 - Inspect in DevTools
 - Use `!important` if needed
 
-**Auth errors:**
-- Verify Cognito is set up
-- Check AWS credentials
-- Review IAM policies
-
 ## Build from Source
 
 ```bash
-cd src/amplify-chat
+cd src/ragstack-chat
 npm install
 npm run build
 npm test
@@ -357,7 +346,7 @@ interface Source {
 
 ## Related Documentation
 
-- [Architecture](ARCHITECTURE.md) - Optional chat stack details
+- [Architecture](ARCHITECTURE.md) - System architecture details
 - [Deployment](DEPLOYMENT.md) - How to deploy
 - [Development](DEVELOPMENT.md) - Development patterns
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues

@@ -38,7 +38,7 @@ VITE_USER_POOL_ID=us-east-1_xxxxx
 VITE_USER_POOL_CLIENT_ID=xxxxx
 VITE_IDENTITY_POOL_ID=us-east-1:xxxxx
 VITE_GRAPHQL_URL=https://xxxxx.appsync-api.us-east-1.amazonaws.com/graphql
-VITE_INPUT_BUCKET=ragstack-xxxxx-input-xxxxx
+VITE_DATA_BUCKET=ragstack-xxxxx-data-xxxxx
 ```
 
 Or use the configuration script:

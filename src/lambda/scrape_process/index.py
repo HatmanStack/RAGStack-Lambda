@@ -38,6 +38,17 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
+def sanitize_for_s3_metadata(value: str, max_length: int = 256) -> str:
+    """Sanitize a string for S3 metadata (ASCII only, limited length)."""
+    if not value:
+        return "Untitled"
+    # Replace non-ASCII with closest ASCII equivalent or remove
+    ascii_value = value.encode("ascii", "ignore").decode("ascii")
+    # Replace common unicode chars that get stripped
+    ascii_value = ascii_value.strip() or "Untitled"
+    return ascii_value[:max_length]
+
+
 def lambda_handler(event, context):
     """
     Main Lambda handler - processes URLs and extracts content.
@@ -45,15 +56,15 @@ def lambda_handler(event, context):
     # Get environment variables
     jobs_table = os.environ.get("SCRAPE_JOBS_TABLE")
     urls_table = os.environ.get("SCRAPE_URLS_TABLE")
-    input_bucket = os.environ.get("INPUT_BUCKET")
+    data_bucket = os.environ.get("DATA_BUCKET")
     request_delay_ms = int(os.environ.get("REQUEST_DELAY_MS", "500"))
 
     if not jobs_table:
         raise ValueError("SCRAPE_JOBS_TABLE environment variable required")
     if not urls_table:
         raise ValueError("SCRAPE_URLS_TABLE environment variable required")
-    if not input_bucket:
-        raise ValueError("INPUT_BUCKET environment variable required")
+    if not data_bucket:
+        raise ValueError("DATA_BUCKET environment variable required")
 
     dynamodb = boto3.resource("dynamodb")
     jobs_tbl = dynamodb.Table(jobs_table)
@@ -155,13 +166,13 @@ def lambda_handler(event, context):
                 skipped += 1
                 continue
 
-            # Generate document ID and S3 key
+            # Generate document ID and S3 key (input/ prefix for DataBucket)
             document_id = str(uuid.uuid4())
-            s3_key = f"{document_id}/{document_id}.scraped.md"
+            s3_key = f"input/{document_id}/{document_id}.scraped.md"
 
-            # Upload to input bucket
+            # Upload to data bucket (input/ prefix)
             s3.put_object(
-                Bucket=input_bucket,
+                Bucket=data_bucket,
                 Key=s3_key,
                 Body=extracted.markdown.encode("utf-8"),
                 ContentType="text/markdown",
@@ -169,11 +180,11 @@ def lambda_handler(event, context):
                     "source_url": url,
                     "job_id": job_id,
                     "document_id": document_id,
-                    "title": extracted.title[:256] if extracted.title else "Untitled",
+                    "title": sanitize_for_s3_metadata(extracted.title),
                 },
             )
 
-            logger.info(f"Saved content to s3://{input_bucket}/{s3_key}")
+            logger.info(f"Saved content to s3://{data_bucket}/{s3_key}")
 
             # Store hash for future deduplication
             dedup.store_hash(job_id, url, extracted.markdown)
@@ -237,8 +248,8 @@ def _mark_failed(jobs_tbl, urls_tbl, job_id: str | None, url: str | None, error:
         # Update URL status to failed
         urls_tbl.update_item(
             Key={"job_id": job_id, "url": url},
-            UpdateExpression="SET #status = :status, error = :err",
-            ExpressionAttributeNames={"#status": "status"},
+            UpdateExpression="SET #status = :status, #error = :err",
+            ExpressionAttributeNames={"#status": "status", "#error": "error"},
             ExpressionAttributeValues={
                 ":status": UrlStatus.FAILED.value,
                 ":err": error[:500],  # Truncate for DynamoDB

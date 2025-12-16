@@ -15,11 +15,11 @@ import pytest
 
 # Get environment variables - check these BEFORE importing boto3
 STACK_NAME = os.environ.get("STACK_NAME", "RAGStack-dev")
-INPUT_BUCKET = os.environ.get("INPUT_BUCKET")
+DATA_BUCKET = os.environ.get("DATA_BUCKET")
 TRACKING_TABLE = os.environ.get("TRACKING_TABLE")
 STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 
-if not all([INPUT_BUCKET, TRACKING_TABLE, STATE_MACHINE_ARN]):
+if not all([DATA_BUCKET, TRACKING_TABLE, STATE_MACHINE_ARN]):
     pytest.skip("Integration tests require deployed stack", allow_module_level=True)
 
 # Import boto3 only after environment check
@@ -60,13 +60,13 @@ def create_test_pdf_with_text():
 
 
 def upload_test_document(s3_client, filename, content):
-    """Upload test document to S3 input bucket."""
+    """Upload test document to S3 data bucket (input/ prefix)."""
     document_id = f"test-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    s3_key = f"{document_id}/{filename}"
+    s3_key = f"input/{document_id}/{filename}"
 
-    s3_client.put_object(Bucket=INPUT_BUCKET, Key=s3_key, Body=content)
+    s3_client.put_object(Bucket=DATA_BUCKET, Key=s3_key, Body=content)
 
-    return document_id, f"s3://{INPUT_BUCKET}/{s3_key}"
+    return document_id, f"s3://{DATA_BUCKET}/{s3_key}"
 
 
 def wait_for_processing(dynamodb_resource, document_id, timeout=300):
