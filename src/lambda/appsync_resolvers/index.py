@@ -1,5 +1,5 @@
 """
-AppSync Lambda resolvers for document and scrape operations.
+AppSync Lambda resolvers for document, scrape, and image operations.
 
 Handles:
 - getDocument
@@ -11,19 +11,26 @@ Handles:
 - checkScrapeUrl
 - startScrape
 - cancelScrape
+- createImageUploadUrl
+- generateCaption
+- submitImage
+- getImage
+- listImages
+- deleteImage
 """
 
 import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 from uuid import uuid4
 
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.scraper import ScrapeStatus
 
 logger = logging.getLogger()
@@ -68,6 +75,8 @@ def lambda_handler(event, context):
         "checkScrapeUrl": check_scrape_url,
         "startScrape": start_scrape,
         "cancelScrape": cancel_scrape,
+        # Image resolvers
+        "createImageUploadUrl": create_image_upload_url,
     }
 
     resolver = resolvers.get(field_name)
@@ -207,7 +216,7 @@ def create_upload_url(args):
 
         # Create tracking record
         logger.info(f"Creating tracking record for document: {document_id}")
-        now = datetime.now().isoformat()
+        now = datetime.now(UTC).isoformat()
         table = dynamodb.Table(TRACKING_TABLE)
         table.put_item(
             Item={
@@ -278,7 +287,7 @@ def process_document(args):
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":status": "processing",
-                ":updated_at": datetime.now().isoformat(),
+                ":updated_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -312,14 +321,43 @@ def process_document(args):
         raise
 
 
+def generate_presigned_download_url(s3_uri, expiration=3600):
+    """Generate presigned URL for S3 object download."""
+    if not s3_uri or not s3_uri.startswith("s3://"):
+        return None
+    try:
+        # Parse s3://bucket/key format
+        path = s3_uri.replace("s3://", "")
+        parts = path.split("/", 1)
+        if len(parts) != 2:
+            return None
+        bucket, key = parts
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=expiration,
+        )
+    except ClientError as e:
+        logger.warning(f"Failed to generate presigned URL for {s3_uri}: {e}")
+        return None
+
+
 def format_document(item):
     """Format DynamoDB item as GraphQL Document type."""
+    output_s3_uri = item.get("output_s3_uri")
+    status = item.get("status", "uploaded").upper()
+
+    # Generate preview URL for completed documents
+    preview_url = None
+    if status in ("OCR_COMPLETE", "EMBEDDING_COMPLETE", "INDEXED") and output_s3_uri:
+        preview_url = generate_presigned_download_url(output_s3_uri)
+
     return {
         "documentId": item["document_id"],
         "filename": item.get("filename", ""),
         "inputS3Uri": item.get("input_s3_uri", ""),
-        "outputS3Uri": item.get("output_s3_uri"),
-        "status": item.get("status", "uploaded").upper(),
+        "outputS3Uri": output_s3_uri,
+        "status": status,
         "fileType": item.get("file_type"),
         "isTextNative": item.get("is_text_native", False),
         "totalPages": item.get("total_pages", 0),
@@ -327,6 +365,7 @@ def format_document(item):
         "createdAt": item.get("created_at"),
         "updatedAt": item.get("updated_at"),
         "metadata": json.dumps(item.get("metadata", {})),
+        "previewUrl": preview_url,
     }
 
 
@@ -498,6 +537,7 @@ def start_scrape(args):
                 "scope": input_data.get("scope", "subpages").lower(),
                 "include_patterns": input_data.get("includePatterns", []),
                 "exclude_patterns": input_data.get("excludePatterns", []),
+                "force_rescrape": input_data.get("forceRescrape", False),
             },
         }
 
@@ -536,8 +576,8 @@ def start_scrape(args):
             "totalUrls": 0,
             "processedCount": 0,
             "failedCount": 0,
-            "createdAt": datetime.now().isoformat(),
-            "updatedAt": datetime.now().isoformat(),
+            "createdAt": datetime.now(UTC).isoformat(),
+            "updatedAt": datetime.now(UTC).isoformat(),
         }
 
     except ClientError as e:
@@ -595,7 +635,7 @@ def cancel_scrape(args):
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":status": ScrapeStatus.CANCELLED.value,
-                ":ts": datetime.now().isoformat(),
+                ":ts": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -646,3 +686,85 @@ def format_scrape_page(item):
         "error": item.get("error"),
         "depth": int(item.get("depth", 0)),
     }
+
+
+# =========================================================================
+# Image Resolvers
+# =========================================================================
+
+
+def create_image_upload_url(args):
+    """
+    Create presigned URL for image upload.
+
+    Returns upload URL and image ID for tracking.
+    The image is stored at images/{imageId}/{filename}.
+    """
+    try:
+        filename = args["filename"]
+        logger.info(f"Creating image upload URL for file: {filename}")
+
+        # Validate filename length
+        if not filename or len(filename) > MAX_FILENAME_LENGTH:
+            logger.warning(f"Invalid filename length: {len(filename) if filename else 0}")
+            raise ValueError(f"Filename must be between 1 and {MAX_FILENAME_LENGTH} characters")
+
+        # Check for path traversal and invalid characters
+        if "/" in filename or "\\" in filename or ".." in filename:
+            logger.warning(f"Filename contains invalid path characters: {filename}")
+            raise ValueError("Filename contains invalid path characters")
+
+        # Validate it's a supported image type
+        if not is_supported_image(filename):
+            logger.warning(f"Unsupported image type: {filename}")
+            is_valid, error_msg = validate_image_type(None, filename)
+            if not is_valid:
+                raise ValueError(error_msg)
+            # Fallback error if is_supported_image fails but validate_image_type passes
+            raise ValueError("Unsupported image file type")
+
+        image_id = str(uuid4())
+        logger.info(f"Generated image ID: {image_id}")
+
+        # Generate S3 key with images/ prefix
+        s3_key = f"images/{image_id}/{filename}"
+
+        # Create presigned POST
+        logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        presigned = s3.generate_presigned_post(
+            Bucket=DATA_BUCKET,
+            Key=s3_key,
+            ExpiresIn=3600,  # 1 hour
+        )
+
+        # Create tracking record with type="image"
+        logger.info(f"Creating tracking record for image: {image_id}")
+        now = datetime.now(UTC).isoformat()
+        table = dynamodb.Table(TRACKING_TABLE)
+        table.put_item(
+            Item={
+                "document_id": image_id,  # Using document_id field for consistency
+                "filename": filename,
+                "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
+                "status": ImageStatus.PENDING.value,
+                "type": "image",  # Differentiate from documents
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        logger.info(f"Image upload URL created successfully for image: {image_id}")
+        return {
+            "uploadUrl": presigned["url"],
+            "imageId": image_id,
+            "fields": json.dumps(presigned["fields"]),
+        }
+
+    except ClientError as e:
+        logger.error(f"AWS service error in create_image_upload_url: {e}")
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in create_image_upload_url: {e}")
+        raise
