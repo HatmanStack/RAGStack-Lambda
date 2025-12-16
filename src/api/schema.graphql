@@ -30,6 +30,12 @@ type Query {
 
   # Check if a URL has been scraped before
   checkScrapeUrl(url: String!): ScrapeUrlCheck
+
+  # Get image by ID
+  getImage(imageId: ID!): Image
+
+  # List all images (paginated)
+  listImages(limit: Int, nextToken: String): ImageConnection
 }
 
 type Mutation {
@@ -47,6 +53,96 @@ type Mutation {
 
   # Cancel an in-progress scrape job
   cancelScrape(jobId: ID!): ScrapeJob
+
+  # Internal: Publish document status update (called by Lambda)
+  publishDocumentUpdate(
+    documentId: ID!
+    filename: String!
+    status: DocumentStatus!
+    totalPages: Int
+    errorMessage: String
+    updatedAt: String!
+  ): DocumentUpdate @aws_iam
+
+  # Internal: Publish scrape job status update (called by Lambda)
+  publishScrapeUpdate(
+    jobId: ID!
+    baseUrl: String!
+    title: String
+    status: ScrapeStatus!
+    totalUrls: Int!
+    processedCount: Int!
+    failedCount: Int!
+    updatedAt: String!
+  ): ScrapeUpdate @aws_iam
+
+  # Create presigned URL for image upload
+  createImageUploadUrl(filename: String!): ImageUploadUrl
+
+  # Generate AI caption for an image using vision model
+  generateCaption(imageS3Uri: String!): CaptionResult
+
+  # Submit image with caption to finalize upload and trigger processing
+  submitImage(input: SubmitImageInput!): Image
+
+  # Delete an image from S3, DynamoDB, and Knowledge Base
+  deleteImage(imageId: ID!): Boolean
+
+  # Internal: Publish image status update (called by Lambda)
+  publishImageUpdate(
+    imageId: ID!
+    filename: String!
+    status: ImageStatus!
+    caption: String
+    errorMessage: String
+    updatedAt: String!
+  ): ImageUpdate @aws_iam
+}
+
+type Subscription {
+  # Subscribe to document status updates
+  onDocumentUpdate: DocumentUpdate
+    @aws_subscribe(mutations: ["publishDocumentUpdate"])
+
+  # Subscribe to scrape job status updates
+  onScrapeUpdate: ScrapeUpdate
+    @aws_subscribe(mutations: ["publishScrapeUpdate"])
+
+  # Subscribe to image status updates
+  onImageUpdate: ImageUpdate
+    @aws_subscribe(mutations: ["publishImageUpdate"])
+}
+
+# Real-time document update payload
+type DocumentUpdate {
+  documentId: ID!
+  filename: String!
+  status: DocumentStatus!
+  totalPages: Int
+  errorMessage: String
+  updatedAt: String!
+}
+
+# Real-time scrape update payload
+type ScrapeUpdate {
+  jobId: ID!
+  baseUrl: String!
+  title: String
+  status: ScrapeStatus!
+  totalUrls: Int!
+  processedCount: Int!
+  failedCount: Int!
+  updatedAt: String!
+}
+
+# Real-time image update payload
+type ImageUpdate {
+  imageId: ID!
+  filename: String!
+  status: ImageStatus!
+  caption: String
+  errorMessage: String
+  updatedAt: String!
 }
 
 # Document type
@@ -63,6 +159,7 @@ type Document {
   createdAt: String
   updatedAt: String
   metadata: AWSJSON
+  previewUrl: String
 }
 
 # Document status enum
@@ -105,6 +202,10 @@ type Source @aws_api_key @aws_cognito_user_pools {
   snippet: String
   documentUrl: String
   documentAccessAllowed: Boolean
+  # Image-specific fields
+  isImage: Boolean
+  thumbnailUrl: String
+  caption: String
 }
 
 # Knowledge Base search result (raw vector search)
@@ -152,6 +253,62 @@ type ThemeConfigResponse @aws_api_key @aws_iam {
 }
 
 # =========================================================================
+# Image Types
+# =========================================================================
+
+# Image status enum
+enum ImageStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+# Image type
+type Image {
+  imageId: ID!
+  filename: String!
+  caption: String
+  userCaption: String
+  aiCaption: String
+  status: ImageStatus!
+  s3Uri: String!
+  thumbnailUrl: String
+  contentType: String
+  fileSize: Int
+  errorMessage: String
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Paginated image list
+type ImageConnection {
+  items: [Image!]!
+  nextToken: String
+}
+
+# Image upload URL response
+type ImageUploadUrl {
+  uploadUrl: String!
+  imageId: ID!
+  fields: AWSJSON
+}
+
+# Caption generation result
+type CaptionResult {
+  caption: String
+  error: String
+}
+
+# Input for submitting image with caption
+input SubmitImageInput {
+  imageId: ID!
+  caption: String
+  userCaption: String
+  aiCaption: String
+}
+
+# =========================================================================
 # Scrape Types
 # =========================================================================
 
@@ -195,6 +352,7 @@ type ScrapeConfig {
   excludePatterns: [String!]
   scrapeMode: ScrapeMode
   cookies: String
+  forceRescrape: Boolean
 }
 
 # Input for starting a scrape job
@@ -207,6 +365,7 @@ input StartScrapeInput {
   excludePatterns: [String!]
   scrapeMode: ScrapeMode
   cookies: String
+  forceRescrape: Boolean
 }
 
 # Scrape job type
