@@ -136,8 +136,8 @@ def create_knowledge_base(properties):
         s3vectors_client.create_index(
             vectorBucketName=vector_bucket,
             indexName=index_name,
-            dataType="float32",  # Titan Embed models output float32
-            dimension=1024,  # Titan Embed models output 1024 dimensions
+            dataType="float32",  # Cohere Embed v4 outputs float32
+            dimension=1024,  # Cohere Embed v4 outputs 1024 dimensions
             distanceMetric="cosine",
             metadataConfiguration={
                 "nonFilterableMetadataKeys": [
