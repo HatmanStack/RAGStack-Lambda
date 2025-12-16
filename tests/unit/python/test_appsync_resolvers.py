@@ -418,3 +418,239 @@ class TestGenerateCaption:
 
         assert result["caption"] is None
         assert "Model error" in result["error"]
+
+
+# =============================================================================
+# Submit Image Resolver Tests
+# =============================================================================
+
+
+class TestSubmitImage:
+    """Tests for submitImage resolver."""
+
+    def test_submit_image_success(self, mock_env, mock_boto3):
+        """Test successful image submission with both captions."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Setup DynamoDB mocks
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "input_s3_uri": "s3://test-data-bucket/images/12345678-1234-1234-1234-123456789012/test.png",
+                "status": "PENDING",
+                "type": "image",
+                "created_at": "2025-01-01T00:00:00Z",
+            }
+        }
+
+        # Setup S3 mocks
+        mock_boto3["s3"].head_object.return_value = {
+            "ContentType": "image/png",
+            "ContentLength": 12345,
+        }
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                    "userCaption": "My vacation photo",
+                    "aiCaption": "A sunset over the ocean",
+                }
+            },
+        }
+
+        result = module.lambda_handler(event, None)
+
+        # Verify result structure
+        assert result["imageId"] == "12345678-1234-1234-1234-123456789012"
+        assert result["status"] == "PENDING"  # From mock return
+
+        # Verify S3 metadata was written
+        mock_boto3["s3"].put_object.assert_called_once()
+        put_call = mock_boto3["s3"].put_object.call_args
+        assert put_call.kwargs["Key"].endswith("metadata.json")
+
+        # Verify DynamoDB was updated
+        mock_boto3["table"].update_item.assert_called_once()
+
+    def test_submit_image_user_caption_only(self, mock_env, mock_boto3):
+        """Test submission with only user caption."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "input_s3_uri": "s3://test-data-bucket/images/12345678-1234-1234-1234-123456789012/test.png",
+                "status": "PENDING",
+                "type": "image",
+            }
+        }
+
+        mock_boto3["s3"].head_object.return_value = {
+            "ContentType": "image/png",
+            "ContentLength": 12345,
+        }
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                    "userCaption": "Just a user caption",
+                }
+            },
+        }
+
+        result = module.lambda_handler(event, None)
+        assert "imageId" in result
+
+    def test_submit_image_not_found(self, mock_env, mock_boto3):
+        """Test rejection when image not found."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {}  # No Item
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                }
+            },
+        }
+
+        with pytest.raises(ValueError, match="not found"):
+            module.lambda_handler(event, None)
+
+    def test_submit_image_not_image_type(self, mock_env, mock_boto3):
+        """Test rejection when record is not an image type."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "document.pdf",
+                "input_s3_uri": "s3://test-data-bucket/input/123/document.pdf",
+                "status": "UPLOADED",
+                "type": "document",  # Not an image
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                }
+            },
+        }
+
+        with pytest.raises(ValueError, match="not an image"):
+            module.lambda_handler(event, None)
+
+    def test_submit_image_wrong_status(self, mock_env, mock_boto3):
+        """Test rejection when image not in PENDING status."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "input_s3_uri": "s3://test-data-bucket/images/123/test.png",
+                "status": "PROCESSING",  # Already processing
+                "type": "image",
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                }
+            },
+        }
+
+        with pytest.raises(ValueError, match="PENDING"):
+            module.lambda_handler(event, None)
+
+    def test_submit_image_s3_file_not_found(self, mock_env, mock_boto3):
+        """Test rejection when image file not in S3."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "input_s3_uri": "s3://test-data-bucket/images/123/test.png",
+                "status": "PENDING",
+                "type": "image",
+            }
+        }
+
+        # Mock S3 to raise NoSuchKey
+        from botocore.exceptions import ClientError
+
+        mock_boto3["s3"].head_object.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}, "HeadObject"
+        )
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "12345678-1234-1234-1234-123456789012",
+                    "userCaption": "Test caption",
+                }
+            },
+        }
+
+        with pytest.raises(ValueError, match="not found in S3"):
+            module.lambda_handler(event, None)
+
+    def test_submit_image_missing_image_id(self, mock_env, mock_boto3):
+        """Test rejection when imageId is missing."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {"input": {}},
+        }
+
+        with pytest.raises(ValueError, match="required"):
+            module.lambda_handler(event, None)
+
+    def test_submit_image_invalid_uuid(self, mock_env, mock_boto3):
+        """Test rejection when imageId is not a valid UUID."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "submitImage"},
+            "arguments": {
+                "input": {
+                    "imageId": "not-a-uuid",
+                }
+            },
+        }
+
+        with pytest.raises(ValueError, match="Invalid"):
+            module.lambda_handler(event, None)

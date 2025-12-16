@@ -85,6 +85,7 @@ def lambda_handler(event, context):
         # Image resolvers
         "createImageUploadUrl": create_image_upload_url,
         "generateCaption": generate_caption,
+        "submitImage": submit_image,
     }
 
     resolver = resolvers.get(field_name)
@@ -919,3 +920,173 @@ def generate_caption(args):
     except Exception as e:
         logger.error(f"Unexpected error in generate_caption: {e}", exc_info=True)
         return {"caption": None, "error": "Failed to generate caption. Please try again."}
+
+
+def submit_image(args):
+    """
+    Submit an image with caption to finalize upload and trigger processing.
+
+    Args:
+        args: Dictionary containing:
+            - input: SubmitImageInput with imageId, caption, userCaption, aiCaption
+
+    Returns:
+        Image object with updated status
+    """
+    input_data = args.get("input", {})
+    image_id = input_data.get("imageId")
+    caption = input_data.get("caption")
+    user_caption = input_data.get("userCaption")
+    ai_caption = input_data.get("aiCaption")
+
+    logger.info(f"Submitting image: {image_id}")
+
+    try:
+        # Validate imageId
+        if not image_id:
+            raise ValueError("imageId is required")
+
+        if not is_valid_uuid(image_id):
+            raise ValueError("Invalid imageId format")
+
+        # Check if tracking record exists
+        table = dynamodb.Table(TRACKING_TABLE)
+        response = table.get_item(Key={"document_id": image_id})
+        item = response.get("Item")
+
+        if not item:
+            raise ValueError("Image not found")
+
+        # Verify it's an image type
+        if item.get("type") != "image":
+            raise ValueError("Record is not an image")
+
+        # Verify status is PENDING
+        if item.get("status") != ImageStatus.PENDING.value:
+            raise ValueError(f"Image is not in PENDING status (current: {item.get('status')})")
+
+        # Get S3 URI and verify image exists in S3
+        input_s3_uri = item.get("input_s3_uri", "")
+        if not input_s3_uri.startswith("s3://"):
+            raise ValueError("Invalid S3 URI in tracking record")
+
+        # Parse S3 URI
+        uri_path = input_s3_uri.replace("s3://", "")
+        parts = uri_path.split("/", 1)
+        bucket = parts[0]
+        key = parts[1] if len(parts) > 1 else ""
+
+        # Verify image exists in S3
+        try:
+            head_response = s3.head_object(Bucket=bucket, Key=key)
+            content_type = head_response.get("ContentType", "image/jpeg")
+            file_size = head_response.get("ContentLength", 0)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("NoSuchKey", "404"):
+                raise ValueError("Image file not found in S3. Please upload the image first.") from e
+            logger.error(f"S3 error checking image: {e}")
+            raise ValueError(f"Failed to verify image in S3: {error_code}") from e
+
+        # Build combined caption (user first, AI appends)
+        combined_caption = ""
+        if user_caption and ai_caption:
+            combined_caption = f"{user_caption}. {ai_caption}"
+        elif user_caption:
+            combined_caption = user_caption
+        elif ai_caption:
+            combined_caption = ai_caption
+        elif caption:
+            combined_caption = caption
+
+        # Write metadata.json to S3
+        metadata = {
+            "caption": combined_caption,
+            "userCaption": user_caption,
+            "aiCaption": ai_caption,
+            "filename": item.get("filename", ""),
+            "contentType": content_type,
+            "fileSize": file_size,
+            "createdAt": item.get("created_at", datetime.now(UTC).isoformat()),
+        }
+
+        # Derive metadata key from image key
+        # Image key: images/{imageId}/{filename}
+        # Metadata key: images/{imageId}/metadata.json
+        key_parts = key.rsplit("/", 1)
+        metadata_key = f"{key_parts[0]}/metadata.json" if len(key_parts) > 1 else f"{key}/metadata.json"
+
+        logger.info(f"Writing metadata to: s3://{bucket}/{metadata_key}")
+        s3.put_object(
+            Bucket=bucket,
+            Key=metadata_key,
+            Body=json.dumps(metadata),
+            ContentType="application/json",
+        )
+
+        # Update tracking record
+        now = datetime.now(UTC).isoformat()
+        table.update_item(
+            Key={"document_id": image_id},
+            UpdateExpression=(
+                "SET #status = :status, caption = :caption, user_caption = :user_caption, "
+                "ai_caption = :ai_caption, content_type = :content_type, file_size = :file_size, "
+                "updated_at = :updated_at"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":status": ImageStatus.PROCESSING.value,
+                ":caption": combined_caption,
+                ":user_caption": user_caption,
+                ":ai_caption": ai_caption,
+                ":content_type": content_type,
+                ":file_size": file_size,
+                ":updated_at": now,
+            },
+        )
+
+        # Get updated item
+        response = table.get_item(Key={"document_id": image_id})
+        updated_item = response.get("Item")
+
+        logger.info(f"Image submitted successfully: {image_id}")
+        return format_image(updated_item)
+
+    except ValueError:
+        raise
+    except ClientError as e:
+        logger.error(f"AWS service error in submit_image: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in submit_image: {e}", exc_info=True)
+        raise
+
+
+def format_image(item):
+    """Format DynamoDB item as GraphQL Image type."""
+    if not item:
+        return None
+
+    input_s3_uri = item.get("input_s3_uri", "")
+    status = item.get("status", ImageStatus.PENDING.value)
+
+    # Generate thumbnail URL for images
+    thumbnail_url = None
+    if input_s3_uri and input_s3_uri.startswith("s3://"):
+        thumbnail_url = generate_presigned_download_url(input_s3_uri)
+
+    return {
+        "imageId": item.get("document_id"),
+        "filename": item.get("filename", ""),
+        "caption": item.get("caption"),
+        "userCaption": item.get("user_caption"),
+        "aiCaption": item.get("ai_caption"),
+        "status": status,
+        "s3Uri": input_s3_uri,
+        "thumbnailUrl": thumbnail_url,
+        "contentType": item.get("content_type"),
+        "fileSize": item.get("file_size"),
+        "errorMessage": item.get("error_message"),
+        "createdAt": item.get("created_at"),
+        "updatedAt": item.get("updated_at"),
+    }
