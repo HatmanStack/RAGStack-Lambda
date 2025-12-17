@@ -114,7 +114,8 @@ def lambda_handler(event, context):
         # Get or create metadata file
         # Metadata key: images/{imageId}/metadata.json
         key_parts = image_key.rsplit("/", 1)
-        metadata_key = f"{key_parts[0]}/metadata.json" if len(key_parts) > 1 else f"{image_key}/metadata.json"
+        base_path = key_parts[0] if len(key_parts) > 1 else image_key
+        metadata_key = f"{base_path}/metadata.json"
 
         metadata = {}
         try:
@@ -146,7 +147,7 @@ def lambda_handler(event, context):
 
         # Write text file to S3 for KB ingestion
         # Text key: images/{imageId}/content.txt (following KB data source pattern)
-        text_key = f"{key_parts[0]}/content.txt" if len(key_parts) > 1 else f"{image_key}/content.txt"
+        text_key = f"{base_path}/content.txt"
         text_s3_uri = f"s3://{bucket}/{text_key}"
 
         s3.put_object(
@@ -179,9 +180,10 @@ def lambda_handler(event, context):
             ingestion_status = doc_details[0].get("status", "UNKNOWN")
 
         # Update image status in DynamoDB
+        update_expr = "SET #status = :status, updated_at = :updated_at, output_s3_uri = :output_uri"
         tracking_table.update_item(
             Key={"document_id": image_id},
-            UpdateExpression="SET #status = :status, updated_at = :updated_at, output_s3_uri = :output_uri",
+            UpdateExpression=update_expr,
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":status": ImageStatus.INDEXED.value,
@@ -218,9 +220,12 @@ def lambda_handler(event, context):
 
         # Update status to FAILED
         try:
+            err_update_expr = (
+                "SET #status = :status, error_message = :error, updated_at = :updated_at"
+            )
             tracking_table.update_item(
                 Key={"document_id": image_id},
-                UpdateExpression="SET #status = :status, error_message = :error, updated_at = :updated_at",
+                UpdateExpression=err_update_expr,
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
                     ":status": ImageStatus.FAILED.value,
@@ -251,7 +256,7 @@ def lambda_handler(event, context):
         try:
             tracking_table.update_item(
                 Key={"document_id": image_id},
-                UpdateExpression="SET #status = :status, error_message = :error, updated_at = :updated_at",
+                UpdateExpression=err_update_expr,
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
                     ":status": ImageStatus.FAILED.value,

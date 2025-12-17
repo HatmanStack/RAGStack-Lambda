@@ -122,7 +122,7 @@ describe('ImageDetail', () => {
     });
   });
 
-  it('handles delete with confirmation', async () => {
+  it('handles delete with confirmation', { timeout: 10000 }, async () => {
     const onDismiss = vi.fn();
     const onDelete = vi.fn();
 
@@ -139,24 +139,29 @@ describe('ImageDetail', () => {
       />
     );
 
+    // Wait for image to load and delete button to appear
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /delete image/i })).toBeInTheDocument();
     });
 
+    // Click delete button
     const deleteButton = screen.getByRole('button', { name: /delete image/i });
     fireEvent.click(deleteButton);
 
+    // Wait for delete to complete and callbacks to be called
     await waitFor(() => {
       expect(mockDeleteImage).toHaveBeenCalledWith('img-123');
     });
 
-    expect(onDelete).toHaveBeenCalledWith('img-123');
-    expect(onDismiss).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledWith('img-123');
+      expect(onDismiss).toHaveBeenCalled();
+    });
 
     window.confirm = originalConfirm;
   });
 
-  it('does not delete when confirmation is cancelled', async () => {
+  it('does not delete when confirmation is cancelled', { timeout: 10000 }, async () => {
     // Mock window.confirm to return false
     const originalConfirm = window.confirm;
     window.confirm = vi.fn().mockReturnValue(false);

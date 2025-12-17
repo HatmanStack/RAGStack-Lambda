@@ -7,8 +7,8 @@ applying preprocessing for improved OCR accuracy, and validating image uploads.
 
 import io
 import logging
-import os
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageFilter
@@ -46,7 +46,7 @@ def validate_image_type(content_type: str | None, filename: str | None) -> tuple
         return False, "Filename is required"
 
     # Get file extension
-    ext = os.path.splitext(filename.lower())[1]
+    ext = Path(filename.lower()).suffix
     if not ext:
         return False, f"Filename must have an extension: {filename}"
 
@@ -115,7 +115,7 @@ def is_supported_image(filename: str | None) -> bool:
     if not filename:
         return False
 
-    ext = os.path.splitext(filename.lower())[1]
+    ext = Path(filename.lower()).suffix
     return ext in SUPPORTED_IMAGE_EXTENSIONS
 
 

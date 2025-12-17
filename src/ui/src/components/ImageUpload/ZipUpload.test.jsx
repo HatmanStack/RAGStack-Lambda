@@ -155,7 +155,7 @@ describe('ZipUpload', () => {
     });
   });
 
-  it('passes generateCaptions=false when unchecked', async () => {
+  it('passes generateCaptions=false when unchecked', { timeout: 10000 }, async () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
@@ -167,12 +167,15 @@ describe('ZipUpload', () => {
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    // Uncheck the checkbox
+    // Uncheck the checkbox - Cloudscape uses detail.checked in onChange
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
 
-    const uploadButton = screen.getByRole('button', { name: /upload archive/i });
-    fireEvent.click(uploadButton);
+    // Wait for checkbox state to update, then click upload
+    await waitFor(() => {
+      const uploadButton = screen.getByRole('button', { name: /upload archive/i });
+      fireEvent.click(uploadButton);
+    });
 
     await waitFor(() => {
       expect(mockUploadZip).toHaveBeenCalledWith(

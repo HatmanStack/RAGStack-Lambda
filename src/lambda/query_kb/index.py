@@ -406,10 +406,9 @@ def extract_image_caption_from_content(content_text):
             if not in_frontmatter:
                 in_frontmatter = True
                 continue
-            else:
-                frontmatter_ended = True
-                in_frontmatter = False
-                continue
+            frontmatter_ended = True
+            in_frontmatter = False
+            continue
 
         # Look for user_caption or ai_caption in frontmatter
         if in_frontmatter:
@@ -455,8 +454,7 @@ def construct_image_uri_from_content_uri(content_s3_uri):
     try:
         # Replace content.txt with metadata.json and try to get the actual filename
         # This is a simplified approach - the full implementation would cache this
-        base_uri = content_s3_uri.replace("/content.txt", "")
-        return base_uri  # UI will need to handle this
+        return content_s3_uri.replace("/content.txt", "")  # UI will need to handle this
     except Exception:
         return None
 
@@ -547,10 +545,13 @@ def extract_sources(citations):
 
                 # Check if this is an image source (from images/ prefix or content.txt)
                 # Images are stored at: images/{imageId}/content.txt
+                is_content_txt_image = (
+                    original_filename and original_filename == "content.txt" and "images" in uri
+                )
                 is_image = (
                     (len(parts) > 1 and parts[1] == "images")
                     or (input_prefix and len(parts) > 3 and parts[3] == "images")
-                    or (original_filename and original_filename == "content.txt" and "images" in uri)
+                    or is_content_txt_image
                 )
 
                 # Construct input document URI
@@ -591,7 +592,8 @@ def extract_sources(citations):
                 image_caption = None
                 if is_image:
                     image_caption = extract_image_caption_from_content(content_text)
-                    logger.debug(f"Image content detected, caption: {image_caption[:50] if image_caption else None}...")
+                    preview = image_caption[:50] if image_caption else None
+                    logger.debug(f"Image content detected, caption: {preview}...")
 
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"

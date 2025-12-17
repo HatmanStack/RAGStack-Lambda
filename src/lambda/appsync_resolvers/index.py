@@ -857,7 +857,14 @@ def generate_caption(args):
         if not media_type:
             # Try to infer from file extension
             ext = key.lower().split(".")[-1] if "." in key else ""
-            media_type = {"png": "png", "jpg": "jpeg", "jpeg": "jpeg", "gif": "gif", "webp": "webp"}.get(ext, "jpeg")
+            ext_to_media = {
+                "png": "png",
+                "jpg": "jpeg",
+                "jpeg": "jpeg",
+                "gif": "gif",
+                "webp": "webp",
+            }
+            media_type = ext_to_media.get(ext, "jpeg")
 
         # Build Converse API request with image
         messages = [
@@ -988,7 +995,8 @@ def submit_image(args):
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code in ("NoSuchKey", "404"):
-                raise ValueError("Image file not found in S3. Please upload the image first.") from e
+                msg = "Image file not found in S3. Please upload the image first."
+                raise ValueError(msg) from e
             logger.error(f"S3 error checking image: {e}")
             raise ValueError(f"Failed to verify image in S3: {error_code}") from e
 
@@ -1018,7 +1026,8 @@ def submit_image(args):
         # Image key: images/{imageId}/{filename}
         # Metadata key: images/{imageId}/metadata.json
         key_parts = key.rsplit("/", 1)
-        metadata_key = f"{key_parts[0]}/metadata.json" if len(key_parts) > 1 else f"{key}/metadata.json"
+        base_path = key_parts[0] if len(key_parts) > 1 else key
+        metadata_key = f"{base_path}/metadata.json"
 
         logger.info(f"Writing metadata to: s3://{bucket}/{metadata_key}")
         s3.put_object(

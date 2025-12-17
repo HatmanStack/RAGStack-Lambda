@@ -32,6 +32,7 @@ import os
 import uuid
 import zipfile
 from datetime import UTC, datetime
+from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
@@ -93,7 +94,9 @@ def lambda_handler(event, context):
         except ClientError as e:
             logger.warning(f"Could not retrieve tracking record for {upload_id}: {e}")
 
-    logger.info(f"Processing ZIP: upload_id={upload_id}, key={key}, generate_captions={generate_captions}")
+    logger.info(
+        f"Processing ZIP: upload_id={upload_id}, key={key}, generate_captions={generate_captions}"
+    )
 
     result = {
         "upload_id": upload_id,
@@ -135,7 +138,7 @@ def lambda_handler(event, context):
             for filename in image_files:
                 try:
                     image_data = zip_file.read(filename)
-                    base_filename = os.path.basename(filename)
+                    base_filename = Path(filename).name
 
                     # Get caption from manifest
                     user_caption = captions.get(filename) or captions.get(base_filename)
@@ -209,7 +212,7 @@ def lambda_handler(event, context):
 
 def is_supported_image(filename: str) -> bool:
     """Check if filename has a supported image extension."""
-    ext = os.path.splitext(filename.lower())[1]
+    ext = Path(filename.lower()).suffix
     return ext in SUPPORTED_EXTENSIONS
 
 
@@ -218,7 +221,7 @@ def generate_image_caption(image_data: bytes, filename: str) -> str | None:
     model_id = os.environ.get("CAPTION_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 
     # Detect content type from filename
-    ext = os.path.splitext(filename.lower())[1]
+    ext = Path(filename.lower()).suffix
     content_type_map = {
         ".png": "image/png",
         ".jpg": "image/jpeg",
@@ -255,7 +258,11 @@ def generate_image_caption(image_data: bytes, filename: str) -> str | None:
                                 },
                                 {
                                     "type": "text",
-                                    "text": "Describe this image in 1-2 sentences for use as a search caption. Focus on the main subject and key visual elements.",
+                                    "text": (
+                                        "Describe this image in 1-2 sentences for use as a "
+                                        "search caption. Focus on the main subject and key "
+                                        "visual elements."
+                                    ),
                                 },
                             ],
                         }
@@ -301,7 +308,7 @@ def create_image_record(
     timestamp = datetime.now(UTC).isoformat()
 
     # Detect content type
-    ext = os.path.splitext(filename.lower())[1]
+    ext = Path(filename.lower()).suffix
     content_type_map = {
         ".png": "image/png",
         ".jpg": "image/jpeg",
