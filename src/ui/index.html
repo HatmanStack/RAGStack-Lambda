@@ -9,14 +9,15 @@
       - 'unsafe-eval': Required by Vite dev server for HMR. Could be removed in production-only builds
         but kept for consistency. AWS Amplify libraries may also use eval for dynamic config.
       - connect-src wildcards: Required for AWS SDK calls to dynamic regional endpoints.
-        Cognito, AppSync, and S3 endpoints vary by region and cannot be hardcoded.
+        Cognito, AppSync (HTTP and WebSocket), and S3 endpoints vary by region.
+        CSP wildcards only work at leftmost label, so we use *.amazonaws.com for all AWS services.
       - data: URIs: Required for inline SVG icons and base64-encoded images from Cloudscape.
     -->
     <meta http-equiv="Content-Security-Policy"
       content="default-src 'self';
                script-src 'self' 'unsafe-inline' 'unsafe-eval';
                style-src 'self' 'unsafe-inline';
-               connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com wss://*.appsync-api.*.amazonaws.com wss://*.appsync-realtime-api.*.amazonaws.com;
+               connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com wss://*.amazonaws.com;
                img-src 'self' data: blob:;
                font-src 'self' data:;">
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
