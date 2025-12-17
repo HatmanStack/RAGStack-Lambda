@@ -14,7 +14,6 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -61,9 +60,8 @@ def run_command(cmd, check=True, capture_output=False, cwd=None):
     if capture_output:
         result = subprocess.run(cmd, capture_output=True, text=True, check=check, cwd=cwd)
         return result.stdout.strip()
-    else:
-        result = subprocess.run(cmd, check=check, cwd=cwd)
-        return result.returncode == 0
+    result = subprocess.run(cmd, check=check, cwd=cwd)
+    return result.returncode == 0
 
 
 def validate_email(email):
@@ -182,22 +180,16 @@ def check_python_version():
 
     if version_info[0] < 3:
         log_error("Python 3.12+ is required")
-        log_info("Current version: Python {}.{}.{}".format(
-            version_info[0], version_info[1], version_info[2]
-        ))
+        log_info(f"Current version: Python {version_info[0]}.{version_info[1]}.{version_info[2]}")
         sys.exit(1)
 
     if version_info[0] == 3 and version_info[1] < 12:
         log_error("Python 3.12+ is required")
-        log_info("Current version: Python {}.{}.{}".format(
-            version_info[0], version_info[1], version_info[2]
-        ))
+        log_info(f"Current version: Python {version_info[0]}.{version_info[1]}.{version_info[2]}")
         log_info("Please upgrade Python and try again")
         sys.exit(1)
 
-    log_success("Found Python {}.{}.{}".format(
-        version_info[0], version_info[1], version_info[2]
-    ))
+    log_success(f"Found Python {version_info[0]}.{version_info[1]}.{version_info[2]}")
     return True
 
 
@@ -559,14 +551,13 @@ def wait_for_codebuild(build_id, region, timeout_minutes=30):
             if status == 'SUCCEEDED':
                 log_success("Build completed successfully")
                 return status
-            else:
-                # Get logs for debugging
-                log_group = build.get('logs', {}).get('groupName')
-                log_stream = build.get('logs', {}).get('streamName')
-                log_error(f"Build failed with status: {status}")
-                if log_group and log_stream:
-                    log_info(f"Logs: {log_group}/{log_stream}")
-                raise RuntimeError(f"CodeBuild failed: {status}")
+            # Get logs for debugging
+            log_group = build.get('logs', {}).get('groupName')
+            log_stream = build.get('logs', {}).get('streamName')
+            log_error(f"Build failed with status: {status}")
+            if log_group and log_stream:
+                log_info(f"Logs: {log_group}/{log_stream}")
+            raise RuntimeError(f"CodeBuild failed: {status}")
 
         # Check timeout
         elapsed = time.time() - start_time
@@ -591,10 +582,10 @@ def sam_build():
 
 def handle_failed_stack(stack_name, region):
     """
-    Check if stack exists and is in a failed state (ROLLBACK_COMPLETE or CREATE_FAILED).
+    Check if stack exists and is in an unrecoverable state.
 
-    If the stack is in a failed state, delete it so a fresh deployment can proceed.
-    This handles the case where a previous deployment failed and needs to be retried.
+    Only deletes stacks that cannot be updated (creation failures like ROLLBACK_COMPLETE).
+    UPDATE_ROLLBACK_COMPLETE is NOT deleted as it's a healthy state that can be updated.
 
     Args:
         stack_name: CloudFormation stack name
@@ -631,13 +622,14 @@ def handle_failed_stack(stack_name, region):
             except Exception as e:
                 log_error(f"Stack deletion timed out or failed: {e}")
                 log_error(f"Stack '{stack_name}' is still deleting. Please wait for deletion to complete:")
-                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error("  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
                 log_error(f"  2. Or run: aws cloudformation wait stack-delete-complete --stack-name {stack_name}")
-                log_error(f"  3. Then retry this deployment")
-                raise IOError(f"Stack deletion timeout - stack '{stack_name}' may still be deleting") from e
+                log_error("  3. Then retry this deployment")
+                raise OSError(f"Stack deletion timeout - stack '{stack_name}' may still be deleting") from e
 
-        # Check if stack is in a failed/rollback state
-        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_ROLLBACK_COMPLETE', 'ROLLBACK_FAILED']:
+        # Check if stack is in an unrecoverable state (creation failures only)
+        # UPDATE_ROLLBACK_COMPLETE is healthy and can be updated again
+        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'ROLLBACK_FAILED']:
             log_warning(f"Stack '{stack_name}' is in {stack_status} state")
             log_info(f"Deleting failed stack '{stack_name}'...")
 
@@ -660,11 +652,11 @@ def handle_failed_stack(stack_name, region):
             except Exception as e:
                 log_error(f"Stack deletion timed out: {e}")
                 log_error(f"Stack '{stack_name}' deletion is taking longer than expected. Please verify deletion:")
-                log_error(f"  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
+                log_error("  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
                 log_error(f"  2. Or run: aws cloudformation describe-stacks --stack-name {stack_name}")
                 log_error(f"  3. If stuck, manually delete: aws cloudformation delete-stack --stack-name {stack_name}")
-                log_error(f"  4. Then retry this deployment")
-                raise IOError(f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting") from e
+                log_error("  4. Then retry this deployment")
+                raise OSError(f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting") from e
 
         # Stack exists and is in a healthy state
         return False
@@ -678,7 +670,7 @@ def handle_failed_stack(stack_name, region):
             return True
 
         # Other errors should be raised
-        raise IOError(f"Failed to check stack status: {e}") from e
+        raise OSError(f"Failed to check stack status: {e}") from e
 
 
 def create_sam_artifact_bucket(project_name, region):
@@ -706,7 +698,7 @@ def create_sam_artifact_bucket(project_name, region):
     try:
         account_id = sts_client.get_caller_identity()['Account']
     except ClientError as e:
-        raise IOError(f"Failed to get AWS account ID: {e}") from e
+        raise OSError(f"Failed to get AWS account ID: {e}") from e
 
     # Use project-specific bucket for all deployment artifacts
     bucket_name = f'{project_name}-artifacts-{account_id}'
@@ -737,9 +729,9 @@ def create_sam_artifact_bucket(project_name, region):
 
                 log_success(f"Created artifact bucket: {bucket_name}")
             except ClientError as create_error:
-                raise IOError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
+                raise OSError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
         else:
-            raise IOError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
+            raise OSError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
 
     return bucket_name
 
@@ -867,9 +859,9 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
         FileNotFoundError: If source directory doesn't exist
         IOError: If packaging or upload fails
     """
-    import zipfile
     import tempfile
     import time
+    import zipfile
     from pathlib import Path
 
     source_path = Path(source_dir)
@@ -906,14 +898,14 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
         try:
             s3_client.upload_file(zip_path, bucket_name, key)
         except ClientError as e:
-            raise IOError(f"Failed to upload source to S3: {e}") from e
+            raise OSError(f"Failed to upload source to S3: {e}") from e
 
         # Clean up temporary file
         os.remove(zip_path)
 
         return key
 
-    except (FileNotFoundError, IOError):
+    except (OSError, FileNotFoundError):
         # Re-raise expected exceptions
         if os.path.exists(zip_path):
             os.remove(zip_path)
@@ -922,7 +914,7 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
         # Clean up temporary file on unexpected error
         if os.path.exists(zip_path):
             os.remove(zip_path)
-        raise IOError(f"Unexpected error packaging source: {e}") from e
+        raise OSError(f"Unexpected error packaging source: {e}") from e
 
 
 def package_ui_source(bucket_name, region):
@@ -1068,15 +1060,15 @@ def print_outputs(outputs, project_name, region):
     if 'ChatCDN' in outputs:
         print(f"\n{Colors.OKGREEN}Chat Component:{Colors.ENDC}")
         print(f"CDN URL: {outputs['ChatCDN']}")
-        print(f"\nEmbed on your website:")
+        print("\nEmbed on your website:")
         print(f'<script src="{outputs["ChatCDN"]}"></script>')
-        print(f'<ragstack-chat conversation-id="my-site"></ragstack-chat>')
+        print('<ragstack-chat conversation-id="my-site"></ragstack-chat>')
 
     if outputs.get('UserPoolId'):
         print(f"\n{Colors.OKGREEN}Next Steps:{Colors.ENDC}")
-        print(f"1. Check your email for temporary password")
-        print(f"2. Sign in to the UI and change your password")
-        print(f"3. Upload a document to test the pipeline")
+        print("1. Check your email for temporary password")
+        print("2. Sign in to the UI and change your password")
+        print("3. Upload a document to test the pipeline")
 
     print()
 
@@ -1447,7 +1439,7 @@ Examples:
         # Create artifact bucket first
         try:
             artifact_bucket = create_sam_artifact_bucket(args.project_name, args.region)
-        except IOError as e:
+        except OSError as e:
             log_error(f"Failed to create artifact bucket: {e}")
             sys.exit(1)
 
@@ -1457,7 +1449,7 @@ Examples:
             try:
                 ui_source_key = package_ui_source(artifact_bucket, args.region)
                 log_info(f"UI source uploaded to {artifact_bucket}/{ui_source_key}")
-            except (FileNotFoundError, IOError) as e:
+            except (OSError, FileNotFoundError) as e:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
 
@@ -1466,7 +1458,7 @@ Examples:
         try:
             wc_source_key = package_ragstack_chat_source(artifact_bucket, args.region)
             log_info(f"Web component source uploaded to {artifact_bucket}/{wc_source_key}")
-        except (FileNotFoundError, IOError) as e:
+        except (OSError, FileNotFoundError) as e:
             log_error(f"Failed to package web component: {e}")
             sys.exit(1)
 
@@ -1481,7 +1473,7 @@ Examples:
         stack_name = f"RAGStack-{args.project_name}"
         try:
             handle_failed_stack(stack_name, args.region)
-        except IOError as e:
+        except OSError as e:
             log_error(f"Failed to handle existing stack: {e}")
             sys.exit(1)
 
