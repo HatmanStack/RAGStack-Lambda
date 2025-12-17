@@ -89,6 +89,7 @@ def lambda_handler(event, context):
         "getImage": get_image,
         "listImages": list_images,
         "deleteImage": delete_image,
+        "createZipUploadUrl": create_zip_upload_url,
     }
 
     resolver = resolvers.get(field_name)
@@ -1285,4 +1286,66 @@ def delete_image(args):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in delete_image: {e}")
+        raise
+
+
+def create_zip_upload_url(args):
+    """
+    Create presigned URL for ZIP archive upload.
+
+    Returns upload URL and upload ID for tracking batch image uploads.
+    The ZIP is stored at uploads/{uploadId}/archive.zip.
+
+    Args:
+        args: Dictionary containing:
+            - generateCaptions: Boolean flag to generate AI captions for images
+
+    Returns:
+        Dictionary with uploadUrl, uploadId, and fields
+    """
+    try:
+        generate_captions = args.get("generateCaptions", False)
+        logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
+
+        upload_id = str(uuid4())
+        logger.info(f"Generated upload ID: {upload_id}")
+
+        # Generate S3 key with uploads/ prefix
+        s3_key = f"uploads/{upload_id}/archive.zip"
+
+        # Create presigned POST
+        logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        presigned = s3.generate_presigned_post(
+            Bucket=DATA_BUCKET,
+            Key=s3_key,
+            ExpiresIn=3600,  # 1 hour
+        )
+
+        # Create upload tracking record
+        logger.info(f"Creating upload tracking record: {upload_id}")
+        now = datetime.now(UTC).isoformat()
+        table = dynamodb.Table(TRACKING_TABLE)
+        table.put_item(
+            Item={
+                "document_id": upload_id,
+                "type": "zip_upload",
+                "status": "PENDING",
+                "generate_captions": generate_captions,
+                "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        return {
+            "uploadUrl": presigned["url"],
+            "uploadId": upload_id,
+            "fields": json.dumps(presigned["fields"]),
+        }
+
+    except ClientError as e:
+        logger.error(f"AWS service error in create_zip_upload_url: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in create_zip_upload_url: {e}")
         raise

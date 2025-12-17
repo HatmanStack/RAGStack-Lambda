@@ -88,6 +88,9 @@ type Mutation {
   # Delete an image from S3, DynamoDB, and Knowledge Base
   deleteImage(imageId: ID!): Boolean
 
+  # Create presigned URL for ZIP archive upload (batch image upload)
+  createZipUploadUrl(generateCaptions: Boolean): ZipUploadUrl
+
   # Internal: Publish image status update (called by Lambda)
   publishImageUpdate(
     imageId: ID!
@@ -298,6 +301,13 @@ type ImageUploadUrl {
 type CaptionResult {
   caption: String
   error: String
+}
+
+# ZIP upload URL response
+type ZipUploadUrl {
+  uploadUrl: String!
+  uploadId: ID!
+  fields: AWSJSON
 }
 
 # Input for submitting image with caption
