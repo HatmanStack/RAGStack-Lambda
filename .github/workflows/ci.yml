@@ -133,6 +133,9 @@ jobs:
         working-directory: ./src/ragstack-chat
         run: npm ci
 
+      - name: Setup generated config for CI
+        run: cp src/ragstack-chat/src/amplify-config.template.ts src/ragstack-chat/src/amplify-config.generated.ts
+
       - name: Run TypeScript check
         working-directory: ./src/ragstack-chat
         run: npx tsc --noEmit
@@ -153,6 +156,9 @@ jobs:
       - name: Install dependencies
         working-directory: ./src/ragstack-chat
         run: npm ci
+
+      - name: Setup generated config for CI
+        run: cp src/ragstack-chat/src/amplify-config.template.ts src/ragstack-chat/src/amplify-config.generated.ts
 
       - name: Run tests
         working-directory: ./src/ragstack-chat
