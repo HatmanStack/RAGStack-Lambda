@@ -380,8 +380,18 @@ export const useDocuments = () => {
     };
   }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
-  // Merge documents, scrape jobs, and images, sorted by createdAt (guard against missing dates)
-  const allItems = [...documents, ...scrapeJobs, ...images].sort((a, b) => {
+  // Merge and deduplicate by documentId with type precedence: image > scrape > document
+  const typePriority = { image: 3, scrape: 2, document: 1 };
+  const itemMap = new Map();
+
+  [...documents, ...scrapeJobs, ...images].forEach(item => {
+    const existing = itemMap.get(item.documentId);
+    if (!existing || typePriority[item.type] > typePriority[existing.type]) {
+      itemMap.set(item.documentId, item);
+    }
+  });
+
+  const allItems = Array.from(itemMap.values()).sort((a, b) => {
     const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return dateB - dateA;
