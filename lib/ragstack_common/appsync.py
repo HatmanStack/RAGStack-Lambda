@@ -51,7 +51,7 @@ def execute_appsync_mutation(graphql_endpoint: str, mutation: str, variables: di
     Returns:
         GraphQL response data
     """
-    region = os.environ.get("AWS_REGION", "us-east-1")
+    region = _get_session().region_name or os.environ.get("AWS_REGION", "us-east-1")
 
     payload = json.dumps({"query": mutation, "variables": variables}).encode("utf-8")
 

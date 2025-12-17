@@ -52,6 +52,7 @@ config_manager = ConfigurationManager()
 # Conversation history settings
 MAX_HISTORY_TURNS = 5
 CONVERSATION_TTL_DAYS = 14
+MAX_MESSAGE_LENGTH = 10000  # Max chars per message to prevent injection attacks
 
 # Quota settings
 QUOTA_TTL_DAYS = 2  # Quota counters expire after 2 days
@@ -59,11 +60,10 @@ QUOTA_TTL_DAYS = 2  # Quota counters expire after 2 days
 
 def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     """
-    Atomically check and increment quotas, returning appropriate model.
+    Atomically check and increment quotas using DynamoDB transactions.
 
-    Uses conditional DynamoDB writes to prevent race conditions.
-    If quota exceeded, returns fallback model.
-    If within quota, increments atomically and returns primary model.
+    Uses TransactWriteItems to ensure atomic updates to both global and user
+    quotas, preventing race conditions and eliminating rollback failures.
 
     Args:
         tracking_id (str): User identifier for per-user quota
@@ -94,79 +94,69 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         logger.warning("CONFIGURATION_TABLE_NAME not set, skipping quota check")
         return primary_model
 
-    table = dynamodb.Table(config_table_name)
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     ttl = int(datetime.now(UTC).timestamp()) + (QUOTA_TTL_DAYS * 86400)
+    global_key = f"quota#global#{today}"
 
     try:
-        # Try to atomically increment global quota with condition
-        global_key = f"quota#global#{today}"
+        # Build transaction items for atomic quota updates
+        transact_items = [
+            {
+                "Update": {
+                    "TableName": config_table_name,
+                    "Key": {"Configuration": {"S": global_key}},
+                    "UpdateExpression": "ADD #count :inc SET #ttl = :ttl",
+                    "ConditionExpression": "#count < :limit OR attribute_not_exists(#count)",
+                    "ExpressionAttributeNames": {"#count": "count", "#ttl": "ttl"},
+                    "ExpressionAttributeValues": {
+                        ":inc": {"N": "1"},
+                        ":limit": {"N": str(global_quota_daily)},
+                        ":ttl": {"N": str(ttl)},
+                    },
+                }
+            }
+        ]
 
-        try:
-            global_result = table.update_item(
-                Key={"Configuration": global_key},
-                UpdateExpression="ADD #count :inc SET #ttl = :ttl",
-                ConditionExpression="#count < :limit OR attribute_not_exists(#count)",
-                ExpressionAttributeNames={"#count": "count", "#ttl": "ttl"},
-                ExpressionAttributeValues={
-                    ":inc": 1,
-                    ":limit": global_quota_daily,
-                    ":ttl": ttl,
-                },
-                ReturnValues="ALL_NEW",
-            )
-
-            new_global_count = int(global_result.get("Attributes", {}).get("count", 0))
-            logger.info(f"Global quota incremented: {new_global_count}/{global_quota_daily}")
-
-        except ClientError as e:
-            if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                logger.info("Global quota exceeded, using fallback model")
-                return fallback_model
-            raise
-
-        # Try to atomically increment per-user quota (if authenticated)
+        # Add user quota check if authenticated
         if is_authenticated and tracking_id:
             user_key = f"quota#user#{tracking_id}#{today}"
+            transact_items.append(
+                {
+                    "Update": {
+                        "TableName": config_table_name,
+                        "Key": {"Configuration": {"S": user_key}},
+                        "UpdateExpression": "ADD #count :inc SET #ttl = :ttl",
+                        "ConditionExpression": "#count < :limit OR attribute_not_exists(#count)",
+                        "ExpressionAttributeNames": {"#count": "count", "#ttl": "ttl"},
+                        "ExpressionAttributeValues": {
+                            ":inc": {"N": "1"},
+                            ":limit": {"N": str(per_user_quota_daily)},
+                            ":ttl": {"N": str(ttl)},
+                        },
+                    }
+                }
+            )
 
-            try:
-                user_result = table.update_item(
-                    Key={"Configuration": user_key},
-                    UpdateExpression="ADD #count :inc SET #ttl = :ttl",
-                    ConditionExpression="#count < :limit OR attribute_not_exists(#count)",
-                    ExpressionAttributeNames={"#count": "count", "#ttl": "ttl"},
-                    ExpressionAttributeValues={
-                        ":inc": 1,
-                        ":limit": per_user_quota_daily,
-                        ":ttl": ttl,
-                    },
-                    ReturnValues="ALL_NEW",
-                )
+        # Execute atomic transaction
+        dynamodb_client = boto3.client("dynamodb")
+        dynamodb_client.transact_write_items(TransactItems=transact_items)
 
-                new_user_count = int(user_result.get("Attributes", {}).get("count", 0))
-                logger.info(
-                    f"User quota: {tracking_id[:8]}...: {new_user_count}/{per_user_quota_daily}"
-                )
-
-            except ClientError as e:
-                if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                    # Rollback global quota since user quota failed
-                    try:
-                        table.update_item(
-                            Key={"Configuration": global_key},
-                            UpdateExpression="ADD #count :dec",
-                            ExpressionAttributeNames={"#count": "count"},
-                            ExpressionAttributeValues={":dec": -1},
-                        )
-                    except ClientError:
-                        logger.warning("Failed to rollback global quota")
-
-                    logger.info("User quota exceeded, using fallback (global rolled back)")
-                    return fallback_model
-                raise
-
-        # Both quotas passed - use primary model
+        user_prefix = tracking_id[:8] if tracking_id else "anon"
+        logger.info(f"Quota transaction succeeded for {user_prefix}...")
         return primary_model
+
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code == "TransactionCanceledException":
+            # Check which condition failed
+            reasons = e.response.get("CancellationReasons", [])
+            for i, reason in enumerate(reasons):
+                if reason.get("Code") == "ConditionalCheckFailed":
+                    quota_type = "global" if i == 0 else "user"
+                    logger.info(f"{quota_type.capitalize()} quota exceeded, using fallback model")
+            return fallback_model
+        logger.error(f"Error in quota transaction: {e}")
+        return fallback_model
 
     except Exception as e:
         logger.error(f"Error in quota check: {e}")
@@ -299,10 +289,10 @@ def build_conversation_messages(current_query, history, retrieved_context):
     """
     messages = []
 
-    # Add conversation history
+    # Add conversation history (with length limits to prevent injection)
     for turn in history:
-        user_msg = turn.get("userMessage", "")
-        assistant_msg = turn.get("assistantResponse", "")
+        user_msg = turn.get("userMessage", "")[:MAX_MESSAGE_LENGTH]
+        assistant_msg = turn.get("assistantResponse", "")[:MAX_MESSAGE_LENGTH]
 
         if user_msg:
             messages.append({"role": "user", "content": [{"text": user_msg}]})

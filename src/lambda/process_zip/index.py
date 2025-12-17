@@ -218,6 +218,12 @@ def is_supported_image(filename: str) -> bool:
 
 def generate_image_caption(image_data: bytes, filename: str) -> str | None:
     """Generate AI caption for image using Bedrock."""
+    # Validate image size before processing (10MB limit for captioning)
+    max_caption_image_size = 10 * 1024 * 1024
+    if len(image_data) > max_caption_image_size:
+        logger.warning(f"Image too large for captioning: {len(image_data)} bytes, skipping")
+        return None
+
     model_id = os.environ.get("CAPTION_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 
     # Detect content type from filename
