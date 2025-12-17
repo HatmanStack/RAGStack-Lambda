@@ -912,6 +912,57 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-process-image-${DeploymentSuffix}'
+      CodeUri: src/lambda/process_image/
+      Handler: index.lambda_handler
+      Description: Process uploaded images and ingest to Knowledge Base
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for image processing
+      MemorySize: 512
+      ReservedConcurrentExecutions: 25  # Limit to prevent account exhaustion
+      Tracing: Active
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          DATA_BUCKET: !Ref DataBucket
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - S3WritePolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1377,6 +1428,51 @@ Resources:
                 Action:
                   - states:StartExecution
                 Resource: !GetAtt ProcessingStateMachine.Arn
+
+  # =========================================================================
+  # EventBridge Rule for Image Upload Trigger
+  # =========================================================================
+
+  ImageUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-ImageUploadTrigger'
+      Description: Trigger image processing on S3 upload to images/ prefix (metadata.json)
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - suffix: '/metadata.json'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessImageFunction.Arn
+          Id: TriggerImageProcessing
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "image_id": "<key>",
+                "input_s3_uri": "s3://<bucket>/<key>"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  ImageUploadRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ImageUploadRule.Arn
 
   # =========================================================================
   # Bedrock Knowledge Base

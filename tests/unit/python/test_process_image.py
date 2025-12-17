@@ -183,13 +183,27 @@ class TestProcessImage:
         with pytest.raises(ValueError, match="required"):
             module.lambda_handler(event, None)
 
-    def test_process_image_missing_s3_uri(self, mock_env, mock_boto3):
-        """Test error when input_s3_uri is missing."""
+    def test_process_image_missing_s3_uri_in_tracking(self, mock_env, mock_boto3):
+        """Test error when tracking record has no input_s3_uri."""
         module = _load_process_image_module()
+        module.bedrock_agent = mock_boto3["bedrock_agent"]
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Return item without input_s3_uri
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "test-image-id",
+                "filename": "test.png",
+                "type": "image",
+                "status": "PROCESSING",
+                # No input_s3_uri
+            }
+        }
 
         event = {"image_id": "test-image-id"}
 
-        with pytest.raises(ValueError, match="required"):
+        with pytest.raises(ValueError, match="No input_s3_uri"):
             module.lambda_handler(event, None)
 
     def test_process_image_s3_file_not_found(self, mock_env, mock_boto3):

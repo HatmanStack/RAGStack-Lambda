@@ -53,13 +53,23 @@ def lambda_handler(event, context):
         raise ValueError("TRACKING_TABLE environment variable is required")
 
     # Extract image info from event
-    image_id = event.get("image_id")
-    input_s3_uri = event.get("input_s3_uri")
+    # EventBridge passes: image_id = "images/{imageId}/metadata.json", input_s3_uri = full S3 URI
+    raw_image_id = event.get("image_id", "")
+    input_s3_uri = event.get("input_s3_uri", "")
 
-    if not image_id or not input_s3_uri:
-        raise ValueError("image_id and input_s3_uri are required in event")
+    # Parse imageId from the key path: images/{imageId}/metadata.json
+    if raw_image_id and "/metadata.json" in raw_image_id:
+        # Extract imageId from path like "images/abc123/metadata.json"
+        parts = raw_image_id.replace("/metadata.json", "").split("/")
+        image_id = parts[-1] if parts else None
+    else:
+        # Direct invocation with just the imageId
+        image_id = raw_image_id
 
-    logger.info(f"Processing image {image_id} from {input_s3_uri}")
+    if not image_id:
+        raise ValueError("image_id is required in event (either as path or direct ID)")
+
+    logger.info(f"Processing image {image_id}, raw_id={raw_image_id}")
 
     # Get DynamoDB table
     tracking_table = dynamodb.Table(tracking_table_name)
@@ -77,6 +87,11 @@ def lambda_handler(event, context):
 
         filename = item.get("filename", "unknown")
         caption = item.get("caption", "")
+
+        # Get actual image S3 URI from tracking record (not from event, which has metadata.json)
+        input_s3_uri = item.get("input_s3_uri", "")
+        if not input_s3_uri:
+            raise ValueError(f"No input_s3_uri in tracking record for image: {image_id}")
 
         # Parse S3 URI to get bucket and key
         uri_path = input_s3_uri.replace("s3://", "")
@@ -274,8 +289,8 @@ def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: d
         "---",
         f"image_id: {image_id}",
         f"filename: {filename}",
-        f"type: image",
-        f"source_type: uploaded_image",
+        "type: image",
+        "source_type: uploaded_image",
     ]
 
     if user_caption:
