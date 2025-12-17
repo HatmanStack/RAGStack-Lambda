@@ -676,8 +676,8 @@ def lambda_handler(event, context):
             "error": "KNOWLEDGE_BASE_ID environment variable is required",
         }
 
-    bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
+    bedrock_agent = boto3.client("bedrock-agent-runtime", region_name=region)
 
     # Get AWS account ID from context
     # Extract from knowledge_base_id ARN format or use STS

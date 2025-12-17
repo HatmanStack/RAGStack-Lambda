@@ -46,7 +46,7 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
-bedrock_runtime = boto3.client("bedrock-runtime")
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
 
 # Supported image extensions
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}

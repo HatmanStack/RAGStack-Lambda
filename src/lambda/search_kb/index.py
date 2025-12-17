@@ -57,8 +57,8 @@ def lambda_handler(event, context):
             "error": "KNOWLEDGE_BASE_ID environment variable is required",
         }
 
-    # Create Bedrock client
-    bedrock_agent = boto3.client("bedrock-agent-runtime")
+    # Create Bedrock client (use Lambda's region)
+    bedrock_agent = boto3.client("bedrock-agent-runtime", region_name=os.environ.get("AWS_REGION"))
 
     # Extract inputs from AppSync event
     # AppSync sends: {"arguments": {"query": "...", "maxResults": 5}, ...}
