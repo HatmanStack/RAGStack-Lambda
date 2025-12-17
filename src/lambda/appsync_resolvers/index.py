@@ -154,13 +154,7 @@ def list_documents(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Filter out images (type != "image") - images are listed via listImages
-        scan_kwargs = {
-            "Limit": limit,
-            "FilterExpression": "attribute_not_exists(#type) OR #type <> :image_type",
-            "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image"},
-        }
+        scan_kwargs = {"Limit": limit}
 
         if next_token:
             try:

@@ -167,6 +167,7 @@ type Document {
 
 # Document status enum
 enum DocumentStatus {
+  PENDING
   UPLOADED
   PROCESSING
   OCR_COMPLETE
