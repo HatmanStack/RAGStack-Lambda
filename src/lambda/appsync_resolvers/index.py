@@ -53,8 +53,8 @@ SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 # Configuration table (optional, for caption generation)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
-# Initialize Bedrock runtime client for caption generation
-bedrock_runtime = boto3.client("bedrock-runtime")
+# Initialize Bedrock runtime client for caption generation (use Lambda's region)
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
 
 # Validation constants
 MAX_FILENAME_LENGTH = 255
