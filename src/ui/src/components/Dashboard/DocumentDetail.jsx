@@ -8,7 +8,9 @@ import {
   Header,
   StatusIndicator,
   Alert,
-  Spinner
+  Spinner,
+  Button,
+  ExpandableSection
 } from '@cloudscape-design/components';
 import { useDocuments } from '../../hooks/useDocuments';
 
@@ -17,10 +19,15 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [previewContent, setPreviewContent] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
 
   const loadDocument = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPreviewContent(null);
+    setPreviewError(null);
 
     try {
       const doc = await fetchDocument(documentId);
@@ -32,6 +39,27 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
     }
   }, [fetchDocument, documentId]);
 
+  const loadPreview = useCallback(async () => {
+    if (!document?.previewUrl) return;
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+
+    try {
+      const response = await fetch(document.previewUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch preview: ${response.status}`);
+      }
+      const text = await response.text();
+      // Limit preview to first 50KB to avoid UI slowdown
+      setPreviewContent(text.length > 50000 ? text.slice(0, 50000) + '\n\n... (truncated)' : text);
+    } catch (err) {
+      setPreviewError(err.message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [document?.previewUrl]);
+
   useEffect(() => {
     if (visible && documentId) {
       loadDocument();
@@ -40,10 +68,16 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
 
   if (!visible) return null;
 
-  const getStatusType = (status) => {
-    if (status === 'INDEXED') return 'success';
-    if (status === 'FAILED') return 'error';
-    return 'in-progress';
+  const getStatusConfig = (status) => {
+    const statusMap = {
+      'UPLOADED': { type: 'pending', label: 'Uploaded' },
+      'PROCESSING': { type: 'in-progress', label: 'Processing' },
+      'OCR_COMPLETE': { type: 'in-progress', label: 'OCR Complete' },
+      'EMBEDDING_COMPLETE': { type: 'in-progress', label: 'Embedding Complete' },
+      'INDEXED': { type: 'success', label: 'Indexed' },
+      'FAILED': { type: 'error', label: 'Failed' }
+    };
+    return statusMap[status] || { type: 'info', label: status };
   };
 
   return (
@@ -80,8 +114,8 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
               <div>
                 <Box variant="awsui-key-label">Status</Box>
                 <div>
-                  <StatusIndicator type={getStatusType(document.status)}>
-                    {document.status}
+                  <StatusIndicator type={getStatusConfig(document.status).type}>
+                    {getStatusConfig(document.status).label}
                   </StatusIndicator>
                 </div>
               </div>
@@ -133,8 +167,58 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
             </ColumnLayout>
           </Container>
 
+          {document.previewUrl && (
+            <Container
+              header={
+                <Header
+                  variant="h2"
+                  actions={
+                    !previewContent && !previewLoading && (
+                      <Button onClick={loadPreview} loading={previewLoading}>
+                        Load Preview
+                      </Button>
+                    )
+                  }
+                >
+                  Extracted Text
+                </Header>
+              }
+            >
+              {previewLoading && (
+                <Box textAlign="center" padding="l">
+                  <Spinner /> Loading preview...
+                </Box>
+              )}
+              {previewError && (
+                <Alert type="error">{previewError}</Alert>
+              )}
+              {previewContent && (
+                <Box>
+                  <pre style={{
+                    fontSize: '12px',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    maxHeight: '400px',
+                    backgroundColor: '#f8f9fa',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    {previewContent}
+                  </pre>
+                </Box>
+              )}
+              {!previewContent && !previewLoading && !previewError && (
+                <Box color="text-body-secondary">
+                  Click "Load Preview" to view extracted text content.
+                </Box>
+              )}
+            </Container>
+          )}
+
           {document.metadata && (
-            <Container header={<Header variant="h2">Metadata</Header>}>
+            <ExpandableSection headerText="Metadata" variant="container">
               <Box>
                 <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                   {(() => {
@@ -146,7 +230,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
                   })()}
                 </pre>
               </Box>
-            </Container>
+            </ExpandableSection>
           )}
         </SpaceBetween>
       )}

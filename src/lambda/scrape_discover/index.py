@@ -138,8 +138,8 @@ def lambda_handler(event, context):
                 # Mark URL as failed but continue - processing will retry
                 urls_tbl.update_item(
                     Key={"job_id": job_id, "url": normalized_url},
-                    UpdateExpression="SET #status = :status, error = :err",
-                    ExpressionAttributeNames={"#status": "status"},
+                    UpdateExpression="SET #status = :status, #error = :err",
+                    ExpressionAttributeNames={"#status": "status", "#error": "error"},
                     ExpressionAttributeValues={
                         ":status": UrlStatus.FAILED.value,
                         ":err": result.error,

@@ -7,8 +7,10 @@ type Query {
   # List all documents (paginated)
   listDocuments(limit: Int, nextToken: String): DocumentConnection
 
-  # Query Knowledge Base with optional session for conversation continuity
-  queryKnowledgeBase(query: String!, sessionId: String): ChatResponse
+  # Query Knowledge Base with optional conversation ID for multi-turn chat
+  # Note: sessionId is deprecated, use conversationId instead
+  # Accessible via API key for web component, or Cognito for admin UI
+  queryKnowledgeBase(query: String!, sessionId: String, conversationId: String): ChatResponse @aws_api_key @aws_cognito_user_pools
 
   # Search Knowledge Base and return raw vector search results
   searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult
@@ -28,6 +30,12 @@ type Query {
 
   # Check if a URL has been scraped before
   checkScrapeUrl(url: String!): ScrapeUrlCheck
+
+  # Get image by ID
+  getImage(imageId: ID!): Image
+
+  # List all images (paginated)
+  listImages(limit: Int, nextToken: String): ImageConnection
 }
 
 type Mutation {
@@ -45,6 +53,99 @@ type Mutation {
 
   # Cancel an in-progress scrape job
   cancelScrape(jobId: ID!): ScrapeJob
+
+  # Internal: Publish document status update (called by Lambda)
+  publishDocumentUpdate(
+    documentId: ID!
+    filename: String!
+    status: DocumentStatus!
+    totalPages: Int
+    errorMessage: String
+    updatedAt: String!
+  ): DocumentUpdate @aws_iam
+
+  # Internal: Publish scrape job status update (called by Lambda)
+  publishScrapeUpdate(
+    jobId: ID!
+    baseUrl: String!
+    title: String
+    status: ScrapeStatus!
+    totalUrls: Int!
+    processedCount: Int!
+    failedCount: Int!
+    updatedAt: String!
+  ): ScrapeUpdate @aws_iam
+
+  # Create presigned URL for image upload
+  createImageUploadUrl(filename: String!): ImageUploadUrl
+
+  # Generate AI caption for an image using vision model
+  generateCaption(imageS3Uri: String!): CaptionResult
+
+  # Submit image with caption to finalize upload and trigger processing
+  submitImage(input: SubmitImageInput!): Image
+
+  # Delete an image from S3, DynamoDB, and Knowledge Base
+  deleteImage(imageId: ID!): Boolean
+
+  # Create presigned URL for ZIP archive upload (batch image upload)
+  createZipUploadUrl(generateCaptions: Boolean): ZipUploadUrl
+
+  # Internal: Publish image status update (called by Lambda)
+  publishImageUpdate(
+    imageId: ID!
+    filename: String!
+    status: ImageStatus!
+    caption: String
+    errorMessage: String
+    updatedAt: String!
+  ): ImageUpdate @aws_iam
+}
+
+type Subscription {
+  # Subscribe to document status updates
+  onDocumentUpdate: DocumentUpdate
+    @aws_subscribe(mutations: ["publishDocumentUpdate"])
+
+  # Subscribe to scrape job status updates
+  onScrapeUpdate: ScrapeUpdate
+    @aws_subscribe(mutations: ["publishScrapeUpdate"])
+
+  # Subscribe to image status updates
+  onImageUpdate: ImageUpdate
+    @aws_subscribe(mutations: ["publishImageUpdate"])
+}
+
+# Real-time document update payload
+type DocumentUpdate {
+  documentId: ID!
+  filename: String!
+  status: DocumentStatus!
+  totalPages: Int
+  errorMessage: String
+  updatedAt: String!
+}
+
+# Real-time scrape update payload
+type ScrapeUpdate {
+  jobId: ID!
+  baseUrl: String!
+  title: String
+  status: ScrapeStatus!
+  totalUrls: Int!
+  processedCount: Int!
+  failedCount: Int!
+  updatedAt: String!
+}
+
+# Real-time image update payload
+type ImageUpdate {
+  imageId: ID!
+  filename: String!
+  status: ImageStatus!
+  caption: String
+  errorMessage: String
+  updatedAt: String!
 }
 
 # Document type
@@ -61,6 +162,7 @@ type Document {
   createdAt: String
   updatedAt: String
   metadata: AWSJSON
+  previewUrl: String
 }
 
 # Document status enum
@@ -86,22 +188,27 @@ type UploadUrl {
   fields: AWSJSON
 }
 
-# Chat response with session support for conversation continuity
-type ChatResponse {
+# Chat response with conversation support for multi-turn context
+type ChatResponse @aws_api_key @aws_cognito_user_pools {
   answer: String!
-  sessionId: String
+  sessionId: String  # Deprecated, use conversationId
+  conversationId: String
   sources: [Source!]!
   error: String
 }
 
 # Source citation from Knowledge Base retrieval
-type Source {
+type Source @aws_api_key @aws_cognito_user_pools {
   documentId: String!
   pageNumber: Int
   s3Uri: String!
   snippet: String
   documentUrl: String
   documentAccessAllowed: Boolean
+  # Image-specific fields
+  isImage: Boolean
+  thumbnailUrl: String
+  caption: String
 }
 
 # Knowledge Base search result (raw vector search)
@@ -149,6 +256,69 @@ type ThemeConfigResponse @aws_api_key @aws_iam {
 }
 
 # =========================================================================
+# Image Types
+# =========================================================================
+
+# Image status enum
+enum ImageStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+# Image type
+type Image {
+  imageId: ID!
+  filename: String!
+  caption: String
+  userCaption: String
+  aiCaption: String
+  status: ImageStatus!
+  s3Uri: String!
+  thumbnailUrl: String
+  contentType: String
+  fileSize: Int
+  errorMessage: String
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Paginated image list
+type ImageConnection {
+  items: [Image!]!
+  nextToken: String
+}
+
+# Image upload URL response
+type ImageUploadUrl {
+  uploadUrl: String!
+  imageId: ID!
+  fields: AWSJSON
+}
+
+# Caption generation result
+type CaptionResult {
+  caption: String
+  error: String
+}
+
+# ZIP upload URL response
+type ZipUploadUrl {
+  uploadUrl: String!
+  uploadId: ID!
+  fields: AWSJSON
+}
+
+# Input for submitting image with caption
+input SubmitImageInput {
+  imageId: ID!
+  caption: String
+  userCaption: String
+  aiCaption: String
+}
+
+# =========================================================================
 # Scrape Types
 # =========================================================================
 
@@ -164,17 +334,23 @@ enum ScrapeStatus {
 }
 
 # URL scope enforcement for crawling
+# - SUBPAGES: Only URLs under the base path
+# - HOSTNAME: Any URL on the same hostname
+# - DOMAIN: Any URL on the same domain (includes subdomains)
 enum ScrapeScope {
-  SUBPAGES   # Only URLs under the base path
-  HOSTNAME   # Any URL on the same hostname
-  DOMAIN     # Any URL on the same domain (includes subdomains)
+  SUBPAGES
+  HOSTNAME
+  DOMAIN
 }
 
 # Scrape mode for content fetching
+# - FAST: HTTP fetch only
+# - FULL: Always use Playwright
+# - AUTO: Auto-detect based on content
 enum ScrapeMode {
-  FAST   # HTTP fetch only
-  FULL   # Always use Playwright
-  AUTO   # Auto-detect based on content
+  FAST
+  FULL
+  AUTO
 }
 
 # Scrape job configuration
@@ -186,6 +362,7 @@ type ScrapeConfig {
   excludePatterns: [String!]
   scrapeMode: ScrapeMode
   cookies: String
+  forceRescrape: Boolean
 }
 
 # Input for starting a scrape job
@@ -198,6 +375,7 @@ input StartScrapeInput {
   excludePatterns: [String!]
   scrapeMode: ScrapeMode
   cookies: String
+  forceRescrape: Boolean
 }
 
 # Scrape job type
@@ -243,9 +421,4 @@ type ScrapeUrlCheck {
   lastScrapedAt: AWSDateTime
   jobId: ID
   title: String
-}
-
-schema {
-  query: Query
-  mutation: Mutation
 }

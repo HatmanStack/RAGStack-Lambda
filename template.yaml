@@ -38,6 +38,11 @@ Parameters:
       - us.anthropic.claude-haiku-4-5-20251001-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
 
+  CaptionModelId:
+    Type: String
+    Default: anthropic.claude-3-haiku-20240307-v1:0
+    Description: Bedrock model ID for image caption generation
+
   UISourceBucket:
     Type: String
     Description: S3 bucket containing UI source code zip
@@ -76,10 +81,14 @@ Resources:
   # S3 Buckets
   # =========================================================================
 
-  InputBucket:
+  # Unified data bucket with prefix-based organization:
+  #   input/   - User uploads (EventBridge triggers processing)
+  #   output/  - Processed documents
+  #   working/ - Temporary files (7-day TTL)
+  DataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-input-${DeploymentSuffix}'
+      BucketName: !Sub '${ProjectName}-data-${DeploymentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -97,6 +106,10 @@ Resources:
             Status: Enabled
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
+          - Id: DeleteWorkingFiles
+            Status: Enabled
+            ExpirationInDays: 7
+            Prefix: working/
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -114,69 +127,6 @@ Resources:
               - 'http://localhost:3000'
               - !Sub 'https://${CloudFrontDistribution.DomainName}'
             MaxAge: 3000
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: Engineering
-
-  OutputBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-output-${DeploymentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: CleanupOldOutputs
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - HEAD
-            AllowedOrigins:
-              - !Sub 'https://${CloudFrontDistribution.DomainName}'
-            MaxAge: 3000
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: Engineering
-
-  WorkingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-working-${DeploymentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteWorkingFiles
-            Status: Enabled
-            ExpirationInDays: 7
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 1
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -326,8 +276,8 @@ Resources:
             Value: !Ref IdentityPool
           - Name: VITE_GRAPHQL_URL
             Value: !GetAtt GraphQLApi.GraphQLUrl
-          - Name: VITE_INPUT_BUCKET
-            Value: !Ref InputBucket
+          - Name: VITE_DATA_BUCKET
+            Value: !Ref DataBucket
           - Name: UI_BUCKET
             Value: !Ref UIBucket
           - Name: CLOUDFRONT_DIST_ID
@@ -503,7 +453,7 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: !Sub 'CDN for ${ProjectName} web component'
-        DefaultRootObject: 'amplify-chat.js'
+        DefaultRootObject: 'ragstack-chat.js'
         Origins:
           - Id: WebComponentS3Origin
             DomainName: !GetAtt WebComponentAssetsBucket.RegionalDomainName
@@ -599,27 +549,24 @@ Resources:
                 nodejs: 24
               commands:
                 - echo "Installing dependencies..."
-                - cd src/amplify-chat
+                - cd src/ragstack-chat
                 - npm ci
             pre_build:
               commands:
-                - echo "Downloading Amplify outputs from S3..."
-                - aws s3 cp s3://${ARTIFACT_BUCKET}/amplify_outputs.json ../../amplify_outputs.json
-                - echo "✓ amplify_outputs.json downloaded successfully"
-                - ls -lh ../../amplify_outputs.json
-                - echo "✓ SAM API endpoint for runtime theme fetching - $SAM_API_ENDPOINT"
+                - echo "Setting up build environment..."
+                - echo "✓ SAM API endpoint for chat queries - $SAM_API_ENDPOINT"
             build:
               commands:
-                - echo "Building web component with runtime theme API..."
+                - echo "Building web component..."
                 - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" SAM_GRAPHQL_API_KEY="$SAM_API_KEY" npm run build:wc
                 - ls -lh dist/
             post_build:
               commands:
                 - echo "Deploying to S3..."
-                - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/amplify-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
-                - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/amplify-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/ragstack-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/ragstack-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
                 - echo "Invalidating CloudFront cache..."
-                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/amplify-chat.js" "/amplify-chat.esm.js"
+                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/ragstack-chat.js" "/ragstack-chat.esm.js"
                 - echo "Deployment complete!"
       Environment:
         Type: LINUX_CONTAINER
@@ -743,6 +690,38 @@ Resources:
           Value: Runtime Configuration Storage
 
   ##########################################################################
+  # Conversation History Table - Stores multi-turn chat context
+  ##########################################################################
+
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-conversations-${DeploymentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: conversationId
+          AttributeType: S
+        - AttributeName: turnNumber
+          AttributeType: N
+      KeySchema:
+        - AttributeName: conversationId
+          KeyType: HASH
+        - AttributeName: turnNumber
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: Conversation History Storage
+
+  ##########################################################################
   # Scrape Jobs Table - Tracks web scraping job state
   ##########################################################################
 
@@ -859,21 +838,17 @@ Resources:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
           METERING_TABLE: !Ref MeteringTable
-          OUTPUT_BUCKET: !Ref OutputBucket
-          WORKING_BUCKET: !Ref WorkingBucket
+          DATA_BUCKET: !Ref DataBucket
           OCR_BACKEND: !Ref OcrBackend
           BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref InputBucket
         - S3CrudPolicy:
-            BucketName: !Ref OutputBucket
-        - S3CrudPolicy:
-            BucketName: !Ref WorkingBucket
+            BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -891,6 +866,9 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
   IngestToKBFunction:
     Type: AWS::Serverless::Function
@@ -910,6 +888,9 @@ Resources:
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
           TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Layers:
+        - !Ref RagstackCommonLayer
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -932,6 +913,117 @@ Resources:
                 - bedrock:GetIngestionJob
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-process-image-${DeploymentSuffix}'
+      CodeUri: src/lambda/process_image/
+      Handler: index.lambda_handler
+      Description: Process uploaded images and ingest to Knowledge Base
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for image processing
+      MemorySize: 512
+      ReservedConcurrentExecutions: 25  # Limit to prevent account exhaustion
+      Tracing: Active
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          DATA_BUCKET: !Ref DataBucket
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - S3WritePolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
+  ProcessZipFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-process-zip-${DeploymentSuffix}'
+      CodeUri: src/lambda/process_zip/
+      Handler: index.lambda_handler
+      Description: Process ZIP archives containing images with optional captions manifest
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 600  # 10 minutes for ZIP processing (potentially many images)
+      MemorySize: 1024  # More memory for ZIP extraction
+      ReservedConcurrentExecutions: 10  # Limit concurrent ZIP processing
+      Tracing: Active
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          DATA_BUCKET: !Ref DataBucket
+          CAPTION_MODEL_ID: !Ref CaptionModelId
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - S3WritePolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+            - Effect: Allow
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
   QueryKBFunction:
     Type: AWS::Serverless::Function
@@ -952,14 +1044,17 @@ Resources:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
         - S3ReadPolicy:
-            BucketName: !Ref InputBucket
+            BucketName: !Ref DataBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1146,7 +1241,7 @@ Resources:
           LOG_LEVEL: INFO
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
           SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
-          INPUT_BUCKET: !Ref InputBucket
+          DATA_BUCKET: !Ref DataBucket
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -1162,7 +1257,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeUrlsTable
         - S3CrudPolicy:
-            BucketName: !Ref InputBucket
+            BucketName: !Ref DataBucket
 
   ScrapeStatusFunction:
     Type: AWS::Serverless::Function
@@ -1180,18 +1275,22 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
+          SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
           SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
           SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ScrapeUrlsTable
         - Statement:
             - Effect: Allow
               Action:
                 - sqs:GetQueueAttributes
+                - sqs:SendMessage
               Resource:
                 - !GetAtt ScrapeDiscoveryQueue.Arn
                 - !GetAtt ScrapeProcessingQueue.Arn
@@ -1340,7 +1439,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${ProjectName}-S3UploadTrigger'
-      Description: Trigger processing pipeline on S3 upload
+      Description: Trigger processing pipeline on S3 upload to input/ prefix
       EventPattern:
         source:
           - aws.s3
@@ -1349,7 +1448,10 @@ Resources:
         detail:
           bucket:
             name:
-              - !Ref InputBucket
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: 'input/'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessingStateMachine.Arn
@@ -1363,7 +1465,7 @@ Resources:
               {
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
-                "output_s3_prefix": "s3://${OutputBucket}/<key>/",
+                "output_s3_prefix": "s3://<bucket>/output/<key>/",
                 "vector_bucket": "${VectorBucket}"
               }
           RetryPolicy:
@@ -1388,6 +1490,94 @@ Resources:
                 Action:
                   - states:StartExecution
                 Resource: !GetAtt ProcessingStateMachine.Arn
+
+  # =========================================================================
+  # EventBridge Rule for Image Upload Trigger
+  # =========================================================================
+
+  ImageUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-ImageUploadTrigger'
+      Description: Trigger image processing on S3 upload to images/ prefix (metadata.json)
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - suffix: '/metadata.json'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessImageFunction.Arn
+          Id: TriggerImageProcessing
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "image_id": "<key>",
+                "input_s3_uri": "s3://<bucket>/<key>"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  ImageUploadRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ImageUploadRule.Arn
+
+  # EventBridge rule to trigger ZIP processing
+  ZipUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-zip-upload-${DeploymentSuffix}'
+      Description: Trigger ZIP processing on S3 upload to uploads/ prefix (.zip files)
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: 'uploads/'
+              - suffix: '.zip'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessZipFunction.Arn
+          Id: TriggerZipProcessing
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "bucket": "<bucket>",
+                "key": "<key>"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  ZipUploadRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessZipFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ZipUploadRule.Arn
 
   # =========================================================================
   # Bedrock Knowledge Base
@@ -1418,8 +1608,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${OutputBucket.Arn}'
-                  - !Sub '${OutputBucket.Arn}/*'
+                  - !Sub '${DataBucket.Arn}'
+                  - !Sub '${DataBucket.Arn}/output/*'
         - PolicyName: S3VectorsAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1451,7 +1641,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/cohere.embed-v4:0'
 
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
@@ -1523,8 +1713,8 @@ Resources:
       KnowledgeBaseName: !Sub '${ProjectName}-kb-${DeploymentSuffix}'
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
-      OutputBucket: !Ref OutputBucket
-      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
+      DataBucket: !Ref DataBucket
+      EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/cohere.embed-v4:0'
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
@@ -1648,8 +1838,7 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                 Resource:
-                  - !Sub '${InputBucket.Arn}/*'
-                  - !Sub '${OutputBucket.Arn}/*'
+                  - !Sub '${DataBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - appsync:GraphQL
@@ -1777,7 +1966,7 @@ Resources:
       Environment:
         Variables:
           TRACKING_TABLE: !Ref TrackingTable
-          INPUT_BUCKET: !Ref InputBucket
+          DATA_BUCKET: !Ref DataBucket
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
           # Scrape environment variables
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
@@ -1790,7 +1979,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - S3CrudPolicy:
-            BucketName: !Ref InputBucket
+            BucketName: !Ref DataBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -2016,6 +2205,55 @@ Resources:
       TypeName: Query
       FieldName: getThemeConfig
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  # =========================================================================
+  # Scrape Resolvers
+  # =========================================================================
+
+  GetScrapeJobResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getScrapeJob
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ListScrapeJobsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: listScrapeJobs
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  CheckScrapeUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: checkScrapeUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  StartScrapeResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: startScrape
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  CancelScrapeResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: cancelScrape
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
   # =========================================================================
   # Dead Letter Queue for Error Handling
@@ -3062,23 +3300,11 @@ Resources:
 
 Outputs:
   # S3 Buckets
-  InputBucketName:
-    Description: S3 bucket for document uploads
-    Value: !Ref InputBucket
+  DataBucketName:
+    Description: S3 bucket for data (input/, output/, working/ prefixes)
+    Value: !Ref DataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-InputBucket'
-
-  OutputBucketName:
-    Description: S3 bucket for processed documents
-    Value: !Ref OutputBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-OutputBucket'
-
-  WorkingBucketName:
-    Description: S3 bucket for temporary working files
-    Value: !Ref WorkingBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-WorkingBucket'
+      Name: !Sub '${AWS::StackName}-DataBucket'
 
   VectorBucketName:
     Description: S3 bucket for embeddings and vectors
@@ -3123,6 +3349,18 @@ Outputs:
     Value: !GetAtt ConfigurationTable.Arn
     Export:
       Name: !Sub '${AWS::StackName}-ConfigurationTableArn'
+
+  ConversationHistoryTableName:
+    Description: DynamoDB table for conversation history
+    Value: !Ref ConversationHistoryTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ConversationHistoryTable'
+
+  ConversationHistoryTableArn:
+    Description: DynamoDB table ARN for conversation history
+    Value: !GetAtt ConversationHistoryTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConversationHistoryTableArn'
 
   # Scrape DynamoDB Tables
   ScrapeJobsTableName:
@@ -3300,7 +3538,7 @@ Outputs:
   # Web Component CDN
   WebComponentCDNUrl:
     Description: CDN URL for embeddable chat web component
-    Value: !Sub 'https://${WebComponentDistribution.DomainName}/amplify-chat.js'
+    Value: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
     Export:
       Name: !Sub '${AWS::StackName}-WebComponentCDNUrl'
 

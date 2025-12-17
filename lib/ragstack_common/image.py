@@ -2,16 +2,121 @@
 Image processing utilities for document pipeline.
 
 Provides functions for resizing images, preparing them for Bedrock API,
-and applying preprocessing for improved OCR accuracy.
+applying preprocessing for improved OCR accuracy, and validating image uploads.
 """
 
 import io
 import logging
+from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageFilter
 
+from ragstack_common.constants import (
+    MAX_IMAGE_SIZE_BYTES,
+    SUPPORTED_IMAGE_EXTENSIONS,
+    SUPPORTED_IMAGE_TYPES,
+)
+
 logger = logging.getLogger(__name__)
+
+
+class ImageStatus(str, Enum):
+    """Image processing status (matches GraphQL ImageStatus enum)."""
+
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    INDEXED = "INDEXED"
+    FAILED = "FAILED"
+
+
+def validate_image_type(content_type: str | None, filename: str | None) -> tuple[bool, str]:
+    """
+    Validate that an image has a supported content type and file extension.
+
+    Args:
+        content_type: MIME type of the image (e.g., "image/png")
+        filename: Original filename with extension
+
+    Returns:
+        Tuple of (is_valid, error_message). error_message is empty if valid.
+    """
+    if not filename:
+        return False, "Filename is required"
+
+    # Get file extension
+    ext = Path(filename.lower()).suffix
+    if not ext:
+        return False, f"Filename must have an extension: {filename}"
+
+    # Check extension is supported
+    if ext not in SUPPORTED_IMAGE_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_IMAGE_EXTENSIONS))
+        return False, f"Unsupported image extension '{ext}'. Supported: {supported}"
+
+    # If content_type is provided, validate it matches extension
+    if content_type:
+        if content_type not in SUPPORTED_IMAGE_TYPES:
+            supported = ", ".join(sorted(SUPPORTED_IMAGE_TYPES.keys()))
+            return False, f"Unsupported content type '{content_type}'. Supported: {supported}"
+
+        # Check that content type matches extension
+        expected_ext = SUPPORTED_IMAGE_TYPES[content_type]
+        # Handle .jpg vs .jpeg
+        if ext == ".jpeg" and expected_ext == ".jpg":
+            pass  # Allow .jpeg for image/jpeg
+        elif ext != expected_ext and not (ext == ".jpg" and expected_ext == ".jpg"):
+            return (
+                False,
+                f"Content type '{content_type}' does not match extension '{ext}'",
+            )
+
+    return True, ""
+
+
+def validate_image_size(size_bytes: int | None) -> tuple[bool, str]:
+    """
+    Validate that an image file size is within the allowed limit.
+
+    Args:
+        size_bytes: File size in bytes
+
+    Returns:
+        Tuple of (is_valid, error_message). error_message is empty if valid.
+    """
+    if size_bytes is None:
+        return False, "File size is required"
+
+    if size_bytes <= 0:
+        return False, "File size must be positive"
+
+    if size_bytes > MAX_IMAGE_SIZE_BYTES:
+        max_mb = MAX_IMAGE_SIZE_BYTES / (1024 * 1024)
+        actual_mb = size_bytes / (1024 * 1024)
+        return (
+            False,
+            f"File size {actual_mb:.1f}MB exceeds maximum {max_mb:.0f}MB",
+        )
+
+    return True, ""
+
+
+def is_supported_image(filename: str | None) -> bool:
+    """
+    Check if a filename has a supported image extension.
+
+    Args:
+        filename: Filename to check
+
+    Returns:
+        True if the filename has a supported image extension, False otherwise.
+    """
+    if not filename:
+        return False
+
+    ext = Path(filename.lower()).suffix
+    return ext in SUPPORTED_IMAGE_EXTENSIONS
 
 
 def resize_image(

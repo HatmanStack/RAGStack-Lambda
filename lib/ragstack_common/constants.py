@@ -71,3 +71,39 @@ DEFAULT_GLOBAL_QUOTA_DAILY = 10000
 
 # Default daily quota per user
 DEFAULT_PER_USER_QUOTA_DAILY = 100
+
+
+# =============================================================================
+# Image Upload Constants
+# =============================================================================
+
+# Maximum image file size (10 MB)
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+
+# Supported image MIME types mapped to file extensions
+SUPPORTED_IMAGE_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+
+# Supported image file extensions
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+# =============================================================================
+# Embedding Model Configuration
+# =============================================================================
+
+# Cohere Embed v4 model ID for multimodal embeddings
+COHERE_EMBED_MODEL_ID = "cohere.embed-v4:0"
+
+# Embedding vector dimension
+EMBEDDING_DIMENSION = 1024
+
+# Input type for document indexing
+EMBEDDING_INPUT_TYPE = "search_document"
+
+# Input type for query retrieval
+EMBEDDING_QUERY_TYPE = "search_query"

@@ -1,10 +1,12 @@
-import React, { useCallback } from 'react';
-import { SpaceBetween } from '@cloudscape-design/components';
+import React, { useState, useCallback } from 'react';
+import { SpaceBetween, Tabs, ContentLayout, Header } from '@cloudscape-design/components';
 import { UploadZone } from './UploadZone';
 import { UploadQueue } from './UploadQueue';
+import { ImageUpload } from '../ImageUpload';
+import { ZipUpload } from '../ImageUpload/ZipUpload';
 import { useUpload } from '../../hooks/useUpload';
 
-export const Upload = () => {
+const DocumentUploadContent = () => {
   const {
     uploads,
     uploading,
@@ -43,5 +45,46 @@ export const Upload = () => {
         />
       )}
     </SpaceBetween>
+  );
+};
+
+export const Upload = () => {
+  const [activeTabId, setActiveTabId] = useState('documents');
+
+  const tabs = [
+    {
+      id: 'documents',
+      label: 'Documents',
+      content: <DocumentUploadContent />
+    },
+    {
+      id: 'images',
+      label: 'Images',
+      content: <ImageUpload />
+    },
+    {
+      id: 'archive',
+      label: 'Image Archive',
+      content: <ZipUpload />
+    }
+  ];
+
+  return (
+    <ContentLayout
+      header={
+        <Header
+          variant="h1"
+          description="Upload documents and images to your knowledge base"
+        >
+          Upload
+        </Header>
+      }
+    >
+      <Tabs
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onChange={({ detail }) => setActiveTabId(detail.activeTabId)}
+      />
+    </ContentLayout>
   );
 };

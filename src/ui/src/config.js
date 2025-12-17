@@ -51,10 +51,10 @@ const awsConfig = {
     },
   },
 
-  // S3 Storage for uploads
+  // S3 Storage for uploads (uses input/ prefix)
   Storage: {
     S3: {
-      bucket: import.meta.env.VITE_INPUT_BUCKET || '',
+      bucket: import.meta.env.VITE_DATA_BUCKET || '',
       region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
     },
   },
@@ -65,6 +65,6 @@ console.log('[Config] AWS Configuration loaded:');
 console.log('[Config] Region:', awsConfig.region);
 console.log('[Config] GraphQL Endpoint:', awsConfig.API.GraphQL.endpoint || '(not set)');
 console.log('[Config] User Pool ID:', awsConfig.Auth.Cognito.userPoolId ? `${awsConfig.Auth.Cognito.userPoolId.substring(0, 10)}...` : '(not set)');
-console.log('[Config] Input Bucket:', awsConfig.Storage.S3.bucket || '(not set)');
+console.log('[Config] Data Bucket:', awsConfig.Storage.S3.bucket || '(not set)');
 
 export default awsConfig;

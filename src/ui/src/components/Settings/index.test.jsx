@@ -315,7 +315,6 @@ describe('Settings Component', () => {
       };
 
       const defaultWithBoolean = {
-        chat_deployed: true,
         chat_require_auth: false
       };
 
@@ -349,7 +348,6 @@ describe('Settings Component', () => {
       };
 
       const defaultWithNumber = {
-        chat_deployed: true,
         chat_global_quota_daily: 10000
       };
 
@@ -388,7 +386,6 @@ describe('Settings Component', () => {
       };
 
       const defaultWithObject = {
-        chat_deployed: true,
         chat_theme_overrides: {
           primaryColor: '#0073bb',
           spacing: 'comfortable'
@@ -412,7 +409,7 @@ describe('Settings Component', () => {
   });
 
   describe('Chat field visibility', () => {
-    it('hides chat fields when chat_deployed is false', async () => {
+    it('shows all chat fields (chat is always deployed with SAM stack)', async () => {
       const schemaWithChat = {
         properties: {
           chat_require_auth: {
@@ -425,98 +422,26 @@ describe('Settings Component', () => {
             enum: ['model1', 'model2'],
             description: 'Primary model',
             order: 2
-          }
-        }
-      };
-
-      const defaultWithChatDisabled = {
-        chat_deployed: false,
-        chat_require_auth: false,
-        chat_primary_model: 'model1'
-      };
-
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(schemaWithChat),
-          Default: JSON.stringify(defaultWithChatDisabled),
-          Custom: JSON.stringify({})
-        }
-      }));
-
-      renderSettings();
-
-      await waitFor(() => {
-        expect(screen.getByText('Settings')).toBeInTheDocument();
-      });
-
-      // Chat fields should NOT be visible
-      expect(screen.queryByText('Require authentication')).not.toBeInTheDocument();
-      expect(screen.queryByText('Primary model')).not.toBeInTheDocument();
-    });
-
-    it('shows chat fields when chat_deployed is true', async () => {
-      const schemaWithChat = {
-        properties: {
-          chat_require_auth: {
-            type: 'boolean',
-            description: 'Require authentication',
-            order: 1
           },
-          chat_primary_model: {
-            type: 'string',
-            enum: ['model1', 'model2'],
-            description: 'Primary model',
-            order: 2
-          }
-        }
-      };
-
-      const defaultWithChatEnabled = {
-        chat_deployed: true,
-        chat_require_auth: false,
-        chat_primary_model: 'model1'
-      };
-
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(schemaWithChat),
-          Default: JSON.stringify(defaultWithChatEnabled),
-          Custom: JSON.stringify({})
-        }
-      }));
-
-      renderSettings();
-
-      await waitFor(() => {
-        expect(screen.getByText('Settings')).toBeInTheDocument();
-      });
-
-      // Chat fields SHOULD be visible
-      expect(screen.getByText('Require authentication')).toBeInTheDocument();
-      expect(screen.getByText('Primary model')).toBeInTheDocument();
-    });
-
-    it('always shows chat_model_id regardless of chat_deployed', async () => {
-      const schemaWithChatModel = {
-        properties: {
           chat_model_id: {
             type: 'string',
             enum: ['model1', 'model2'],
             description: 'Chat Model',
-            order: 1
+            order: 3
           }
         }
       };
 
-      const defaultWithChatDisabled = {
-        chat_deployed: false,
+      const defaultConfig = {
+        chat_require_auth: false,
+        chat_primary_model: 'model1',
         chat_model_id: 'model1'
       };
 
       mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
         getConfiguration: {
-          Schema: JSON.stringify(schemaWithChatModel),
-          Default: JSON.stringify(defaultWithChatDisabled),
+          Schema: JSON.stringify(schemaWithChat),
+          Default: JSON.stringify(defaultConfig),
           Custom: JSON.stringify({})
         }
       }));
@@ -527,7 +452,9 @@ describe('Settings Component', () => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
 
-      // chat_model_id should be visible even when chat_deployed is false
+      // All chat fields should be visible
+      expect(screen.getByText('Require authentication')).toBeInTheDocument();
+      expect(screen.getByText('Primary model')).toBeInTheDocument();
       expect(screen.getByText('Chat Model')).toBeInTheDocument();
     });
   });
@@ -545,7 +472,6 @@ describe('Settings Component', () => {
       };
 
       const defaultWithNumber = {
-        chat_deployed: true,
         chat_global_quota_daily: 10000
       };
 

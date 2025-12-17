@@ -60,13 +60,13 @@ GRAPHQL_URL=$(aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs[?OutputKey==`GraphQLApiUrl`].OutputValue' \
   --output text)
 
-INPUT_BUCKET=$(aws cloudformation describe-stacks \
+DATA_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
-  --query 'Stacks[0].Outputs[?OutputKey==`InputBucketName`].OutputValue' \
+  --query 'Stacks[0].Outputs[?OutputKey==`DataBucketName`].OutputValue' \
   --output text)
 
 # Validate required outputs
-if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ] || [ -z "$GRAPHQL_URL" ] || [ -z "$INPUT_BUCKET" ]; then
+if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ] || [ -z "$GRAPHQL_URL" ] || [ -z "$DATA_BUCKET" ]; then
     echo ""
     echo "Error: Missing required CloudFormation outputs"
     echo "Make sure your stack has these outputs defined:"
@@ -74,7 +74,7 @@ if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ] || [ -z "$GRAPHQL_URL
     echo "  - UserPoolClientId"
     echo "  - IdentityPoolId (optional)"
     echo "  - GraphQLApiUrl"
-    echo "  - InputBucketName"
+    echo "  - DataBucketName"
     echo ""
     echo "Current outputs:"
     aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' --output table
@@ -103,8 +103,8 @@ VITE_IDENTITY_POOL_ID=${IDENTITY_POOL_ID:-}
 # AppSync GraphQL API
 VITE_GRAPHQL_URL=$GRAPHQL_URL
 
-# S3 Input Bucket
-VITE_INPUT_BUCKET=$INPUT_BUCKET
+# S3 Data Bucket (uses input/ prefix for uploads)
+VITE_DATA_BUCKET=$DATA_BUCKET
 EOF
 
 echo ""
@@ -116,7 +116,7 @@ echo "  User Pool:          $USER_POOL_ID"
 echo "  Client ID:          $USER_POOL_CLIENT_ID"
 echo "  Identity Pool:      ${IDENTITY_POOL_ID:-Not configured}"
 echo "  GraphQL API:        $GRAPHQL_URL"
-echo "  Input Bucket:       $INPUT_BUCKET"
+echo "  Data Bucket:        $DATA_BUCKET"
 echo ""
 echo "Next steps:"
 echo "  1. cd src/ui"

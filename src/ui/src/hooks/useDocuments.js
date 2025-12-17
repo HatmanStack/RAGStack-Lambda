@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import { listScrapeJobs } from '../graphql/queries/listScrapeJobs';
+import { listImages } from '../graphql/queries/listImages';
 
 const LIST_DOCUMENTS = gql`
   query ListDocuments($limit: Int, $nextToken: String) {
@@ -37,6 +38,53 @@ const GET_DOCUMENT = gql`
       createdAt
       updatedAt
       metadata
+      previewUrl
+    }
+  }
+`;
+
+// Subscription for real-time document updates
+const ON_DOCUMENT_UPDATE = gql`
+  subscription OnDocumentUpdate {
+    onDocumentUpdate {
+      documentId
+      filename
+      status
+      totalPages
+      errorMessage
+      updatedAt
+    }
+  }
+`;
+
+// Subscription for real-time scrape job updates
+const ON_SCRAPE_UPDATE = gql`
+  subscription OnScrapeUpdate {
+    onScrapeUpdate {
+      jobId
+      baseUrl
+      title
+      status
+      totalUrls
+      processedCount
+      failedCount
+      updatedAt
+    }
+  }
+`;
+
+// Subscription for real-time image updates
+const ON_IMAGE_UPDATE = gql`
+  subscription OnImageUpdate {
+    onImageUpdate {
+      imageId
+      filename
+      caption
+      status
+      s3Uri
+      thumbnailUrl
+      errorMessage
+      updatedAt
     }
   }
 `;
@@ -46,6 +94,7 @@ const client = generateClient();
 export const useDocuments = () => {
   const [documents, setDocuments] = useState([]);
   const [scrapeJobs, setScrapeJobs] = useState([]);
+  const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [nextToken, setNextToken] = useState(null);
@@ -58,14 +107,57 @@ export const useDocuments = () => {
     nextTokenRef.current = nextToken;
   }, [nextToken]);
 
+  const fetchImages = useCallback(async () => {
+    try {
+      const response = await client.graphql({
+        query: listImages,
+        variables: { limit: 50 }
+      });
+
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors fetching images:', response.errors);
+        return;
+      }
+
+      const { data } = response;
+      const items = data?.listImages?.items || [];
+
+      // Transform images to match document structure for unified display
+      const transformedImages = items.map(img => ({
+        documentId: img.imageId,
+        filename: img.filename,
+        status: img.status,
+        caption: img.caption,
+        createdAt: img.createdAt,
+        updatedAt: img.updatedAt,
+        type: 'image',
+        thumbnailUrl: img.thumbnailUrl,
+        s3Uri: img.s3Uri
+      }));
+      setImages(transformedImages);
+    } catch (err) {
+      console.error('Failed to fetch images:', err);
+    }
+  }, []);
+
   const fetchScrapeJobs = useCallback(async () => {
     try {
-      const { data } = await client.graphql({
+      const response = await client.graphql({
         query: listScrapeJobs,
         variables: { limit: 50 }
       });
+
+      // Check for errors in response
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors fetching scrape jobs:', response.errors);
+        return;
+      }
+
+      const { data } = response;
+      const items = data?.listScrapeJobs?.items || [];
+
       // Transform scrape jobs to match document structure for unified display
-      const transformedJobs = (data.listScrapeJobs?.items || []).map(job => ({
+      const transformedJobs = items.map(job => ({
         documentId: job.jobId,
         filename: job.title || job.baseUrl,
         status: job.status,
@@ -79,8 +171,7 @@ export const useDocuments = () => {
       }));
       setScrapeJobs(transformedJobs);
     } catch (err) {
-      // Silently fail - scrape API may not be deployed yet
-      console.debug('Failed to fetch scrape jobs:', err);
+      console.error('Failed to fetch scrape jobs:', err);
     }
   }, []);
 
@@ -89,7 +180,7 @@ export const useDocuments = () => {
     setError(null);
 
     try {
-      const { data } = await client.graphql({
+      const response = await client.graphql({
         query: LIST_DOCUMENTS,
         variables: {
           limit: 50,
@@ -97,16 +188,21 @@ export const useDocuments = () => {
         }
       });
 
-      const newDocs = data.listDocuments.items.map(doc => ({
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors fetching documents:', response.errors);
+      }
+
+      const { data } = response;
+      const newDocs = (data?.listDocuments?.items || []).map(doc => ({
         ...doc,
         type: 'document'
       }));
 
       setDocuments(prev => reset ? newDocs : [...prev, ...newDocs]);
-      setNextToken(data.listDocuments.nextToken);
+      setNextToken(data?.listDocuments?.nextToken);
 
-      // Also fetch scrape jobs
-      await fetchScrapeJobs();
+      // Also fetch scrape jobs and images
+      await Promise.all([fetchScrapeJobs(), fetchImages()]);
 
     } catch (err) {
       console.error('Failed to fetch documents:', err);
@@ -114,7 +210,7 @@ export const useDocuments = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchScrapeJobs]); // Empty deps - uses ref for nextToken
+  }, [fetchScrapeJobs, fetchImages]);
 
   const refreshDocuments = useCallback(() => {
     fetchDocuments(true);
@@ -134,20 +230,162 @@ export const useDocuments = () => {
     }
   }, []);
 
+  // Handle real-time document update
+  const handleDocumentUpdate = useCallback((update) => {
+    console.log('[useDocuments] Document update received:', update);
+    setDocuments(prev => {
+      const idx = prev.findIndex(d => d.documentId === update.documentId);
+      if (idx >= 0) {
+        // Update existing document
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], ...update, type: 'document' };
+        return updated;
+      }
+      // New document - add to list
+      return [{ ...update, type: 'document' }, ...prev];
+    });
+  }, []);
+
+  // Handle real-time scrape update
+  const handleScrapeUpdate = useCallback((update) => {
+    console.log('[useDocuments] Scrape update received:', update);
+    setScrapeJobs(prev => {
+      const idx = prev.findIndex(j => j.documentId === update.jobId);
+      if (idx >= 0) {
+        // Update existing job
+        const updated = [...prev];
+        updated[idx] = {
+          ...updated[idx],
+          status: update.status,
+          totalPages: update.totalUrls,
+          processedCount: update.processedCount,
+          failedCount: update.failedCount,
+          filename: update.title || update.baseUrl,
+          updatedAt: update.updatedAt
+        };
+        return updated;
+      }
+      // New job - add to list
+      return [{
+        documentId: update.jobId,
+        filename: update.title || update.baseUrl,
+        status: update.status,
+        totalPages: update.totalUrls,
+        processedCount: update.processedCount,
+        failedCount: update.failedCount,
+        createdAt: update.updatedAt,
+        updatedAt: update.updatedAt,
+        type: 'scrape',
+        baseUrl: update.baseUrl
+      }, ...prev];
+    });
+  }, []);
+
+  // Handle real-time image update
+  const handleImageUpdate = useCallback((update) => {
+    console.log('[useDocuments] Image update received:', update);
+    setImages(prev => {
+      const idx = prev.findIndex(img => img.documentId === update.imageId);
+      if (idx >= 0) {
+        // Update existing image
+        const updated = [...prev];
+        updated[idx] = {
+          ...updated[idx],
+          status: update.status,
+          caption: update.caption || updated[idx].caption,
+          thumbnailUrl: update.thumbnailUrl || updated[idx].thumbnailUrl,
+          errorMessage: update.errorMessage,
+          updatedAt: update.updatedAt
+        };
+        return updated;
+      }
+      // New image - add to list
+      return [{
+        documentId: update.imageId,
+        filename: update.filename,
+        status: update.status,
+        caption: update.caption,
+        thumbnailUrl: update.thumbnailUrl,
+        s3Uri: update.s3Uri,
+        createdAt: update.updatedAt,
+        updatedAt: update.updatedAt,
+        type: 'image'
+      }, ...prev];
+    });
+  }, []);
+
   useEffect(() => {
     // Initial fetch on mount
     fetchDocuments(true);
 
-    // Poll for updates every 30 seconds
+    // Set up subscriptions for real-time updates
+    let docSubscription = null;
+    let scrapeSubscription = null;
+    let imageSubscription = null;
+
+    try {
+      // Subscribe to document updates
+      docSubscription = client.graphql({
+        query: ON_DOCUMENT_UPDATE
+      }).subscribe({
+        next: ({ data }) => {
+          if (data?.onDocumentUpdate) {
+            handleDocumentUpdate(data.onDocumentUpdate);
+          }
+        },
+        error: (err) => {
+          console.error('[useDocuments] Document subscription error:', err);
+        }
+      });
+
+      // Subscribe to scrape updates
+      scrapeSubscription = client.graphql({
+        query: ON_SCRAPE_UPDATE
+      }).subscribe({
+        next: ({ data }) => {
+          if (data?.onScrapeUpdate) {
+            handleScrapeUpdate(data.onScrapeUpdate);
+          }
+        },
+        error: (err) => {
+          console.error('[useDocuments] Scrape subscription error:', err);
+        }
+      });
+
+      // Subscribe to image updates
+      imageSubscription = client.graphql({
+        query: ON_IMAGE_UPDATE
+      }).subscribe({
+        next: ({ data }) => {
+          if (data?.onImageUpdate) {
+            handleImageUpdate(data.onImageUpdate);
+          }
+        },
+        error: (err) => {
+          console.error('[useDocuments] Image subscription error:', err);
+        }
+      });
+
+      console.log('[useDocuments] Subscriptions established');
+    } catch (err) {
+      console.error('[useDocuments] Failed to set up subscriptions:', err);
+    }
+
+    // Fallback: poll every 2 minutes in case subscriptions fail
     const interval = setInterval(() => {
       fetchDocuments(true);
-    }, 30000);
+    }, 120000);
 
-    return () => clearInterval(interval);
-  }, [fetchDocuments]);
+    return () => {
+      clearInterval(interval);
+      if (docSubscription) docSubscription.unsubscribe();
+      if (imageSubscription) imageSubscription.unsubscribe();
+      if (scrapeSubscription) scrapeSubscription.unsubscribe();
+    };
+  }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
-  // Merge documents and scrape jobs, sorted by createdAt (guard against missing dates)
-  const allItems = [...documents, ...scrapeJobs].sort((a, b) => {
+  // Merge documents, scrape jobs, and images, sorted by createdAt (guard against missing dates)
+  const allItems = [...documents, ...scrapeJobs, ...images].sort((a, b) => {
     const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return dateB - dateA;

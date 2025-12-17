@@ -82,7 +82,7 @@ Quick reference for common issues and solutions.
 | Problem | Cause | Solution |
 |---------|-------|----------|
 | Unit tests fail with imports | Library not installed | `npm install` in project root. `npm run test:backend` to verify. |
-| Integration tests fail | Stack not deployed or missing env vars | Export `STACK_NAME`, `INPUT_BUCKET`, `TRACKING_TABLE`. Verify stack exists. |
+| Integration tests fail | Stack not deployed or missing env vars | Export `STACK_NAME`, `DATA_BUCKET`, `TRACKING_TABLE`. Verify stack exists. |
 | Sample documents missing | Not generated | `cd tests/sample-documents && python3 generate_samples.py` |
 
 ## Debugging Tips

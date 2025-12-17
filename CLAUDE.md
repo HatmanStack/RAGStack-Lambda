@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS. Documents are uploaded → OCR processed (Textract/Bedrock) → vectorized → stored in Bedrock Knowledge Base → queryable via chat interface.
 
-**Dual-stack architecture:**
-- **SAM stack (core):** Document processing pipeline (Lambda, Step Functions, S3, DynamoDB, Bedrock KB)
-- **Amplify stack (optional):** Chat UI with web component CDN (AppSync GraphQL, Cognito auth, CloudFront)
+**Single SAM stack architecture:**
+- Document processing pipeline (Lambda, Step Functions, S3, DynamoDB, Bedrock KB)
+- Chat API (AppSync GraphQL, Cognito auth)
+- `<ragstack-chat>` web component (CloudFront CDN)
 
 ## Prerequisites
 
@@ -16,7 +17,6 @@ RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS
 - Node.js 24+
 - AWS CLI, SAM CLI (configured)
 - Docker (required for Lambda layer builds)
-- Amplify CLI (auto-installed if missing when using `--deploy-chat`)
 
 ## Common Commands
 
@@ -31,8 +31,7 @@ npm run test:backend                    # Python unit tests (uv run pytest)
 npm run test:backend:integration        # Python integration tests
 npm run test:backend:coverage          # Python tests with coverage report
 npm run test:frontend                   # React UI tests (src/ui)
-npm run test:amplify-chat              # AmplifyChat component tests
-npm run test:amplify                    # Amplify backend tests
+npm run test:ragstack-chat              # RagStackChat component tests
 npm run test:all                        # All tests + linting
 
 # Run single Python test
@@ -58,18 +57,11 @@ npm run lint                # Lint both backend and frontend
 ### Deployment
 
 ```bash
-# Full deployment with chat
+# Full deployment
 python publish.py \
   --project-name my-docs \
   --admin-email admin@example.com \
-  --region us-east-1 \
-  --deploy-chat
-
-# Without chat (SAM stack only)
-python publish.py --project-name my-docs --admin-email admin@example.com --region us-east-1
-
-# Update chat component only
-python publish.py --project-name my-docs --admin-email admin@example.com --region us-east-1 --chat-only
+  --region us-east-1
 
 # Skip UI deployment (backend only)
 python publish.py --project-name my-docs --admin-email admin@example.com --region us-east-1 --skip-ui
@@ -103,17 +95,13 @@ cd src/ui && npm run dev
 │   ├── lambda/                   # Lambda function handlers
 │   │   ├── process_document/     # OCR extraction (Textract/Bedrock)
 │   │   ├── ingest_to_kb/         # Ingest embeddings to Bedrock KB
-│   │   ├── query_kb/             # Query knowledge base (used by chat)
+│   │   ├── query_kb/             # Query knowledge base (chat API)
 │   │   ├── appsync_resolvers/    # GraphQL resolvers for AppSync
 │   │   └── configuration_resolver/ # DynamoDB config resolver
 │   ├── ui/                       # React 19 + Vite dashboard (Cloudscape Design)
-│   ├── amplify-chat/             # Reusable chat React component + web component
+│   ├── ragstack-chat/            # Reusable chat React component + web component
 │   ├── api/                      # GraphQL schema
 │   └── statemachine/             # Step Functions state machine definition
-├── amplify/
-│   ├── backend.ts                # Amplify Gen 2 backend (Auth, Data, CDN)
-│   ├── auth/                     # Cognito auth config
-│   └── data/                     # GraphQL schema and custom queries
 ├── tests/
 │   ├── unit/python/              # Python unit tests (pytest)
 │   ├── integration/              # Integration tests (marked with @pytest.mark.integration)
@@ -128,17 +116,16 @@ cd src/ui && npm run dev
 1. **Upload:** User uploads to S3 → EventBridge triggers ProcessDocument Lambda
 2. **Processing:** ProcessDocument (OCR) → IngestToKB → Bedrock Knowledge Base
 3. **Query:** User queries via AppSync → QueryKB Lambda → Bedrock KB → results with source attribution
-4. **Chat (optional):** Web component → Amplify GraphQL API → Bedrock conversational API → QueryKB for RAG context
+4. **Chat:** Web component (`<ragstack-chat>`) → SAM AppSync GraphQL API → QueryKB Lambda
 
 ### Key Components
 
 - **lib/ragstack_common/:** Shared library used by all Lambdas (OCR, embeddings, config, storage)
 - **ProcessDocument Lambda:** Extracts text from documents using Textract or Bedrock vision models
 - **IngestToKB Lambda:** Creates embeddings (Titan) and syncs to Bedrock Knowledge Base
-- **QueryKB Lambda:** Retrieves relevant documents from KB with source attribution
+- **QueryKB Lambda:** Retrieves relevant documents from KB with source attribution, handles chat with quota management
 - **Step Functions:** Orchestrates document processing workflow
 - **AppSync:** GraphQL API for UI and chat (queries, mutations, subscriptions)
-- **Amplify backend:** Custom CDK stack for chat API (AppSync GraphQL, Lambda authorizers, conversation handler)
 
 ## Testing Architecture
 
@@ -150,8 +137,7 @@ cd src/ui && npm run dev
 
 **Frontend tests (Vitest):**
 - UI tests: `src/ui/src/**/*.test.{ts,tsx}`
-- AmplifyChat tests: `src/amplify-chat/src/**/*.test.{ts,tsx}`
-- Amplify backend tests: `amplify/**/*.test.ts`
+- RagStackChat tests: `src/ragstack-chat/src/**/*.test.{ts,tsx}`
 
 **Coverage:** `npm run test:coverage` generates HTML coverage report in `htmlcov/`
 
@@ -182,15 +168,13 @@ The `publish.py` script orchestrates:
 1. **Validation:** Email format, project name (2-32 chars, lowercase alphanumeric + hyphens)
 2. **SAM build/deploy:** Builds Lambda layers (Docker), packages, deploys via CloudFormation
 3. **UI build/upload:** Builds React UI (Vite), uploads to S3, invalidates CloudFront cache
-4. **Amplify deploy (optional):** Deploys custom CDK stack via `npx cdk deploy` for chat API
+4. **Web component build:** Triggers CodeBuild to build and deploy `<ragstack-chat>` to CDN
 5. **Outputs:** Knowledge Base ID, GraphQL API endpoint, CloudFront URLs, Cognito user pool
 
 **Parameters:**
 - `--project-name`: Unique project identifier (used in resource names)
 - `--admin-email`: Admin user email (Cognito, CloudWatch alerts)
 - `--region`: AWS region
-- `--deploy-chat`: Deploy Amplify chat stack
-- `--chat-only`: Update chat component without redeploying SAM stack
 - `--skip-ui`: Deploy backend only, skip React UI
 
 ## Important Notes
@@ -221,11 +205,14 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed configuration gu
 
 Configured via `OcrBackend` parameter in `template.yaml` or `--ocr-backend` in `publish.py`.
 
-### Amplify Gen 2
-Chat stack uses Amplify Gen 2 (file-based config, not AWS console). Backend defined in `amplify/backend.ts` using CDK constructs. Data schema in `amplify/data/resource.ts`.
-
 ### Web Component
-`src/amplify-chat/` exports both React component and web component (custom element). Web component is built and deployed to CloudFront CDN via CodeBuild project defined in `amplify/backend.ts`.
+`src/ragstack-chat/` exports both React component and web component (custom element `<ragstack-chat>`). Web component is built and deployed to CloudFront CDN via CodeBuild project defined in `template.yaml`.
+
+**Usage:**
+```html
+<script src="https://YOUR_CLOUDFRONT_DOMAIN/ragstack-chat.js"></script>
+<ragstack-chat conversation-id="my-site"></ragstack-chat>
+```
 
 ### Lambda Layer
 Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer during SAM build. Docker is required for building layer with native dependencies (Pillow, etc.).
@@ -238,8 +225,6 @@ Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer durin
 
 **"Test discovery: no tests found"**: Ensure test files match pattern `test_*.py` and are in `tests/` directory
 
-**Amplify deployment fails**: Check `amplify/.env` exists with correct values, verify Amplify CLI is installed
-
 **Web component not loading**: Check CloudFront distribution status, verify CodeBuild project completed successfully
 
 ## Documentation
@@ -248,6 +233,6 @@ Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer durin
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment guide
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Local development
-- [docs/AMPLIFY_CHAT.md](docs/AMPLIFY_CHAT.md) - Chat component API
+- [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) - Chat component API
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Runtime configuration
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues

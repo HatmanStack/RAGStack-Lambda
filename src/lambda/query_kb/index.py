@@ -2,18 +2,18 @@
 Knowledge Base Query Lambda
 
 AppSync resolver for searching/chatting with the Knowledge Base.
-Supports conversation continuity via Bedrock session management.
+Supports conversation continuity via DynamoDB-stored conversation history.
 
 Input (AppSync):
 {
     "query": "What is in this document?",
-    "sessionId": "optional-session-id-for-conversation"
+    "conversationId": "optional-conversation-id-for-multi-turn"
 }
 
 Output (ChatResponse):
 {
     "answer": "Generated response text",
-    "sessionId": "session-id-from-bedrock",
+    "conversationId": "conversation-id",
     "sources": [
         {
             "documentId": "document.pdf",
@@ -29,9 +29,12 @@ Output (ChatResponse):
 import json
 import logging
 import os
+from datetime import UTC, datetime
+from decimal import Decimal
 from urllib.parse import unquote
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from ragstack_common.config import ConfigurationManager
@@ -45,6 +48,270 @@ logger.setLevel(logging.INFO)
 
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
+
+# Conversation history settings
+MAX_HISTORY_TURNS = 5
+CONVERSATION_TTL_DAYS = 14
+MAX_MESSAGE_LENGTH = 10000  # Max chars per message to prevent injection attacks
+
+# Quota settings
+QUOTA_TTL_DAYS = 2  # Quota counters expire after 2 days
+
+
+def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
+    """
+    Atomically check and increment quotas using DynamoDB transactions.
+
+    Uses TransactWriteItems to ensure atomic updates to both global and user
+    quotas, preventing race conditions and eliminating rollback failures.
+
+    Args:
+        tracking_id (str): User identifier for per-user quota
+        is_authenticated (bool): Whether user is authenticated
+        region (str): AWS region
+
+    Returns:
+        str: Model ID to use (primary or fallback)
+    """
+    # Load quota configuration
+    primary_model = config_manager.get_parameter(
+        "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    )
+    fallback_model = config_manager.get_parameter(
+        "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
+    )
+    global_quota_daily = config_manager.get_parameter("chat_global_quota_daily", default=10000)
+    per_user_quota_daily = config_manager.get_parameter("chat_per_user_quota_daily", default=100)
+
+    # Ensure quotas are integers
+    if isinstance(global_quota_daily, Decimal):
+        global_quota_daily = int(global_quota_daily)
+    if isinstance(per_user_quota_daily, Decimal):
+        per_user_quota_daily = int(per_user_quota_daily)
+
+    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not config_table_name:
+        logger.warning("CONFIGURATION_TABLE_NAME not set, skipping quota check")
+        return primary_model
+
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    ttl = int(datetime.now(UTC).timestamp()) + (QUOTA_TTL_DAYS * 86400)
+    global_key = f"quota#global#{today}"
+
+    try:
+        # Build transaction items for atomic quota updates
+        transact_items = [
+            {
+                "Update": {
+                    "TableName": config_table_name,
+                    "Key": {"Configuration": {"S": global_key}},
+                    "UpdateExpression": "ADD #count :inc SET #ttl = :ttl",
+                    "ConditionExpression": "#count < :limit OR attribute_not_exists(#count)",
+                    "ExpressionAttributeNames": {"#count": "count", "#ttl": "ttl"},
+                    "ExpressionAttributeValues": {
+                        ":inc": {"N": "1"},
+                        ":limit": {"N": str(global_quota_daily)},
+                        ":ttl": {"N": str(ttl)},
+                    },
+                }
+            }
+        ]
+
+        # Add user quota check if authenticated
+        if is_authenticated and tracking_id:
+            user_key = f"quota#user#{tracking_id}#{today}"
+            transact_items.append(
+                {
+                    "Update": {
+                        "TableName": config_table_name,
+                        "Key": {"Configuration": {"S": user_key}},
+                        "UpdateExpression": "ADD #count :inc SET #ttl = :ttl",
+                        "ConditionExpression": "#count < :limit OR attribute_not_exists(#count)",
+                        "ExpressionAttributeNames": {"#count": "count", "#ttl": "ttl"},
+                        "ExpressionAttributeValues": {
+                            ":inc": {"N": "1"},
+                            ":limit": {"N": str(per_user_quota_daily)},
+                            ":ttl": {"N": str(ttl)},
+                        },
+                    }
+                }
+            )
+
+        # Execute atomic transaction
+        dynamodb_client = boto3.client("dynamodb")
+        dynamodb_client.transact_write_items(TransactItems=transact_items)
+
+        user_prefix = tracking_id[:8] if tracking_id else "anon"
+        logger.info(f"Quota transaction succeeded for {user_prefix}...")
+        return primary_model
+
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code == "TransactionCanceledException":
+            # Check which condition failed
+            reasons = e.response.get("CancellationReasons", [])
+            for i, reason in enumerate(reasons):
+                if reason.get("Code") == "ConditionalCheckFailed":
+                    quota_type = "global" if i == 0 else "user"
+                    logger.info(f"{quota_type.capitalize()} quota exceeded, using fallback model")
+            return fallback_model
+        logger.error(f"Error in quota transaction: {e}")
+        return fallback_model
+
+    except Exception as e:
+        logger.error(f"Error in quota check: {e}")
+        # On error, default to fallback model (conservative approach)
+        return fallback_model
+
+
+def get_conversation_history(conversation_id):
+    """
+    Retrieve the last N conversation turns from DynamoDB.
+
+    Args:
+        conversation_id (str): The conversation ID
+
+    Returns:
+        list[dict]: Previous conversation turns in chronological order
+    """
+    conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
+    if not conversation_table_name or not conversation_id:
+        return []
+
+    table = dynamodb.Table(conversation_table_name)
+
+    try:
+        response = table.query(
+            KeyConditionExpression=Key("conversationId").eq(conversation_id),
+            ScanIndexForward=False,  # Descending order (newest first)
+            Limit=MAX_HISTORY_TURNS,
+            ProjectionExpression="turnNumber, userMessage, assistantResponse",
+        )
+
+        # Reverse to chronological order and convert Decimal to int
+        items = response.get("Items", [])
+        for item in items:
+            if "turnNumber" in item and isinstance(item["turnNumber"], Decimal):
+                item["turnNumber"] = int(item["turnNumber"])
+        items.reverse()
+        return items
+    except ClientError as e:
+        logger.error(f"Failed to retrieve conversation history: {e}")
+        return []
+
+
+def store_conversation_turn(
+    conversation_id, turn_number, user_message, assistant_response, sources
+):
+    """
+    Store a conversation turn in DynamoDB.
+
+    Args:
+        conversation_id (str): The conversation ID
+        turn_number (int): The turn number (1-indexed)
+        user_message (str): The user's original query
+        assistant_response (str): The assistant's response
+        sources (list): The source documents used
+    """
+    conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
+    if not conversation_table_name or not conversation_id:
+        return
+
+    table = dynamodb.Table(conversation_table_name)
+
+    # Calculate TTL (14 days from now)
+    ttl = int(datetime.now(UTC).timestamp()) + (CONVERSATION_TTL_DAYS * 86400)
+
+    try:
+        table.put_item(
+            Item={
+                "conversationId": conversation_id,
+                "turnNumber": turn_number,
+                "userMessage": user_message,
+                "assistantResponse": assistant_response,
+                "sources": json.dumps(sources),  # Store as JSON string
+                "createdAt": datetime.now(UTC).isoformat(),
+                "ttl": ttl,
+            }
+        )
+        logger.info(f"Stored turn {turn_number} for conversation {conversation_id[:8]}...")
+    except ClientError as e:
+        logger.error(f"Failed to store conversation turn: {e}")
+
+
+def build_retrieval_query(current_query, history):
+    """
+    Build an optimized query for KB retrieval.
+
+    For multi-turn conversations, we expand the current query with key context
+    from conversation history to help disambiguate references (e.g., "it", "that"),
+    but keep it focused for effective retrieval.
+
+    Args:
+        current_query (str): The user's current question
+        history (list[dict]): Previous conversation turns
+
+    Returns:
+        str: Query optimized for KB retrieval
+    """
+    if not history:
+        return current_query
+
+    # Extract key terms from recent conversation to help disambiguate
+    # Focus on the last 2 turns for context
+    recent_context = []
+    for turn in history[-2:]:
+        user_msg = turn.get("userMessage", "")
+        if user_msg:
+            recent_context.append(user_msg)
+
+    if not recent_context:
+        return current_query
+
+    # Build a retrieval query that includes the current question
+    # plus brief context for disambiguation
+    context_summary = " | ".join(recent_context)
+
+    return f"{current_query} (context: {context_summary})"
+
+
+def build_conversation_messages(current_query, history, retrieved_context):
+    """
+    Build messages array for Bedrock Converse API with conversation history.
+
+    Args:
+        current_query (str): The user's current question
+        history (list[dict]): Previous conversation turns
+        retrieved_context (str): Retrieved documents from KB
+
+    Returns:
+        list[dict]: Messages array for Converse API
+    """
+    messages = []
+
+    # Add conversation history (with length limits to prevent injection)
+    for turn in history:
+        user_msg = turn.get("userMessage", "")[:MAX_MESSAGE_LENGTH]
+        assistant_msg = turn.get("assistantResponse", "")[:MAX_MESSAGE_LENGTH]
+
+        if user_msg:
+            messages.append({"role": "user", "content": [{"text": user_msg}]})
+
+        if assistant_msg:
+            messages.append({"role": "assistant", "content": [{"text": assistant_msg}]})
+
+    # Add current question with retrieved context
+    current_message = f"""Based on the following information from our knowledge base:
+
+{retrieved_context}
+
+Please answer this question: {current_query}
+
+If the retrieved information doesn't contain the answer, say so and provide relevant info."""
+
+    messages.append({"role": "user", "content": [{"text": current_message}]})
+
+    return messages
 
 
 def generate_presigned_url(bucket, key, expiration=3600):
@@ -94,6 +361,94 @@ def extract_source_url_from_content(content_text):
     return None
 
 
+def extract_image_caption_from_content(content_text):
+    """
+    Extract caption from image content frontmatter.
+
+    Args:
+        content_text (str): Content text that may contain frontmatter
+
+    Returns:
+        str or None: Caption if found, None otherwise
+    """
+    if not content_text:
+        return None
+
+    # Look for caption in content (usually after frontmatter)
+    # Image content format:
+    # ---
+    # image_id: ...
+    # filename: ...
+    # ---
+    # # Image: filename
+    # <caption text>
+
+    # First try to extract from frontmatter-style format
+    lines = content_text.split("\n")
+    in_frontmatter = False
+    frontmatter_ended = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Track frontmatter boundaries
+        if stripped == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            frontmatter_ended = True
+            in_frontmatter = False
+            continue
+
+        # Look for user_caption or ai_caption in frontmatter
+        if in_frontmatter:
+            if stripped.startswith("user_caption:"):
+                caption = stripped.split(":", 1)[1].strip()
+                if caption:
+                    return caption
+            if stripped.startswith("ai_caption:"):
+                caption = stripped.split(":", 1)[1].strip()
+                if caption:
+                    return caption
+
+        # After frontmatter, look for actual content
+        if frontmatter_ended and stripped and not stripped.startswith("#"):
+            # Return first non-header line as caption snippet
+            return stripped[:200] if len(stripped) > 200 else stripped
+
+    return None
+
+
+def construct_image_uri_from_content_uri(content_s3_uri):
+    """
+    Convert content.txt S3 URI to the actual image file URI.
+
+    The content.txt file is stored at: images/{imageId}/content.txt
+    The actual image is at: images/{imageId}/{filename}.ext
+
+    Since we don't know the filename, we need to query S3 or DynamoDB.
+    For now, we'll return None and let the calling code handle it.
+
+    Args:
+        content_s3_uri (str): S3 URI of the content.txt file
+
+    Returns:
+        str or None: S3 URI of the image file, or None if not determinable
+    """
+    if not content_s3_uri or "content.txt" not in content_s3_uri:
+        return None
+
+    # For now, return the base path (without content.txt)
+    # The UI can use this to construct a thumbnail request
+    # In a full implementation, we'd query DynamoDB for the actual filename
+    try:
+        # Replace content.txt with metadata.json and try to get the actual filename
+        # This is a simplified approach - the full implementation would cache this
+        return content_s3_uri.replace("/content.txt", "")  # UI will need to handle this
+    except Exception:
+        return None
+
+
 def extract_sources(citations):
     """
     Parse Bedrock citations into structured sources.
@@ -124,36 +479,85 @@ def extract_sources(citations):
     for idx, citation in enumerate(citations):
         logger.debug(f"Processing citation {idx}")
         for ref in citation.get("retrievedReferences", []):
-            # Extract S3 URI
-            uri = ref.get("location", {}).get("s3Location", {}).get("uri", "")
+            # Extract S3 URI - handle both retrieve and retrieve_and_generate response formats
+            location = ref.get("location") or {}
+            s3_location = location.get("s3Location") or {}
+            uri = s3_location.get("uri", "")
+
             if not uri:
-                logger.debug("No URI found in reference")
+                logger.debug(f"No URI found in reference. Location: {location}")
                 continue
 
-            # Parse S3 URI from output bucket to construct input bucket URI
-            # Output URI: s3://project-output-suffix/doc-id/filename.pdf/doc-id/extracted_text.txt
-            # Input URI:  s3://project-input-suffix/doc-id/filename.pdf
+            logger.info(f"Processing source URI: {uri}")
+
+            # Parse S3 URI to construct the original input document URI
+            # Two possible structures:
+            # 1. Single bucket: s3://bucket/output/input/doc-id/filename.pdf/extracted_text.txt
+            # 2. Separate buckets: s3://project-output-suffix/doc-id/filename.pdf/extracted_text.txt
             try:
-                parts = uri.replace("s3://", "").split("/")
+                uri_path = uri.replace("s3://", "")
+                parts = uri_path.split("/")
+                logger.info(f"Parsing URI: {uri}, parts count: {len(parts)}")
+
                 if len(parts) < 3:
-                    logger.warning(f"Invalid S3 URI format (too few parts): {len(parts)}")
+                    logger.warning(f"Invalid S3 URI format (too few parts): {parts}")
                     continue
 
-                # Extract components
-                output_bucket = parts[0]  # e.g., "chat-fix-output-mvm4c"
-                document_id = unquote(parts[1])  # e.g., "f8e9d9fc-..."
-                original_filename = unquote(parts[2]) if len(parts) > 2 else None  # e.g., "doc.pdf"
+                bucket = parts[0]
+
+                # Detect structure: single bucket with output/input prefix or separate buckets
+                if len(parts) > 3 and parts[1] == "output" and parts[2] == "input":
+                    # Single bucket structure: bucket/output/input/doc-id/filename/...
+                    # Input path: bucket/input/doc-id/filename
+                    document_id = unquote(parts[3]) if len(parts) > 3 else None
+                    original_filename = unquote(parts[4]) if len(parts) > 4 else None
+                    input_prefix = "input"
+                    logger.info("Single bucket structure detected")
+                else:
+                    # Separate bucket structure: bucket-output-suffix/doc-id/filename/...
+                    # Input bucket: bucket-input-suffix/doc-id/filename
+                    document_id = unquote(parts[1])
+                    original_filename = unquote(parts[2]) if len(parts) > 2 else None
+                    input_prefix = None
+                    # Convert output bucket to input bucket
+                    bucket = bucket.replace("-output-", "-input-")
+                    logger.info("Separate bucket structure detected")
+
+                logger.info(f"Parsed: bucket={bucket}, doc={document_id}, file={original_filename}")
+
+                # Validate extracted values
+                if not document_id or len(document_id) < 5:
+                    logger.warning(f"Invalid document_id: {document_id}")
+                    continue
 
                 # Check if this is scraped content (ends with .scraped.md)
                 is_scraped = original_filename and original_filename.endswith(".scraped.md")
 
-                # Construct input bucket URI (replace -output- with -input-)
-                input_bucket = output_bucket.replace("-output-", "-input-")
-                if original_filename:
-                    document_s3_uri = f"s3://{input_bucket}/{document_id}/{original_filename}"
+                # Check if this is an image source (from images/ prefix or content.txt)
+                # Images are stored at: images/{imageId}/content.txt
+                is_content_txt_image = (
+                    original_filename and original_filename == "content.txt" and "images" in uri
+                )
+                is_image = (
+                    (len(parts) > 1 and parts[1] == "images")
+                    or (input_prefix and len(parts) > 3 and parts[3] == "images")
+                    or is_content_txt_image
+                )
+
+                # Construct input document URI
+                if original_filename and len(original_filename) > 0:
+                    if input_prefix:
+                        document_s3_uri = (
+                            f"s3://{bucket}/{input_prefix}/{document_id}/{original_filename}"
+                        )
+                    else:
+                        document_s3_uri = f"s3://{bucket}/{document_id}/{original_filename}"
                 else:
                     # Fallback if filename missing
+                    logger.warning("No filename found, using original URI")
                     document_s3_uri = uri
+
+                logger.info(f"Constructed input URI: {document_s3_uri}")
 
                 # Extract page number if available (from metadata or filename)
                 page_num = None
@@ -174,6 +578,13 @@ def extract_sources(citations):
                     source_url = extract_source_url_from_content(content_text)
                     logger.debug(f"Scraped content detected, source_url: {source_url}")
 
+                # For image content, extract caption from frontmatter
+                image_caption = None
+                if is_image:
+                    image_caption = extract_image_caption_from_content(content_text)
+                    preview = image_caption[:50] if image_caption else None
+                    logger.debug(f"Image content detected, caption: {preview}...")
+
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"
                 if source_key not in seen:
@@ -184,14 +595,37 @@ def extract_sources(citations):
 
                     # Generate presigned URL if access is enabled
                     document_url = None
-                    if allow_document_access and document_s3_uri:
+                    if (
+                        allow_document_access
+                        and document_s3_uri
+                        and document_s3_uri.startswith("s3://")
+                    ):
                         # Parse S3 URI to get bucket and key
-                        s3_match = document_s3_uri.replace("s3://", "").split("/", 1)
-                        if len(s3_match) == 2:
+                        s3_path = document_s3_uri.replace("s3://", "")
+                        s3_match = s3_path.split("/", 1)
+                        if len(s3_match) == 2 and s3_match[1]:
                             bucket = s3_match[0]
                             key = s3_match[1]
-                            document_url = generate_presigned_url(bucket, key)
-                            logger.debug(f"Generated presigned URL for {document_id}")
+                            # Validate key looks reasonable (has document ID and filename)
+                            if "/" in key and len(key) > 10:
+                                logger.info(f"Generating presigned URL: bucket={bucket}, key={key}")
+                                document_url = generate_presigned_url(bucket, key)
+                            else:
+                                logger.warning(f"Skipping malformed key: {key}")
+                        else:
+                            logger.warning(f"Could not parse S3 URI: {document_s3_uri}")
+
+                    # For images, generate thumbnail URL from the original image
+                    thumbnail_url = None
+                    if is_image and allow_document_access:
+                        # Image S3 URI: images/{imageId}/{filename}.png
+                        # We need to find the actual image file (not content.txt)
+                        image_s3_uri = construct_image_uri_from_content_uri(document_s3_uri)
+                        if image_s3_uri:
+                            s3_path = image_s3_uri.replace("s3://", "")
+                            s3_parts = s3_path.split("/", 1)
+                            if len(s3_parts) == 2:
+                                thumbnail_url = generate_presigned_url(s3_parts[0], s3_parts[1])
 
                     source_obj = {
                         "documentId": document_id,
@@ -202,6 +636,10 @@ def extract_sources(citations):
                         "documentAccessAllowed": allow_document_access,
                         "isScraped": is_scraped,
                         "sourceUrl": source_url,  # Original web URL for scraped content
+                        # Image-specific fields
+                        "isImage": is_image,
+                        "thumbnailUrl": thumbnail_url,
+                        "caption": image_caption,
                     }
                     logger.debug(f"Added source: {source_key}")
                     sources.append(source_obj)
@@ -219,27 +657,24 @@ def extract_sources(citations):
 
 def lambda_handler(event, context):
     """
-    Query Bedrock Knowledge Base with optional session for conversation continuity.
+    Query Bedrock Knowledge Base with DynamoDB-stored conversation history.
 
     Args:
         event['query'] (str): User's question
-        event['sessionId'] (str, optional): Conversation session ID
+        event['conversationId'] (str, optional): Conversation ID for multi-turn context
 
     Returns:
-        dict: ChatResponse with answer, sessionId, sources, and optional error
+        dict: ChatResponse with answer, conversationId, sources, and optional error
     """
     # Get environment variables (moved here for testability)
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     if not knowledge_base_id:
         return {
             "answer": "",
-            "sessionId": None,
+            "conversationId": None,
             "sources": [],
             "error": "KNOWLEDGE_BASE_ID environment variable is required",
         }
-
-    # Read chat model from ConfigurationManager (runtime configuration)
-    chat_model_id = config_manager.get_parameter("chat_model_id", default="us.amazon.nova-pro-v1:0")
 
     bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
@@ -275,15 +710,29 @@ def lambda_handler(event, context):
             raise ValueError("Could not determine AWS account ID for ARN construction") from e
 
     # Extract inputs from AppSync event
-    # AppSync sends: {"arguments": {"query": "...", "sessionId": "..."}, ...}
+    # AppSync sends: {"arguments": {"query": "...", "conversationId": "..."}, ...}
     arguments = event.get("arguments", event)  # Fallback to event for direct invocation
     query = arguments.get("query", "")
-    session_id = arguments.get("sessionId")
+    conversation_id = arguments.get("conversationId")
+
+    # Extract user identity for quota tracking
+    # AppSync Cognito auth provides identity in event
+    # API key auth returns None for identity, so we need to handle that
+    identity = event.get("identity") or {}
+    user_id = identity.get("sub") or identity.get("username") if identity else None
+    is_authenticated = user_id is not None
+
+    # Use conversationId as fallback tracking ID for anonymous users
+    tracking_id = user_id or (f"anon:{conversation_id}" if conversation_id else None)
+
+    # Check quotas and select model (primary or fallback)
+    chat_model_id = atomic_quota_check_and_increment(tracking_id, is_authenticated, region)
 
     # Log safe summary (not full event payload to avoid PII/user data leakage)
     safe_summary = {
         "query_length": len(query) if isinstance(query, str) else 0,
-        "has_session": session_id is not None,
+        "has_conversation": conversation_id is not None,
+        "is_authenticated": is_authenticated,
         "knowledge_base_id": knowledge_base_id[:8] + "..."
         if len(knowledge_base_id) > 8
         else knowledge_base_id,
@@ -294,12 +743,17 @@ def lambda_handler(event, context):
     try:
         # Validate query
         if not query:
-            return {"answer": "", "sessionId": None, "sources": [], "error": "No query provided"}
+            return {
+                "answer": "",
+                "conversationId": None,
+                "sources": [],
+                "error": "No query provided",
+            }
 
         if not isinstance(query, str):
             return {
                 "answer": "",
-                "sessionId": None,
+                "conversationId": None,
                 "sources": [],
                 "error": "Query must be a string",
             }
@@ -307,79 +761,134 @@ def lambda_handler(event, context):
         if len(query) > 10000:
             return {
                 "answer": "",
-                "sessionId": None,
+                "conversationId": None,
                 "sources": [],
                 "error": "Query exceeds maximum length of 10000 characters",
             }
 
-        # Build request
-        # Determine ARN type based on model ID format
+        # Retrieve conversation history for multi-turn context
+        history = []
+        if conversation_id:
+            history = get_conversation_history(conversation_id)
+            logger.info(f"Retrieved {len(history)} turns for conversation {conversation_id[:8]}...")
+
+        # Validate account ID for inference profiles (required for proper billing/routing)
         # Inference profiles start with region prefix (e.g., us.amazon.nova-pro-v1:0)
-        # Foundation models don't (e.g., anthropic.claude-3-5-sonnet-20241022-v2:0)
-        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")):
-            # Inference profiles require account ID in ARN
-            if not account_id:
-                msg = f"Account ID is required for inference profile model {chat_model_id}"
-                raise ValueError(msg)
-            model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{chat_model_id}"
-        else:
-            # Foundation models don't use account ID
-            model_arn = f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}"
+        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")) and not account_id:
+            msg = f"Account ID is required for inference profile model {chat_model_id}"
+            raise ValueError(msg)
 
         logger.info(f"Using model: {chat_model_id} in region {region}")
 
-        request = {
-            "input": {"text": query},
-            "retrieveAndGenerateConfiguration": {
-                "type": "KNOWLEDGE_BASE",
-                "knowledgeBaseConfiguration": {
-                    "knowledgeBaseId": knowledge_base_id,
-                    "modelArn": model_arn,
-                },
+        # STEP 1: Retrieve relevant documents from KB
+        # Use a focused query with minimal context for effective retrieval
+        retrieval_query = build_retrieval_query(query, history)
+        logger.info(f"Retrieval query: {retrieval_query[:100]}...")
+
+        retrieve_response = bedrock_agent.retrieve(
+            knowledgeBaseId=knowledge_base_id,
+            retrievalQuery={"text": retrieval_query},
+            retrievalConfiguration={
+                "vectorSearchConfiguration": {
+                    "numberOfResults": 5,  # Get top 5 relevant chunks
+                }
             },
-        }
-
-        # Add sessionId if provided (for conversation continuity)
-        if session_id:
-            request["sessionId"] = session_id
-
-        # Call Bedrock
-        response = bedrock_agent.retrieve_and_generate(**request)
-
-        # Extract data
-        answer = response.get("output", {}).get("text", "")
-        new_session_id = response.get("sessionId")
-        citations = response.get("citations", [])
-
-        logger.info(
-            f"KB query successful. SessionId: {new_session_id}, Citations: {len(citations)}"
         )
 
-        # Parse sources
+        # Extract retrieved results and build context
+        retrieval_results = retrieve_response.get("retrievalResults", [])
+        logger.info(f"Retrieved {len(retrieval_results)} results from KB")
+
+        # Build context from retrieved documents
+        retrieved_chunks = []
+        citations = []  # Build citations in the format expected by extract_sources
+        for result in retrieval_results:
+            content = result.get("content") or {}
+            content_text = content.get("text", "") if isinstance(content, dict) else ""
+            if content_text:
+                retrieved_chunks.append(content_text)
+                # Build citation structure for source extraction
+                citations.append(
+                    {
+                        "retrievedReferences": [
+                            {
+                                "content": {"text": content_text},
+                                "location": result.get("location") or {},
+                                "metadata": result.get("metadata") or {},
+                            }
+                        ]
+                    }
+                )
+
+        if retrieved_chunks:
+            retrieved_context = "\n\n---\n\n".join(retrieved_chunks)
+        else:
+            retrieved_context = "No relevant information found in the knowledge base."
+
+        # Parse sources from citations
         sources = extract_sources(citations)
 
-        return {"answer": answer, "sessionId": new_session_id, "sources": sources}
+        # STEP 2: Generate response using Converse API with conversation history
+        bedrock_runtime = boto3.client("bedrock-runtime", region_name=region)
+
+        # Build messages with conversation history and retrieved context
+        messages = build_conversation_messages(query, history, retrieved_context)
+
+        # System prompt for the assistant
+        system_prompt = (
+            "You are a helpful assistant that answers questions based on information "
+            "from a knowledge base. Always base your answers on the provided knowledge "
+            "base information. If the provided information doesn't contain the answer, "
+            "clearly state that and provide what relevant information you can. "
+            "Be concise but thorough."
+        )
+
+        # Call Converse API
+        converse_response = bedrock_runtime.converse(
+            modelId=chat_model_id,
+            messages=messages,
+            system=[{"text": system_prompt}],
+            inferenceConfig={
+                "maxTokens": 2048,
+                "temperature": 0.7,
+            },
+        )
+
+        # Extract answer from response
+        answer = ""
+        output = converse_response.get("output") or {}
+        output_message = output.get("message") or {} if isinstance(output, dict) else {}
+        if isinstance(output_message, dict):
+            content_blocks = output_message.get("content", [])
+        else:
+            content_blocks = []
+        for content_block in content_blocks:
+            if isinstance(content_block, dict) and "text" in content_block:
+                answer += content_block["text"]
+
+        logger.info(f"KB query done. Retrieved: {len(retrieval_results)}, Sources: {len(sources)}")
+
+        # Store conversation turn for future context
+        if conversation_id:
+            next_turn = len(history) + 1
+            store_conversation_turn(
+                conversation_id=conversation_id,
+                turn_number=next_turn,
+                user_message=query,  # Store original query, not enhanced
+                assistant_response=answer,
+                sources=sources,
+            )
+
+        return {"answer": answer, "conversationId": conversation_id, "sources": sources}
 
     except ClientError as e:
-        # Handle session expiration specifically
         error_code = e.response.get("Error", {}).get("Code", "")
         error_msg = e.response.get("Error", {}).get("Message", "")
-
-        if error_code == "ValidationException" and "session" in error_msg.lower():
-            logger.warning(f"Session expired: {session_id}")
-            return {
-                "error": "Session expired. Please start a new conversation.",
-                "answer": "",
-                "sessionId": None,
-                "sources": [],
-            }
-
-        # Other client errors
         logger.error(f"Bedrock client error: {error_code} - {error_msg}")
         return {
             "error": f"Failed to query knowledge base: {error_msg}",
             "answer": "",
-            "sessionId": None,
+            "conversationId": conversation_id,
             "sources": [],
         }
 
@@ -389,6 +898,6 @@ def lambda_handler(event, context):
         return {
             "error": "Failed to query knowledge base. Please try again.",
             "answer": "",
-            "sessionId": None,
+            "conversationId": conversation_id,
             "sources": [],
         }

@@ -30,25 +30,36 @@ export const Scrape = () => {
     setDuplicateWarning(null);
     setPendingConfig(null);
 
+    const scrapeInput = {
+      url: config.url,
+      maxPages: config.maxPages,
+      maxDepth: config.maxDepth,
+      scope: config.scope,
+      includePatterns: config.includePatterns,
+      excludePatterns: config.excludePatterns,
+      scrapeMode: config.scrapeMode,
+      cookies: config.cookies,
+      forceRescrape: config.forceRescrape
+    };
+
+    console.log('[Scrape] Submitting scrape with config:', JSON.stringify(scrapeInput, null, 2));
+
     try {
-      const job = await startScrape({
-        url: config.url,
-        maxPages: config.maxPages,
-        maxDepth: config.maxDepth,
-        scope: config.scope,
-        includePatterns: config.includePatterns,
-        excludePatterns: config.excludePatterns,
-        scrapeMode: config.scrapeMode,
-        cookies: config.cookies
-      });
+      const job = await startScrape(scrapeInput);
+      console.log('[Scrape] Job created successfully:', job);
 
       // Navigate to dashboard to see the new job
       if (job?.jobId) {
         navigate('/');
       }
     } catch (err) {
-      // Error is handled by hook
-      console.error('Scrape submission failed:', err);
+      // Error is handled by hook, but log details here too
+      console.error('[Scrape] Scrape submission failed:', err);
+      console.error('[Scrape] Error type:', err.constructor.name);
+      console.error('[Scrape] Error message:', err.message);
+      if (err.errors) {
+        console.error('[Scrape] GraphQL errors:', JSON.stringify(err.errors, null, 2));
+      }
     }
   };
 
@@ -73,6 +84,8 @@ export const Scrape = () => {
           header="Scrape failed"
         >
           {hookError}
+          <br />
+          <small style={{ color: '#666' }}>Check browser console (F12) for details</small>
         </Alert>
       )}
       <Container header={<Header variant="h1">Scrape Website</Header>}>

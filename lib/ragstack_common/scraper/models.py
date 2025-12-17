@@ -65,6 +65,7 @@ class ScrapeConfig:
     exclude_patterns: list[str] = field(default_factory=list)
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
+    force_rescrape: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for DynamoDB storage."""
@@ -77,6 +78,7 @@ class ScrapeConfig:
             "exclude_patterns": self.exclude_patterns,
             "cookies": self.cookies,
             "headers": self.headers,
+            "force_rescrape": self.force_rescrape,
         }
 
     @classmethod
@@ -88,14 +90,15 @@ class ScrapeConfig:
         except ValueError:
             scope = ScrapeScope.SUBPAGES
         return cls(
-            max_pages=data.get("max_pages", 1000),
-            max_depth=data.get("max_depth", 3),
+            max_pages=int(data.get("max_pages", 1000)),
+            max_depth=int(data.get("max_depth", 3)),
             scope=scope,
-            request_delay_ms=data.get("request_delay_ms", 500),
+            request_delay_ms=int(data.get("request_delay_ms", 500)),
             include_patterns=data.get("include_patterns", []),
             exclude_patterns=data.get("exclude_patterns", []),
             cookies=data.get("cookies", {}),
             headers=data.get("headers", {}),
+            force_rescrape=bool(data.get("force_rescrape", False)),
         )
 
 
@@ -166,9 +169,9 @@ class ScrapeJob:
             status=ScrapeStatus(data.get("status", "pending")),
             config=ScrapeConfig.from_dict(data.get("config", {})),
             title=data.get("title"),
-            total_urls=data.get("total_urls", 0),
-            processed_count=data.get("processed_count", 0),
-            failed_count=data.get("failed_count", 0),
+            total_urls=int(data.get("total_urls", 0)),
+            processed_count=int(data.get("processed_count", 0)),
+            failed_count=int(data.get("failed_count", 0)),
             failed_urls=data.get("failed_urls", []),
             step_function_arn=data.get("step_function_arn"),
             created_at=datetime.fromisoformat(created_at) if created_at else datetime.now(UTC),
@@ -238,7 +241,7 @@ class ScrapePage:
             job_id=data["job_id"],
             url=data["url"],
             status=UrlStatus(data.get("status", "pending")),
-            depth=data.get("depth", 0),
+            depth=int(data.get("depth", 0)),
             content_hash=data.get("content_hash"),
             document_id=data.get("document_id"),
             title=data.get("title"),

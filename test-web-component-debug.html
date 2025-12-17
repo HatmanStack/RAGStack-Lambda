@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amplify Chat Debug Test</title>
+  <title>RagStack Chat Debug Test</title>
   <style>
     body {
       font-family: monospace;
@@ -20,35 +20,66 @@
     .error { color: red; }
     .success { color: green; }
     .info { color: blue; }
+    .config {
+      background: #fffde7;
+      padding: 15px;
+      margin-bottom: 20px;
+      border: 1px solid #fdd835;
+      border-radius: 4px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      font-family: monospace;
+    }
+    button {
+      padding: 8px 16px;
+      margin: 5px 5px 5px 0;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <h1>Web Component Debug Test</h1>
+  <h1>RagStack Chat Debug Test</h1>
+
+  <div class="config">
+    <h3>Configuration</h3>
+    <p>Enter your CloudFront CDN URL or use local build:</p>
+    <input type="text" id="cdn-url" placeholder="https://d1234567890.cloudfront.net/ragstack-chat.js" />
+    <br>
+    <button onclick="loadFromCDN()">Load from CDN</button>
+    <button onclick="loadLocal()">Load Local Build</button>
+    <p class="info" style="font-size: 12px;">
+      Local: Run <code>cd src/ragstack-chat && npm run build:wc</code> first, then start a local server.
+    </p>
+  </div>
 
   <div class="debug">
     <h2>Script Loading Test</h2>
-    <div id="script-status">Loading...</div>
+    <div id="script-status">Waiting for script to load...</div>
   </div>
 
   <div class="debug">
     <h2>Custom Element Test</h2>
-    <div id="element-status">Checking...</div>
+    <div id="element-status">Waiting...</div>
   </div>
 
   <div class="debug">
     <h2>Global Object Test</h2>
-    <div id="global-status">Checking...</div>
+    <div id="global-status">Waiting...</div>
   </div>
 
   <div class="debug">
-    <h2>Chat Component (Light Theme)</h2>
-    <p class="info">Use theme-preset attribute: light, dark, or brand</p>
-    <amplify-chat conversation-id="debug-test" theme-preset="light"></amplify-chat>
+    <h2>Chat Component</h2>
+    <div id="chat-container">
+      <p class="info">Chat component will appear here after script loads</p>
+    </div>
   </div>
 
   <div class="debug">
     <h2>JavaScript Errors</h2>
-    <div id="errors">None</div>
+    <div id="errors">None yet</div>
   </div>
 
   <script>
@@ -56,81 +87,107 @@
 
     // Capture all errors
     window.addEventListener('error', (e) => {
-      errors.push(`${e.message} at ${e.filename}:${e.lineno}:${e.colno}`);
-      document.getElementById('errors').innerHTML = errors.map(err =>
-        `<div class="error">❌ ${err}</div>`
-      ).join('');
+      const errorMsg = `${e.message} at ${e.filename}:${e.lineno}:${e.colno}`;
+      errors.push(errorMsg);
+      updateErrors();
     });
 
     // Capture console errors
     const originalError = console.error;
     console.error = function(...args) {
       errors.push(args.join(' '));
-      document.getElementById('errors').innerHTML = errors.map(err =>
-        `<div class="error">❌ ${err}</div>`
-      ).join('');
+      updateErrors();
       originalError.apply(console, args);
     };
-  </script>
 
-  <!-- Load the web component -->
-  <script src="https://d32yde9gdu649l.cloudfront.net/amplify-chat.js"
-          onload="console.log('✓ Script loaded successfully')"
-          onerror="console.error('✗ Script failed to load')"></script>
+    function updateErrors() {
+      document.getElementById('errors').innerHTML = errors.length > 0
+        ? errors.map(err => `<div class="error">${err}</div>`).join('')
+        : '<div class="success">No JavaScript errors detected</div>';
+    }
 
-  <script>
-    // Wait for everything to load
-    window.addEventListener('load', () => {
-      // Check script loaded
-      document.getElementById('script-status').innerHTML =
-        '<div class="success">✓ Script tag executed</div>';
-
+    function checkComponent() {
       // Check if custom element is defined
-      const isDefined = customElements.get('amplify-chat');
+      const isDefined = customElements.get('ragstack-chat');
       document.getElementById('element-status').innerHTML = isDefined
-        ? '<div class="success">✓ Custom element IS registered</div>'
-        : '<div class="error">✗ Custom element NOT registered</div>';
+        ? '<div class="success">Custom element IS registered</div>'
+        : '<div class="error">Custom element NOT registered</div>';
 
       // Check what's in the global scope
       const globalKeys = [];
-      if (window.AmplifyChat) {
-        globalKeys.push('window.AmplifyChat exists');
-      }
-      if (window.Amplify) {
-        globalKeys.push('window.Amplify exists');
-      }
+      if (window.RagStackChat) globalKeys.push('window.RagStackChat');
+      if (window.THEME_CONFIG) globalKeys.push('window.THEME_CONFIG');
 
-      // Check what the UMD module exposed
       const umdKeys = Object.keys(window).filter(key =>
-        key.includes('Amplify') || key.includes('Chat')
+        key.includes('RagStack') || key.includes('Chat')
       );
 
       document.getElementById('global-status').innerHTML = `
-        <div class="info">UMD exports found: ${umdKeys.join(', ') || 'NONE'}</div>
-        <div class="info">Global checks: ${globalKeys.join(', ') || 'NONE'}</div>
+        <div class="info">Global objects: ${globalKeys.join(', ') || 'NONE'}</div>
+        <div class="info">Window keys matching: ${umdKeys.join(', ') || 'NONE'}</div>
       `;
 
-      // Try to manually register if it's available
-      if (!isDefined && window.AmplifyChat) {
-        console.log('Attempting manual registration...');
-        try {
-          customElements.define('amplify-chat', window.AmplifyChat);
-          document.getElementById('element-status').innerHTML =
-            '<div class="success">✓ Manually registered successfully!</div>';
-        } catch (e) {
-          document.getElementById('element-status').innerHTML +=
-            `<div class="error">Manual registration failed: ${e.message}</div>`;
-        }
+      // Add chat component if element is registered
+      if (isDefined) {
+        document.getElementById('chat-container').innerHTML = `
+          <ragstack-chat
+            conversation-id="debug-test-${Date.now()}"
+            header-text="Debug Test Chat"
+            theme-preset="light">
+          </ragstack-chat>
+        `;
       }
 
-      // Final error check
-      setTimeout(() => {
-        if (errors.length === 0) {
-          document.getElementById('errors').innerHTML =
-            '<div class="success">✓ No JavaScript errors detected</div>';
-        }
-      }, 1000);
-    });
+      updateErrors();
+    }
+
+    function loadScript(src) {
+      // Remove any existing script
+      const existing = document.getElementById('ragstack-script');
+      if (existing) existing.remove();
+
+      document.getElementById('script-status').innerHTML =
+        `<div class="info">Loading: ${src}</div>`;
+
+      const script = document.createElement('script');
+      script.id = 'ragstack-script';
+      script.src = src;
+      script.onload = () => {
+        document.getElementById('script-status').innerHTML =
+          `<div class="success">Script loaded from: ${src}</div>`;
+        setTimeout(checkComponent, 500);
+      };
+      script.onerror = (e) => {
+        document.getElementById('script-status').innerHTML =
+          `<div class="error">Failed to load: ${src}</div>`;
+        errors.push(`Script load failed: ${src}`);
+        updateErrors();
+      };
+      document.body.appendChild(script);
+    }
+
+    function loadFromCDN() {
+      const url = document.getElementById('cdn-url').value.trim();
+      if (!url) {
+        alert('Please enter a CDN URL');
+        return;
+      }
+      loadScript(url);
+    }
+
+    function loadLocal() {
+      // Try common local development paths
+      const localPath = './src/ragstack-chat/dist/wc.js';
+      loadScript(localPath);
+    }
+
+    // Check URL params for auto-load
+    const params = new URLSearchParams(window.location.search);
+    const cdnParam = params.get('cdn');
+    if (cdnParam) {
+      document.getElementById('cdn-url').value = cdnParam;
+      loadScript(cdnParam);
+    }
   </script>
 </body>
 </html>

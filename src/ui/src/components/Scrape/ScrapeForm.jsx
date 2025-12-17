@@ -8,7 +8,8 @@ import {
   Button,
   ExpandableSection,
   Textarea,
-  Alert
+  Alert,
+  Checkbox
 } from '@cloudscape-design/components';
 import { CookieHelp } from './CookieHelp';
 
@@ -16,23 +17,25 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState('100');
   const [maxDepth, setMaxDepth] = useState('3');
-  const [scope, setScope] = useState({ value: 'subpages', label: 'Subpages only' });
+  const [scope, setScope] = useState({ value: 'SUBPAGES', label: 'Subpages only' });
   const [includePatterns, setIncludePatterns] = useState('');
   const [excludePatterns, setExcludePatterns] = useState('');
-  const [scrapeMode, setScrapeMode] = useState({ value: 'auto', label: 'Auto-detect' });
+  const [scrapeMode, setScrapeMode] = useState({ value: 'AUTO', label: 'Auto-detect' });
   const [cookies, setCookies] = useState('');
+  const [forceRescrape, setForceRescrape] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // GraphQL enum values must be uppercase
   const scopeOptions = [
-    { value: 'subpages', label: 'Subpages only', description: 'Only URLs under the starting path' },
-    { value: 'hostname', label: 'Entire hostname', description: 'All pages on the same subdomain' },
-    { value: 'domain', label: 'Entire domain', description: 'All subdomains of the domain' }
+    { value: 'SUBPAGES', label: 'Subpages only', description: 'Only URLs under the starting path' },
+    { value: 'HOSTNAME', label: 'Entire hostname', description: 'All pages on the same subdomain' },
+    { value: 'DOMAIN', label: 'Entire domain', description: 'All subdomains of the domain' }
   ];
 
   const modeOptions = [
-    { value: 'auto', label: 'Auto-detect', description: 'Try fast mode, fall back to full for SPAs' },
-    { value: 'fast', label: 'Fast (HTTP only)', description: 'Faster, but may miss JavaScript content' },
-    { value: 'full', label: 'Full (with browser)', description: 'Slower, but handles all JavaScript' }
+    { value: 'AUTO', label: 'Auto-detect', description: 'Try fast mode, fall back to full for SPAs' },
+    { value: 'FAST', label: 'Fast (HTTP only)', description: 'Faster, but may miss JavaScript content' },
+    { value: 'FULL', label: 'Full (with browser)', description: 'Slower, but handles all JavaScript' }
   ];
 
   const getFormData = () => ({
@@ -43,7 +46,8 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
     includePatterns: includePatterns.split('\n').filter(Boolean),
     excludePatterns: excludePatterns.split('\n').filter(Boolean),
     scrapeMode: scrapeMode.value,
-    cookies: cookies || null
+    cookies: cookies || null,
+    forceRescrape
   });
 
   const handleSubmit = (e) => {
@@ -152,6 +156,14 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
                   options={modeOptions}
                 />
               </FormField>
+
+              <Checkbox
+                checked={forceRescrape}
+                onChange={({ detail }) => setForceRescrape(detail.checked)}
+                description="Re-scrape all pages even if content hasn't changed"
+              >
+                Force re-scrape
+              </Checkbox>
 
               <FormField
                 label="Cookies"

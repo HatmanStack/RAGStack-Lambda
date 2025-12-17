@@ -10,7 +10,7 @@
  * Prerequisites:
  * - Application deployed to staging environment
  * - STAGING_URL environment variable set
- * - Test documents uploaded to InputBucket
+ * - Test documents uploaded to DataBucket (input/ prefix)
  * - Admin credentials configured
  *
  * Run with:

@@ -20,8 +20,6 @@
  * - Number → Input with validation
  * - Enum → Select dropdown
  * - Object → ExpandableSection with nested inputs
- *
- * Chat fields are conditionally visible based on the `chat_deployed` flag.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -198,11 +196,8 @@ export function Settings() {
     const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, key);
     const validationError = validationErrors[key];
 
-    // Hide chat fields if chat is not deployed
-    if (key.startsWith('chat_') && key !== 'chat_model_id' && !formValues.chat_deployed) {
-      console.log(`[Settings] Hiding field ${key} because chat_deployed=${formValues.chat_deployed}`);
-      return null;
-    }
+    // Note: chat_deployed check removed - chat is always deployed with SAM stack
+    // All chat fields are now always visible
 
     // Log when rendering chat_allow_document_access
     if (key === 'chat_allow_document_access') {
@@ -225,11 +220,11 @@ export function Settings() {
             </Box>
             <Box>
               <code style={{ display: 'block', whiteSpace: 'pre-wrap', padding: '12px', background: '#f4f4f4', borderRadius: '4px' }}>
-                {`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+                {`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
               </code>
             </Box>
             <CopyToClipboard
-              copyText={`<script src="${value}"></script>\n<amplify-chat conversation-id="my-site"></amplify-chat>`}
+              copyText={`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
               copyButtonText="Copy Embed Code"
               copySuccessText="Copied!"
             />

@@ -63,9 +63,9 @@ export const useUpload = () => {
 
       const { documentId } = data.createUploadUrl;
 
-      // Upload to S3 using Amplify Storage
+      // Upload to S3 using Amplify Storage (input/ prefix for DataBucket)
       const operation = uploadData({
-        path: `${documentId}/${upload.file.name}`,
+        path: `input/${documentId}/${upload.file.name}`,
         data: upload.file,
         options: {
           onProgress: ({ transferredBytes, totalBytes }) => {

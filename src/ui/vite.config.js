@@ -9,6 +9,7 @@ export default defineConfig({
     // This prevents accidental exposure of sensitive data (user IDs, API endpoints,
     // configuration details) that may be logged during development.
     // The conditional ensures development debugging remains functional.
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    // TEMPORARILY DISABLED for debugging
+    // drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
 })
