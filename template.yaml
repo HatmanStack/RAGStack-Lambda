@@ -1007,6 +1007,7 @@ Resources:
                 - bedrock:InvokeModel
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
@@ -1972,6 +1973,8 @@ Resources:
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
           SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
           SCRAPE_START_FUNCTION_ARN: !GetAtt ScrapeStartFunction.Arn
+          # Configuration table for caption generation model selection
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -2000,6 +2003,17 @@ Resources:
               Action:
                 - states:StopExecution
               Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${ProjectName}-ScrapeWorkflow:*'
+        # Configuration table read for caption model selection
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        # Bedrock InvokeModel for AI caption generation
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function
