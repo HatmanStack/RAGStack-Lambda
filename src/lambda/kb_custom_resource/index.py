@@ -70,15 +70,10 @@ def lambda_handler(event, context):
             )
 
         elif request_type == "Update":
-            # For simplicity, updates not supported - would require recreation
+            # Return existing KB attributes so GetAtt works
             kb_id = event.get("PhysicalResourceId", "KnowledgeBase")
-            send_response(
-                event,
-                context,
-                "SUCCESS",
-                {"Message": "Update not implemented"},
-                physical_resource_id=kb_id,
-            )
+            result = get_knowledge_base_attributes(kb_id)
+            send_response(event, context, "SUCCESS", result, physical_resource_id=kb_id)
 
         elif request_type == "Delete":
             kb_id = event.get("PhysicalResourceId", "KnowledgeBase")
@@ -89,6 +84,38 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error(f"Failed: {e}", exc_info=True)
         send_response(event, context, "FAILED", reason=str(e))
+
+
+def get_knowledge_base_attributes(kb_id):
+    """Fetch existing Knowledge Base attributes for Update requests."""
+    logger.info(f"Fetching attributes for Knowledge Base: {kb_id}")
+
+    try:
+        kb_response = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
+        kb = kb_response["knowledgeBase"]
+        kb_arn = kb["knowledgeBaseArn"]
+
+        # Get data source ID
+        ds_response = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+        data_source_id = ""
+        if ds_response.get("dataSourceSummaries"):
+            data_source_id = ds_response["dataSourceSummaries"][0]["dataSourceId"]
+
+        # Get index ARN from storage config
+        index_arn = ""
+        storage_config = kb.get("storageConfiguration", {})
+        if storage_config.get("type") == "S3_VECTORS":
+            index_arn = storage_config.get("s3VectorsConfiguration", {}).get("indexArn", "")
+
+        return {
+            "KnowledgeBaseId": kb_id,
+            "KnowledgeBaseArn": kb_arn,
+            "DataSourceId": data_source_id,
+            "IndexArn": index_arn,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get KB attributes: {e}")
+        raise
 
 
 def create_knowledge_base(properties):
