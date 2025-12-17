@@ -405,6 +405,7 @@ type ScrapePage {
   title: String
   status: String!
   documentId: ID
+  contentUrl: String
   error: String
   depth: Int!
 }

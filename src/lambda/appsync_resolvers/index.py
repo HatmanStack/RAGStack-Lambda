@@ -429,7 +429,34 @@ def get_scrape_job(args):
                 ExpressionAttributeValues={":jid": job_id},
                 Limit=100,
             )
-            pages = [format_scrape_page(p) for p in urls_response.get("Items", [])]
+            page_items = urls_response.get("Items", [])
+
+            # Batch-get documents to generate contentUrls
+            doc_ids = [p.get("document_id") for p in page_items if p.get("document_id")]
+            content_urls = {}
+            if doc_ids:
+                # Batch get in chunks of 100 (DynamoDB limit)
+                for i in range(0, len(doc_ids), 100):
+                    chunk = doc_ids[i : i + 100]
+                    batch_response = dynamodb.batch_get_item(
+                        RequestItems={
+                            TRACKING_TABLE: {
+                                "Keys": [{"document_id": did} for did in chunk],
+                                "ProjectionExpression": "document_id, output_s3_uri, #s",
+                                "ExpressionAttributeNames": {"#s": "status"},
+                            }
+                        }
+                    )
+                    for doc in batch_response.get("Responses", {}).get(TRACKING_TABLE, []):
+                        doc_id = doc.get("document_id")
+                        output_uri = doc.get("output_s3_uri")
+                        status = doc.get("status", "").upper()
+                        if output_uri and status in ("OCR_COMPLETE", "INDEXED"):
+                            content_urls[doc_id] = generate_presigned_download_url(output_uri)
+
+            pages = [
+                format_scrape_page(p, content_urls.get(p.get("document_id"))) for p in page_items
+            ]
 
         return {
             "job": format_scrape_job(item),
@@ -689,13 +716,14 @@ def format_scrape_job(item):
     }
 
 
-def format_scrape_page(item):
+def format_scrape_page(item, content_url=None):
     """Format DynamoDB item as GraphQL ScrapePage type."""
     return {
         "url": item["url"],
         "title": item.get("title"),
         "status": item.get("status", "pending").upper(),
         "documentId": item.get("document_id"),
+        "contentUrl": content_url,
         "error": item.get("error"),
         "depth": int(item.get("depth", 0)),
     }
