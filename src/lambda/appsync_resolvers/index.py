@@ -155,11 +155,12 @@ def list_documents(args):
         table = dynamodb.Table(TRACKING_TABLE)
 
         # Filter out images - they're listed via listImages
+        # Check both type field and input_s3_uri path for robustness
         scan_kwargs = {
             "Limit": limit,
-            "FilterExpression": "attribute_not_exists(#type) OR #type <> :image_type",
+            "FilterExpression": "(attribute_not_exists(#type) OR #type <> :image_type) AND (attribute_not_exists(input_s3_uri) OR NOT contains(input_s3_uri, :images_prefix))",
             "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image"},
+            "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
         }
 
         if next_token:
@@ -1204,12 +1205,12 @@ def list_images(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Scan with filter for type="image"
+        # Scan with filter for type="image" OR input_s3_uri contains /images/
         scan_kwargs = {
             "Limit": limit,
-            "FilterExpression": "#type = :image_type",
+            "FilterExpression": "#type = :image_type OR contains(input_s3_uri, :images_prefix)",
             "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image"},
+            "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
         }
 
         if next_token:
