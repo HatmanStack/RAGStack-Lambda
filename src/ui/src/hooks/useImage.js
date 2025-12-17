@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import { createImageUploadUrl } from '../graphql/mutations/createImageUploadUrl';
+import { createZipUploadUrl as createZipUploadUrlMutation } from '../graphql/mutations/createZipUploadUrl';
 import { generateCaption as generateCaptionMutation } from '../graphql/mutations/generateCaption';
 import { submitImage as submitImageMutation } from '../graphql/mutations/submitImage';
 import { deleteImage as deleteImageMutation } from '../graphql/mutations/deleteImage';
@@ -207,6 +208,61 @@ export const useImage = () => {
     setImages([]);
   }, []);
 
+  const createZipUploadUrl = useCallback(async (generateCaptions = false) => {
+    setError(null);
+    try {
+      const { data } = await client.graphql({
+        query: createZipUploadUrlMutation,
+        variables: { generateCaptions }
+      });
+
+      if (!data?.createZipUploadUrl) {
+        throw new Error('Failed to create ZIP upload URL');
+      }
+
+      return data.createZipUploadUrl;
+    } catch (err) {
+      console.error('Failed to create ZIP upload URL:', err);
+      setError(err.message || 'Failed to create ZIP upload URL');
+      throw err;
+    }
+  }, []);
+
+  const uploadZip = useCallback(async (file, generateCaptions = false, onProgress) => {
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Get presigned URL
+      const { uploadId } = await createZipUploadUrl(generateCaptions);
+
+      // Upload to S3 using Amplify Storage (uploads/ prefix)
+      const operation = uploadData({
+        path: `uploads/${uploadId}/archive.zip`,
+        data: file,
+        options: {
+          onProgress: ({ transferredBytes, totalBytes }) => {
+            const progress = Math.round((transferredBytes / totalBytes) * 100);
+            if (onProgress) {
+              onProgress(progress);
+            }
+          }
+        }
+      });
+
+      await operation.result;
+
+      return { uploadId };
+
+    } catch (err) {
+      console.error('ZIP upload failed:', err);
+      setError(err.message || 'Failed to upload ZIP');
+      throw err;
+    } finally {
+      setUploading(false);
+    }
+  }, [createZipUploadUrl]);
+
   return {
     images,
     uploading,
@@ -220,6 +276,8 @@ export const useImage = () => {
     deleteImage: deleteImageById,
     getImage: getImageById,
     removeImage,
-    clearImages
+    clearImages,
+    createZipUploadUrl,
+    uploadZip
   };
 };
