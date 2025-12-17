@@ -6,11 +6,13 @@ Extracts images, applies captions, and creates tracking records for each image.
 
 Input event (from S3 trigger via EventBridge):
 {
-    "upload_id": "abc123",
     "bucket": "my-bucket",
-    "key": "uploads/abc123/archive.zip",
-    "generate_captions": true
+    "key": "uploads/abc123/archive.zip"
 }
+
+The upload_id is extracted from the key (format: uploads/{upload_id}/archive.zip).
+The generate_captions flag is retrieved from the tracking record in DynamoDB,
+which was set by the createZipUploadUrl resolver.
 
 Output:
 {
@@ -64,13 +66,32 @@ def lambda_handler(event, context):
     tracking_table = dynamodb.Table(tracking_table_name)
 
     # Extract event parameters
-    upload_id = event.get("upload_id")
     bucket = event.get("bucket")
     key = event.get("key")
-    generate_captions = event.get("generate_captions", False)
 
-    if not upload_id or not bucket or not key:
-        raise ValueError("upload_id, bucket, and key are required in event")
+    if not bucket or not key:
+        raise ValueError("bucket and key are required in event")
+
+    # Extract upload_id from key (format: uploads/{upload_id}/archive.zip)
+    upload_id = event.get("upload_id")
+    if not upload_id:
+        # Parse from key: uploads/{upload_id}/archive.zip
+        key_parts = key.split("/")
+        if len(key_parts) >= 2 and key_parts[0] == "uploads":
+            upload_id = key_parts[1]
+        else:
+            raise ValueError(f"Cannot extract upload_id from key: {key}")
+
+    # Look up generate_captions from tracking record (set by createZipUploadUrl resolver)
+    generate_captions = event.get("generate_captions", False)
+    if not generate_captions:
+        try:
+            tracking_response = tracking_table.get_item(Key={"document_id": upload_id})
+            tracking_item = tracking_response.get("Item", {})
+            generate_captions = tracking_item.get("generate_captions", False)
+            logger.info(f"Retrieved generate_captions={generate_captions} from tracking record")
+        except ClientError as e:
+            logger.warning(f"Could not retrieve tracking record for {upload_id}: {e}")
 
     logger.info(f"Processing ZIP: upload_id={upload_id}, key={key}, generate_captions={generate_captions}")
 
