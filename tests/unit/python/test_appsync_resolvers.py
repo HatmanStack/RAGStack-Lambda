@@ -1,7 +1,6 @@
 """Unit tests for AppSync resolver Lambda handlers."""
 
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

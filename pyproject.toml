@@ -80,6 +80,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Test files can have additional flexibility
 "tests/**/*.py" = [
     "ARG001",  # Unused function arguments (common in fixtures)
+    "ARG002",  # Unused method arguments (common in pytest fixtures)
     "S101",    # Use of assert (required for pytest)
     "PTH123",  # Using open() instead of Path.open() is acceptable in tests
     "E402",    # Module imports after sys.path manipulation (required for Lambda tests)
