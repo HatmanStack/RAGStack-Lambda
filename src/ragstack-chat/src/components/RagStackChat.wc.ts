@@ -112,7 +112,6 @@ class RagStackChat extends HTMLElement {
       if (theme) {
         this.themeFetched = true;
         this.fetchedTheme = theme;
-      } else {
       }
     } catch (error) {
       console.warn('[RagStackChat] Theme fetch failed, using defaults:', error);

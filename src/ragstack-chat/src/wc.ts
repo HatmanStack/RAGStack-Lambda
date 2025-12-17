@@ -34,7 +34,6 @@ if (!existingDef) {
     console.error('[RagStackChat] Failed to register custom element:', error);
     throw error;
   }
-} else {
 }
 
 // Export the Web Component class for programmatic use
