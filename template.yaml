@@ -2255,6 +2255,70 @@ Resources:
       FieldName: cancelScrape
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
+  # Image resolvers
+  CreateImageUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createImageUploadUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  GenerateCaptionResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: generateCaption
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  SubmitImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: submitImage
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  GetImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getImage
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ListImagesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: listImages
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  DeleteImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteImage
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  CreateZipUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createZipUploadUrl
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
   # =========================================================================
   # Dead Letter Queue for Error Handling
   # =========================================================================
