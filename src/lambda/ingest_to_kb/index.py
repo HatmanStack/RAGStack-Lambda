@@ -21,10 +21,12 @@ Output:
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import boto3
 from botocore.exceptions import ClientError
+
+from ragstack_common.appsync import publish_document_update
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -82,18 +84,30 @@ def lambda_handler(event, context):
         if doc_details:
             ingestion_status = doc_details[0].get("status", "UNKNOWN")
 
+        # Get document details for publishing update
+        doc_response = tracking_table.get_item(Key={"document_id": document_id})
+        doc_item = doc_response.get("Item", {})
+        filename = doc_item.get("filename", "unknown")
+        total_pages = doc_item.get("total_pages", 0)
+
         # Update document status in DynamoDB to 'indexed'
         try:
             tracking_table.update_item(
                 Key={"document_id": document_id},
-                UpdateExpression="SET #status = :status, updatedAt = :updated_at",
+                UpdateExpression="SET #status = :status, updated_at = :updated_at",
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
                     ":status": "indexed",
-                    ":updated_at": datetime.utcnow().isoformat() + "Z",
+                    ":updated_at": datetime.now(UTC).isoformat(),
                 },
             )
             logger.info(f"Updated document {document_id} status to 'indexed'")
+
+            # Publish real-time update
+            graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+            publish_document_update(
+                graphql_endpoint, document_id, filename, "INDEXED", total_pages=total_pages
+            )
         except ClientError as e:
             logger.error(f"Failed to update DynamoDB status for {document_id}: {str(e)}")
             # Log the error but don't fail the ingestion - the document was successfully ingested

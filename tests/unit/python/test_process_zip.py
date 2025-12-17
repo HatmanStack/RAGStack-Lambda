@@ -51,7 +51,7 @@ def mock_boto3():
         def client_factory(service_name, *args, **kwargs):
             if service_name == "s3":
                 return mock_s3
-            elif service_name == "bedrock-runtime":
+            if service_name == "bedrock-runtime":
                 return mock_bedrock
             return MagicMock()
 
@@ -169,11 +169,7 @@ class TestProcessZip:
         mock_boto3["bedrock"].invoke_model.return_value = {
             "body": io.BytesIO(
                 json.dumps(
-                    {
-                        "content": [
-                            {"type": "text", "text": "AI generated description of image"}
-                        ]
-                    }
+                    {"content": [{"type": "text", "text": "AI generated description of image"}]}
                 ).encode()
             )
         }

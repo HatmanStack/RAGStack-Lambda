@@ -4,9 +4,9 @@
   "States": {
     "ExtractDocumentId": {
       "Type": "Pass",
-      "Comment": "Extract document_id from S3 key (format: document_id/filename)",
+      "Comment": "Extract document_id from S3 key (format: input/document_id/filename)",
       "Parameters": {
-        "document_id.$": "States.ArrayGetItem(States.StringSplit($.document_id, '/'), 0)",
+        "document_id.$": "States.ArrayGetItem(States.StringSplit($.document_id, '/'), 1)",
         "input_s3_uri.$": "$.input_s3_uri",
         "output_s3_prefix.$": "$.output_s3_prefix",
         "vector_bucket.$": "$.vector_bucket"

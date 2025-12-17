@@ -4,7 +4,11 @@ Shared utilities and classes for document pipeline document processing pipeline.
 """
 
 from ragstack_common import constants
-from ragstack_common.appsync import publish_document_update, publish_image_update, publish_scrape_update
+from ragstack_common.appsync import (
+    publish_document_update,
+    publish_image_update,
+    publish_scrape_update,
+)
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import (
     ImageStatus,

@@ -65,6 +65,7 @@ class ScrapeConfig:
     exclude_patterns: list[str] = field(default_factory=list)
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
+    force_rescrape: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for DynamoDB storage."""
@@ -77,6 +78,7 @@ class ScrapeConfig:
             "exclude_patterns": self.exclude_patterns,
             "cookies": self.cookies,
             "headers": self.headers,
+            "force_rescrape": self.force_rescrape,
         }
 
     @classmethod
@@ -96,6 +98,7 @@ class ScrapeConfig:
             exclude_patterns=data.get("exclude_patterns", []),
             cookies=data.get("cookies", {}),
             headers=data.get("headers", {}),
+            force_rescrape=bool(data.get("force_rescrape", False)),
         )
 
 

@@ -1,14 +1,14 @@
 /**
- * Tests for AmplifyChat web component.
+ * Tests for RagStackChat web component.
  */
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import '../src/components/AmplifyChat.wc';
+import '../src/components/RagStackChat.wc';
 
-describe('AmplifyChat Web Component', () => {
+describe('RagStackChat Web Component', () => {
   beforeAll(() => {
     // Ensure custom element is defined
-    if (!customElements.get('amplify-chat')) {
-      throw new Error('amplify-chat custom element not registered');
+    if (!customElements.get('ragstack-chat')) {
+      throw new Error('ragstack-chat custom element not registered');
     }
   });
 
@@ -18,13 +18,13 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('is registered as custom element', () => {
-    const el = document.createElement('amplify-chat');
+    const el = document.createElement('ragstack-chat');
     expect(el).toBeInstanceOf(HTMLElement);
-    expect(el.tagName.toLowerCase()).toBe('amplify-chat');
+    expect(el.tagName.toLowerCase()).toBe('ragstack-chat');
   });
 
   it('accepts conversation-id attribute', () => {
-    const el = document.createElement('amplify-chat') as any;
+    const el = document.createElement('ragstack-chat') as any;
     el.setAttribute('conversation-id', 'test-123');
 
     document.body.appendChild(el);
@@ -36,7 +36,7 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('accepts user-id and user-token attributes', () => {
-    const el = document.createElement('amplify-chat');
+    const el = document.createElement('ragstack-chat');
     el.setAttribute('user-id', 'user-456');
     el.setAttribute('user-token', 'token-xyz');
 
@@ -49,7 +49,7 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('accepts theme-preset attribute', () => {
-    const el = document.createElement('amplify-chat');
+    const el = document.createElement('ragstack-chat');
     el.setAttribute('theme-preset', 'dark');
 
     document.body.appendChild(el);
@@ -60,7 +60,7 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('accepts theme-overrides attribute as JSON', () => {
-    const el = document.createElement('amplify-chat');
+    const el = document.createElement('ragstack-chat');
     const overrides = JSON.stringify({
       primaryColor: '#ff9900',
       fontFamily: 'Arial',
@@ -75,7 +75,7 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('can programmatically set conversation ID', () => {
-    const el = document.createElement('amplify-chat') as any;
+    const el = document.createElement('ragstack-chat') as any;
     document.body.appendChild(el);
 
     el.setConversationId('new-conversation');
@@ -88,11 +88,11 @@ describe('AmplifyChat Web Component', () => {
 
   it('dispatches custom events with correct structure', () => {
     return new Promise<void>((resolve) => {
-      const el = document.createElement('amplify-chat');
+      const el = document.createElement('ragstack-chat');
       document.body.appendChild(el);
 
       // Listen for the send-message event
-      el.addEventListener('amplify-chat:send-message', ((event: CustomEvent) => {
+      el.addEventListener('ragstack-chat:send-message', ((event: CustomEvent) => {
         expect(event.detail).toBeDefined();
         expect(event.detail.message).toBeDefined();
         expect(event.detail.conversationId).toBeDefined();
@@ -105,7 +105,7 @@ describe('AmplifyChat Web Component', () => {
 
       // Manually trigger the event (simulating the component's behavior)
       el.dispatchEvent(
-        new CustomEvent('amplify-chat:send-message', {
+        new CustomEvent('ragstack-chat:send-message', {
           detail: { message: 'test', conversationId: 'default' },
           bubbles: true,
           composed: true,
@@ -115,7 +115,7 @@ describe('AmplifyChat Web Component', () => {
   });
 
   it('handles missing attributes with defaults', () => {
-    const el = document.createElement('amplify-chat') as any;
+    const el = document.createElement('ragstack-chat') as any;
     document.body.appendChild(el);
 
     // Should use default conversation ID

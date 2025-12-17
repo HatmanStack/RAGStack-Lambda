@@ -7,18 +7,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatInterface } from '../ChatInterface';
 import { mockScrollIntoView, mockSessionStorage, cleanupTestUtils } from '../../test-utils';
 
-// Mock the GraphQL client using vi.hoisted to avoid hoisting issues
-const { mockGraphql } = vi.hoisted(() => {
-  return {
-    mockGraphql: vi.fn(),
-  };
-});
-
-vi.mock('aws-amplify/api', () => ({
-  generateClient: () => ({
-    graphql: mockGraphql,
-  }),
-}));
+// Mock fetch globally
+const mockFetch = vi.fn();
 
 describe('ChatInterface', () => {
   beforeEach(() => {
@@ -26,33 +16,47 @@ describe('ChatInterface', () => {
     mockScrollIntoView();
     mockSessionStorage();
 
-    // Reset and configure the GraphQL mock
-    mockGraphql.mockReset();
+    // Set up global SAM_GRAPHQL_ENDPOINT
+    (globalThis as unknown as { SAM_GRAPHQL_ENDPOINT: string }).SAM_GRAPHQL_ENDPOINT =
+      'https://test-api.example.com/graphql';
+    (globalThis as unknown as { SAM_GRAPHQL_API_KEY: string }).SAM_GRAPHQL_API_KEY = 'test-api-key';
 
-    // Default mock response - resolves after a short delay
-    mockGraphql.mockImplementation(({ variables }) => {
-      return Promise.resolve({
-        data: {
-          conversation: {
-            content: `Mock response to: ${variables?.message || 'unknown'}`,
-            sources: [
-              {
-                title: 'Test Document',
-                location: 'Page 1',
-                snippet: 'Test snippet from document',
-              },
-            ],
-            modelUsed: 'test-model',
+    // Reset and configure the fetch mock
+    mockFetch.mockReset();
+    globalThis.fetch = mockFetch;
+
+    // Default mock response
+    mockFetch.mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options?.body || '{}');
+      const query = body.variables?.query || 'unknown';
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            queryKnowledgeBase: {
+              answer: `Mock response to: ${query}`,
+              conversationId: body.variables?.conversationId || 'test-conv',
+              sources: [
+                {
+                  documentId: 'test-doc.pdf',
+                  pageNumber: 1,
+                  s3Uri: 's3://test/doc.pdf',
+                  snippet: 'Test snippet from document',
+                },
+              ],
+            },
           },
-        },
-        errors: null,
-      });
+        }),
+      };
     });
   });
 
   afterEach(() => {
     cleanupTestUtils();
     vi.restoreAllMocks();
+    // Clean up global variables
+    delete (globalThis as unknown as { SAM_GRAPHQL_ENDPOINT?: string }).SAM_GRAPHQL_ENDPOINT;
+    delete (globalThis as unknown as { SAM_GRAPHQL_API_KEY?: string }).SAM_GRAPHQL_API_KEY;
   });
 
   it('renders MessageList and MessageInput components', () => {
@@ -81,9 +85,9 @@ describe('ChatInterface', () => {
     // User message should appear immediately
     expect(screen.getByText('Hello')).toBeInTheDocument();
 
-    // Wait for async GraphQL call to complete to avoid act() warnings
+    // Wait for async fetch call to complete to avoid act() warnings
     await waitFor(() => {
-      expect(mockGraphql).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalled();
     });
   });
 
@@ -193,7 +197,7 @@ describe('ChatInterface', () => {
 
     // Wait for async operations to complete
     await waitFor(() => {
-      expect(mockGraphql).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalled();
     });
   });
 

@@ -38,7 +38,8 @@ export const Scrape = () => {
       includePatterns: config.includePatterns,
       excludePatterns: config.excludePatterns,
       scrapeMode: config.scrapeMode,
-      cookies: config.cookies
+      cookies: config.cookies,
+      forceRescrape: config.forceRescrape
     };
 
     console.log('[Scrape] Submitting scrape with config:', JSON.stringify(scrapeInput, null, 2));

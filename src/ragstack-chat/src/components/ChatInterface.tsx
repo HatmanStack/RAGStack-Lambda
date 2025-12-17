@@ -213,7 +213,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         // Map sources to the format expected by the UI
         const mappedSources = (response.sources || []).map((s) => ({
           title: s.documentId,
-          location: s.pageNumber ? `Page ${s.pageNumber}` : undefined,
+          location: s.pageNumber ? `Page ${s.pageNumber}` : '',
           snippet: s.snippet || '',
           documentUrl: s.documentUrl,
           documentAccessAllowed: s.documentAccessAllowed,

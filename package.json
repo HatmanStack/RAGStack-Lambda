@@ -7,6 +7,7 @@
     "deploy": "./publish.sh",
     "lint": "uv run ruff check . --fix && uv run ruff format . && cd src/ui && npm run lint -- --fix",
     "typecheck": "cd src/ragstack-chat && npx tsc --noEmit",
+    "pretest": "uv pip install -r requirements.txt -q",
     "test": "uv run pytest tests/unit/python/ -m 'not integration' && cd src/ui && npm test -- --run && cd ../ragstack-chat && npm test -- --run",
     "test:ragstack-chat": "cd src/ragstack-chat && npm test -- --run",
     "test:integration": "uv run pytest -m integration",

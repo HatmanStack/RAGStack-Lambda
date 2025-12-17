@@ -8,7 +8,8 @@ import {
   Button,
   ExpandableSection,
   Textarea,
-  Alert
+  Alert,
+  Checkbox
 } from '@cloudscape-design/components';
 import { CookieHelp } from './CookieHelp';
 
@@ -21,6 +22,7 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
   const [excludePatterns, setExcludePatterns] = useState('');
   const [scrapeMode, setScrapeMode] = useState({ value: 'AUTO', label: 'Auto-detect' });
   const [cookies, setCookies] = useState('');
+  const [forceRescrape, setForceRescrape] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // GraphQL enum values must be uppercase
@@ -44,7 +46,8 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
     includePatterns: includePatterns.split('\n').filter(Boolean),
     excludePatterns: excludePatterns.split('\n').filter(Boolean),
     scrapeMode: scrapeMode.value,
-    cookies: cookies || null
+    cookies: cookies || null,
+    forceRescrape
   });
 
   const handleSubmit = (e) => {
@@ -153,6 +156,14 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
                   options={modeOptions}
                 />
               </FormField>
+
+              <Checkbox
+                checked={forceRescrape}
+                onChange={({ detail }) => setForceRescrape(detail.checked)}
+                description="Re-scrape all pages even if content hasn't changed"
+              >
+                Force re-scrape
+              </Checkbox>
 
               <FormField
                 label="Cookies"

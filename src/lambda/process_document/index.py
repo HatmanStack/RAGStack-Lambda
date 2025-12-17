@@ -25,10 +25,11 @@ Output:
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import boto3
 
+from ragstack_common.appsync import publish_document_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.models import Document, Status
 
@@ -103,7 +104,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
             "is_text_native": True,
             "output_s3_uri": output_s3_uri,
             "ocr_backend": "passthrough",
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -138,10 +139,33 @@ def lambda_handler(event, context):
 
     try:
         # Extract event data
-        document_id = event["document_id"]
+        raw_document_id = event["document_id"]
         input_s3_uri = event["input_s3_uri"]
         output_s3_prefix = event["output_s3_prefix"]
-        filename = event.get("filename", "document.pdf")
+
+        # Extract actual document_id from S3 key path
+        # S3 key format: input/{document_id}/{filename}
+        # State machine may have already extracted the document_id, or EventBridge may pass full key
+        key_parts = raw_document_id.split("/")
+        if len(key_parts) >= 2 and key_parts[0] == "input":
+            document_id = key_parts[1]  # Extract UUID from path
+            filename = key_parts[2] if len(key_parts) > 2 else "document.pdf"
+        else:
+            # State machine already extracted document_id, or it's in a different format
+            document_id = raw_document_id
+            # Try to extract filename from input_s3_uri
+            input_parts = input_s3_uri.split("/")
+            filename = input_parts[-1] if input_parts else "document.pdf"
+
+        # Fix output_s3_prefix - EventBridge template produces wrong format
+        # Received: s3://bucket/output/input/{doc_id}/{filename}/
+        # Expected: s3://bucket/output/{doc_id}/
+        if "/output/input/" in output_s3_prefix:
+            bucket_and_prefix = output_s3_prefix.split("/output/input/")[0]
+            output_s3_prefix = f"{bucket_and_prefix}/output/{document_id}/"
+
+        logger.info(f"Parsed document_id: {document_id}, filename: {filename}")
+        logger.info(f"Output S3 prefix: {output_s3_prefix}")
 
         # Check for scraped markdown passthrough (.scraped.md files skip OCR)
         if input_s3_uri.endswith(".scraped.md"):
@@ -164,8 +188,12 @@ def lambda_handler(event, context):
         update_item(
             tracking_table,
             {"document_id": document_id},
-            {"status": Status.PROCESSING.value, "updated_at": datetime.now().isoformat()},
+            {"status": Status.PROCESSING.value, "updated_at": datetime.now(UTC).isoformat()},
         )
+
+        # Publish real-time update
+        graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+        publish_document_update(graphql_endpoint, document_id, filename, "PROCESSING")
 
         # Create Document object (Phase 1 API)
         document = Document(
@@ -199,8 +227,17 @@ def lambda_handler(event, context):
                 "total_pages": processed_document.total_pages,
                 "is_text_native": processed_document.is_text_native or False,
                 "output_s3_uri": processed_document.output_s3_uri,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             },
+        )
+
+        # Publish real-time update
+        publish_document_update(
+            graphql_endpoint,
+            document_id,
+            filename,
+            "OCR_COMPLETE",
+            total_pages=processed_document.total_pages,
         )
 
         # Return results for Step Functions
@@ -227,15 +264,27 @@ def lambda_handler(event, context):
         # Update status to failed
         try:
             tracking_table = os.environ.get("TRACKING_TABLE")
+            raw_doc_id = event.get("document_id", "")
+            key_parts = raw_doc_id.split("/")
+            doc_id = key_parts[1] if len(key_parts) >= 2 and key_parts[0] == "input" else raw_doc_id
             if tracking_table:
                 update_item(
                     tracking_table,
-                    {"document_id": event["document_id"]},
+                    {"document_id": doc_id},
                     {
                         "status": Status.FAILED.value,
                         "error_message": str(e),
-                        "updated_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                     },
+                )
+                # Publish failure update
+                graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+                publish_document_update(
+                    graphql_endpoint,
+                    doc_id,
+                    event.get("filename", "unknown"),
+                    "FAILED",
+                    error_message=str(e),
                 )
         except Exception as update_error:
             logger.error(f"Failed to update DynamoDB: {update_error}")

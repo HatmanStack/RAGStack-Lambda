@@ -143,8 +143,8 @@ def lambda_handler(event, context):
             # Extract content and convert to markdown
             extracted = extract_content(result.content, url)
 
-            # Check for content changes (deduplication)
-            if not dedup.is_content_changed(url, extracted.markdown):
+            # Check for content changes (deduplication) - skip if force_rescrape enabled
+            if not config.force_rescrape and not dedup.is_content_changed(url, extracted.markdown):
                 logger.info(f"Content unchanged, skipping: {url}")
                 urls_tbl.update_item(
                     Key={"job_id": job_id, "url": url},

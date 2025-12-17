@@ -288,9 +288,7 @@ class TestGenerateCaption:
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = {
             "output": {
-                "message": {
-                    "content": [{"text": "A beautiful sunset over the ocean with clouds."}]
-                }
+                "message": {"content": [{"text": "A beautiful sunset over the ocean with clouds."}]}
             }
         }
         module.bedrock_runtime = mock_bedrock

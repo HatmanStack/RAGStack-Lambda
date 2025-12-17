@@ -11,9 +11,7 @@ import pytest
 
 def _load_process_image_module():
     """Load process_image module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent.parent / "src/lambda/process_image/index.py"
-    )
+    module_path = Path(__file__).parent.parent.parent.parent / "src/lambda/process_image/index.py"
     spec = importlib.util.spec_from_file_location("process_image_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["process_image_index"] = module
