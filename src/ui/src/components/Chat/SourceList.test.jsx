@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SourceList } from './SourceList';
 
 describe('SourceList', () => {
@@ -159,5 +159,47 @@ describe('SourceList', () => {
 
     // Should show documentId when sourceUrl is missing
     expect(screen.getByText('abc123')).toBeInTheDocument();
+  });
+
+  it('renders image source with thumbnail', () => {
+    const sources = [
+      {
+        documentId: 'img-123',
+        isImage: true,
+        caption: 'A beautiful image',
+        thumbnailUrl: 'https://example.com/thumb.png',
+        documentUrl: 'https://example.com/full.png'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show the image source count
+    expect(screen.getByText(/Sources \(1\)/i)).toBeInTheDocument();
+
+    // Expand the section to access the content
+    const expandButton = screen.getByRole('button', { name: /Sources \(1\)/i });
+    fireEvent.click(expandButton);
+
+    // Should show the image element after expanding
+    const img = screen.getByRole('img');
+    expect(img).toHaveAttribute('src', 'https://example.com/thumb.png');
+  });
+
+  it('renders image source caption', () => {
+    const sources = [
+      {
+        documentId: 'img-123',
+        isImage: true,
+        caption: 'A beautiful landscape photograph',
+        thumbnailUrl: 'https://example.com/thumb.png'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Caption may appear multiple times (preview and modal)
+    const captionElements = screen.getAllByText('A beautiful landscape photograph');
+    expect(captionElements.length).toBeGreaterThanOrEqual(1);
   });
 });
