@@ -654,3 +654,269 @@ class TestSubmitImage:
 
         with pytest.raises(ValueError, match="Invalid"):
             module.lambda_handler(event, None)
+
+
+# =============================================================================
+# Get Image Resolver Tests
+# =============================================================================
+
+
+class TestGetImage:
+    """Tests for getImage resolver."""
+
+    def test_get_image_success(self, mock_env, mock_boto3):
+        """Test successful image retrieval."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "caption": "Test caption",
+                "input_s3_uri": "s3://test-bucket/images/123/test.png",
+                "status": "INDEXED",
+                "type": "image",
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "getImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["imageId"] == "12345678-1234-1234-1234-123456789012"
+        assert result["filename"] == "test.png"
+        assert result["caption"] == "Test caption"
+
+    def test_get_image_not_found(self, mock_env, mock_boto3):
+        """Test image not found returns None."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {}
+
+        event = {
+            "info": {"fieldName": "getImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        result = module.lambda_handler(event, None)
+        assert result is None
+
+    def test_get_image_not_image_type(self, mock_env, mock_boto3):
+        """Test returns None for non-image type."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "type": "document",  # Not image
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "getImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        result = module.lambda_handler(event, None)
+        assert result is None
+
+    def test_get_image_invalid_uuid(self, mock_env, mock_boto3):
+        """Test rejection of invalid UUID."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "getImage"},
+            "arguments": {"imageId": "not-a-uuid"},
+        }
+
+        with pytest.raises(ValueError, match="Invalid"):
+            module.lambda_handler(event, None)
+
+
+# =============================================================================
+# List Images Resolver Tests
+# =============================================================================
+
+
+class TestListImages:
+    """Tests for listImages resolver."""
+
+    def test_list_images_success(self, mock_env, mock_boto3):
+        """Test successful image listing."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].scan.return_value = {
+            "Items": [
+                {
+                    "document_id": "image-1",
+                    "filename": "test1.png",
+                    "type": "image",
+                    "status": "INDEXED",
+                    "input_s3_uri": "s3://test/1.png",
+                },
+                {
+                    "document_id": "image-2",
+                    "filename": "test2.jpg",
+                    "type": "image",
+                    "status": "PENDING",
+                    "input_s3_uri": "s3://test/2.jpg",
+                },
+            ]
+        }
+
+        event = {
+            "info": {"fieldName": "listImages"},
+            "arguments": {"limit": 10},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert len(result["items"]) == 2
+        assert result["items"][0]["imageId"] == "image-1"
+        assert result["items"][1]["imageId"] == "image-2"
+
+    def test_list_images_with_pagination(self, mock_env, mock_boto3):
+        """Test listing with pagination token."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].scan.return_value = {
+            "Items": [
+                {
+                    "document_id": "image-3",
+                    "filename": "test3.png",
+                    "type": "image",
+                    "status": "INDEXED",
+                    "input_s3_uri": "s3://test/3.png",
+                }
+            ],
+            "LastEvaluatedKey": {"document_id": "image-3"},
+        }
+
+        event = {
+            "info": {"fieldName": "listImages"},
+            "arguments": {"limit": 10, "nextToken": '{"document_id": "image-2"}'},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert len(result["items"]) == 1
+        assert "nextToken" in result
+
+    def test_list_images_invalid_limit(self, mock_env, mock_boto3):
+        """Test rejection of invalid limit."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "listImages"},
+            "arguments": {"limit": 200},  # Over max
+        }
+
+        with pytest.raises(ValueError, match="must be between"):
+            module.lambda_handler(event, None)
+
+
+# =============================================================================
+# Delete Image Resolver Tests
+# =============================================================================
+
+
+class TestDeleteImage:
+    """Tests for deleteImage resolver."""
+
+    def test_delete_image_success(self, mock_env, mock_boto3):
+        """Test successful image deletion."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "filename": "test.png",
+                "input_s3_uri": "s3://test-bucket/images/123/test.png",
+                "type": "image",
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "deleteImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result is True
+
+        # Verify S3 objects were deleted
+        assert mock_boto3["s3"].delete_object.called
+
+        # Verify DynamoDB delete was called
+        mock_boto3["table"].delete_item.assert_called_once()
+
+    def test_delete_image_not_found(self, mock_env, mock_boto3):
+        """Test error when image not found."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {}
+
+        event = {
+            "info": {"fieldName": "deleteImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        with pytest.raises(ValueError, match="not found"):
+            module.lambda_handler(event, None)
+
+    def test_delete_image_not_image_type(self, mock_env, mock_boto3):
+        """Test error when record is not an image."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].get_item.return_value = {
+            "Item": {
+                "document_id": "12345678-1234-1234-1234-123456789012",
+                "type": "document",
+            }
+        }
+
+        event = {
+            "info": {"fieldName": "deleteImage"},
+            "arguments": {"imageId": "12345678-1234-1234-1234-123456789012"},
+        }
+
+        with pytest.raises(ValueError, match="not an image"):
+            module.lambda_handler(event, None)
+
+    def test_delete_image_missing_id(self, mock_env, mock_boto3):
+        """Test error when imageId is missing."""
+        module = _load_appsync_resolvers_module()
+        module.s3 = mock_boto3["s3"]
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "deleteImage"},
+            "arguments": {},
+        }
+
+        with pytest.raises(ValueError, match="required"):
+            module.lambda_handler(event, None)

@@ -86,6 +86,9 @@ def lambda_handler(event, context):
         "createImageUploadUrl": create_image_upload_url,
         "generateCaption": generate_caption,
         "submitImage": submit_image,
+        "getImage": get_image,
+        "listImages": list_images,
+        "deleteImage": delete_image,
     }
 
     resolver = resolvers.get(field_name)
@@ -1090,3 +1093,196 @@ def format_image(item):
         "createdAt": item.get("created_at"),
         "updatedAt": item.get("updated_at"),
     }
+
+
+def get_image(args):
+    """
+    Get image by ID.
+
+    Args:
+        args: Dictionary containing:
+            - imageId: Image ID to retrieve
+
+    Returns:
+        Image object or None if not found
+    """
+    image_id = args.get("imageId")
+    logger.info(f"Getting image: {image_id}")
+
+    try:
+        if not image_id:
+            raise ValueError("imageId is required")
+
+        if not is_valid_uuid(image_id):
+            raise ValueError("Invalid imageId format")
+
+        table = dynamodb.Table(TRACKING_TABLE)
+        response = table.get_item(Key={"document_id": image_id})
+
+        item = response.get("Item")
+        if not item:
+            logger.info(f"Image not found: {image_id}")
+            return None
+
+        # Verify it's an image type
+        if item.get("type") != "image":
+            logger.info(f"Record is not an image: {image_id}")
+            return None
+
+        return format_image(item)
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error in get_image: {e}")
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_image: {e}")
+        raise
+
+
+def list_images(args):
+    """
+    List all images with pagination.
+
+    Args:
+        args: Dictionary containing:
+            - limit: Max items to return (default 50)
+            - nextToken: Pagination token
+
+    Returns:
+        ImageConnection with items and nextToken
+    """
+    limit = args.get("limit", 50)
+    next_token = args.get("nextToken")
+
+    logger.info(f"Listing images with limit: {limit}")
+
+    try:
+        # Validate limit
+        if limit < 1 or limit > MAX_DOCUMENTS_LIMIT:
+            raise ValueError(f"Limit must be between 1 and {MAX_DOCUMENTS_LIMIT}")
+
+        table = dynamodb.Table(TRACKING_TABLE)
+
+        # Scan with filter for type="image"
+        scan_kwargs = {
+            "Limit": limit,
+            "FilterExpression": "#type = :image_type",
+            "ExpressionAttributeNames": {"#type": "type"},
+            "ExpressionAttributeValues": {":image_type": "image"},
+        }
+
+        if next_token:
+            try:
+                scan_kwargs["ExclusiveStartKey"] = json.loads(next_token)
+            except json.JSONDecodeError:
+                raise ValueError("Invalid pagination token") from None
+
+        response = table.scan(**scan_kwargs)
+
+        items = [format_image(item) for item in response.get("Items", [])]
+        logger.info(f"Retrieved {len(items)} images")
+
+        result = {"items": items}
+        if "LastEvaluatedKey" in response:
+            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
+
+        return result
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error in list_images: {e}")
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in list_images: {e}")
+        raise
+
+
+def delete_image(args):
+    """
+    Delete an image from S3, DynamoDB, and Knowledge Base.
+
+    Args:
+        args: Dictionary containing:
+            - imageId: Image ID to delete
+
+    Returns:
+        True if deleted successfully
+    """
+    image_id = args.get("imageId")
+    logger.info(f"Deleting image: {image_id}")
+
+    try:
+        if not image_id:
+            raise ValueError("imageId is required")
+
+        if not is_valid_uuid(image_id):
+            raise ValueError("Invalid imageId format")
+
+        table = dynamodb.Table(TRACKING_TABLE)
+
+        # Get image record
+        response = table.get_item(Key={"document_id": image_id})
+        item = response.get("Item")
+
+        if not item:
+            raise ValueError("Image not found")
+
+        # Verify it's an image type
+        if item.get("type") != "image":
+            raise ValueError("Record is not an image")
+
+        input_s3_uri = item.get("input_s3_uri", "")
+
+        # Delete files from S3
+        if input_s3_uri and input_s3_uri.startswith("s3://"):
+            uri_path = input_s3_uri.replace("s3://", "")
+            parts = uri_path.split("/", 1)
+            if len(parts) == 2:
+                bucket = parts[0]
+                image_key = parts[1]
+
+                # Delete image file
+                try:
+                    s3.delete_object(Bucket=bucket, Key=image_key)
+                    logger.info(f"Deleted image from S3: {image_key}")
+                except ClientError as e:
+                    logger.warning(f"Failed to delete image from S3: {e}")
+
+                # Delete metadata.json
+                key_parts = image_key.rsplit("/", 1)
+                if len(key_parts) > 1:
+                    metadata_key = f"{key_parts[0]}/metadata.json"
+                    try:
+                        s3.delete_object(Bucket=bucket, Key=metadata_key)
+                        logger.info(f"Deleted metadata from S3: {metadata_key}")
+                    except ClientError as e:
+                        logger.warning(f"Failed to delete metadata from S3: {e}")
+
+                    # Delete content.txt (KB ingestion file)
+                    content_key = f"{key_parts[0]}/content.txt"
+                    try:
+                        s3.delete_object(Bucket=bucket, Key=content_key)
+                        logger.info(f"Deleted content from S3: {content_key}")
+                    except ClientError as e:
+                        logger.warning(f"Failed to delete content from S3: {e}")
+
+        # Delete from DynamoDB
+        table.delete_item(Key={"document_id": image_id})
+        logger.info(f"Deleted image from DynamoDB: {image_id}")
+
+        # Note: KB vectors will be cleaned up on next data source sync
+        # or we could call bedrock_agent.delete_knowledge_base_documents here
+
+        return True
+
+    except ClientError as e:
+        logger.error(f"AWS service error in delete_image: {e}")
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in delete_image: {e}")
+        raise
