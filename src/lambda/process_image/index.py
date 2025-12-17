@@ -254,9 +254,7 @@ def lambda_handler(event, context):
 
         # Update status to FAILED
         try:
-            update_expr = (
-                "SET #status = :status, error_message = :error, updated_at = :updated_at"
-            )
+            update_expr = "SET #status = :status, error_message = :error, updated_at = :updated_at"
             tracking_table.update_item(
                 Key={"document_id": image_id},
                 UpdateExpression=update_expr,
