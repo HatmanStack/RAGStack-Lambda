@@ -83,6 +83,17 @@ const getStatusIndicator = (status, type) => {
     return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
   }
 
+  if (type === 'image') {
+    const imageStatusMap = {
+      'PENDING': { type: 'pending', text: 'Pending' },
+      'PROCESSING': { type: 'in-progress', text: 'Processing' },
+      'INDEXED': { type: 'success', text: 'Indexed' },
+      'FAILED': { type: 'error', text: 'Failed' }
+    };
+    const config = imageStatusMap[status] || { type: 'info', text: status };
+    return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
+  }
+
   const statusMap = {
     'UPLOADED': { type: 'pending', text: 'Uploaded' },
     'PROCESSING': { type: 'in-progress', text: 'Processing' },
@@ -97,15 +108,11 @@ const getStatusIndicator = (status, type) => {
 };
 
 const getTypeLabel = (type) => {
-  if (type === 'scrape') {
-    return (
-      <SpaceBetween direction="horizontal" size="xs">
-        <Icon name="external" />
-        <span>Website</span>
-      </SpaceBetween>
-    );
+  switch (type) {
+    case 'scrape': return 'Website';
+    case 'image': return 'Image';
+    default: return 'Document';
   }
-  return 'Document';
 };
 
 export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument }) => {
@@ -127,7 +134,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
     opt => opt.value === preferences.dateRange
   )?.label || 'Last 7 days';
 
-  const { items, filteredItemsCount, collectionProps, filterProps, paginationProps } =
+  const { items, filteredItemsCount, collectionProps, filterProps, paginationProps, actions } =
     useCollection(filteredDocuments, {
       filtering: {
         empty: (
@@ -158,13 +165,21 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
       }
     });
 
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case 'scrape': return <Icon name="external" size="small" />;
+      case 'image': return <Icon name="file" size="small" />;
+      default: return null;
+    }
+  };
+
   const columnDefinitions = [
     {
       id: 'filename',
       header: 'Name',
       cell: item => (
         <SpaceBetween direction="horizontal" size="xs">
-          {item.type === 'scrape' && <Icon name="external" size="small" />}
+          {getTypeIcon(item.type)}
           <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
             {item.filename}
           </Link>
@@ -254,11 +269,16 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
           confirmLabel="Confirm"
           cancelLabel="Cancel"
           onConfirm={({ detail }) => {
-            setPreferences({
+            const newPrefs = {
               pageSize: detail.pageSize,
               visibleContent: detail.visibleContent,
               dateRange: detail.custom?.dateRange || preferences.dateRange
-            });
+            };
+            setPreferences(newPrefs);
+            // Reset to first page when preferences change
+            if (actions?.setCurrentPage) {
+              actions.setCurrentPage(1);
+            }
           }}
           preferences={{
             pageSize: preferences.pageSize,

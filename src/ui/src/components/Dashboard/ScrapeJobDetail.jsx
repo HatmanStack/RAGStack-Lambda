@@ -75,11 +75,18 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
     {
       id: 'status',
       header: 'Status',
-      cell: item => (
-        <StatusIndicator type={item.status === 'completed' ? 'success' : 'error'}>
-          {item.status}
-        </StatusIndicator>
-      )
+      cell: item => {
+        const status = item.status?.toUpperCase();
+        const statusConfig = {
+          COMPLETED: { type: 'success', label: 'Completed' },
+          PENDING: { type: 'pending', label: 'Pending' },
+          PROCESSING: { type: 'in-progress', label: 'Processing' },
+          FAILED: { type: 'error', label: 'Failed' },
+          SKIPPED: { type: 'stopped', label: 'Skipped' }
+        };
+        const config = statusConfig[status] || { type: 'info', label: item.status };
+        return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
+      }
     },
     {
       id: 'depth',
@@ -105,12 +112,9 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
       header={
         <Header
           actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              {isActive && (
-                <Button onClick={() => onCancel(jobInfo.jobId)}>Cancel</Button>
-              )}
-              <Button variant="primary" onClick={onDismiss}>Close</Button>
-            </SpaceBetween>
+            isActive && (
+              <Button onClick={() => onCancel(jobInfo.jobId)}>Cancel</Button>
+            )
           }
         >
           {jobInfo.title || jobInfo.baseUrl}
