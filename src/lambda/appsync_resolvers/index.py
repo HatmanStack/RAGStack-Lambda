@@ -431,31 +431,24 @@ def get_scrape_job(args):
             )
             page_items = urls_response.get("Items", [])
 
-            # Batch-get documents to generate contentUrls
-            doc_ids = [p.get("document_id") for p in page_items if p.get("document_id")]
-            content_urls = {}
-            if doc_ids:
-                # Batch get in chunks of 100 (DynamoDB limit)
-                for i in range(0, len(doc_ids), 100):
-                    chunk = doc_ids[i : i + 100]
-                    batch_response = dynamodb.batch_get_item(
-                        RequestItems={
-                            TRACKING_TABLE: {
-                                "Keys": [{"document_id": did} for did in chunk],
-                                "ProjectionExpression": "document_id, output_s3_uri, #s",
-                                "ExpressionAttributeNames": {"#s": "status"},
-                            }
-                        }
+            # Generate content URLs directly from document_id
+            # Scraped content is stored at: input/{doc_id}/{doc_id}.scraped.md
+            def get_content_url(doc_id):
+                if not doc_id:
+                    return None
+                try:
+                    s3_key = f"input/{doc_id}/{doc_id}.scraped.md"
+                    return s3.generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": DATA_BUCKET, "Key": s3_key},
+                        ExpiresIn=3600,
                     )
-                    for doc in batch_response.get("Responses", {}).get(TRACKING_TABLE, []):
-                        doc_id = doc.get("document_id")
-                        output_uri = doc.get("output_s3_uri")
-                        status = doc.get("status", "").upper()
-                        if output_uri and status in ("OCR_COMPLETE", "INDEXED"):
-                            content_urls[doc_id] = generate_presigned_download_url(output_uri)
+                except Exception as e:
+                    logger.warning(f"Failed to generate content URL for {doc_id}: {e}")
+                    return None
 
             pages = [
-                format_scrape_page(p, content_urls.get(p.get("document_id"))) for p in page_items
+                format_scrape_page(p, get_content_url(p.get("document_id"))) for p in page_items
             ]
 
         return {
