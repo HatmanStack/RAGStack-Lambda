@@ -4,7 +4,7 @@ Shared utilities and classes for document pipeline document processing pipeline.
 """
 
 from ragstack_common import constants
-from ragstack_common.appsync import publish_document_update, publish_scrape_update
+from ragstack_common.appsync import publish_document_update, publish_image_update, publish_scrape_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import (
     ImageStatus,
@@ -21,6 +21,7 @@ __all__ = [
     "is_supported_image",
     "log_summary",
     "publish_document_update",
+    "publish_image_update",
     "publish_scrape_update",
     "safe_log_event",
     "validate_image_size",
