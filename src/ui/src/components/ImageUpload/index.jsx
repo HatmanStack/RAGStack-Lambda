@@ -30,6 +30,7 @@ export const ImageUpload = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imageId, setImageId] = useState(null);
+  const [imageS3Uri, setImageS3Uri] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, uploaded, submitting, complete, error
   const [userCaption, setUserCaption] = useState('');
@@ -78,6 +79,7 @@ export const ImageUpload = () => {
         setUploadProgress(progress);
       });
       setImageId(result.imageId);
+      setImageS3Uri(result.s3Uri);
       setUploadStatus('uploaded');
     } catch (err) {
       setUploadStatus('error');
@@ -113,17 +115,16 @@ export const ImageUpload = () => {
   }, [handleFileSelect]);
 
   const handleGenerateCaption = useCallback(async () => {
-    if (!imageId || !selectedFile) return;
+    if (!imageS3Uri) return;
 
     try {
       setLocalError(null);
-      const s3Uri = `s3://images/${imageId}/${selectedFile.name}`;
-      const caption = await generateCaption(s3Uri);
+      const caption = await generateCaption(imageS3Uri);
       setAiCaption(caption);
     } catch (err) {
       setLocalError(err.message || 'Failed to generate caption');
     }
-  }, [imageId, selectedFile, generateCaption]);
+  }, [imageS3Uri, generateCaption]);
 
   const handleSubmit = useCallback(async () => {
     if (!imageId) return;
@@ -139,6 +140,7 @@ export const ImageUpload = () => {
       setTimeout(() => {
         setSelectedFile(null);
         setImageId(null);
+        setImageS3Uri(null);
         setUserCaption('');
         setAiCaption('');
         setUploadStatus('idle');
@@ -153,6 +155,7 @@ export const ImageUpload = () => {
   const handleRemoveImage = useCallback(() => {
     setSelectedFile(null);
     setImageId(null);
+    setImageS3Uri(null);
     setUserCaption('');
     setAiCaption('');
     setUploadStatus('idle');

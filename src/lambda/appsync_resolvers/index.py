@@ -787,10 +787,12 @@ def create_image_upload_url(args):
             }
         )
 
+        s3_uri = f"s3://{DATA_BUCKET}/{s3_key}"
         logger.info(f"Image upload URL created successfully for image: {image_id}")
         return {
             "uploadUrl": presigned["url"],
             "imageId": image_id,
+            "s3Uri": s3_uri,
             "fields": json.dumps(presigned["fields"]),
         }
 
