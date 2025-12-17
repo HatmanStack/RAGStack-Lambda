@@ -859,13 +859,13 @@ def generate_caption(args):
             try:
                 config_manager = ConfigurationManager(CONFIGURATION_TABLE_NAME)
                 chat_model_id = config_manager.get_parameter(
-                    "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                    "chat_primary_model", default="anthropic.claude-haiku-4-5-20251001-v1:0"
                 )
             except Exception as e:
                 logger.warning(f"Failed to get config, using default model: {e}")
-                chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                chat_model_id = "anthropic.claude-haiku-4-5-20251001-v1:0"
         else:
-            chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+            chat_model_id = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
         logger.info(f"Using model for caption: {chat_model_id}")
 
