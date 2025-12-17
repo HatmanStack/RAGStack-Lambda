@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Modal,
   Box,
@@ -11,8 +11,14 @@ import {
   ProgressBar,
   Link,
   Table,
-  Spinner
+  Spinner,
+  ExpandableSection,
+  Alert
 } from '@cloudscape-design/components';
+import { generateClient } from 'aws-amplify/api';
+import { getDocument } from '../../graphql/queries/getDocument';
+
+const client = generateClient();
 
 const getStatusIndicator = (status) => {
   const statusMap = {
@@ -26,6 +32,92 @@ const getStatusIndicator = (status) => {
   };
   const config = statusMap[status] || { type: 'pending', label: status };
   return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
+};
+
+// Component to display parsed page content
+const PageContent = ({ documentId }) => {
+  const [content, setContent] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const fetchContent = useCallback(async () => {
+    if (!documentId || content !== null) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data } = await client.graphql({
+        query: getDocument,
+        variables: { documentId }
+      });
+
+      const doc = data?.getDocument;
+      if (!doc?.previewUrl) {
+        setError('No parsed content available');
+        return;
+      }
+
+      // Fetch the actual content from the presigned URL
+      const response = await fetch(doc.previewUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch content: ${response.status}`);
+      }
+      const text = await response.text();
+      setContent(text);
+    } catch (err) {
+      console.error('Failed to fetch page content:', err);
+      setError(err.message || 'Failed to load content');
+    } finally {
+      setLoading(false);
+    }
+  }, [documentId, content]);
+
+  const handleExpand = (isExpanded) => {
+    setExpanded(isExpanded);
+    if (isExpanded && content === null && !loading) {
+      fetchContent();
+    }
+  };
+
+  if (!documentId) {
+    return <Box color="text-status-inactive">Not yet processed</Box>;
+  }
+
+  return (
+    <ExpandableSection
+      headerText="Parsed Content"
+      expanded={expanded}
+      onChange={({ detail }) => handleExpand(detail.expanded)}
+    >
+      {loading && (
+        <Box textAlign="center" padding="s">
+          <Spinner /> Loading content...
+        </Box>
+      )}
+      {error && (
+        <Alert type="error">{error}</Alert>
+      )}
+      {content && (
+        <Box>
+          <pre style={{
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            maxHeight: '400px',
+            overflow: 'auto',
+            backgroundColor: '#f5f5f5',
+            padding: '12px',
+            borderRadius: '4px',
+            fontSize: '13px',
+            lineHeight: '1.5'
+          }}>
+            {content}
+          </pre>
+        </Box>
+      )}
+    </ExpandableSection>
+  );
 };
 
 export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
@@ -67,10 +159,17 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
   const pageColumns = [
     {
       id: 'url',
-      header: 'URL',
+      header: 'Original Page',
       cell: item => (
         <Link href={item.url} external>{item.title || item.url}</Link>
-      )
+      ),
+      width: 300
+    },
+    {
+      id: 'content',
+      header: 'Parsed Content',
+      cell: item => <PageContent documentId={item.documentId} />,
+      width: 400
     },
     {
       id: 'status',
@@ -86,12 +185,14 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
         };
         const config = statusConfig[status] || { type: 'info', label: item.status };
         return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
-      }
+      },
+      width: 120
     },
     {
       id: 'depth',
       header: 'Depth',
-      cell: item => item.depth
+      cell: item => item.depth,
+      width: 80
     },
     {
       id: 'error',
