@@ -42,7 +42,6 @@ const GET_THEME_CONFIG_QUERY = `
  */
 export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
   try {
-    console.log('[ThemeConfig] Fetching theme from SAM API...');
 
     // Check if theme API config is available
     if (!THEME_API_CONFIG?.endpoint || !THEME_API_CONFIG?.apiKey) {
@@ -86,7 +85,6 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
       return null;
     }
 
-    console.log('[ThemeConfig] Theme loaded:', themeData);
 
     // Build theme config with overrides
     const themeOverrides: ThemeConfig['themeOverrides'] = {};

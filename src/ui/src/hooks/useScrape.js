@@ -17,13 +17,11 @@ export const useScrape = () => {
   const startScrape = useCallback(async (input) => {
     setLoading(true);
     setError(null);
-    console.log('[useScrape] Starting scrape with input:', JSON.stringify(input, null, 2));
     try {
       const response = await client.graphql({
         query: startScrapeMutation,
         variables: { input }
       });
-      console.log('[useScrape] Scrape response:', JSON.stringify(response, null, 2));
 
       // Check for GraphQL errors in the response
       if (response.errors && response.errors.length > 0) {

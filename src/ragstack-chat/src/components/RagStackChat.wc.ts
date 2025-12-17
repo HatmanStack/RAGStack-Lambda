@@ -81,7 +81,6 @@ class RagStackChat extends HTMLElement {
    */
   connectedCallback(): void {
     try {
-      console.log('[RagStackChat] connectedCallback - element added to DOM');
 
       // Check if theme attributes are provided
       const hasThemeAttrs = this.hasAttribute('theme-preset') ||
@@ -89,17 +88,14 @@ class RagStackChat extends HTMLElement {
 
       if (hasThemeAttrs) {
         // Use provided attributes, don't fetch
-        console.log('[RagStackChat] Using theme from attributes');
         this.render();
       } else if (!this.themeFetched) {
         // No attributes provided, fetch theme from SAM API
-        console.log('[RagStackChat] Fetching theme from API...');
         this.fetchAndApplyTheme();
       } else {
         this.render();
       }
 
-      console.log('[RagStackChat] render() completed successfully');
     } catch (error) {
       console.error('[RagStackChat] Error in connectedCallback:', error);
       throw error;
@@ -116,9 +112,6 @@ class RagStackChat extends HTMLElement {
       if (theme) {
         this.themeFetched = true;
         this.fetchedTheme = theme;
-        console.log('[RagStackChat] Theme fetched successfully:', theme);
-      } else {
-        console.log('[RagStackChat] No theme fetched, using defaults');
       }
     } catch (error) {
       console.warn('[RagStackChat] Theme fetch failed, using defaults:', error);
@@ -181,13 +174,10 @@ class RagStackChat extends HTMLElement {
    */
   private render(): void {
     try {
-      console.log('[RagStackChat] render() called');
 
       // Create root if it doesn't exist
       if (!this.root) {
-        console.log('[RagStackChat] Creating React root...');
         this.root = createRoot(this);
-        console.log('[RagStackChat] React root created');
       }
 
       // Build props from attributes
@@ -244,14 +234,12 @@ class RagStackChat extends HTMLElement {
         },
       };
 
-      console.log('[RagStackChat] Rendering with props:', props);
 
       // Render the component
       this.root.render(
         React.createElement(ChatWithSources, props)
       );
 
-      console.log('[RagStackChat] React.createElement() completed');
     } catch (error) {
       console.error('[RagStackChat] Error in render():', error);
       // SECURITY: Use DOM construction with textContent instead of innerHTML template literals.

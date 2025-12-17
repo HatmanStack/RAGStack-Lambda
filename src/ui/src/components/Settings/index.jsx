@@ -77,23 +77,12 @@ export function Settings() {
       const parsedDefault = JSON.parse(config.Default);
       const parsedCustom = JSON.parse(config.Custom || '{}');
 
-      console.log('[Settings] Config loaded from GraphQL:', {
-        defaultKeys: Object.keys(parsedDefault),
-        customKeys: Object.keys(parsedCustom),
-        default_allowDocAccess: parsedDefault.chat_allow_document_access,
-        custom_allowDocAccess: parsedCustom.chat_allow_document_access
-      });
-
       setSchema(parsedSchema);
       setDefaultConfig(parsedDefault);
       setCustomConfig(parsedCustom);
 
       // Initialize form with custom values overriding defaults
       const initialValues = { ...parsedDefault, ...parsedCustom };
-      console.log('[Settings] Initial form values after merge:', {
-        chat_allow_document_access: initialValues.chat_allow_document_access,
-        chat_theme_preset: initialValues.chat_theme_preset
-      });
       setFormValues(initialValues);
 
       setLoading(false);
@@ -110,11 +99,6 @@ export function Settings() {
   }, [loadConfiguration]);
 
   const handleSave = async () => {
-    console.log('[Settings] Save clicked');
-    console.log('[Settings] Form values:', formValues);
-    console.log('[Settings] Default config:', defaultConfig);
-    console.log('[Settings] Validation errors:', validationErrors);
-
     try {
       // Block save if there are validation errors
       if (Object.keys(validationErrors).length > 0) {
@@ -123,7 +107,6 @@ export function Settings() {
         return;
       }
 
-      console.log('[Settings] Calling saveConfiguration...');
       await saveConfiguration(formValues);
     } catch (err) {
       console.error('[Settings] Error in handleSave:', err);
@@ -133,7 +116,6 @@ export function Settings() {
 
   const saveConfiguration = async (values) => {
     try {
-      console.log('[Settings] saveConfiguration called with values:', values);
       setSaving(true);
       setError(null);
       setSuccess(false);
@@ -145,30 +127,23 @@ export function Settings() {
         const currentValue = currentMergedValues[key];
         const newValue = values[key];
         const isDifferent = newValue !== currentValue;
-        console.log(`[Settings] ${key}: formValue=${newValue}, currentMerged=${currentValue}, different=${isDifferent}`);
         if (isDifferent) {
           changedValues[key] = newValue;
         }
       });
 
-      console.log('[Settings] Changed values to save:', changedValues);
-      console.log('[Settings] Changed values JSON:', JSON.stringify(changedValues));
-
-      const response = await client.graphql({
+      await client.graphql({
         query: updateConfiguration,
         variables: {
           customConfig: JSON.stringify(changedValues)
         }
       });
 
-      console.log('[Settings] Mutation response:', response);
-
       setSuccess(true);
       setSaving(false);
 
       // Reload configuration
       setTimeout(() => {
-        console.log('[Settings] Reloading configuration...');
         loadConfiguration();
         setSuccess(false);
       }, 2000);
@@ -198,17 +173,6 @@ export function Settings() {
 
     // Note: chat_deployed check removed - chat is always deployed with SAM stack
     // All chat fields are now always visible
-
-    // Log when rendering chat_allow_document_access
-    if (key === 'chat_allow_document_access') {
-      console.log(`[Settings] Rendering chat_allow_document_access toggle:`, {
-        value,
-        isCustomized,
-        formValues_value: formValues[key],
-        customConfig_value: customConfig[key],
-        defaultConfig_value: defaultConfig[key]
-      });
-    }
 
     // Special handling for chat_cdn_url - display with embed code
     if (key === 'chat_cdn_url' && value) {
@@ -282,11 +246,6 @@ export function Settings() {
           <Toggle
             checked={value === true}
             onChange={({ detail }) => {
-              console.log(`[Settings] Toggle changed for ${key}:`, {
-                oldValue: value,
-                newValue: detail.checked,
-                field: key
-              });
               setFormValues({ ...formValues, [key]: detail.checked });
             }}
           >

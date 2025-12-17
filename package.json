@@ -4,15 +4,16 @@
   "description": "Serverless OCR-to-Knowledge Base pipeline on AWS",
   "private": true,
   "scripts": {
-    "deploy": "./publish.sh",
-    "lint": "uv run ruff check . --fix && uv run ruff format . && cd src/ui && npm run lint -- --fix",
-    "typecheck": "cd src/ragstack-chat && npx tsc --noEmit",
-    "pretest": "uv pip install -r requirements.txt -q",
-    "test": "uv run pytest tests/unit/python/ -m 'not integration' && cd src/ui && npm test -- --run && cd ../ragstack-chat && npm test -- --run",
-    "test:ragstack-chat": "cd src/ragstack-chat && npm test -- --run",
-    "test:integration": "uv run pytest -m integration",
-    "test:coverage": "uv run pytest tests/unit/python/ -m 'not integration' --cov=lib --cov=src/lambda --cov-report=html --cov-report=term && cd src/ui && npm run test:coverage",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "deploy": "python publish.py",
+    "lint": "uv run ruff check . --fix && uv run ruff format .",
+    "lint:frontend": "cd src/ui && npm run lint -- --fix && cd ../ragstack-chat && npx tsc --noEmit",
+    "lint:all": "npm run lint && npm run lint:frontend",
+    "test": "uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short && cd src/ui && npm test -- --run && cd ../ragstack-chat && npm test -- --run",
+    "test:backend": "uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short",
+    "test:frontend": "cd src/ui && npm test -- --run && cd ../ragstack-chat && npm test -- --run",
+    "test:integration": "uv run pytest -m integration -v",
+    "test:coverage": "uv run pytest tests/unit/python/ -m 'not integration' --cov=lib --cov=src/lambda --cov-report=html --cov-report=term",
+    "check": "npm run lint:all && npm run test"
   },
   "keywords": [
     "aws",

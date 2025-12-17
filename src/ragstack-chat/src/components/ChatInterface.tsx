@@ -197,18 +197,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setError(null);
 
       try {
-        console.log('[RagStackChat] Sending query to SAM API', {
-          conversationId,
-          messageLength: messageText.length,
-        });
-
         // Call SAM AppSync API directly
         const response = await queryKnowledgeBase(messageText, conversationId);
-
-        console.log('[RagStackChat] Query successful', {
-          hasAnswer: !!response.answer,
-          sourcesCount: response.sources?.length || 0,
-        });
 
         // Map sources to the format expected by the UI
         const mappedSources = (response.sources || []).map((s) => ({

@@ -55,7 +55,6 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
       }
     } catch (error) {
       // Handle environments without sessionStorage (SSR, private browsing)
-      console.debug('Failed to read from sessionStorage:', error);
     }
     return defaultExpanded;
   });
@@ -75,7 +74,6 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
       sessionStorage.setItem(STORAGE_KEY, String(newExpanded));
     } catch (error) {
       // Handle storage errors (quota exceeded, etc.)
-      console.debug('Failed to save to sessionStorage:', error);
     }
 
     // Call callback if provided
@@ -84,7 +82,6 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
     }
 
     // Log toggle event at debug level
-    console.debug('Sources toggled:', { expanded: newExpanded, count: sources.length });
   };
 
   return (
