@@ -73,6 +73,22 @@ const ON_SCRAPE_UPDATE = gql`
   }
 `;
 
+// Subscription for real-time image updates
+const ON_IMAGE_UPDATE = gql`
+  subscription OnImageUpdate {
+    onImageUpdate {
+      imageId
+      filename
+      caption
+      status
+      s3Uri
+      thumbnailUrl
+      errorMessage
+      updatedAt
+    }
+  }
+`;
+
 const client = generateClient();
 
 export const useDocuments = () => {
@@ -265,6 +281,39 @@ export const useDocuments = () => {
     });
   }, []);
 
+  // Handle real-time image update
+  const handleImageUpdate = useCallback((update) => {
+    console.log('[useDocuments] Image update received:', update);
+    setImages(prev => {
+      const idx = prev.findIndex(img => img.documentId === update.imageId);
+      if (idx >= 0) {
+        // Update existing image
+        const updated = [...prev];
+        updated[idx] = {
+          ...updated[idx],
+          status: update.status,
+          caption: update.caption || updated[idx].caption,
+          thumbnailUrl: update.thumbnailUrl || updated[idx].thumbnailUrl,
+          errorMessage: update.errorMessage,
+          updatedAt: update.updatedAt
+        };
+        return updated;
+      }
+      // New image - add to list
+      return [{
+        documentId: update.imageId,
+        filename: update.filename,
+        status: update.status,
+        caption: update.caption,
+        thumbnailUrl: update.thumbnailUrl,
+        s3Uri: update.s3Uri,
+        createdAt: update.updatedAt,
+        updatedAt: update.updatedAt,
+        type: 'image'
+      }, ...prev];
+    });
+  }, []);
+
   useEffect(() => {
     // Initial fetch on mount
     fetchDocuments(true);
@@ -272,6 +321,7 @@ export const useDocuments = () => {
     // Set up subscriptions for real-time updates
     let docSubscription = null;
     let scrapeSubscription = null;
+    let imageSubscription = null;
 
     try {
       // Subscribe to document updates
@@ -302,6 +352,20 @@ export const useDocuments = () => {
         }
       });
 
+      // Subscribe to image updates
+      imageSubscription = client.graphql({
+        query: ON_IMAGE_UPDATE
+      }).subscribe({
+        next: ({ data }) => {
+          if (data?.onImageUpdate) {
+            handleImageUpdate(data.onImageUpdate);
+          }
+        },
+        error: (err) => {
+          console.error('[useDocuments] Image subscription error:', err);
+        }
+      });
+
       console.log('[useDocuments] Subscriptions established');
     } catch (err) {
       console.error('[useDocuments] Failed to set up subscriptions:', err);
@@ -315,9 +379,10 @@ export const useDocuments = () => {
     return () => {
       clearInterval(interval);
       if (docSubscription) docSubscription.unsubscribe();
+      if (imageSubscription) imageSubscription.unsubscribe();
       if (scrapeSubscription) scrapeSubscription.unsubscribe();
     };
-  }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate]);
+  }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
   // Merge documents, scrape jobs, and images, sorted by createdAt (guard against missing dates)
   const allItems = [...documents, ...scrapeJobs, ...images].sort((a, b) => {
