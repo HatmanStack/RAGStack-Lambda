@@ -232,7 +232,6 @@ export const useDocuments = () => {
 
   // Handle real-time document update
   const handleDocumentUpdate = useCallback((update) => {
-    console.log('[useDocuments] Document update received:', update);
     setDocuments(prev => {
       const idx = prev.findIndex(d => d.documentId === update.documentId);
       if (idx >= 0) {
@@ -248,7 +247,6 @@ export const useDocuments = () => {
 
   // Handle real-time scrape update
   const handleScrapeUpdate = useCallback((update) => {
-    console.log('[useDocuments] Scrape update received:', update);
     setScrapeJobs(prev => {
       const idx = prev.findIndex(j => j.documentId === update.jobId);
       if (idx >= 0) {
@@ -283,7 +281,6 @@ export const useDocuments = () => {
 
   // Handle real-time image update
   const handleImageUpdate = useCallback((update) => {
-    console.log('[useDocuments] Image update received:', update);
     setImages(prev => {
       const idx = prev.findIndex(img => img.documentId === update.imageId);
       if (idx >= 0) {
@@ -366,7 +363,6 @@ export const useDocuments = () => {
         }
       });
 
-      console.log('[useDocuments] Subscriptions established');
     } catch (err) {
       console.error('[useDocuments] Failed to set up subscriptions:', err);
     }

@@ -18,12 +18,10 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const checkUser = useCallback(async () => {
-    console.log('[AuthProvider] checkUser() called');
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
 
-      console.log('[AuthProvider] User authenticated:', currentUser.username);
       setUser({
         username: currentUser.username,
         userId: currentUser.userId,
@@ -31,16 +29,14 @@ export const AuthProvider = ({ children }) => {
         tokens: session.tokens
       });
     } catch (err) {
-      // Distinguish between expected "not authenticated" vs actual errors in logs
+      // Distinguish between expected "not authenticated" vs actual errors
       const errorName = err?.name || 'Unknown';
       const isAuthError = errorName.includes('NotAuthorizedException') ||
                          errorName.includes('UserUnAuthenticatedException') ||
                          errorName === 'UserNotFoundException';
 
-      if (isAuthError) {
-        console.log('[AuthProvider] No authenticated user:', errorName);
-      } else {
-        // Network, config, or unexpected errors
+      // Only log unexpected errors (network, config issues)
+      if (!isAuthError) {
         console.error('[AuthProvider] Error checking auth status:', errorName, err.message || err);
       }
 
@@ -48,12 +44,10 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
     } finally {
       setLoading(false);
-      console.log('[AuthProvider] checkUser() complete, loading set to false');
     }
   }, []);
 
   useEffect(() => {
-    console.log('[AuthProvider] Initial mount - calling checkUser()');
     checkUser();
   }, [checkUser]);
 

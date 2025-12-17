@@ -13,7 +13,6 @@
  * ```
  */
 
-console.log('[RagStackChat] Bundle loading...');
 
 import { THEME_CONFIG } from './amplify-config.generated';
 
@@ -22,27 +21,20 @@ export { THEME_CONFIG };
 
 // Import and auto-register the Web Component
 // The import side effect will register the custom element
-console.log('[RagStackChat] Importing RagStackChat component...');
 import { RagStackChat } from './components/RagStackChat.wc';
-console.log('[RagStackChat] RagStackChat component imported');
 
 // Force registration in case it didn't happen during import
 // (this is safe because customElements.define() is idempotent if already defined)
-console.log('[RagStackChat] Checking custom element registration...');
 const existingDef = customElements.get('ragstack-chat');
-console.log('[RagStackChat] Existing definition:', existingDef ? 'FOUND' : 'NOT FOUND');
 
 if (!existingDef) {
   try {
-    console.log('[RagStackChat] Registering custom element...');
     customElements.define('ragstack-chat', RagStackChat);
-    console.log('[RagStackChat] Custom element registered successfully');
   } catch (error) {
     console.error('[RagStackChat] Failed to register custom element:', error);
     throw error;
   }
 } else {
-  console.log('[RagStackChat] Custom element already registered');
 }
 
 // Export the Web Component class for programmatic use
@@ -100,5 +92,4 @@ if (typeof window !== 'undefined') {
     });
   });
 
-  console.log('[RagStackChat] Error handlers registered');
 }

@@ -28,13 +28,6 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
   // State to track whether sources are expanded or collapsed
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Debug logging
-  console.log('[SourcesDisplay] Rendering with sources:', sources?.map(s => ({
-    title: s.title,
-    hasDocumentUrl: !!s.documentUrl,
-    documentAccessAllowed: s.documentAccessAllowed,
-    urlPreview: s.documentUrl?.substring(0, 60)
-  })));
 
   // Don't render if no sources
   if (!sources || sources.length === 0) {
@@ -96,28 +89,22 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
 
               {/* Document download link (when available) */}
               {source.documentUrl && (
-                <>
-                  {console.log('[SourcesDisplay] Rendering download link for:', source.title, source.documentUrl?.substring(0, 60))}
-                  <a
-                    href={source.documentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.documentLink}
-                    aria-label={`View source document: ${source.title}`}
-                  >
-                    View Document →
-                  </a>
-                </>
+                <a
+                  href={source.documentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.documentLink}
+                  aria-label={`View source document: ${source.title}`}
+                >
+                  View Document →
+                </a>
               )}
 
               {/* Disabled state (when access explicitly disabled) */}
               {source.documentAccessAllowed === false && !source.documentUrl && (
-                <>
-                  {console.log('[SourcesDisplay] Showing disabled state for:', source.title)}
-                  <span className={styles.documentLinkDisabled}>
-                    Document access disabled
-                  </span>
-                </>
+                <span className={styles.documentLinkDisabled}>
+                  Document access disabled
+                </span>
               )}
             </div>
           ))}

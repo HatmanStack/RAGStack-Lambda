@@ -42,11 +42,9 @@ export const Scrape = () => {
       forceRescrape: config.forceRescrape
     };
 
-    console.log('[Scrape] Submitting scrape with config:', JSON.stringify(scrapeInput, null, 2));
 
     try {
       const job = await startScrape(scrapeInput);
-      console.log('[Scrape] Job created successfully:', job);
 
       // Navigate to dashboard to see the new job
       if (job?.jobId) {

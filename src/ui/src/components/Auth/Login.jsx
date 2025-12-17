@@ -14,11 +14,9 @@ const RedirectOnAuth = ({ user, from, navigate }) => {
 
   useEffect(() => {
     if (user && !syncing && !syncError) {
-      console.log('[Login] Authenticator detected user, syncing with AuthProvider...');
       setSyncing(true);
       // Update AuthProvider state before navigating
       checkUser().then(() => {
-        console.log('[Login] AuthProvider synced, navigating to:', from);
         navigate(from, { replace: true });
       }).catch((err) => {
         console.error('[Login] Failed to sync AuthProvider:', err);
