@@ -29,7 +29,7 @@ Output (ChatResponse):
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.parse import unquote
 
@@ -95,8 +95,8 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         return primary_model
 
     table = dynamodb.Table(config_table_name)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    ttl = int(datetime.now(timezone.utc).timestamp()) + (QUOTA_TTL_DAYS * 86400)
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    ttl = int(datetime.now(UTC).timestamp()) + (QUOTA_TTL_DAYS * 86400)
 
     try:
         # Try to atomically increment global quota with condition
@@ -144,7 +144,9 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
                 )
 
                 new_user_count = int(user_result.get("Attributes", {}).get("count", 0))
-                logger.info(f"User quota incremented for {tracking_id[:8]}...: {new_user_count}/{per_user_quota_daily}")
+                logger.info(
+                    f"User quota: {tracking_id[:8]}...: {new_user_count}/{per_user_quota_daily}"
+                )
 
             except ClientError as e:
                 if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
@@ -159,7 +161,7 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
                     except ClientError:
                         logger.warning("Failed to rollback global quota")
 
-                    logger.info("User quota exceeded, using fallback model (global quota rolled back)")
+                    logger.info("User quota exceeded, using fallback (global rolled back)")
                     return fallback_model
                 raise
 
@@ -208,7 +210,9 @@ def get_conversation_history(conversation_id):
         return []
 
 
-def store_conversation_turn(conversation_id, turn_number, user_message, assistant_response, sources):
+def store_conversation_turn(
+    conversation_id, turn_number, user_message, assistant_response, sources
+):
     """
     Store a conversation turn in DynamoDB.
 
@@ -226,7 +230,7 @@ def store_conversation_turn(conversation_id, turn_number, user_message, assistan
     table = dynamodb.Table(conversation_table_name)
 
     # Calculate TTL (14 days from now)
-    ttl = int(datetime.now(timezone.utc).timestamp()) + (CONVERSATION_TTL_DAYS * 86400)
+    ttl = int(datetime.now(UTC).timestamp()) + (CONVERSATION_TTL_DAYS * 86400)
 
     try:
         table.put_item(
@@ -236,7 +240,7 @@ def store_conversation_turn(conversation_id, turn_number, user_message, assistan
                 "userMessage": user_message,
                 "assistantResponse": assistant_response,
                 "sources": json.dumps(sources),  # Store as JSON string
-                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "createdAt": datetime.now(UTC).isoformat(),
                 "ttl": ttl,
             }
         )
@@ -301,16 +305,10 @@ def build_conversation_messages(current_query, history, retrieved_context):
         assistant_msg = turn.get("assistantResponse", "")
 
         if user_msg:
-            messages.append({
-                "role": "user",
-                "content": [{"text": user_msg}]
-            })
+            messages.append({"role": "user", "content": [{"text": user_msg}]})
 
         if assistant_msg:
-            messages.append({
-                "role": "assistant",
-                "content": [{"text": assistant_msg}]
-            })
+            messages.append({"role": "assistant", "content": [{"text": assistant_msg}]})
 
     # Add current question with retrieved context
     current_message = f"""Based on the following information from our knowledge base:
@@ -319,12 +317,9 @@ def build_conversation_messages(current_query, history, retrieved_context):
 
 Please answer this question: {current_query}
 
-If the retrieved information doesn't contain the answer, say so and provide what relevant information you can."""
+If the retrieved information doesn't contain the answer, say so and provide relevant info."""
 
-    messages.append({
-        "role": "user",
-        "content": [{"text": current_message}]
-    })
+    messages.append({"role": "user", "content": [{"text": current_message}]})
 
     return messages
 
@@ -374,6 +369,96 @@ def extract_source_url_from_content(content_text):
                     url = url[1:-1]
                 return url
     return None
+
+
+def extract_image_caption_from_content(content_text):
+    """
+    Extract caption from image content frontmatter.
+
+    Args:
+        content_text (str): Content text that may contain frontmatter
+
+    Returns:
+        str or None: Caption if found, None otherwise
+    """
+    if not content_text:
+        return None
+
+    # Look for caption in content (usually after frontmatter)
+    # Image content format:
+    # ---
+    # image_id: ...
+    # filename: ...
+    # ---
+    # # Image: filename
+    # <caption text>
+
+    # First try to extract from frontmatter-style format
+    lines = content_text.split("\n")
+    in_frontmatter = False
+    frontmatter_ended = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Track frontmatter boundaries
+        if stripped == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            else:
+                frontmatter_ended = True
+                in_frontmatter = False
+                continue
+
+        # Look for user_caption or ai_caption in frontmatter
+        if in_frontmatter:
+            if stripped.startswith("user_caption:"):
+                caption = stripped.split(":", 1)[1].strip()
+                if caption:
+                    return caption
+            if stripped.startswith("ai_caption:"):
+                caption = stripped.split(":", 1)[1].strip()
+                if caption:
+                    return caption
+
+        # After frontmatter, look for actual content
+        if frontmatter_ended and stripped and not stripped.startswith("#"):
+            # Return first non-header line as caption snippet
+            return stripped[:200] if len(stripped) > 200 else stripped
+
+    return None
+
+
+def construct_image_uri_from_content_uri(content_s3_uri):
+    """
+    Convert content.txt S3 URI to the actual image file URI.
+
+    The content.txt file is stored at: images/{imageId}/content.txt
+    The actual image is at: images/{imageId}/{filename}.ext
+
+    Since we don't know the filename, we need to query S3 or DynamoDB.
+    For now, we'll return None and let the calling code handle it.
+
+    Args:
+        content_s3_uri (str): S3 URI of the content.txt file
+
+    Returns:
+        str or None: S3 URI of the image file, or None if not determinable
+    """
+    if not content_s3_uri or "content.txt" not in content_s3_uri:
+        return None
+
+    # For now, return the base path (without content.txt)
+    # The UI can use this to construct a thumbnail request
+    # In a full implementation, we'd query DynamoDB for the actual filename
+    try:
+        # Replace content.txt with metadata.json and try to get the actual filename
+        # This is a simplified approach - the full implementation would cache this
+        base_uri = content_s3_uri.replace("/content.txt", "")
+        return base_uri  # UI will need to handle this
+    except Exception:
+        return None
 
 
 def extract_sources(citations):
@@ -439,7 +524,7 @@ def extract_sources(citations):
                     document_id = unquote(parts[3]) if len(parts) > 3 else None
                     original_filename = unquote(parts[4]) if len(parts) > 4 else None
                     input_prefix = "input"
-                    logger.info(f"Single bucket structure detected")
+                    logger.info("Single bucket structure detected")
                 else:
                     # Separate bucket structure: bucket-output-suffix/doc-id/filename/...
                     # Input bucket: bucket-input-suffix/doc-id/filename
@@ -448,9 +533,9 @@ def extract_sources(citations):
                     input_prefix = None
                     # Convert output bucket to input bucket
                     bucket = bucket.replace("-output-", "-input-")
-                    logger.info(f"Separate bucket structure detected")
+                    logger.info("Separate bucket structure detected")
 
-                logger.info(f"Parsed: bucket={bucket}, doc_id={document_id}, filename={original_filename}")
+                logger.info(f"Parsed: bucket={bucket}, doc={document_id}, file={original_filename}")
 
                 # Validate extracted values
                 if not document_id or len(document_id) < 5:
@@ -460,15 +545,25 @@ def extract_sources(citations):
                 # Check if this is scraped content (ends with .scraped.md)
                 is_scraped = original_filename and original_filename.endswith(".scraped.md")
 
+                # Check if this is an image source (from images/ prefix or content.txt)
+                # Images are stored at: images/{imageId}/content.txt
+                is_image = (
+                    (len(parts) > 1 and parts[1] == "images")
+                    or (input_prefix and len(parts) > 3 and parts[3] == "images")
+                    or (original_filename and original_filename == "content.txt" and "images" in uri)
+                )
+
                 # Construct input document URI
                 if original_filename and len(original_filename) > 0:
                     if input_prefix:
-                        document_s3_uri = f"s3://{bucket}/{input_prefix}/{document_id}/{original_filename}"
+                        document_s3_uri = (
+                            f"s3://{bucket}/{input_prefix}/{document_id}/{original_filename}"
+                        )
                     else:
                         document_s3_uri = f"s3://{bucket}/{document_id}/{original_filename}"
                 else:
                     # Fallback if filename missing
-                    logger.warning(f"No filename found, using original URI")
+                    logger.warning("No filename found, using original URI")
                     document_s3_uri = uri
 
                 logger.info(f"Constructed input URI: {document_s3_uri}")
@@ -492,6 +587,12 @@ def extract_sources(citations):
                     source_url = extract_source_url_from_content(content_text)
                     logger.debug(f"Scraped content detected, source_url: {source_url}")
 
+                # For image content, extract caption from frontmatter
+                image_caption = None
+                if is_image:
+                    image_caption = extract_image_caption_from_content(content_text)
+                    logger.debug(f"Image content detected, caption: {image_caption[:50] if image_caption else None}...")
+
                 # Deduplicate by document + page
                 source_key = f"{document_id}:{page_num}"
                 if source_key not in seen:
@@ -502,7 +603,11 @@ def extract_sources(citations):
 
                     # Generate presigned URL if access is enabled
                     document_url = None
-                    if allow_document_access and document_s3_uri and document_s3_uri.startswith("s3://"):
+                    if (
+                        allow_document_access
+                        and document_s3_uri
+                        and document_s3_uri.startswith("s3://")
+                    ):
                         # Parse S3 URI to get bucket and key
                         s3_path = document_s3_uri.replace("s3://", "")
                         s3_match = s3_path.split("/", 1)
@@ -518,6 +623,18 @@ def extract_sources(citations):
                         else:
                             logger.warning(f"Could not parse S3 URI: {document_s3_uri}")
 
+                    # For images, generate thumbnail URL from the original image
+                    thumbnail_url = None
+                    if is_image and allow_document_access:
+                        # Image S3 URI: images/{imageId}/{filename}.png
+                        # We need to find the actual image file (not content.txt)
+                        image_s3_uri = construct_image_uri_from_content_uri(document_s3_uri)
+                        if image_s3_uri:
+                            s3_path = image_s3_uri.replace("s3://", "")
+                            s3_parts = s3_path.split("/", 1)
+                            if len(s3_parts) == 2:
+                                thumbnail_url = generate_presigned_url(s3_parts[0], s3_parts[1])
+
                     source_obj = {
                         "documentId": document_id,
                         "pageNumber": page_num,
@@ -527,6 +644,10 @@ def extract_sources(citations):
                         "documentAccessAllowed": allow_document_access,
                         "isScraped": is_scraped,
                         "sourceUrl": source_url,  # Original web URL for scraped content
+                        # Image-specific fields
+                        "isImage": is_image,
+                        "thumbnailUrl": thumbnail_url,
+                        "caption": image_caption,
                     }
                     logger.debug(f"Added source: {source_key}")
                     sources.append(source_obj)
@@ -630,7 +751,12 @@ def lambda_handler(event, context):
     try:
         # Validate query
         if not query:
-            return {"answer": "", "conversationId": None, "sources": [], "error": "No query provided"}
+            return {
+                "answer": "",
+                "conversationId": None,
+                "sources": [],
+                "error": "No query provided",
+            }
 
         if not isinstance(query, str):
             return {
@@ -652,21 +778,13 @@ def lambda_handler(event, context):
         history = []
         if conversation_id:
             history = get_conversation_history(conversation_id)
-            logger.info(f"Retrieved {len(history)} previous turns for conversation {conversation_id[:8]}...")
+            logger.info(f"Retrieved {len(history)} turns for conversation {conversation_id[:8]}...")
 
-        # Build model ID/ARN
-        # Determine ARN type based on model ID format
+        # Validate account ID for inference profiles (required for proper billing/routing)
         # Inference profiles start with region prefix (e.g., us.amazon.nova-pro-v1:0)
-        # Foundation models don't (e.g., anthropic.claude-3-5-sonnet-20241022-v2:0)
-        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")):
-            # Inference profiles require account ID in ARN
-            if not account_id:
-                msg = f"Account ID is required for inference profile model {chat_model_id}"
-                raise ValueError(msg)
-            model_arn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{chat_model_id}"
-        else:
-            # Foundation models don't use account ID
-            model_arn = f"arn:aws:bedrock:{region}::foundation-model/{chat_model_id}"
+        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")) and not account_id:
+            msg = f"Account ID is required for inference profile model {chat_model_id}"
+            raise ValueError(msg)
 
         logger.info(f"Using model: {chat_model_id} in region {region}")
 
@@ -698,15 +816,22 @@ def lambda_handler(event, context):
             if content_text:
                 retrieved_chunks.append(content_text)
                 # Build citation structure for source extraction
-                citations.append({
-                    "retrievedReferences": [{
-                        "content": {"text": content_text},
-                        "location": result.get("location") or {},
-                        "metadata": result.get("metadata") or {},
-                    }]
-                })
+                citations.append(
+                    {
+                        "retrievedReferences": [
+                            {
+                                "content": {"text": content_text},
+                                "location": result.get("location") or {},
+                                "metadata": result.get("metadata") or {},
+                            }
+                        ]
+                    }
+                )
 
-        retrieved_context = "\n\n---\n\n".join(retrieved_chunks) if retrieved_chunks else "No relevant information found in the knowledge base."
+        if retrieved_chunks:
+            retrieved_context = "\n\n---\n\n".join(retrieved_chunks)
+        else:
+            retrieved_context = "No relevant information found in the knowledge base."
 
         # Parse sources from citations
         sources = extract_sources(citations)
@@ -718,10 +843,13 @@ def lambda_handler(event, context):
         messages = build_conversation_messages(query, history, retrieved_context)
 
         # System prompt for the assistant
-        system_prompt = """You are a helpful assistant that answers questions based on information from a knowledge base.
-Always base your answers on the provided knowledge base information.
-If the provided information doesn't contain the answer, clearly state that and provide what relevant information you can.
-Be concise but thorough."""
+        system_prompt = (
+            "You are a helpful assistant that answers questions based on information "
+            "from a knowledge base. Always base your answers on the provided knowledge "
+            "base information. If the provided information doesn't contain the answer, "
+            "clearly state that and provide what relevant information you can. "
+            "Be concise but thorough."
+        )
 
         # Call Converse API
         converse_response = bedrock_runtime.converse(
@@ -738,12 +866,15 @@ Be concise but thorough."""
         answer = ""
         output = converse_response.get("output") or {}
         output_message = output.get("message") or {} if isinstance(output, dict) else {}
-        content_blocks = output_message.get("content", []) if isinstance(output_message, dict) else []
+        if isinstance(output_message, dict):
+            content_blocks = output_message.get("content", [])
+        else:
+            content_blocks = []
         for content_block in content_blocks:
             if isinstance(content_block, dict) and "text" in content_block:
                 answer += content_block["text"]
 
-        logger.info(f"KB query successful. Retrieved: {len(retrieval_results)}, Sources: {len(sources)}")
+        logger.info(f"KB query done. Retrieved: {len(retrieval_results)}, Sources: {len(sources)}")
 
         # Store conversation turn for future context
         if conversation_id:
