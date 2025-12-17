@@ -3,6 +3,7 @@ import { SpaceBetween, Tabs, ContentLayout, Header } from '@cloudscape-design/co
 import { UploadZone } from './UploadZone';
 import { UploadQueue } from './UploadQueue';
 import { ImageUpload } from '../ImageUpload';
+import { ZipUpload } from '../ImageUpload/ZipUpload';
 import { useUpload } from '../../hooks/useUpload';
 
 const DocumentUploadContent = () => {
@@ -60,6 +61,11 @@ export const Upload = () => {
       id: 'images',
       label: 'Images',
       content: <ImageUpload />
+    },
+    {
+      id: 'archive',
+      label: 'Image Archive',
+      content: <ZipUpload />
     }
   ];
 
