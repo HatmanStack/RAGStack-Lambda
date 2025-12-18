@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
+import { fetchCDNConfig } from '../utils/fetchThemeConfig';
 import styles from '../styles/ChatWithSources.module.css';
 
 // GraphQL query for SAM AppSync queryKnowledgeBase
@@ -30,11 +31,6 @@ const QUERY_KB_QUERY = `
   }
 `;
 
-// Get SAM API endpoint and key from build-time config
-// These are injected by the inject-amplify-config.js script
-declare const SAM_GRAPHQL_ENDPOINT: string | undefined;
-declare const SAM_GRAPHQL_API_KEY: string | undefined;
-
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
 
@@ -43,6 +39,7 @@ const MAX_RETRIES = 3;
 
 /**
  * Query SAM AppSync API directly using fetch
+ * Gets API endpoint from config.json at runtime
  */
 async function queryKnowledgeBase(
   message: string,
@@ -60,18 +57,17 @@ async function queryKnowledgeBase(
   }>;
   error?: string;
 }> {
-  const endpoint = typeof SAM_GRAPHQL_ENDPOINT !== 'undefined' ? SAM_GRAPHQL_ENDPOINT : '';
-  const apiKey = typeof SAM_GRAPHQL_API_KEY !== 'undefined' ? SAM_GRAPHQL_API_KEY : '';
+  const config = await fetchCDNConfig();
 
-  if (!endpoint) {
-    throw new Error('SAM_GRAPHQL_ENDPOINT not configured. Check web component build configuration.');
+  if (!config?.apiEndpoint) {
+    throw new Error('API endpoint not available. Please check your configuration.');
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(config.apiEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(apiKey ? { 'x-api-key': apiKey } : {}),
+      ...(config.apiKey ? { 'x-api-key': config.apiKey } : {}),
     },
     body: JSON.stringify({
       query: QUERY_KB_QUERY,

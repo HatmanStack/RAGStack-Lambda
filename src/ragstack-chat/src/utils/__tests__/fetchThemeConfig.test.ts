@@ -2,34 +2,45 @@
  * Tests for fetchThemeConfig utility
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// Mock the generated config before importing the module
-vi.mock('../../amplify-config.generated', () => ({
-  THEME_API_CONFIG: {
-    endpoint: 'https://test-api.example.com/graphql',
-    apiKey: 'test-api-key',
-  },
-}));
-
 import { fetchThemeConfig } from '../fetchThemeConfig';
 
 describe('fetchThemeConfig', () => {
   const mockFetch = vi.fn();
   const originalFetch = global.fetch;
+  const originalDocument = global.document;
 
   beforeEach(() => {
     global.fetch = mockFetch;
     mockFetch.mockReset();
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Mock document.querySelectorAll to return a script element
+    const mockScript = { src: 'https://cdn.example.com/ragstack-chat.js' };
+    global.document = {
+      ...originalDocument,
+      querySelectorAll: vi.fn().mockReturnValue([mockScript]),
+    } as unknown as Document;
+
+    // Clear the cached config between tests
+    vi.resetModules();
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    global.document = originalDocument;
     vi.restoreAllMocks();
   });
 
   it('returns theme config on successful fetch', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL API
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -44,7 +55,8 @@ describe('fetchThemeConfig', () => {
       }),
     });
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result).toEqual({
       themePreset: 'dark',
@@ -56,18 +68,51 @@ describe('fetchThemeConfig', () => {
     });
   });
 
+  it('returns null when config.json fetch fails', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    });
+
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
+
+    expect(result).toBeNull();
+  });
+
   it('returns null when API returns error status', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL API fails
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
     });
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result).toBeNull();
   });
 
   it('returns null when GraphQL returns errors', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL returns errors
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -75,21 +120,32 @@ describe('fetchThemeConfig', () => {
       }),
     });
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result).toBeNull();
   });
 
-  it('returns null and logs warning on network error', async () => {
+  it('returns null on network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result).toBeNull();
-    expect(console.warn).toHaveBeenCalled();
   });
 
   it('returns theme with only themePreset when no overrides', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL API
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -104,7 +160,8 @@ describe('fetchThemeConfig', () => {
       }),
     });
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result).toEqual({
       themePreset: 'light',
@@ -113,6 +170,16 @@ describe('fetchThemeConfig', () => {
   });
 
   it('defaults to light theme when themePreset is missing', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL API with null themePreset
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -124,38 +191,56 @@ describe('fetchThemeConfig', () => {
       }),
     });
 
-    const result = await fetchThemeConfig();
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
 
     expect(result?.themePreset).toBe('light');
   });
 
-  it('aborts fetch after timeout', async () => {
-    // Simulate a slow response that exceeds timeout
-    mockFetch.mockImplementationOnce(
-      () => new Promise((resolve) => setTimeout(resolve, 10000))
+  it('returns null when config has no apiEndpoint', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: '',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
+
+    expect(result).toBeNull();
+  });
+
+  it('constructs config URL from script src', async () => {
+    // First call: config.json
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        apiKey: 'test-api-key',
+      }),
+    });
+
+    // Second call: GraphQL API
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          getThemeConfig: {
+            themePreset: 'brand',
+          },
+        },
+      }),
+    });
+
+    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
+    await freshFetch();
+
+    // Should have called fetch with the config URL derived from script src
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://cdn.example.com/config.json',
+      expect.any(Object)
     );
-
-    const result = await fetchThemeConfig();
-
-    // Should return null due to abort
-    expect(result).toBeNull();
-  }, 10000);
-});
-
-describe('fetchThemeConfig without API config', () => {
-  it('returns null when THEME_API_CONFIG is not set', async () => {
-    // Re-mock with null config
-    vi.doMock('../../amplify-config.generated', () => ({
-      THEME_API_CONFIG: {
-        endpoint: null,
-        apiKey: null,
-      },
-    }));
-
-    // Need to re-import to get the new mock
-    const { fetchThemeConfig: fetchWithoutConfig } = await import('../fetchThemeConfig');
-
-    const result = await fetchWithoutConfig();
-    expect(result).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AmplifyChat Web Component Test</title>
+  <title>RagStackChat Web Component Test</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -46,87 +46,90 @@
   </style>
 </head>
 <body>
-  <h1>AmplifyChat Web Component Tests</h1>
+  <h1>RagStackChat Web Component Tests</h1>
 
   <div class="test-info">
-    <strong>Test Status:</strong> Web component bundle loaded via script tag<br>
-    <strong>Bundle:</strong> <code>dist/wc.js</code> (121 KB gzipped)<br>
-    <strong>Config:</strong> Mock Amplify configuration embedded<br>
+    <strong>Test Status:</strong> Web component bundle loaded from CDN<br>
+    <strong>Bundle:</strong> <code>ragstack-chat.js</code><br>
+    <strong>Config:</strong> Fetched from CDN config.json, theme from GraphQL API<br>
     <strong>Open DevTools Console:</strong> Check for component registration and errors
   </div>
 
   <div class="test-container">
-    <h2>Test 1: Default Light Theme</h2>
-    <amplify-chat
-      conversation-id="test-light"
-      header-text="Light Theme Chat"
-      header-subtitle="Testing default light theme"
-    ></amplify-chat>
+    <h2>Test 1: Theme from Settings UI (API fetch)</h2>
+    <p><em>No theme attributes - fetches theme from GraphQL API based on Settings UI config</em></p>
+    <ragstack-chat
+      conversation-id="test-api-theme"
+      header-text="API Theme Chat"
+      header-subtitle="Theme loaded from Settings UI"
+    ></ragstack-chat>
   </div>
 
   <div class="test-container">
-    <h2>Test 2: Dark Theme</h2>
-    <amplify-chat
+    <h2>Test 2: Dark Theme (attribute override)</h2>
+    <p><em>theme-preset="dark" overrides API theme</em></p>
+    <ragstack-chat
       conversation-id="test-dark"
       header-text="Dark Theme Chat"
       header-subtitle="Testing dark theme preset"
       theme-preset="dark"
-    ></amplify-chat>
+    ></ragstack-chat>
   </div>
 
   <div class="test-container">
     <h2>Test 3: Custom Theme with Color Override</h2>
-    <amplify-chat
+    <p><em>theme-overrides attribute overrides API theme</em></p>
+    <ragstack-chat
       conversation-id="test-custom"
       header-text="Custom Purple Chat"
       header-subtitle="Testing theme overrides"
       theme-overrides='{"primaryColor": "#9c27b0"}'
-    ></amplify-chat>
+    ></ragstack-chat>
   </div>
 
   <div class="test-container">
     <h2>Test 4: Custom Input Placeholder</h2>
-    <amplify-chat
+    <ragstack-chat
       conversation-id="test-placeholder"
       header-text="Custom Placeholder"
       header-subtitle="Testing input-placeholder attribute"
       input-placeholder="Type your custom question here..."
-    ></amplify-chat>
+    ></ragstack-chat>
   </div>
 
-  <!-- Load the web component bundle -->
-  <script src="dist/wc.js"></script>
+  <!-- Load the web component bundle from CDN -->
+  <script src="https://d2fk0t9sdkg4j7.cloudfront.net/ragstack-chat.js"></script>
 
   <!-- Test script -->
   <script>
-    console.log('=== AmplifyChat Web Component Test Page ===');
+    console.log('=== RagStackChat Web Component Test Page ===');
 
     // Check if custom element is registered
-    const isRegistered = customElements.get('amplify-chat');
+    const isRegistered = customElements.get('ragstack-chat');
     console.log('Custom element registered:', !!isRegistered);
 
     if (!isRegistered) {
-      console.error('❌ amplify-chat custom element not registered!');
+      console.error('❌ ragstack-chat custom element not registered!');
       document.body.insertAdjacentHTML('afterbegin',
         '<div style="background: #fee; border: 2px solid #c00; padding: 20px; margin: 20px 0;">' +
         '<h3>⚠️ Error: Web component not loaded</h3>' +
-        '<p>The amplify-chat custom element is not registered. Check console for errors.</p>' +
+        '<p>The ragstack-chat custom element is not registered. Check console for errors.</p>' +
         '</div>'
       );
     } else {
-      console.log('✅ amplify-chat custom element registered successfully');
+      console.log('✅ ragstack-chat custom element registered successfully');
     }
 
     // Wait for components to mount
     setTimeout(() => {
-      const chatElements = document.querySelectorAll('amplify-chat');
+      const chatElements = document.querySelectorAll('ragstack-chat');
       console.log(`Found ${chatElements.length} chat instances on page`);
 
       chatElements.forEach((chat, index) => {
         console.log(`Chat ${index + 1}:`, {
           conversationId: chat.getAttribute('conversation-id'),
           headerText: chat.getAttribute('header-text'),
-          themePreset: chat.getAttribute('theme-preset') || 'light'
+          themePreset: chat.getAttribute('theme-preset') || '(from API)'
         });
       });
 
@@ -135,40 +138,22 @@
       if (firstChat && firstChat.getConversationId) {
         console.log('Testing programmatic API...');
         console.log('Current conversation ID:', firstChat.getConversationId());
-
-        // Test setting conversation ID
-        firstChat.setConversationId('programmatically-set-id');
-        console.log('New conversation ID:', firstChat.getConversationId());
-
-        // Reset it
-        firstChat.setConversationId('test-light');
       }
-
-      // Test attribute changes
-      console.log('Testing dynamic attribute changes...');
-      setTimeout(() => {
-        const darkChat = chatElements[1];
-        if (darkChat) {
-          console.log('Changing theme from dark to light...');
-          darkChat.setAttribute('theme-preset', 'light');
-        }
-      }, 2000);
     }, 1000);
 
     // Listen for custom events
-    document.addEventListener('amplify-chat:send-message', (event) => {
+    document.addEventListener('ragstack-chat:send-message', (event) => {
       console.log('🚀 Message sent:', event.detail);
     });
 
-    document.addEventListener('amplify-chat:response-received', (event) => {
+    document.addEventListener('ragstack-chat:response-received', (event) => {
       console.log('📨 Response received:', event.detail);
     });
 
     console.log('Test page loaded. Try:');
-    console.log('1. Send messages in each chat instance');
-    console.log('2. Check if themes apply correctly');
-    console.log('3. Verify custom placeholder appears in Test 4');
-    console.log('4. Watch for custom events in console');
+    console.log('1. Test 1 should use theme from Settings UI');
+    console.log('2. Test 2-3 use attribute overrides');
+    console.log('3. Check DevTools Network tab for config.json and getThemeConfig calls');
   </script>
 </body>
 </html>

@@ -81,7 +81,6 @@ class RagStackChat extends HTMLElement {
    */
   connectedCallback(): void {
     try {
-
       // Check if theme attributes are provided
       const hasThemeAttrs = this.hasAttribute('theme-preset') ||
                            this.hasAttribute('theme-overrides');
@@ -113,8 +112,8 @@ class RagStackChat extends HTMLElement {
         this.themeFetched = true;
         this.fetchedTheme = theme;
       }
-    } catch (error) {
-      console.warn('[RagStackChat] Theme fetch failed, using defaults:', error);
+    } catch {
+      // Theme fetch failed, will use defaults
     } finally {
       // Always render, even if theme fetch failed
       this.render();
@@ -174,7 +173,6 @@ class RagStackChat extends HTMLElement {
    */
   private render(): void {
     try {
-
       // Create root if it doesn't exist
       if (!this.root) {
         this.root = createRoot(this);
