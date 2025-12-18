@@ -188,6 +188,8 @@ def create_knowledge_base(properties):
     # Nova Multimodal Embeddings requires supplementalDataStorageConfiguration
     # Note: The S3 URI must be bucket root only - no subfolders allowed
     data_bucket = properties.get("DataBucket")
+    if not data_bucket:
+        raise ValueError("DataBucket property is required")
     multimodal_storage_uri = f"s3://{data_bucket}"
     logger.info(f"Using multimodal storage: {multimodal_storage_uri}")
 
@@ -235,10 +237,6 @@ def create_knowledge_base(properties):
     # Step 5: Create Data Source for S3 data bucket (output/ prefix)
     # This allows Bedrock KB to ingest documents from the output prefix
     project_name = properties.get("ProjectName", "default")
-    data_bucket = properties.get("DataBucket")
-    if not data_bucket:
-        raise ValueError("DataBucket property is required")
-
     data_source_name = f"{kb_name}-datasource"
     logger.info(f"Creating Data Source: {data_source_name} for bucket {data_bucket}/output/")
 
