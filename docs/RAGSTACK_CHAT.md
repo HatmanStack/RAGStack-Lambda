@@ -346,7 +346,7 @@ interface Source {
 
 ## Related Documentation
 
-- [Architecture](ARCHITECTURE.md) - System architecture details
-- [Deployment](DEPLOYMENT.md) - How to deploy
-- [Development](DEVELOPMENT.md) - Development patterns
+- [Architecture](ARCHITECTURE.md) - System design
+- [Development](DEVELOPMENT.md) - Local dev
+- [Configuration](CONFIGURATION.md) - Runtime settings
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues

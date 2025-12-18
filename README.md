@@ -44,15 +44,15 @@ python publish.py \
 Use AI chat in **any web application** (React, Vue, Angular, Svelte, etc.):
 
 ```html
-<script src="https://your-cdn-url/amplify-chat.js"></script>
+<script src="https://your-cdn-url/ragstack-chat.js"></script>
 
-<amplify-chat
+<ragstack-chat
   conversation-id="my-app"
   header-text="Ask About Documents"
-></amplify-chat>
+></ragstack-chat>
 ```
 
-Load the CDN script once, then use `<amplify-chat>` in any framework. Styling and configuration are centrally managed through the web UI—apply changes across all deployments instantly.
+Load the CDN script once, then use `<ragstack-chat>` in any framework.
 
 ## Architecture
 
@@ -64,14 +64,27 @@ Upload → OCR → Embeddings → Bedrock KB
  Web Component ←→ AI Chat with Sources
 ```
 
+## Usage
+
+### Documents
+Upload PDF, DOCX, XLSX, TXT, MD. Processing: UPLOADED → PROCESSING → INDEXED (2-15 min)
+
+### Images
+Upload JPG, PNG, GIF, WebP with captions. Both visual content and caption text are searchable.
+
+### Web Scraping
+Scrape websites into the knowledge base. See [Web Scraping](docs/WEB_SCRAPING.md).
+
+### Chat
+Ask questions about your content. Sources show where answers came from.
+
 ## Documentation
 
-- [Deployment](docs/DEPLOYMENT.md) - Deploy with chat
-- [Chat Component](docs/AMPLIFY_CHAT.md) - Web component API
-- [User Guide](docs/USER_GUIDE.md) - Using the UI
-- [Configuration](docs/CONFIGURATION.md) - Runtime settings
-- [Development](docs/DEVELOPMENT.md) - Local dev
+- [Configuration](docs/CONFIGURATION.md) - Settings & quotas
+- [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
+- [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
 - [Architecture](docs/ARCHITECTURE.md) - System design
+- [Development](docs/DEVELOPMENT.md) - Local dev
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 
 ## Local Development
@@ -94,8 +107,11 @@ python test.py
 # Full deployment (defaults to us-east-1)
 python publish.py --project-name myapp --admin-email admin@example.com
 
-# Backend only (skip UI rebuild)
+# Backend only (skip dashboard rebuild)
 python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
+
+# Backend only (skip ALL UI builds - dashboard and web component)
+python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
 ```
 
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.

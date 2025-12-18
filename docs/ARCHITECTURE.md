@@ -3,8 +3,8 @@
 ## System Design
 
 ```
-Upload → OCR → Embeddings → Bedrock KB
-                                ↓
+Upload → OCR → Bedrock KB (embeddings + indexing)
+                            ↓
         UI/Chat ←→ Query Bedrock KB
 ```
 
@@ -18,21 +18,52 @@ Upload → OCR → Embeddings → Bedrock KB
 | Component | Purpose |
 |-----------|---------|
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) |
-| GenerateEmbeddings Lambda | Create embeddings (Titan) |
-| QueryKB Lambda | Query documents (used by chat) |
-| Step Functions | Orchestrate workflow |
-| Bedrock KB | Vector storage & retrieval |
-| S3 | File storage |
-| DynamoDB | Metadata & config |
-| AppSync | GraphQL API |
-| React UI | Web interface |
-| Amplify Chat | AI chat (optional) |
+| IngestToKB Lambda | Trigger Bedrock KB ingestion (Nova Multimodal embeddings) |
+| QueryKB Lambda | Query documents, chat with sources |
+| ProcessImage Lambda | Image ingestion with captions |
+| Scrape Lambdas | Web scraping pipeline (start/discover/process/status) |
+| Step Functions | Orchestrate document/scrape workflows |
+| Bedrock KB | Vector storage & retrieval (S3 backend) |
+| S3 | File storage (input/, output/, images/) |
+| DynamoDB | Document tracking, config, conversations, scrape jobs |
+| AppSync | GraphQL API with subscriptions |
+| React UI | Web dashboard (Cloudscape) |
+| ragstack-chat | AI chat web component |
 
 ## Data Flow
 
-1. **Upload:** User → S3 → EventBridge → ProcessDocument
-2. **Processing:** ProcessDocument → GenerateEmbeddings → IngestToKB → Bedrock KB
-3. **Chat:** User → AppSync → QueryKB → Bedrock KB → Results
+### Document Processing
+1. **Upload:** User → S3 input/ → EventBridge → ProcessDocument
+2. **OCR:** ProcessDocument extracts text → S3 output/
+3. **Indexing:** IngestToKB → Bedrock KB API → Nova Multimodal embeddings → S3 vectors
+
+### Web Scraping
+1. **Start:** User → AppSync → ScrapeStart Lambda → SQS discovery queue
+2. **Discover:** ScrapeDiscover finds links → SQS processing queue
+3. **Process:** ScrapeProcess fetches content → S3 input/ (.scraped.md)
+4. **Index:** Step Functions → ProcessDocument → IngestToKB
+
+### Image Processing
+1. **Upload:** User → S3 images/ → EventBridge → ProcessImage
+2. **Indexing:** ProcessImage ingests image + caption to Bedrock KB
+3. **Cross-modal:** Both visual and text vectors share image_id
+
+### Chat Query
+1. **Query:** User → AppSync → QueryKB Lambda
+2. **Quota Check:** Atomic DynamoDB transaction (global + per-user limits)
+3. **History:** Load last 5 conversation turns for context
+4. **Retrieve:** bedrock_agent.retrieve() → top 5 KB results
+5. **Generate:** bedrock_runtime.converse() → answer with citations
+6. **Sources:** KB URIs resolved to original files via tracking table
+7. **Store:** Save turn to conversation history (14-day TTL)
+
+### Real-time Updates
+All state changes publish via GraphQL subscriptions:
+- `onDocumentUpdate` - Document processing progress
+- `onImageUpdate` - Image processing progress
+- `onScrapeUpdate` - Web scraping progress
+
+UI subscribes on load, updates automatically without polling.
 
 ## Architecture Decisions
 
@@ -44,33 +75,14 @@ Upload → OCR → Embeddings → Bedrock KB
 
 **Why shared library?** `lib/ragstack_common/` eliminates duplication
 
-**Error handling:** 3-tier (Lambda retry → Bedrock retry → DLQ)
-
-## Optional: Amplify Chat
-
-Core (SAM) provides document processing. Optional Amplify adds chat interface.
-
-```
-        Bedrock KB
-            ↑
-     ┌──────┴──────┐
-     │             │
-  SAM(Core)  Amplify(Chat)
-```
-
-Deploy:
-```bash
-python publish.py --project-name myapp --admin-email admin@example.com
-```
-
-See [RAGSTACK_CHAT.md](RAGSTACK_CHAT.md)
+**Error handling:** Lambda retry → Bedrock retry → DLQ
 
 ## Security
 
 - HTTPS/TLS everywhere
 - S3 SSE, DynamoDB encryption
 - Cognito auth + optional MFA
-- Lambda Authorizer validates JWT tokens for chat API
+- API key support for public chat
 - Least-privilege IAM
 - Public S3 blocked
 
@@ -79,7 +91,6 @@ See [RAGSTACK_CHAT.md](RAGSTACK_CHAT.md)
 **10-page PDF:**
 - Upload: <5 sec
 - OCR: 2-15 min
-- Embeddings: 1-5 min
 - KB Sync: 1-10 min
 
 **Optimization:**
@@ -99,4 +110,5 @@ See [Configuration](CONFIGURATION.md)
 - **Infrastructure:** SAM, Lambda, Step Functions
 - **Storage:** S3, DynamoDB, Bedrock KB
 - **APIs:** AppSync, Bedrock, Textract
-- **Frontend:** React 19, Vite, Amplify, Cloudscape
+- **Frontend:** React 19, Vite, Cloudscape
+- **Chat:** ragstack-chat web component
