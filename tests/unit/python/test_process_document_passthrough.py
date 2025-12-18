@@ -47,9 +47,10 @@ class TestMarkdownPassthrough:
 
     def test_scraped_md_passthrough(self, _mock_env):
         """Test that .scraped.md files skip OCR."""
-        with patch("boto3.client") as mock_boto3_client, patch(
-            "boto3.resource"
-        ) as mock_boto3_resource:
+        with (
+            patch("boto3.client") as mock_boto3_client,
+            patch("boto3.resource") as mock_boto3_resource,
+        ):
             # Mock S3 client
             mock_s3 = MagicMock()
             mock_s3.get_object.return_value = {

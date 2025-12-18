@@ -340,9 +340,7 @@ def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: d
     # Add media keywords for better KB query matching
     # These help the KB recognize this content as visual media when users search
     lines.append("---")
-    lines.append(
-        "Content type: image, picture, photo, photograph, visual, media, graphic, imagery"
-    )
+    lines.append("Content type: image, picture, photo, photograph, visual, media, graphic, imagery")
     lines.append("This is a visual image file that can be viewed and displayed.")
     lines.append("")
 

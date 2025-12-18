@@ -659,9 +659,7 @@ def extract_sources(citations):
                     else:
                         # Fallback: try to extract from content frontmatter
                         source_url = extract_source_url_from_content(content_text)
-                        logger.info(
-                            f"[SOURCE] Extracted source_url from content: {source_url}"
-                        )
+                        logger.info(f"[SOURCE] Extracted source_url from content: {source_url}")
 
                 # For image content, extract caption from frontmatter
                 image_caption = None
@@ -700,8 +698,7 @@ def extract_sources(citations):
                                 document_url = generate_presigned_url(bucket, key)
                                 if document_url:
                                     logger.info(
-                                        f"[SOURCE] Presigned URL generated: "
-                                        f"{document_url[:80]}..."
+                                        f"[SOURCE] Presigned URL generated: {document_url[:80]}..."
                                     )
                                 else:
                                     logger.warning("[SOURCE] Presigned URL returned None")
@@ -744,13 +741,11 @@ def extract_sources(citations):
                     }
                     # Log the complete source object for debugging
                     doc_url_preview = (
-                        document_url[:60] + "..." if document_url and len(document_url) > 60
+                        document_url[:60] + "..."
+                        if document_url and len(document_url) > 60
                         else document_url
                     )
-                    logger.info(
-                        f"[SOURCE] FINAL: docId={document_id}, "
-                        f"s3Uri={document_s3_uri}"
-                    )
+                    logger.info(f"[SOURCE] FINAL: docId={document_id}, s3Uri={document_s3_uri}")
                     logger.info(
                         f"[SOURCE] FINAL: documentUrl={doc_url_preview}, "
                         f"isScraped={is_scraped}, isImage={is_image}"
