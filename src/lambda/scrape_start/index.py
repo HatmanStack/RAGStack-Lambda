@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.appsync import publish_scrape_update
 from ragstack_common.scraper import ScrapeConfig, ScrapeJob, ScrapeStatus
 
 logger = logging.getLogger()
@@ -133,6 +134,19 @@ def lambda_handler(event, context):
                 ":arn": step_function_arn,
                 ":ts": datetime.now(UTC).isoformat(),
             },
+        )
+
+        # Publish real-time update to subscribers
+        graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+        publish_scrape_update(
+            graphql_endpoint=graphql_endpoint,
+            job_id=job_id,
+            base_url=base_url,
+            title=job.title or base_url,
+            status=ScrapeStatus.DISCOVERING.value,
+            total_urls=0,
+            processed_count=0,
+            failed_count=0,
         )
 
         return {

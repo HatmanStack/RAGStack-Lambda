@@ -1,8 +1,11 @@
 """
 Process Image Lambda
 
-Processes uploaded images by generating multimodal embeddings and ingesting
-into Bedrock Knowledge Base via the data source API.
+Processes uploaded images using Nova Multimodal Embeddings. Ingests BOTH:
+1. The actual image file - for visual similarity search
+2. Caption text - for semantic text search
+
+Both vectors share the same image_id, enabling cross-modal retrieval.
 
 Input event (from Step Functions or S3 trigger):
 {
@@ -14,7 +17,8 @@ Output:
 {
     "image_id": "abc123",
     "status": "INDEXED",
-    "ingestion_status": "STARTING"
+    "image_ingestion_status": "STARTING",
+    "caption_ingestion_status": "STARTING"
 }
 """
 
@@ -141,13 +145,9 @@ def lambda_handler(event, context):
             else:
                 raise
 
-        # Create text content for ingestion
-        # The text file will be stored alongside the image for KB ingestion
+        # Create caption text file for semantic text search
         text_content = build_ingestion_text(image_id, filename, caption, metadata)
-
-        # Write text file to S3 for KB ingestion
-        # Text key: images/{imageId}/content.txt (following KB data source pattern)
-        text_key = f"{base_path}/content.txt"
+        text_key = f"{base_path}/caption.txt"
         text_s3_uri = f"s3://{bucket}/{text_key}"
 
         s3.put_object(
@@ -156,31 +156,43 @@ def lambda_handler(event, context):
             Body=text_content,
             ContentType="text/plain",
         )
-        logger.info(f"Created text file for KB ingestion: {text_s3_uri}")
+        logger.info(f"Created caption file: {text_s3_uri}")
 
-        # Ingest the text content into KB
-        # Bedrock KB will:
-        # 1. Read the text from S3
-        # 2. Generate embeddings using Cohere Embed v4
-        # 3. Write vectors to S3 Vectors index
+        # Ingest BOTH the image and caption into KB
+        # Nova Multimodal Embeddings will:
+        # 1. Generate visual embedding from the image file
+        # 2. Generate text embedding from the caption
+        # Both vectors are in the same semantic space for cross-modal search
+        documents_to_ingest = [
+            # Image file - for visual similarity search
+            {"content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": input_s3_uri}}}},
+            # Caption text - for semantic text search
+            {"content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}},
+        ]
+
         ingest_response = bedrock_agent.ingest_knowledge_base_documents(
             knowledgeBaseId=kb_id,
             dataSourceId=ds_id,
-            documents=[
-                {"content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}}
-            ],
+            documents=documents_to_ingest,
         )
 
         logger.info(f"Ingestion response: {json.dumps(ingest_response, default=str)}")
 
-        # Extract status from response
+        # Extract status for both documents
         doc_details = ingest_response.get("documentDetails", [])
-        ingestion_status = "UNKNOWN"
-        if doc_details:
-            ingestion_status = doc_details[0].get("status", "UNKNOWN")
+        image_ingestion_status = "UNKNOWN"
+        caption_ingestion_status = "UNKNOWN"
+        if len(doc_details) >= 1:
+            image_ingestion_status = doc_details[0].get("status", "UNKNOWN")
+        if len(doc_details) >= 2:
+            caption_ingestion_status = doc_details[1].get("status", "UNKNOWN")
 
         # Update image status in DynamoDB
-        update_expr = "SET #status = :status, updated_at = :updated_at, output_s3_uri = :output_uri"
+        # Store both URIs - image for display, caption for reference
+        update_expr = (
+            "SET #status = :status, updated_at = :updated_at, "
+            "output_s3_uri = :output_uri, caption_s3_uri = :caption_uri"
+        )
         tracking_table.update_item(
             Key={"document_id": image_id},
             UpdateExpression=update_expr,
@@ -188,7 +200,8 @@ def lambda_handler(event, context):
             ExpressionAttributeValues={
                 ":status": ImageStatus.INDEXED.value,
                 ":updated_at": datetime.now(UTC).isoformat(),
-                ":output_uri": text_s3_uri,
+                ":output_uri": input_s3_uri,  # Original image
+                ":caption_uri": text_s3_uri,  # Caption text file
             },
         )
         logger.info(f"Updated image {image_id} status to INDEXED")
@@ -209,7 +222,8 @@ def lambda_handler(event, context):
         return {
             "image_id": image_id,
             "status": ImageStatus.INDEXED.value,
-            "ingestion_status": ingestion_status,
+            "image_ingestion_status": image_ingestion_status,
+            "caption_ingestion_status": caption_ingestion_status,
             "knowledge_base_id": kb_id,
         }
 
@@ -322,5 +336,14 @@ def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: d
     if ai_caption and ai_caption != caption:
         lines.append(f"AI description: {ai_caption}")
         lines.append("")
+
+    # Add media keywords for better KB query matching
+    # These help the KB recognize this content as visual media when users search
+    lines.append("---")
+    lines.append(
+        "Content type: image, picture, photo, photograph, visual, media, graphic, imagery"
+    )
+    lines.append("This is a visual image file that can be viewed and displayed.")
+    lines.append("")
 
     return "\n".join(lines)

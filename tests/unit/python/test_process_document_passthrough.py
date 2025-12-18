@@ -47,39 +47,53 @@ class TestMarkdownPassthrough:
 
     def test_scraped_md_passthrough(self, _mock_env):
         """Test that .scraped.md files skip OCR."""
-        with patch("boto3.client") as mock_boto3_client:
-            # Mock S3
+        with patch("boto3.client") as mock_boto3_client, patch(
+            "boto3.resource"
+        ) as mock_boto3_resource:
+            # Mock S3 client
             mock_s3 = MagicMock()
             mock_s3.get_object.return_value = {
-                "Body": MagicMock(read=lambda: b"# Test Content\n\nThis is markdown.")
+                "Body": MagicMock(read=lambda: b"# Test Content\n\nThis is markdown."),
+                "Metadata": {"title": "Test Page", "source_url": "https://example.com/page"},
             }
             mock_boto3_client.return_value = mock_s3
 
-            # Mock update_item at module level
-            with patch("ragstack_common.storage.update_item") as mock_update:
-                module = _load_process_document_module()
+            # Mock DynamoDB resource
+            mock_dynamodb = MagicMock()
+            mock_table = MagicMock()
+            mock_dynamodb.Table.return_value = mock_table
+            mock_boto3_resource.return_value = mock_dynamodb
 
-                event = {
-                    "document_id": "test-doc-123",
-                    "input_s3_uri": "s3://input-bucket/doc/test.scraped.md",
-                    "output_s3_prefix": "s3://output-bucket/processed/test-doc-123/",
-                }
+            module = _load_process_document_module()
 
-                result = module.lambda_handler(event, None)
+            event = {
+                "document_id": "test-doc-123",
+                "input_s3_uri": "s3://input-bucket/doc/test.scraped.md",
+                "output_s3_prefix": "s3://output-bucket/processed/test-doc-123/",
+            }
 
-                # Verify result
-                assert result["document_id"] == "test-doc-123"
-                assert result["status"] == "ocr_complete"
-                assert result["total_pages"] == 1
-                assert result["is_text_native"] is True
-                assert "passthrough" in result["pages"][0]["ocr_backend"]
+            result = module.lambda_handler(event, None)
 
-                # Verify S3 operations
-                mock_s3.get_object.assert_called_once()
-                mock_s3.put_object.assert_called_once()
+            # Verify result
+            assert result["document_id"] == "test-doc-123"
+            assert result["status"] == "ocr_complete"
+            assert result["total_pages"] == 1
+            assert result["is_text_native"] is True
+            assert "passthrough" in result["pages"][0]["ocr_backend"]
 
-                # Verify DynamoDB update
-                mock_update.assert_called_once()
+            # Verify S3 operations
+            mock_s3.get_object.assert_called_once()
+            mock_s3.put_object.assert_called_once()
+
+            # Verify DynamoDB update with created_at, filename, input_s3_uri, type
+            mock_table.update_item.assert_called_once()
+            call_kwargs = mock_table.update_item.call_args[1]
+            assert "created_at" in call_kwargs["UpdateExpression"]
+            assert "filename" in call_kwargs["UpdateExpression"]
+            assert "#type" in call_kwargs["UpdateExpression"]
+            assert ":filename" in call_kwargs["ExpressionAttributeValues"]
+            assert call_kwargs["ExpressionAttributeValues"][":filename"] == "Test Page"
+            assert call_kwargs["ExpressionAttributeValues"][":type"] == "scraped"
 
 
 class TestS3UriParsing:

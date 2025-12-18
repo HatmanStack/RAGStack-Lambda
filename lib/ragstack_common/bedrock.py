@@ -4,10 +4,9 @@ Bedrock client module for document pipeline.
 Provides a simplified client for invoking Amazon Bedrock models with:
 - Exponential backoff retry logic
 - Token usage tracking and metering
-- Support for both converse API (text extraction) and embeddings
+- Support for converse API (text extraction for OCR)
 """
 
-import json
 import logging
 import os
 import random
@@ -240,148 +239,9 @@ class BedrockClient:
             logger.error(f"Unexpected Bedrock error: {str(e)}", exc_info=True)
             raise
 
-    def generate_embedding(
-        self, text: str, model_id: str = "amazon.titan-embed-text-v2:0"
-    ) -> list[float]:
-        """
-        Generate an embedding vector for the given text.
-
-        Args:
-            text: The text to generate embeddings for
-            model_id: The embedding model ID
-
-        Returns:
-            List of floats representing the embedding vector
-        """
-        if not text or not isinstance(text, str):
-            return []
-
-        # Normalize whitespace
-        normalized_text = " ".join(text.split())
-
-        # Prepare request body for Titan embedding models
-        request_body = json.dumps({"inputText": normalized_text})
-
-        # Call with retry
-        return self._generate_embedding_with_retry(
-            model_id=model_id, request_body=request_body, retry_count=0
-        )
-
-    def generate_image_embedding(
-        self, image_bytes: bytes, model_id: str = "amazon.titan-embed-image-v1"
-    ) -> list[float]:
-        """
-        Generate an embedding vector for an image.
-
-        Args:
-            image_bytes: The image file bytes
-            model_id: The embedding model ID (default: Titan Embed Image V1)
-
-        Returns:
-            List of floats representing the embedding vector
-        """
-        if not image_bytes:
-            return []
-
-        # Encode image as base64
-        import base64
-
-        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        # Prepare request body for Titan image embedding model
-        request_body = json.dumps({"inputImage": image_base64})
-
-        # Call with retry
-        return self._generate_embedding_with_retry(
-            model_id=model_id, request_body=request_body, retry_count=0
-        )
-
-    def _generate_embedding_with_retry(
-        self,
-        model_id: str,
-        request_body: str,
-        retry_count: int,
-        _last_exception: Exception | None = None,
-    ) -> list[float]:
-        """
-        Recursive helper for embedding generation with retry.
-        """
-        try:
-            logger.info(
-                f"Bedrock embedding request attempt {retry_count + 1}/"
-                f"{self.max_retries + 1}: {model_id}"
-            )
-
-            attempt_start_time = time.time()
-            response = self.client.invoke_model(
-                modelId=model_id,
-                contentType="application/json",
-                accept="application/json",
-                body=request_body,
-            )
-            duration = time.time() - attempt_start_time
-
-            # Extract embedding vector
-            response_body = json.loads(response["body"].read())
-            embedding = response_body.get("embedding", [])
-
-            logger.info(f"Generated embedding with {len(embedding)} dimensions in {duration:.2f}s")
-            return embedding
-
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            error_message = e.response["Error"]["Message"]
-
-            retryable_errors = [
-                "ThrottlingException",
-                "ServiceQuotaExceededException",
-                "RequestLimitExceeded",
-                "TooManyRequestsException",
-                "ServiceUnavailableException",
-                "RequestTimeout",
-                "ReadTimeout",
-            ]
-
-            if error_code in retryable_errors:
-                if retry_count >= self.max_retries:
-                    logger.error(f"Max retries ({self.max_retries}) exceeded for embedding")
-                    raise
-
-                backoff = self._calculate_backoff(retry_count)
-                logger.warning(f"Bedrock throttling. Backing off for {backoff:.2f}s")
-                time.sleep(backoff)
-
-                return self._generate_embedding_with_retry(
-                    model_id=model_id,
-                    request_body=request_body,
-                    retry_count=retry_count + 1,
-                    _last_exception=e,
-                )
-            logger.error(f"Non-retryable embedding error: {error_code} - {error_message}")
-            raise
-
-        except (ReadTimeoutError, ConnectTimeoutError) as e:
-            if retry_count >= self.max_retries:
-                logger.exception(f"Max retries ({self.max_retries}) exceeded for embedding timeout")
-                raise
-
-            backoff = self._calculate_backoff(retry_count)
-            logger.warning(
-                f"Bedrock embedding timeout (attempt {retry_count + 1}/{self.max_retries + 1}). "
-                f"Backing off for {backoff:.2f}s"
-            )
-            time.sleep(backoff)
-
-            return self._generate_embedding_with_retry(
-                model_id=model_id,
-                request_body=request_body,
-                retry_count=retry_count + 1,
-                _last_exception=e,
-            )
-
-        except Exception:
-            logger.exception("Unexpected error generating embedding")
-            raise
+    # Note: Embedding generation is handled by Bedrock Knowledge Base.
+    # The KB uses Nova Multimodal Embeddings configured in template.yaml.
+    # No direct embedding calls needed - use bedrock_agent.ingest_knowledge_base_documents()
 
     def extract_text_from_response(self, response: dict[str, Any]) -> str:
         """

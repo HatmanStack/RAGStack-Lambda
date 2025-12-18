@@ -68,6 +68,6 @@ Configure OCR and models (no redeployment):
 
 **UI not loading?** Invalidate CloudFront cache
 **Upload fails?** Check file format/size (<10MB)
-**Chat not working?** Documents must be COMPLETED status, check --deploy-chat was used
+**Chat not working?** Documents must be COMPLETED status
 
 See [Troubleshooting](TROUBLESHOOTING.md)

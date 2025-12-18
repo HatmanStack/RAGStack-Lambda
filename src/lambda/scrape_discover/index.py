@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.appsync import publish_scrape_update
 from ragstack_common.scraper import ScrapePage, ScrapeStatus, UrlStatus
 from ragstack_common.scraper.discovery import (
     extract_links,
@@ -176,6 +177,20 @@ def lambda_handler(event, context):
                     ":inc": 1,
                     ":ts": datetime.now(UTC).isoformat(),
                 },
+            )
+
+            # Publish discovery progress update to subscribers
+            graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+            current_total = int(job_item.get("total_urls", 0)) + 1
+            publish_scrape_update(
+                graphql_endpoint=graphql_endpoint,
+                job_id=job_id,
+                base_url=job_item.get("base_url", url),
+                title=job_item.get("title") or job_item.get("base_url", url),
+                status=job_item.get("status", ScrapeStatus.DISCOVERING.value),
+                total_urls=current_total,
+                processed_count=int(job_item.get("processed_count", 0)),
+                failed_count=int(job_item.get("failed_count", 0)),
             )
 
             # Extract and filter links if within depth limit

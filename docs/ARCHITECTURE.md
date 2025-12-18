@@ -58,12 +58,12 @@ Core (SAM) provides document processing. Optional Amplify adds chat interface.
   SAM(Core)  Amplify(Chat)
 ```
 
-Deploy chat:
+Deploy:
 ```bash
-python publish.py --project-name myapp ... --deploy-chat
+python publish.py --project-name myapp --admin-email admin@example.com
 ```
 
-See [AMPLIFY_CHAT.md](AMPLIFY_CHAT.md)
+See [RAGSTACK_CHAT.md](RAGSTACK_CHAT.md)
 
 ## Security
 

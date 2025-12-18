@@ -19,7 +19,6 @@ Serverless document processing with AI chat. Upload documents, extract text with
 - Python 3.13+, Node.js 24+
 - AWS CLI, SAM CLI (configured and running)
 - **Docker** (required for Lambda layer builds)
-- **For chat (optional):** Amplify CLI (auto-installed if missing)
 
 ### Deploy
 
@@ -32,12 +31,10 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# With chat (recommended)
+# Deploys to us-east-1 by default (Nova Multimodal Embeddings)
 python publish.py \
   --project-name my-docs \
-  --admin-email admin@example.com \
-  --region us-east-1 \
-  --deploy-chat
+  --admin-email admin@example.com
 ```
 
 **Outputs:** Web UI URL, Chat CDN URL, GraphQL API, KB ID
@@ -94,15 +91,14 @@ python test.py
 ## Deployment Options
 
 ```bash
-# With chat (recommended)
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --deploy-chat
+# Full deployment (defaults to us-east-1)
+python publish.py --project-name myapp --admin-email admin@example.com
 
-# Without chat
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1
-
-# Update chat only
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --chat-only
+# Backend only (skip UI rebuild)
+python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 ```
+
+> **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
 
 ## Cost
 

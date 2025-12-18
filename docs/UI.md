@@ -23,7 +23,7 @@ npm start  # http://localhost:5173
 - **Authentication** - Cognito-backed login/signup
 - **Document Upload** - Drag-and-drop with progress tracking
 - **Document Dashboard** - Table with filtering, sorting, pagination
-- **Chat Interface** - Query documents via AI chat (requires --deploy-chat)
+- **Chat Interface** - Query documents via AI chat
 - **Responsive** - Works on desktop, tablet, mobile
 
 ## Configuration

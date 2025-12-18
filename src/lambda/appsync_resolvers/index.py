@@ -154,13 +154,22 @@ def list_documents(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Filter out images - they're listed via listImages
+        # Filter out images and scraped pages - they're listed via listImages and listScrapeJobs
         # Check both type field and input_s3_uri path for robustness
         scan_kwargs = {
             "Limit": limit,
-            "FilterExpression": "(attribute_not_exists(#type) OR #type <> :image_type) AND (attribute_not_exists(input_s3_uri) OR NOT contains(input_s3_uri, :images_prefix))",
+            "FilterExpression": (
+                "(attribute_not_exists(#type) OR "
+                "(#type <> :image_type AND #type <> :scraped_type)) "
+                "AND (attribute_not_exists(input_s3_uri) OR "
+                "NOT contains(input_s3_uri, :images_prefix))"
+            ),
             "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
+            "ExpressionAttributeValues": {
+                ":image_type": "image",
+                ":scraped_type": "scraped",
+                ":images_prefix": "/images/",
+            },
         }
 
         if next_token:

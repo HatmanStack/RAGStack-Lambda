@@ -9,8 +9,8 @@ RAGStack-Lambda Deployment Script
 Project-based deployment automation for RAGStack-Lambda stack.
 
 Usage:
-    python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
-    python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
+    python publish.py --project-name customer-docs --admin-email admin@example.com
+    python publish.py --project-name legal-archive --admin-email admin@example.com --skip-ui
 """
 
 import argparse
@@ -315,260 +315,6 @@ def check_sam_cli():
     version_output = sam_result.stdout.strip()
     log_success(f"Found {version_output}")
     return True
-
-
-def ensure_cdk_bootstrap(region):
-    """
-    Ensure CDK is bootstrapped in the target region.
-
-    CDK bootstrap creates the CDKToolkit stack with:
-    - S3 bucket for assets (cdk-hnb659fds-assets-{account}-{region})
-    - IAM roles for deployment
-    - SSM parameters for version tracking
-
-    This handles several cases:
-    - CDK not bootstrapped: runs bootstrap
-    - CDK bootstrapped and healthy: no action needed
-    - CDK stack exists but bucket deleted: deletes broken stack and re-bootstraps
-
-    Args:
-        region: AWS region to bootstrap
-
-    Returns:
-        bool: True if bootstrap is ready
-
-    Raises:
-        SystemExit: If bootstrap fails
-    """
-    log_info(f"Checking CDK bootstrap status in {region}...")
-
-    cf_client = boto3.client('cloudformation', region_name=region)
-    s3_client = boto3.client('s3', region_name=region)
-    sts_client = boto3.client('sts', region_name=region)
-
-    account_id = sts_client.get_caller_identity()['Account']
-    expected_bucket = f'cdk-hnb659fds-assets-{account_id}-{region}'
-
-    needs_bootstrap = False
-    needs_cleanup = False
-
-    # Check if CDKToolkit stack exists
-    try:
-        response = cf_client.describe_stacks(StackName='CDKToolkit')
-        stack_status = response['Stacks'][0]['StackStatus']
-
-        if stack_status in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
-            # Stack exists - verify bucket actually exists (may have been manually deleted)
-            try:
-                s3_client.head_bucket(Bucket=expected_bucket)
-                log_success(f"CDK bootstrapped in {region} (bucket verified)")
-                return True
-            except ClientError as e:
-                error_code = e.response.get('Error', {}).get('Code', '')
-                if error_code in ['404', 'NoSuchBucket']:
-                    log_warning(f"CDKToolkit stack exists but bucket {expected_bucket} is missing")
-                    log_warning("Stack is in inconsistent state - will delete and re-bootstrap")
-                    needs_cleanup = True
-                    needs_bootstrap = True
-                else:
-                    raise
-
-        elif stack_status in ['CREATE_IN_PROGRESS', 'UPDATE_IN_PROGRESS']:
-            log_info("CDK bootstrap in progress, waiting...")
-            waiter = cf_client.get_waiter('stack_create_complete')
-            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
-            log_success("CDK bootstrap complete")
-            return True
-
-        elif stack_status in ['DELETE_IN_PROGRESS']:
-            log_info("CDK stack being deleted, waiting...")
-            waiter = cf_client.get_waiter('stack_delete_complete')
-            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
-            needs_bootstrap = True
-
-        else:
-            log_warning(f"CDKToolkit stack in state: {stack_status}")
-            needs_cleanup = True
-            needs_bootstrap = True
-
-    except cf_client.exceptions.ClientError as e:
-        if 'does not exist' in str(e):
-            log_info(f"CDK not bootstrapped in {region}")
-            needs_bootstrap = True
-        else:
-            raise
-
-    # Clean up broken stack if needed
-    if needs_cleanup:
-        log_info("Deleting broken CDKToolkit stack...")
-        try:
-            cf_client.delete_stack(StackName='CDKToolkit')
-            waiter = cf_client.get_waiter('stack_delete_complete')
-            waiter.wait(StackName='CDKToolkit', WaiterConfig={'Delay': 10, 'MaxAttempts': 60})
-            log_success("Broken CDKToolkit stack deleted")
-        except Exception as e:
-            log_error(f"Failed to delete CDKToolkit stack: {e}")
-            log_error("Please manually delete:")
-            log_error("  aws cloudformation delete-stack --stack-name CDKToolkit")
-            sys.exit(1)
-
-    # Run CDK bootstrap
-    if needs_bootstrap:
-        log_info(f"Bootstrapping CDK in {region}...")
-
-        bootstrap_cmd = [
-            'npx', 'cdk', 'bootstrap',
-            f'aws://{account_id}/{region}'
-        ]
-
-        log_info(f"Running: {' '.join(bootstrap_cmd)}")
-
-        try:
-            result = subprocess.run(
-                bootstrap_cmd,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
-
-            if result.returncode != 0:
-                log_error("CDK bootstrap failed")
-                if result.stdout:
-                    log_error(f"stdout: {result.stdout}")
-                if result.stderr:
-                    log_error(f"stderr: {result.stderr}")
-                sys.exit(1)
-
-            log_success(f"CDK bootstrapped in {region}")
-
-        except subprocess.TimeoutExpired:
-            log_error("CDK bootstrap timed out after 5 minutes")
-            sys.exit(1)
-        except FileNotFoundError:
-            log_error("npx not found - ensure Node.js is installed")
-            sys.exit(1)
-
-    return True
-
-
-def get_codebuild_project_name(stack_name, region):
-    """
-    Get CodeBuild project name from SAM stack outputs.
-
-    Args:
-        stack_name: CloudFormation stack name
-        region: AWS region
-
-    Returns:
-        str: CodeBuild project name
-
-    Raises:
-        ValueError: If output not found in stack
-    """
-    cf = boto3.client('cloudformation', region_name=region)
-
-    response = cf.describe_stacks(StackName=stack_name)
-    stack = response['Stacks'][0]
-    outputs = {o['OutputKey']: o['OutputValue'] for o in stack.get('Outputs', [])}
-
-    project_name = outputs.get('AmplifyDeployProjectName')
-    if not project_name:
-        raise ValueError("AmplifyDeployProjectName output not found in SAM stack")
-
-    return project_name
-
-
-def trigger_codebuild(project_name, environment_overrides, region, source_location=None):
-    """
-    Trigger CodeBuild project with environment variable overrides.
-
-    Args:
-        project_name: CodeBuild project name
-        environment_overrides: List of env var dicts to override
-        region: AWS region
-        source_location: Optional S3 location to override source (format: 'bucket/key.zip', NOT 's3://bucket/key')
-
-    Returns:
-        str: Build ID
-
-    Raises:
-        ClientError: If CodeBuild API call fails
-    """
-    codebuild = boto3.client('codebuild', region_name=region)
-
-    log_info(f"Starting CodeBuild project: {project_name}")
-
-    # Build start_build parameters
-    build_params = {
-        'projectName': project_name,
-        'environmentVariablesOverride': environment_overrides
-    }
-
-    # Add source override if provided
-    if source_location:
-        build_params['sourceLocationOverride'] = source_location
-        build_params['sourceTypeOverride'] = 'S3'
-        log_info(f"  Source override: s3://{source_location}")
-
-    response = codebuild.start_build(**build_params)
-
-    build_id = response['build']['id']
-
-    log_success(f"Build started: {build_id}")
-    return build_id
-
-
-def wait_for_codebuild(build_id, region, timeout_minutes=30):
-    """
-    Wait for CodeBuild to complete, polling status.
-
-    Args:
-        build_id: CodeBuild build ID
-        region: AWS region
-        timeout_minutes: Max time to wait (default 30)
-
-    Returns:
-        str: Final build status (SUCCEEDED, FAILED, etc.)
-
-    Raises:
-        TimeoutError: If build exceeds timeout
-        RuntimeError: If build fails
-    """
-    codebuild = boto3.client('codebuild', region_name=region)
-
-    start_time = time.time()
-    timeout_seconds = timeout_minutes * 60
-    poll_interval = 30  # Check every 30 seconds
-
-    log_info(f"Waiting for build to complete (timeout: {timeout_minutes}min)...")
-
-    while True:
-        response = codebuild.batch_get_builds(ids=[build_id])
-        build = response['builds'][0]
-        status = build['buildStatus']
-
-        if status in ['SUCCEEDED', 'FAILED', 'STOPPED', 'FAULT', 'TIMED_OUT']:
-            if status == 'SUCCEEDED':
-                log_success("Build completed successfully")
-                return status
-            # Get logs for debugging
-            log_group = build.get('logs', {}).get('groupName')
-            log_stream = build.get('logs', {}).get('streamName')
-            log_error(f"Build failed with status: {status}")
-            if log_group and log_stream:
-                log_info(f"Logs: {log_group}/{log_stream}")
-            raise RuntimeError(f"CodeBuild failed: {status}")
-
-        # Check timeout
-        elapsed = time.time() - start_time
-        if elapsed > timeout_seconds:
-            raise TimeoutError(f"Build exceeded {timeout_minutes} minute timeout")
-
-        # Progress indicator
-        minutes_elapsed = int(elapsed / 60)
-        log_info(f"Build in progress... ({minutes_elapsed}min elapsed, status: {status})")
-
-        time.sleep(poll_interval)
 
 
 def sam_build():
@@ -1340,8 +1086,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python publish.py --project-name customer-docs --admin-email admin@example.com --region us-east-1
-  python publish.py --project-name legal-archive --admin-email admin@example.com --region us-west-2 --skip-ui
+  python publish.py --project-name customer-docs --admin-email admin@example.com
+  python publish.py --project-name legal-archive --admin-email admin@example.com --skip-ui
         """
     )
 
@@ -1359,14 +1105,20 @@ Examples:
 
     parser.add_argument(
         "--region",
-        required=True,
-        help="AWS region (e.g., us-east-1, us-west-2)"
+        default="us-east-1",
+        help="AWS region (default: us-east-1). Nova Multimodal Embeddings currently requires us-east-1."
     )
 
     parser.add_argument(
         "--skip-ui",
         action="store_true",
-        help="Skip UI build and deployment"
+        help="Skip UI build and deployment (still builds web component)"
+    )
+
+    parser.add_argument(
+        "--skip-ui-all",
+        action="store_true",
+        help="Skip all UI builds (dashboard and web component)"
     )
 
     # Scrape configuration arguments
@@ -1417,24 +1169,34 @@ Examples:
             log_error(str(e))
             sys.exit(1)
 
+        # Check for us-east-1 requirement (Nova Multimodal Embeddings)
+        if args.region != "us-east-1":
+            log_warning(f"Region '{args.region}' selected, but Nova Multimodal Embeddings is currently only available in us-east-1.")
+            log_warning("The Knowledge Base will fail to create unless the embedding model is available in your region.")
+            response = input(f"{Colors.WARNING}Continue anyway? (y/N): {Colors.ENDC}").strip().lower()
+            if response != 'y':
+                log_info("Deployment cancelled. Use --region us-east-1 for Nova Multimodal Embeddings support.")
+                sys.exit(0)
+
         log_success("All inputs validated")
 
         log_info(f"Project Name: {args.project_name}")
         log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
+        # --skip-ui-all implies --skip-ui
+        if args.skip_ui_all:
+            args.skip_ui = True
+
         # Check prerequisites
         log_info("Checking prerequisites...")
         check_python_version()
-        check_nodejs_version(skip_ui=args.skip_ui)
+        check_nodejs_version(skip_ui=args.skip_ui_all)
         check_aws_cli()
         check_sam_cli()
         # Docker check skipped for now
         # check_docker()
         log_success("All prerequisites met")
-
-        # Ensure CDK is bootstrapped (required for Amplify deployment)
-        ensure_cdk_bootstrap(args.region)
 
         # Create artifact bucket first
         try:
@@ -1453,14 +1215,15 @@ Examples:
                 log_error(f"Failed to package UI: {e}")
                 sys.exit(1)
 
-        # Package web component source
+        # Package web component source (unless --skip-ui-all)
         wc_source_key = None
-        try:
-            wc_source_key = package_ragstack_chat_source(artifact_bucket, args.region)
-            log_info(f"Web component source uploaded to {artifact_bucket}/{wc_source_key}")
-        except (OSError, FileNotFoundError) as e:
-            log_error(f"Failed to package web component: {e}")
-            sys.exit(1)
+        if not args.skip_ui_all:
+            try:
+                wc_source_key = package_ragstack_chat_source(artifact_bucket, args.region)
+                log_info(f"Web component source uploaded to {artifact_bucket}/{wc_source_key}")
+            except (OSError, FileNotFoundError) as e:
+                log_error(f"Failed to package web component: {e}")
+                sys.exit(1)
 
         # Note: Amplify placeholder is created automatically by CloudFormation custom resource
         # The CreateAmplifyPlaceholder resource creates a minimal valid zip in S3

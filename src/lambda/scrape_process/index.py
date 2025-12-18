@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.appsync import publish_scrape_update
 from ragstack_common.scraper import ScrapeStatus, UrlStatus
 from ragstack_common.scraper.dedup import DeduplicationService
 from ragstack_common.scraper.extractor import extract_content
@@ -214,6 +215,20 @@ def lambda_handler(event, context):
                     ":one": 1,
                     ":ts": datetime.now(UTC).isoformat(),
                 },
+            )
+
+            # Publish processing progress update to subscribers
+            graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+            current_processed = int(job_item.get("processed_count", 0)) + 1
+            publish_scrape_update(
+                graphql_endpoint=graphql_endpoint,
+                job_id=job_id,
+                base_url=job_item.get("base_url", ""),
+                title=job_item.get("title") or job_item.get("base_url", ""),
+                status=job_item.get("status", ScrapeStatus.PROCESSING.value),
+                total_urls=int(job_item.get("total_urls", 0)),
+                processed_count=current_processed,
+                failed_count=int(job_item.get("failed_count", 0)),
             )
 
             processed += 1

@@ -163,8 +163,8 @@ def create_knowledge_base(properties):
         s3vectors_client.create_index(
             vectorBucketName=vector_bucket,
             indexName=index_name,
-            dataType="float32",  # Cohere Embed v4 outputs float32
-            dimension=1024,  # Cohere Embed v4 outputs 1024 dimensions
+            dataType="float32",
+            dimension=1024,  # Nova Multimodal Embeddings outputs 1024 dimensions
             distanceMetric="cosine",
             metadataConfiguration={
                 "nonFilterableMetadataKeys": [
@@ -185,6 +185,12 @@ def create_knowledge_base(properties):
     logger.info(f"Using S3 vector index ARN: {index_arn}")
 
     # Step 4: Create Knowledge Base with unique suffix
+    # Nova Multimodal Embeddings requires supplementalDataStorageConfiguration
+    # Note: The S3 URI must be bucket root only - no subfolders allowed
+    data_bucket = properties.get("DataBucket")
+    multimodal_storage_uri = f"s3://{data_bucket}"
+    logger.info(f"Using multimodal storage: {multimodal_storage_uri}")
+
     logger.info(f"Creating Knowledge Base: {kb_name}")
     try:
         kb_response = bedrock_agent.create_knowledge_base(
@@ -197,11 +203,20 @@ def create_knowledge_base(properties):
                 "vectorKnowledgeBaseConfiguration": {
                     "embeddingModelConfiguration": {
                         "bedrockEmbeddingModelConfiguration": {
-                            "dimensions": 1024,
+                            "dimensions": 1024,  # Nova Multimodal Embeddings
                             "embeddingDataType": "FLOAT32",
                         }
                     },
                     "embeddingModelArn": embed_model_arn,
+                    # Required for Nova Multimodal Embeddings
+                    "supplementalDataStorageConfiguration": {
+                        "storageLocations": [
+                            {
+                                "type": "S3",
+                                "s3Location": {"uri": multimodal_storage_uri},
+                            }
+                        ]
+                    },
                 },
             },
             storageConfiguration={

@@ -6,7 +6,10 @@
 - AWS CLI configured: `aws sts get-caller-identity`
 - Python 3.13+, Node.js 24+, SAM CLI
 - **Docker** (required to build Lambda layers)
-- **For chat (optional):** Amplify CLI (auto-installed if missing)
+
+## Region Requirement
+
+**Currently requires `us-east-1`** - Nova Multimodal Embeddings (used for document/image indexing) is only available in us-east-1. When it becomes available in other regions, simply deploy there with `--region <your-region>`.
 
 ## Deploy
 
@@ -14,24 +17,13 @@
 git clone https://github.com/your-org/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
-# With chat (recommended)
 python publish.py \
   --project-name myapp \
-  --admin-email admin@example.com \
-  --region us-east-1 \
-  --deploy-chat
-
-# Without chat
-python publish.py \
-  --project-name myapp \
-  --admin-email admin@example.com \
-  --region us-east-1
+  --admin-email admin@example.com
 ```
 
 **Flags:**
-- `--deploy-chat`: Deploy AI chat with web component (requires Amplify CLI)
-- `--chat-only`: Update chat only (after SAM deployed)
-- `--skip-ui`: Skip UI rebuild
+- `--skip-ui`: Skip UI rebuild (backend only)
 
 ## Post-Deployment
 
@@ -46,13 +38,10 @@ python publish.py \
 git pull origin main
 
 # Update everything
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --deploy-chat
+python publish.py --project-name myapp --admin-email admin@example.com
 
 # Update backend only (skip UI)
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --skip-ui
-
-# Update chat only
-python publish.py --project-name myapp --admin-email admin@example.com --region us-east-1 --chat-only
+python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 ```
 
 ## Uninstall
@@ -68,9 +57,6 @@ aws bedrock-agent delete-knowledge-base --knowledge-base-id <KB-ID>
 
 # Delete stack
 aws cloudformation delete-stack --stack-name RAGStack-myapp
-
-# Delete Amplify app (if chat deployed)
-amplify delete
 ```
 
 ## Troubleshooting
@@ -79,15 +65,7 @@ amplify delete
 
 **"Docker not found"** → Ensure Docker is installed and running
 
-**"Amplify CLI installation failed"** → Ensure npm/Node.js is installed and npm can write to global package directory
-
 **"Insufficient permissions"** → Need admin IAM access
-
-**"Region not bootstrapped"** → First-time Amplify deployment requires CDK bootstrap:
-```bash
-cd amplify
-npm exec -- cdk bootstrap aws://<account-id>/<region>
-```
 
 **UI not loading** → Invalidate CloudFront: `aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"`
 

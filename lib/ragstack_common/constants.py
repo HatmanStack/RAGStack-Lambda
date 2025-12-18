@@ -95,15 +95,6 @@ SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 # =============================================================================
 # Embedding Model Configuration
 # =============================================================================
-
-# Cohere Embed v4 model ID for multimodal embeddings
-COHERE_EMBED_MODEL_ID = "cohere.embed-v4:0"
-
-# Embedding vector dimension
-EMBEDDING_DIMENSION = 1024
-
-# Input type for document indexing
-EMBEDDING_INPUT_TYPE = "search_document"
-
-# Input type for query retrieval
-EMBEDDING_QUERY_TYPE = "search_query"
+# Note: Embedding model is configured in the Knowledge Base (template.yaml).
+# Currently using Nova Multimodal Embeddings with 1024 dimensions.
+# Bedrock KB handles embedding generation - no direct model calls needed.
