@@ -419,32 +419,45 @@ def extract_image_caption_from_content(content_text):
     return None
 
 
-def construct_image_uri_from_content_uri(content_s3_uri):
+def construct_image_uri_from_content_uri(content_s3_uri, content_text=None):
     """
-    Convert content.txt S3 URI to the actual image file URI.
+    Convert caption/content.txt S3 URI to the actual image file URI.
 
-    The content.txt file is stored at: images/{imageId}/content.txt
+    The caption file is stored at: images/{imageId}/caption.txt (or content.txt)
     The actual image is at: images/{imageId}/{filename}.ext
 
-    Since we don't know the filename, we need to query S3 or DynamoDB.
-    For now, we'll return None and let the calling code handle it.
+    We extract the filename from the frontmatter in the caption text.
 
     Args:
-        content_s3_uri (str): S3 URI of the content.txt file
+        content_s3_uri (str): S3 URI of the caption.txt or content.txt file
+        content_text (str): Optional content text to extract filename from frontmatter
 
     Returns:
         str or None: S3 URI of the image file, or None if not determinable
     """
-    if not content_s3_uri or "content.txt" not in content_s3_uri:
+    if not content_s3_uri:
         return None
 
-    # For now, return the base path (without content.txt)
-    # The UI can use this to construct a thumbnail request
-    # In a full implementation, we'd query DynamoDB for the actual filename
+    # Check for caption.txt or content.txt
+    is_caption_file = "caption.txt" in content_s3_uri or "content.txt" in content_s3_uri
+    if not is_caption_file:
+        return None
+
     try:
-        # Replace content.txt with metadata.json and try to get the actual filename
-        # This is a simplified approach - the full implementation would cache this
-        return content_s3_uri.replace("/content.txt", "")  # UI will need to handle this
+        # Try to extract filename from frontmatter in content
+        if content_text:
+            # Look for "filename: xxx" in YAML frontmatter
+            import re
+
+            filename_match = re.search(r"^filename:\s*(.+)$", content_text, re.MULTILINE)
+            if filename_match:
+                filename = filename_match.group(1).strip()
+                # Replace caption.txt or content.txt with the actual filename
+                base_uri = content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
+                return f"{base_uri}/{filename}"
+
+        # Fallback: return base path (folder)
+        return content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
     except Exception:
         return None
 
@@ -491,9 +504,13 @@ def extract_sources(citations):
             logger.info(f"Processing source URI: {uri}")
 
             # Parse S3 URI to construct the original input document URI
-            # Two possible structures:
-            # 1. Single bucket: s3://bucket/output/input/doc-id/filename.pdf/extracted_text.txt
-            # 2. Separate buckets: s3://project-output-suffix/doc-id/filename.pdf/extracted_text.txt
+            # Actual structures in this project:
+            # 1. PDF output: s3://bucket/output/{docId}/{docId}/extracted_text.txt
+            #    Input: s3://bucket/input/{docId}/{filename}.pdf
+            # 2. Scraped output: s3://bucket/output/{docId}/full_text.txt
+            #    Input: s3://bucket/input/{docId}/{docId}.scraped.md
+            # 3. Images: s3://bucket/images/{imageId}/caption.txt
+            #    Actual image: s3://bucket/images/{imageId}/{filename}.ext
             try:
                 uri_path = uri.replace("s3://", "")
                 parts = uri_path.split("/")
@@ -504,24 +521,43 @@ def extract_sources(citations):
                     continue
 
                 bucket = parts[0]
+                document_id = None
+                original_filename = None
+                input_prefix = None
+                is_scraped = False
+                is_image = False
 
-                # Detect structure: single bucket with output/input prefix or separate buckets
-                if len(parts) > 3 and parts[1] == "output" and parts[2] == "input":
-                    # Single bucket structure: bucket/output/input/doc-id/filename/...
-                    # Input path: bucket/input/doc-id/filename
-                    document_id = unquote(parts[3]) if len(parts) > 3 else None
-                    original_filename = unquote(parts[4]) if len(parts) > 4 else None
+                # Detect structure based on path prefix
+                if len(parts) > 2 and parts[1] == "images":
+                    # Image structure: bucket/images/{imageId}/caption.txt
+                    document_id = unquote(parts[2])
+                    input_prefix = "images"
+                    is_image = True
+                    # original_filename will be extracted from frontmatter later
+                    logger.info(f"Image structure detected: imageId={document_id}")
+
+                elif len(parts) > 2 and parts[1] == "output":
+                    # Output structure: bucket/output/{docId}/...
+                    document_id = unquote(parts[2])
                     input_prefix = "input"
-                    logger.info("Single bucket structure detected")
+
+                    # Check if it's scraped content (full_text.txt) or PDF (extracted_text.txt)
+                    last_part = parts[-1] if parts else ""
+                    if last_part == "full_text.txt":
+                        # Scraped: input filename is {docId}.scraped.md
+                        original_filename = f"{document_id}.scraped.md"
+                        is_scraped = True
+                        logger.info(f"Scraped content detected: docId={document_id}")
+                    else:
+                        # PDF or other document - need to look up filename from tracking table
+                        # For now, we'll need to query DynamoDB to get the original filename
+                        logger.info(f"Document output detected: docId={document_id}")
+
                 else:
-                    # Separate bucket structure: bucket-output-suffix/doc-id/filename/...
-                    # Input bucket: bucket-input-suffix/doc-id/filename
-                    document_id = unquote(parts[1])
+                    # Fallback: try to parse as generic structure
+                    document_id = unquote(parts[1]) if len(parts) > 1 else None
                     original_filename = unquote(parts[2]) if len(parts) > 2 else None
-                    input_prefix = None
-                    # Convert output bucket to input bucket
-                    bucket = bucket.replace("-output-", "-input-")
-                    logger.info("Separate bucket structure detected")
+                    logger.info(f"Generic structure detected: docId={document_id}")
 
                 logger.info(f"Parsed: bucket={bucket}, doc={document_id}, file={original_filename}")
 
@@ -530,34 +566,76 @@ def extract_sources(citations):
                     logger.warning(f"Invalid document_id: {document_id}")
                     continue
 
-                # Check if this is scraped content (ends with .scraped.md)
-                is_scraped = original_filename and original_filename.endswith(".scraped.md")
+                # Extract content text early - needed for filename extraction
+                content_text = ref.get("content", {}).get("text", "")
 
-                # Check if this is an image source (from images/ prefix or content.txt)
-                # Images are stored at: images/{imageId}/content.txt
-                is_content_txt_image = (
-                    original_filename and original_filename == "content.txt" and "images" in uri
-                )
-                is_image = (
-                    (len(parts) > 1 and parts[1] == "images")
-                    or (input_prefix and len(parts) > 3 and parts[3] == "images")
-                    or is_content_txt_image
-                )
+                # ============================================================
+                # SOURCE URI RESOLUTION - Comprehensive logging for debugging
+                # ============================================================
+                logger.info(f"[SOURCE] ===== Processing source: {document_id} =====")
+                logger.info(f"[SOURCE] KB citation URI: {uri}")
+                logger.info(f"[SOURCE] is_scraped={is_scraped}, is_image={is_image}")
+                logger.info(f"[SOURCE] Parsed - bucket: {bucket}, input_prefix: {input_prefix}")
+
+                # Look up input_s3_uri, filename, and source_url from tracking table
+                # This gives us the actual source document URI (PDF, image, scraped web page)
+                tracking_input_uri = None
+                tracking_source_url = None
+                tracking_item = None
+                tracking_table_name = os.environ.get("TRACKING_TABLE")
+                logger.info(f"[SOURCE] Tracking table: {tracking_table_name}")
+                if tracking_table_name:
+                    try:
+                        tracking_table = dynamodb.Table(tracking_table_name)
+                        response = tracking_table.get_item(Key={"document_id": document_id})
+                        tracking_item = response.get("Item")
+                        if tracking_item:
+                            tracking_input_uri = tracking_item.get("input_s3_uri")
+                            tracking_source_url = tracking_item.get("source_url")
+                            original_filename = tracking_item.get("filename")
+                            logger.info(
+                                f"[SOURCE] Tracking lookup SUCCESS: "
+                                f"input_s3_uri={tracking_input_uri}, "
+                                f"filename={original_filename}, "
+                                f"source_url={tracking_source_url}, "
+                                f"status={tracking_item.get('status')}, "
+                                f"type={tracking_item.get('type')}"
+                            )
+                        else:
+                            logger.warning(
+                                f"[SOURCE] Tracking lookup EMPTY: "
+                                f"No item found for document_id={document_id}"
+                            )
+                    except Exception as e:
+                        logger.error(f"[SOURCE] Tracking lookup FAILED: {e}", exc_info=True)
+                else:
+                    logger.warning("[SOURCE] TRACKING_TABLE env var not set!")
 
                 # Construct input document URI
-                if original_filename and len(original_filename) > 0:
+                # Prefer input_s3_uri from tracking table (most reliable)
+                if tracking_input_uri:
+                    document_s3_uri = tracking_input_uri
+                    logger.info(f"[SOURCE] Using tracking input_s3_uri: {document_s3_uri}")
+                elif original_filename and len(original_filename) > 0:
                     if input_prefix:
                         document_s3_uri = (
                             f"s3://{bucket}/{input_prefix}/{document_id}/{original_filename}"
                         )
                     else:
                         document_s3_uri = f"s3://{bucket}/{document_id}/{original_filename}"
+                    logger.info(
+                        f"[SOURCE] Constructed URI from filename: {document_s3_uri} "
+                        f"(input_prefix={input_prefix}, filename={original_filename})"
+                    )
                 else:
                     # Fallback if filename missing
-                    logger.warning("No filename found, using original URI")
                     document_s3_uri = uri
+                    logger.warning(
+                        f"[SOURCE] FALLBACK to KB URI (no input_s3_uri or filename): "
+                        f"{document_s3_uri}"
+                    )
 
-                logger.info(f"Constructed input URI: {document_s3_uri}")
+                logger.info(f"[SOURCE] Final document_s3_uri: {document_s3_uri}")
 
                 # Extract page number if available (from metadata or filename)
                 page_num = None
@@ -568,15 +646,20 @@ def extract_sources(citations):
                     except (IndexError, ValueError):
                         logger.debug(f"Could not extract page number from: {page_file}")
 
-                # Extract snippet and source URL (for scraped content)
-                content_text = ref.get("content", {}).get("text", "")
+                # Extract snippet (content_text already extracted above)
                 snippet = content_text[:200] if content_text else ""
 
-                # For scraped content, try to extract source URL from frontmatter
+                # For scraped content, get source URL from tracking table or frontmatter
                 source_url = None
                 if is_scraped:
-                    source_url = extract_source_url_from_content(content_text)
-                    logger.debug(f"Scraped content detected, source_url: {source_url}")
+                    # Prefer source_url from tracking table (more reliable)
+                    if tracking_source_url:
+                        source_url = tracking_source_url
+                        logger.info(f"[SOURCE] Using source_url from tracking: {source_url}")
+                    else:
+                        # Fallback: try to extract from content frontmatter
+                        source_url = extract_source_url_from_content(content_text)
+                        logger.info(f"[SOURCE] Extracted source_url from content: {source_url}")
 
                 # For image content, extract caption from frontmatter
                 image_caption = None
@@ -592,6 +675,7 @@ def extract_sources(citations):
                     allow_document_access = config_manager.get_parameter(
                         "chat_allow_document_access", default=False
                     )
+                    logger.info(f"[SOURCE] Document access allowed: {allow_document_access}")
 
                     # Generate presigned URL if access is enabled
                     document_url = None
@@ -608,24 +692,38 @@ def extract_sources(citations):
                             key = s3_match[1]
                             # Validate key looks reasonable (has document ID and filename)
                             if "/" in key and len(key) > 10:
-                                logger.info(f"Generating presigned URL: bucket={bucket}, key={key}")
+                                logger.info(
+                                    f"[SOURCE] Generating presigned URL: bucket={bucket}, key={key}"
+                                )
                                 document_url = generate_presigned_url(bucket, key)
+                                if document_url:
+                                    logger.info(
+                                        f"[SOURCE] Presigned URL generated: {document_url[:80]}..."
+                                    )
+                                else:
+                                    logger.warning("[SOURCE] Presigned URL returned None")
                             else:
-                                logger.warning(f"Skipping malformed key: {key}")
+                                logger.warning(f"[SOURCE] Skipping malformed key: {key}")
                         else:
-                            logger.warning(f"Could not parse S3 URI: {document_s3_uri}")
+                            logger.warning(f"[SOURCE] Could not parse S3 URI: {document_s3_uri}")
+                    else:
+                        logger.info(
+                            f"[SOURCE] Skipping presigned URL: access={allow_document_access}, "
+                            f"uri={document_s3_uri[:50] if document_s3_uri else 'None'}..."
+                        )
 
-                    # For images, generate thumbnail URL from the original image
+                    # For images, use the same presigned URL as document_url
+                    # (document_s3_uri now points to actual image, not caption.txt)
                     thumbnail_url = None
-                    if is_image and allow_document_access:
-                        # Image S3 URI: images/{imageId}/{filename}.png
-                        # We need to find the actual image file (not content.txt)
-                        image_s3_uri = construct_image_uri_from_content_uri(document_s3_uri)
-                        if image_s3_uri:
-                            s3_path = image_s3_uri.replace("s3://", "")
-                            s3_parts = s3_path.split("/", 1)
-                            if len(s3_parts) == 2:
-                                thumbnail_url = generate_presigned_url(s3_parts[0], s3_parts[1])
+                    if is_image and allow_document_access and document_url:
+                        thumbnail_url = document_url
+                        logger.info("[SOURCE] Image thumbnail URL set from document_url")
+
+                    # For scraped content, use the original web URL as documentUrl
+                    # so users can click through to the source website
+                    if is_scraped and source_url:
+                        document_url = source_url
+                        logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
                     source_obj = {
                         "documentId": document_id,
@@ -641,7 +739,18 @@ def extract_sources(citations):
                         "thumbnailUrl": thumbnail_url,
                         "caption": image_caption,
                     }
-                    logger.debug(f"Added source: {source_key}")
+                    # Log the complete source object for debugging
+                    doc_url_preview = (
+                        document_url[:60] + "..."
+                        if document_url and len(document_url) > 60
+                        else document_url
+                    )
+                    logger.info(f"[SOURCE] FINAL: docId={document_id}, s3Uri={document_s3_uri}")
+                    logger.info(
+                        f"[SOURCE] FINAL: documentUrl={doc_url_preview}, "
+                        f"isScraped={is_scraped}, isImage={is_image}"
+                    )
+                    logger.info(f"[SOURCE] ===== End source {document_id} =====")
                     sources.append(source_obj)
                     seen.add(source_key)
                 else:

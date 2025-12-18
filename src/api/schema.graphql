@@ -167,6 +167,7 @@ type Document {
 
 # Document status enum
 enum DocumentStatus {
+  PENDING
   UPLOADED
   PROCESSING
   OCR_COMPLETE
@@ -294,6 +295,7 @@ type ImageConnection {
 type ImageUploadUrl {
   uploadUrl: String!
   imageId: ID!
+  s3Uri: String!
   fields: AWSJSON
 }
 
@@ -405,6 +407,7 @@ type ScrapePage {
   title: String
   status: String!
   documentId: ID
+  contentUrl: String
   error: String
   depth: Int!
 }

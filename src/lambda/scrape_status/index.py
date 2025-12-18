@@ -39,6 +39,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from ragstack_common.appsync import publish_scrape_update
 from ragstack_common.scraper import ScrapeStatus
 
 logger = logging.getLogger()
@@ -158,6 +159,11 @@ def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queu
             and total_urls > 0
         )
 
+        # Get GraphQL endpoint for publishing updates
+        graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+        base_url = job_item.get("base_url", "")
+        title = job_item.get("title") or base_url
+
         # Update job status if complete
         if is_complete and status in [
             ScrapeStatus.DISCOVERING.value,
@@ -179,6 +185,18 @@ def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queu
                 },
             )
             status = new_status
+
+            # Publish completion update to subscribers
+            publish_scrape_update(
+                graphql_endpoint=graphql_endpoint,
+                job_id=job_id,
+                base_url=base_url,
+                title=title,
+                status=status,
+                total_urls=total_urls,
+                processed_count=processed_count,
+                failed_count=failed_count,
+            )
 
         result = {
             "job_id": job_id,
@@ -354,6 +372,19 @@ def _cancel_job(jobs_tbl, job_id: str) -> dict:
             ":status": ScrapeStatus.CANCELLED.value,
             ":ts": datetime.now(UTC).isoformat(),
         },
+    )
+
+    # Publish cancellation update to subscribers
+    graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+    publish_scrape_update(
+        graphql_endpoint=graphql_endpoint,
+        job_id=job_id,
+        base_url=job.get("base_url", ""),
+        title=job.get("title") or job.get("base_url", ""),
+        status=ScrapeStatus.CANCELLED.value,
+        total_urls=int(job.get("total_urls", 0)),
+        processed_count=int(job.get("processed_count", 0)),
+        failed_count=int(job.get("failed_count", 0)),
     )
 
     return _response(

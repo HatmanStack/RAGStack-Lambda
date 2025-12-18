@@ -249,6 +249,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
         </Header>
       }
       columnDefinitions={columnDefinitions}
+      visibleColumns={preferences.visibleContent}
       items={items}
       loading={loading}
       loadingText="Loading items"

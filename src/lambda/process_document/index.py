@@ -79,6 +79,14 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     response = s3.get_object(Bucket=input_bucket, Key=input_key)
     content = response["Body"].read().decode("utf-8")
 
+    # Extract metadata from S3 object (set by scrape_process Lambda)
+    metadata = response.get("Metadata", {})
+    title = metadata.get("title", "")
+    source_url = metadata.get("source_url", "")
+    # Use title as filename, fall back to source URL or document ID
+    filename = title or source_url or f"{document_id}.scraped.md"
+    logger.info(f"Extracted metadata - title: {title}, source_url: {source_url}")
+
     # Parse output prefix to get bucket and key prefix
     output_bucket, output_prefix = _parse_s3_uri(output_s3_prefix)
 
@@ -94,17 +102,47 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     output_s3_uri = f"s3://{output_bucket}/{output_key}"
     logger.info(f"Copied scraped markdown to: {output_s3_uri}")
 
-    # Update tracking table
-    update_item(
-        tracking_table,
-        {"document_id": document_id},
-        {
-            "status": Status.OCR_COMPLETE.value,
-            "total_pages": 1,
-            "is_text_native": True,
-            "output_s3_uri": output_s3_uri,
-            "ocr_backend": "passthrough",
-            "updated_at": datetime.now(UTC).isoformat(),
+    # Update tracking table with full document info
+    # For scraped documents, the tracking record may not exist yet
+    # so we include all required fields (created_at, filename, input_s3_uri)
+    now = datetime.now(UTC).isoformat()
+    dynamodb = boto3.resource("dynamodb")
+    table = dynamodb.Table(tracking_table)
+
+    # Use DynamoDB update with if_not_exists for fields that should only be set once
+    # Include source_url for scraped content so query_kb can return the original web URL
+    logger.info(
+        f"[TRACKING] Updating scraped doc={document_id}: "
+        f"source_url={source_url}, filename={filename}"
+    )
+    table.update_item(
+        Key={"document_id": document_id},
+        UpdateExpression=(
+            "SET #status = :status, "
+            "#type = if_not_exists(#type, :type), "
+            "total_pages = :total_pages, "
+            "is_text_native = :is_text_native, "
+            "output_s3_uri = :output_s3_uri, "
+            "ocr_backend = :ocr_backend, "
+            "updated_at = :updated_at, "
+            "created_at = if_not_exists(created_at, :created_at), "
+            "filename = if_not_exists(filename, :filename), "
+            "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
+            "source_url = if_not_exists(source_url, :source_url)"
+        ),
+        ExpressionAttributeNames={"#status": "status", "#type": "type"},
+        ExpressionAttributeValues={
+            ":status": Status.OCR_COMPLETE.value,
+            ":type": "scraped",
+            ":total_pages": 1,
+            ":is_text_native": True,
+            ":output_s3_uri": output_s3_uri,
+            ":ocr_backend": "passthrough",
+            ":updated_at": now,
+            ":created_at": now,
+            ":filename": filename,
+            ":input_s3_uri": input_s3_uri,
+            ":source_url": source_url,
         },
     )
 
@@ -219,17 +257,37 @@ def lambda_handler(event, context):
             raise Exception(processed_document.error_message or "OCR processing failed")
 
         # Update DynamoDB with results
-        update_item(
-            tracking_table,
-            {"document_id": document_id},
-            {
-                "status": Status.OCR_COMPLETE.value,
-                "total_pages": processed_document.total_pages,
-                "is_text_native": processed_document.is_text_native or False,
-                "output_s3_uri": processed_document.output_s3_uri,
-                "updated_at": datetime.now(UTC).isoformat(),
+        # Include input_s3_uri and filename to ensure they're set for source delivery
+        logger.info(
+            f"[TRACKING] Updating tracking table for doc={document_id}: "
+            f"input_s3_uri={input_s3_uri}, filename={filename}, "
+            f"output_s3_uri={processed_document.output_s3_uri}"
+        )
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.Table(tracking_table)
+        table.update_item(
+            Key={"document_id": document_id},
+            UpdateExpression=(
+                "SET #status = :status, "
+                "total_pages = :total_pages, "
+                "is_text_native = :is_text_native, "
+                "output_s3_uri = :output_s3_uri, "
+                "updated_at = :updated_at, "
+                "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
+                "filename = if_not_exists(filename, :filename)"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":status": Status.OCR_COMPLETE.value,
+                ":total_pages": processed_document.total_pages,
+                ":is_text_native": processed_document.is_text_native or False,
+                ":output_s3_uri": processed_document.output_s3_uri,
+                ":updated_at": datetime.now(UTC).isoformat(),
+                ":input_s3_uri": input_s3_uri,
+                ":filename": filename,
             },
         )
+        logger.info(f"[TRACKING] Successfully updated tracking table for doc={document_id}")
 
         # Publish real-time update
         publish_document_update(

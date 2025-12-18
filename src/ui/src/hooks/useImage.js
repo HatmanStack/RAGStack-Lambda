@@ -50,13 +50,14 @@ export const useImage = () => {
 
     try {
       // Get presigned URL
-      const { imageId } = await createUploadUrl(file.name);
+      const { imageId, s3Uri } = await createUploadUrl(file.name);
 
       // Track this upload in state
       const uploadId = crypto.randomUUID();
       setImages(prev => [...prev, {
         id: uploadId,
         imageId,
+        s3Uri,
         file,
         filename: file.name,
         status: 'uploading',
@@ -90,7 +91,7 @@ export const useImage = () => {
           : img
       ));
 
-      return { imageId, filename: file.name };
+      return { imageId, s3Uri, filename: file.name };
 
     } catch (err) {
       console.error('Upload failed:', err);

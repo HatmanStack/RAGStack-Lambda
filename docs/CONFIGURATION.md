@@ -1,118 +1,76 @@
-# Configuration Guide
+# Configuration
 
-## User-Configurable Settings
+All settings are stored in DynamoDB and apply immediately without redeployment.
 
-### Document Processing
-- `ocr_backend` - "textract" or "bedrock"
-- `bedrock_ocr_model_id` - Claude model for OCR
-- `chat_model_id` - Claude model for queries
+## Settings UI
 
-### Chat Configuration
-- `chat_require_auth` - Enable/disable authentication (boolean)
-- `chat_primary_model` - Primary chat model ARN
-- `chat_fallback_model` - Fallback chat model ARN
-- `chat_global_quota_daily` - Daily query limit (all users)
-- `chat_per_user_quota_daily` - Daily query limit (per user)
-- `chat_allow_document_access` - Enable/disable source document downloads (boolean)
+**Dashboard → Settings** - Change any setting, click Save.
 
-**Hardcoded** (managed by Bedrock KB API):
-- Text embeddings: `amazon.titan-embed-text-v2:0`
-- Image embeddings: `amazon.titan-embed-image-v1`
+## Document Processing
 
-## Change Settings
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `ocr_backend` | textract, bedrock | textract | Textract is faster and cheaper |
+| `bedrock_ocr_model_id` | Claude model ID | haiku | Only used when ocr_backend=bedrock |
 
-**Via UI (easiest):**
-1. WebUI → Settings
-2. Change OCR backend or model
-3. Save (applies immediately)
+## Chat Settings
 
-**Via CLI:**
-```bash
-aws dynamodb put-item \
-  --table-name RAGStack-<project>-Configuration \
-  --item '{
-    "Configuration": {"S": "Custom"},
-    "ocr_backend": {"S": "bedrock"},
-    "chat_model_id": {"S": "anthropic.claude-3-5-sonnet-20241022"}
-  }'
-```
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `chat_primary_model` | Model ARN | claude-haiku | Model for chat responses |
+| `chat_fallback_model` | Model ARN | nova-micro | Used when quota exceeded |
+| `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |
+| `chat_per_user_quota_daily` | number | 100 | Queries/day per authenticated user |
+| `chat_allow_document_access` | boolean | false | Show "View Document" links in sources |
 
-## Configuration Parameters
+## Quota System
 
-| Parameter | Values | Default | Cost Impact |
-|-----------|--------|---------|------------|
-| `ocr_backend` | textract, bedrock | textract | Textract cheaper (~50%) |
-| `bedrock_ocr_model_id` | Claude models | haiku | Haiku cheapest |
-| `chat_model_id` | Claude models | haiku | Haiku cheapest |
-
-## Cost Optimization
-
-**OCR (biggest cost):**
-- Textract: $1.50 per 1000 pages (default)
-- Bedrock: $0.75 per 1000 pages
-- Text-native PDFs: Free (no OCR)
-
-**Models:**
-- Haiku: ~$0.80 per 1M tokens
-- Opus: ~$15 per 1M tokens (20x more expensive)
-
-**Monthly estimate** (1000 docs, 5 pages each):
-- Textract + Haiku: ~$7-10
-- Bedrock + Haiku: ~$25-30
-
-## Document Access Configuration
-
-### `chat_allow_document_access`
-
-Controls whether users can download original source documents from chat responses.
-
-**Type:** Boolean
-**Default:** `false` (disabled)
-**Purpose:** Enable/disable "View Document" links in chat source citations
+Quotas prevent runaway costs. When exceeded, chat switches to the fallback model (cheaper, less capable).
 
 **How it works:**
-1. When enabled, chat responses include presigned S3 URLs for original documents
-2. URLs expire after 1 hour (security feature)
-3. Only read-only access (GetObject), no modification or deletion
-4. Users can download PDFs, images, and other source files
+1. Each query checks global + per-user quota atomically
+2. If under limit → use primary model, increment counter
+3. If over limit → use fallback model (still works, just different model)
+4. Counters reset at midnight UTC
+5. Unauthenticated users share the global quota only
 
-**Enable via Admin UI:**
-1. Navigate to Configuration page
-2. Toggle "Allow Document Access" switch
-3. Changes apply immediately (60-second cache delay)
+**Atomic enforcement:** Uses DynamoDB transactions to prevent race conditions under high concurrency.
 
-**Enable via CLI:**
+## Document Access
+
+When `chat_allow_document_access` is enabled:
+- Chat sources include "View Document" links
+- Links are presigned S3 URLs (1-hour expiry)
+- Read-only access to original files
+
+**Enable for:** Internal KB, public docs
+**Disable for:** Sensitive documents, compliance requirements
+
+## CLI Configuration
+
 ```bash
+# View current config
+aws dynamodb get-item \
+  --table-name RAGStack-<project>-config-<suffix> \
+  --key '{"Configuration": {"S": "Custom"}}'
+
+# Update setting
 aws dynamodb update-item \
-  --table-name {ProjectName}-config-{Suffix} \
-  --key '{"Configuration": {"S": "Default"}}' \
-  --update-expression "SET chat_allow_document_access = :val" \
-  --expression-attribute-values '{":val": {"BOOL": true}}'
+  --table-name RAGStack-<project>-config-<suffix> \
+  --key '{"Configuration": {"S": "Custom"}}' \
+  --update-expression "SET chat_per_user_quota_daily = :val" \
+  --expression-attribute-values '{":val": {"N": "200"}}'
 ```
 
-**Security Implications:**
-- URLs are time-limited (1 hour expiry)
-- URLs are revocable by disabling the setting
-- No bucket listing or write access
-- Presigned URLs contain AWS credentials in query params (do not log)
+## Cost Impact
 
-**When to enable:**
-- Internal knowledge base (trusted users)
-- Public documentation (already public sources)
+| Choice | Monthly Cost (1000 docs) |
+|--------|-------------------------|
+| Textract + Haiku | $7-10 |
+| Bedrock OCR + Haiku | $25-30 |
+| Sonnet instead of Haiku | +$5-15 |
 
-**When to disable:**
-- Sensitive/confidential documents
-- Compliance requirements prohibit downloads
-- Citation snippets are sufficient
-
-## FAQ
-
-**Q: Why can't I change embedding models?**
-- Managed by Bedrock Knowledge Base API automatically
-- Changing requires re-creating KB (not recommended)
-
-**Q: Do config changes require redeployment?**
-- No. Changes apply immediately
-
-**Q: Can I have different configs per environment?**
-- Yes. Deploy separate stacks with different project names
+**Tips:**
+- Text-native PDFs skip OCR entirely (free)
+- Haiku is 20x cheaper than Opus
+- Set conservative quotas, increase as needed

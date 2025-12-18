@@ -13,7 +13,6 @@ Quick reference for common issues and solutions.
 | `sam build` fails | Python version mismatch | Check: `python3.13 --version`. Install Python 3.13+ if needed. |
 | Docker connection error | Docker not running | Start Docker: macOS (open Docker Desktop), Linux (`sudo systemctl start docker`) |
 | SAM build timeout | Network or resource issue | `sam build --use-container` |
-| Amplify deployment fails: "region not bootstrapped" | CDK not bootstrapped for region | Bootstrap CDK: `cd amplify && npm exec -- cdk bootstrap aws://<account-id>/<region>` (one-time per region) |
 
 ## Document Processing Issues
 
@@ -28,7 +27,7 @@ Quick reference for common issues and solutions.
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Chat returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. Chat requires --deploy-chat flag. |
+| Chat returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. |
 | Chat results irrelevant | Query too vague | Try rephrasing query (be more specific). Ensure documents are fully processed. |
 | "Knowledge Base not found" error | KB ID incorrect or missing | Check SAM outputs for Knowledge Base ID. Set in environment variables. Verify KB in Bedrock console. |
 
@@ -60,14 +59,14 @@ Quick reference for common issues and solutions.
 | Slow embeddings generation | Rate limiting or large batch | Reduce batch size. Add delay between batches. Check Bedrock quota in Service Quotas. |
 | DynamoDB throttling | High write rate | Change to on-demand billing mode. Increase provisioned capacity. |
 
-## Amplify Chat Performance
+## Chat Performance
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| First chat response slow (500ms-2s) | Lambda cold start | **Expected behavior** for serverless. Subsequent requests ~200-500ms. Keep Lambda warm with scheduled pings if critical. |
-| Quota limits not enforced immediately | Race condition on high concurrency | Atomic quota checking prevents most races. Some overflow (<1%) possible under extreme load. Increase quotas or rate limit API Gateway. |
-| Chat responses timeout | Bedrock query taking too long | Check Knowledge Base has indexed documents. Verify network connectivity to Bedrock. Increase Lambda timeout if needed. |
-| Config changes not applied | Config cached for 60 seconds | **Expected behavior**. Wait 60 seconds for cache to expire. Restart Lambda to force refresh: redeploy or trigger cold start. |
+| First chat response slow (500ms-2s) | Lambda cold start | **Expected behavior** for serverless. Subsequent requests ~200-500ms. |
+| Quota limits not enforced immediately | Race condition on high concurrency | Atomic quota checking prevents most races. Some overflow (<1%) possible under extreme load. |
+| Chat responses timeout | Bedrock query taking too long | Check Knowledge Base has indexed documents. Verify network connectivity to Bedrock. |
+| Config changes not applied | Config cached | Wait for cache refresh or redeploy to force. |
 
 ## Runtime Configuration Issues
 
@@ -136,8 +135,7 @@ aws bedrock-agent list-data-sources --knowledge-base-id <KB-ID>
 1. **Check logs first** - Most issues visible in CloudWatch
 2. **Search this guide** - Use Ctrl+F to search by error message
 3. **Review ARCHITECTURE.md** - Understand system design
-4. **Check DEPLOYMENT.md** - Verify deployment was correct
-5. **Open GitHub issue** - Include logs, AWS region, error message
+4. **Open GitHub issue** - Include logs, AWS region, error message
 
 Common resources:
 - AWS CloudWatch Logs

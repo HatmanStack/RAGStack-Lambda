@@ -57,15 +57,16 @@ npm run lint                # Lint both backend and frontend
 ### Deployment
 
 ```bash
-# Full deployment
+# Full deployment (defaults to us-east-1 for Nova Multimodal Embeddings)
 python publish.py \
   --project-name my-docs \
-  --admin-email admin@example.com \
-  --region us-east-1
+  --admin-email admin@example.com
 
 # Skip UI deployment (backend only)
-python publish.py --project-name my-docs --admin-email admin@example.com --region us-east-1 --skip-ui
+python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui
 ```
+
+> **Region Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available elsewhere, use `--region <region>`.
 
 ### Development
 
@@ -122,7 +123,7 @@ cd src/ui && npm run dev
 
 - **lib/ragstack_common/:** Shared library used by all Lambdas (OCR, embeddings, config, storage)
 - **ProcessDocument Lambda:** Extracts text from documents using Textract or Bedrock vision models
-- **IngestToKB Lambda:** Creates embeddings (Titan) and syncs to Bedrock Knowledge Base
+- **IngestToKB Lambda:** Creates embeddings (Nova Multimodal) and syncs to Bedrock Knowledge Base
 - **QueryKB Lambda:** Retrieves relevant documents from KB with source attribution, handles chat with quota management
 - **Step Functions:** Orchestrates document processing workflow
 - **AppSync:** GraphQL API for UI and chat (queries, mutations, subscriptions)
@@ -174,7 +175,7 @@ The `publish.py` script orchestrates:
 **Parameters:**
 - `--project-name`: Unique project identifier (used in resource names)
 - `--admin-email`: Admin user email (Cognito, CloudWatch alerts)
-- `--region`: AWS region
+- `--region`: AWS region (default: us-east-1, required for Nova Multimodal Embeddings)
 - `--skip-ui`: Deploy backend only, skip React UI
 
 ## Important Notes

@@ -70,15 +70,10 @@ def lambda_handler(event, context):
             )
 
         elif request_type == "Update":
-            # For simplicity, updates not supported - would require recreation
+            # Return existing KB attributes so GetAtt works
             kb_id = event.get("PhysicalResourceId", "KnowledgeBase")
-            send_response(
-                event,
-                context,
-                "SUCCESS",
-                {"Message": "Update not implemented"},
-                physical_resource_id=kb_id,
-            )
+            result = get_knowledge_base_attributes(kb_id)
+            send_response(event, context, "SUCCESS", result, physical_resource_id=kb_id)
 
         elif request_type == "Delete":
             kb_id = event.get("PhysicalResourceId", "KnowledgeBase")
@@ -89,6 +84,38 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error(f"Failed: {e}", exc_info=True)
         send_response(event, context, "FAILED", reason=str(e))
+
+
+def get_knowledge_base_attributes(kb_id):
+    """Fetch existing Knowledge Base attributes for Update requests."""
+    logger.info(f"Fetching attributes for Knowledge Base: {kb_id}")
+
+    try:
+        kb_response = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
+        kb = kb_response["knowledgeBase"]
+        kb_arn = kb["knowledgeBaseArn"]
+
+        # Get data source ID
+        ds_response = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+        data_source_id = ""
+        if ds_response.get("dataSourceSummaries"):
+            data_source_id = ds_response["dataSourceSummaries"][0]["dataSourceId"]
+
+        # Get index ARN from storage config
+        index_arn = ""
+        storage_config = kb.get("storageConfiguration", {})
+        if storage_config.get("type") == "S3_VECTORS":
+            index_arn = storage_config.get("s3VectorsConfiguration", {}).get("indexArn", "")
+
+        return {
+            "KnowledgeBaseId": kb_id,
+            "KnowledgeBaseArn": kb_arn,
+            "DataSourceId": data_source_id,
+            "IndexArn": index_arn,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get KB attributes: {e}")
+        raise
 
 
 def create_knowledge_base(properties):
@@ -136,8 +163,8 @@ def create_knowledge_base(properties):
         s3vectors_client.create_index(
             vectorBucketName=vector_bucket,
             indexName=index_name,
-            dataType="float32",  # Cohere Embed v4 outputs float32
-            dimension=1024,  # Cohere Embed v4 outputs 1024 dimensions
+            dataType="float32",
+            dimension=1024,  # Nova Multimodal Embeddings outputs 1024 dimensions
             distanceMetric="cosine",
             metadataConfiguration={
                 "nonFilterableMetadataKeys": [
@@ -158,6 +185,12 @@ def create_knowledge_base(properties):
     logger.info(f"Using S3 vector index ARN: {index_arn}")
 
     # Step 4: Create Knowledge Base with unique suffix
+    # Nova Multimodal Embeddings requires supplementalDataStorageConfiguration
+    # Note: The S3 URI must be bucket root only - no subfolders allowed
+    data_bucket = properties.get("DataBucket")
+    multimodal_storage_uri = f"s3://{data_bucket}"
+    logger.info(f"Using multimodal storage: {multimodal_storage_uri}")
+
     logger.info(f"Creating Knowledge Base: {kb_name}")
     try:
         kb_response = bedrock_agent.create_knowledge_base(
@@ -170,11 +203,20 @@ def create_knowledge_base(properties):
                 "vectorKnowledgeBaseConfiguration": {
                     "embeddingModelConfiguration": {
                         "bedrockEmbeddingModelConfiguration": {
-                            "dimensions": 1024,
+                            "dimensions": 1024,  # Nova Multimodal Embeddings
                             "embeddingDataType": "FLOAT32",
                         }
                     },
                     "embeddingModelArn": embed_model_arn,
+                    # Required for Nova Multimodal Embeddings
+                    "supplementalDataStorageConfiguration": {
+                        "storageLocations": [
+                            {
+                                "type": "S3",
+                                "s3Location": {"uri": multimodal_storage_uri},
+                            }
+                        ]
+                    },
                 },
             },
             storageConfiguration={

@@ -23,6 +23,7 @@ export const getScrapeJob = /* GraphQL */ `
         title
         status
         documentId
+        contentUrl
         error
         depth
       }

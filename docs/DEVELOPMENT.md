@@ -58,44 +58,45 @@ RAGStack-Lambda/
 │   ├── bedrock.py              # Bedrock API utilities
 │   ├── storage.py              # S3 operations
 │   ├── image.py                # Image processing
-│   ├── setup.py                # Package configuration
-│   └── test_*.py               # Unit tests
+│   └── appsync.py              # AppSync subscription publishing
 │
 ├── src/
 │   ├── lambda/                 # Lambda function handlers
-│   │   ├── process_document/
-│   │   ├── generate_embeddings/
-│   │   ├── query_kb/
-│   │   ├── appsync_resolvers/
+│   │   ├── process_document/   # OCR extraction
+│   │   ├── ingest_to_kb/       # Bedrock KB ingestion
+│   │   ├── query_kb/           # Chat queries with sources
+│   │   ├── process_image/      # Image ingestion
+│   │   ├── appsync_resolvers/  # GraphQL resolvers
 │   │   ├── configuration_resolver/
-│   │   ├── ingest_to_kb/
-│   │   ├── kb_custom_resource/
-│   │   └── start_codebuild/
+│   │   ├── kb_custom_resource/ # KB provisioning
+│   │   ├── start_codebuild/    # Web component build trigger
+│   │   ├── scrape_start/       # Web scraping initiation
+│   │   ├── scrape_discover/    # URL discovery
+│   │   ├── scrape_process/     # Content extraction
+│   │   ├── scrape_status/      # Scrape job status
+│   │   └── zip_processor/      # ZIP file handling
 │   ├── statemachine/           # Step Functions workflow
 │   │   └── pipeline.asl.json
 │   ├── api/                    # GraphQL schema
 │   │   └── schema.graphql
-│   ├── ui/                     # React web UI
+│   ├── ui/                     # React web UI (Cloudscape)
 │   │   ├── src/
 │   │   ├── package.json
 │   │   └── vite.config.ts
-│   └── amplify-chat/           # AI chat component (React + Web Component)
+│   └── ragstack-chat/          # AI chat web component
 │       ├── src/
 │       ├── package.json
-│       ├── vite.wc.config.ts   # Web component build
-│       └── README.md
+│       └── vite.wc.config.ts
 │
 ├── tests/                      # Test files
-│   ├── unit/                   # Unit tests
+│   ├── unit/python/            # Python unit tests
 │   ├── integration/            # Integration tests (requires AWS)
-│   ├── conftest.py             # pytest configuration
 │   └── events/                 # Sample Lambda events
 │
-├── template.yaml               # CloudFormation/SAM template
-├── samconfig.toml              # SAM build configuration
-├── pyproject.toml              # Python linting config
+├── template.yaml               # SAM template
+├── pyproject.toml              # Python linting (ruff)
 ├── pytest.ini                  # pytest configuration
-├── publish.py                  # Deployment automation
+├── publish.py                  # Deployment script
 └── docs/                       # Documentation
 ```
 
@@ -452,8 +453,43 @@ MyFunction:
         SPECIFIC_VAR: value
 ```
 
+## React UI Development
+
+### Local Dev Server
+
+```bash
+cd src/ui
+npm install
+npm run dev  # http://localhost:5173
+```
+
+### Environment Variables (.env.local)
+
+```bash
+VITE_AWS_REGION=us-east-1
+VITE_USER_POOL_ID=us-east-1_xxxxx
+VITE_USER_POOL_CLIENT_ID=xxxxx
+VITE_IDENTITY_POOL_ID=us-east-1:xxxxx
+VITE_GRAPHQL_URL=https://xxxxx.appsync-api.us-east-1.amazonaws.com/graphql
+VITE_DATA_BUCKET=ragstack-xxxxx-data-xxxxx
+```
+
+Get values: `aws cloudformation describe-stacks --stack-name RAGStack-<name> --query 'Stacks[0].Outputs'`
+
+### Stack
+
+React 19 + Vite + Cloudscape Design System + AWS Amplify v6
+
+### GraphQL Queries
+
+```javascript
+import { generateClient } from 'aws-amplify/api';
+const client = generateClient();
+const { data } = await client.graphql({ query: MY_QUERY });
+```
+
 ## Related Documentation
 
-- [Architecture](ARCHITECTURE.md) - System design and components
-- [Configuration](CONFIGURATION.md) - Runtime configuration options
-- [Deployment](DEPLOYMENT.md) - How to deploy to AWS
+- [Architecture](ARCHITECTURE.md) - System design
+- [Configuration](CONFIGURATION.md) - Runtime config
+- [Troubleshooting](TROUBLESHOOTING.md) - Common issues

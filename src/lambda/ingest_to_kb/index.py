@@ -65,7 +65,7 @@ def lambda_handler(event, context):
         # Call Bedrock Agent to ingest the document
         # Bedrock will:
         # 1. Read the text from S3
-        # 2. Generate embeddings using Titan models
+        # 2. Generate embeddings using KB's configured model (Nova Multimodal)
         # 3. Write vectors to S3 Vectors index
         # 4. Make the document queryable
         response = bedrock_agent.ingest_knowledge_base_documents(

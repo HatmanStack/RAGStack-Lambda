@@ -5,6 +5,7 @@ export const createImageUploadUrl = gql`
     createImageUploadUrl(filename: $filename) {
       uploadUrl
       imageId
+      s3Uri
       fields
     }
   }

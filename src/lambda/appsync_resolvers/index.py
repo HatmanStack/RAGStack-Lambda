@@ -53,8 +53,8 @@ SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 # Configuration table (optional, for caption generation)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
-# Initialize Bedrock runtime client for caption generation
-bedrock_runtime = boto3.client("bedrock-runtime")
+# Initialize Bedrock runtime client for caption generation (use Lambda's region)
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
 
 # Validation constants
 MAX_FILENAME_LENGTH = 255
@@ -154,7 +154,23 @@ def list_documents(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        scan_kwargs = {"Limit": limit}
+        # Filter out images and scraped pages - they're listed via listImages and listScrapeJobs
+        # Check both type field and input_s3_uri path for robustness
+        scan_kwargs = {
+            "Limit": limit,
+            "FilterExpression": (
+                "(attribute_not_exists(#type) OR "
+                "(#type <> :image_type AND #type <> :scraped_type)) "
+                "AND (attribute_not_exists(input_s3_uri) OR "
+                "NOT contains(input_s3_uri, :images_prefix))"
+            ),
+            "ExpressionAttributeNames": {"#type": "type"},
+            "ExpressionAttributeValues": {
+                ":image_type": "image",
+                ":scraped_type": "scraped",
+                ":images_prefix": "/images/",
+            },
+        }
 
         if next_token:
             try:
@@ -429,7 +445,27 @@ def get_scrape_job(args):
                 ExpressionAttributeValues={":jid": job_id},
                 Limit=100,
             )
-            pages = [format_scrape_page(p) for p in urls_response.get("Items", [])]
+            page_items = urls_response.get("Items", [])
+
+            # Generate content URLs directly from document_id
+            # Scraped content is stored at: input/{doc_id}/{doc_id}.scraped.md
+            def get_content_url(doc_id):
+                if not doc_id:
+                    return None
+                try:
+                    s3_key = f"input/{doc_id}/{doc_id}.scraped.md"
+                    return s3.generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": DATA_BUCKET, "Key": s3_key},
+                        ExpiresIn=3600,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to generate content URL for {doc_id}: {e}")
+                    return None
+
+            pages = [
+                format_scrape_page(p, get_content_url(p.get("document_id"))) for p in page_items
+            ]
 
         return {
             "job": format_scrape_job(item),
@@ -689,13 +725,14 @@ def format_scrape_job(item):
     }
 
 
-def format_scrape_page(item):
+def format_scrape_page(item, content_url=None):
     """Format DynamoDB item as GraphQL ScrapePage type."""
     return {
         "url": item["url"],
         "title": item.get("title"),
         "status": item.get("status", "pending").upper(),
         "documentId": item.get("document_id"),
+        "contentUrl": content_url,
         "error": item.get("error"),
         "depth": int(item.get("depth", 0)),
     }
@@ -766,10 +803,12 @@ def create_image_upload_url(args):
             }
         )
 
+        s3_uri = f"s3://{DATA_BUCKET}/{s3_key}"
         logger.info(f"Image upload URL created successfully for image: {image_id}")
         return {
             "uploadUrl": presigned["url"],
             "imageId": image_id,
+            "s3Uri": s3_uri,
             "fields": json.dumps(presigned["fields"]),
         }
 
@@ -836,13 +875,13 @@ def generate_caption(args):
             try:
                 config_manager = ConfigurationManager(CONFIGURATION_TABLE_NAME)
                 chat_model_id = config_manager.get_parameter(
-                    "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                    "chat_primary_model", default="anthropic.claude-haiku-4-5-20251001-v1:0"
                 )
             except Exception as e:
                 logger.warning(f"Failed to get config, using default model: {e}")
-                chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                chat_model_id = "anthropic.claude-haiku-4-5-20251001-v1:0"
         else:
-            chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+            chat_model_id = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
         logger.info(f"Using model for caption: {chat_model_id}")
 
@@ -1175,12 +1214,12 @@ def list_images(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Scan with filter for type="image"
+        # Scan with filter for type="image" OR input_s3_uri contains /images/
         scan_kwargs = {
             "Limit": limit,
-            "FilterExpression": "#type = :image_type",
+            "FilterExpression": "#type = :image_type OR contains(input_s3_uri, :images_prefix)",
             "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image"},
+            "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
         }
 
         if next_token:

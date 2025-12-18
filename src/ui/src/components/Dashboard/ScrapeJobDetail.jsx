@@ -67,10 +67,21 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
   const pageColumns = [
     {
       id: 'url',
-      header: 'URL',
+      header: 'Original Page',
       cell: item => (
         <Link href={item.url} external>{item.title || item.url}</Link>
-      )
+      ),
+      width: 300
+    },
+    {
+      id: 'content',
+      header: 'Parsed Content',
+      cell: item => item.contentUrl ? (
+        <Link href={item.contentUrl} external>View parsed text</Link>
+      ) : (
+        <Box color="text-status-inactive">-</Box>
+      ),
+      width: 150
     },
     {
       id: 'status',
@@ -86,12 +97,14 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
         };
         const config = statusConfig[status] || { type: 'info', label: item.status };
         return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
-      }
+      },
+      width: 120
     },
     {
       id: 'depth',
       header: 'Depth',
-      cell: item => item.depth
+      cell: item => item.depth,
+      width: 80
     },
     {
       id: 'error',
