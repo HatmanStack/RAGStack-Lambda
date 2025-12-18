@@ -341,7 +341,7 @@ def handle_failed_stack(stack_name, region):
         bool: True if stack was deleted or doesn't exist, False if stack exists and is healthy
 
     Raises:
-        IOError: If deletion fails
+        OSError: If deletion fails
     """
     cf_client = boto3.client('cloudformation', region_name=region)
 
@@ -435,7 +435,7 @@ def create_sam_artifact_bucket(project_name, region):
         str: Bucket name
 
     Raises:
-        IOError: If bucket creation fails
+        OSError: If bucket creation fails
     """
     s3_client = boto3.client('s3', region_name=region)
     sts_client = boto3.client('sts', region_name=region)
@@ -603,7 +603,7 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
 
     Raises:
         FileNotFoundError: If source directory doesn't exist
-        IOError: If packaging or upload fails
+        OSError: If packaging or upload fails
     """
     import tempfile
     import time
@@ -679,7 +679,7 @@ def package_ui_source(bucket_name, region):
 
     Raises:
         FileNotFoundError: If UI source directory doesn't exist
-        IOError: If packaging or upload fails
+        OSError: If packaging or upload fails
     """
     log_info("Packaging UI source code...")
 
@@ -712,7 +712,7 @@ def package_ragstack_chat_source(bucket_name, region):
 
     Raises:
         FileNotFoundError: If src/ragstack-chat/ doesn't exist
-        IOError: If packaging or upload fails
+        OSError: If packaging or upload fails
     """
     log_info("Packaging RagStack chat web component source...")
 

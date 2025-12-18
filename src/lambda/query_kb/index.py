@@ -29,6 +29,7 @@ Output (ChatResponse):
 import json
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.parse import unquote
@@ -447,8 +448,6 @@ def construct_image_uri_from_content_uri(content_s3_uri, content_text=None):
         # Try to extract filename from frontmatter in content
         if content_text:
             # Look for "filename: xxx" in YAML frontmatter
-            import re
-
             filename_match = re.search(r"^filename:\s*(.+)$", content_text, re.MULTILINE)
             if filename_match:
                 filename = filename_match.group(1).strip()

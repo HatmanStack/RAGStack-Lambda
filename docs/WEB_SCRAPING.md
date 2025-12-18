@@ -25,7 +25,7 @@ Scrape websites and index content into the knowledge base.
 
 ## How It Works
 
-```
+```text
 Start URL → Discovery Queue → Process Queue → S3 → Knowledge Base
 ```
 
@@ -44,14 +44,14 @@ Progress publishes via GraphQL subscriptions. The UI updates automatically as pa
 
 ## Troubleshooting
 
-**Scrape stuck at 0%**
+### Scrape stuck at 0%
 - Check ScrapeDiscover Lambda logs
 - Verify URL is accessible
 
-**Pages missing**
+### Pages missing
 - Check scope setting (subpages is restrictive)
 - Increase max depth
 - Some SPAs need "full" mode
 
-**Content garbled**
+### Content garbled
 - Try "full" mode for JavaScript-heavy sites

@@ -187,6 +187,13 @@ def lambda_handler(event, context):
         if len(doc_details) >= 2:
             caption_ingestion_status = doc_details[1].get("status", "UNKNOWN")
 
+        # Log warning if any ingestion didn't start as expected
+        expected_statuses = ("STARTING", "IN_PROGRESS", "INDEXED")
+        if image_ingestion_status not in expected_statuses:
+            logger.warning(f"Image ingestion status unexpected: {image_ingestion_status}")
+        if caption_ingestion_status not in expected_statuses:
+            logger.warning(f"Caption ingestion status unexpected: {caption_ingestion_status}")
+
         # Update image status in DynamoDB
         # Store both URIs - image for display, caption for reference
         update_expr = (

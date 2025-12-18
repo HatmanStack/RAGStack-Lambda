@@ -78,7 +78,7 @@ def mock_boto3():
         mock_dynamodb = MagicMock()
         mock_dynamodb.Table.return_value = mock_table
 
-        def client_factory(service):
+        def client_factory(service, **kwargs):
             if service == "bedrock-agent":
                 return mock_bedrock_agent
             if service == "s3":

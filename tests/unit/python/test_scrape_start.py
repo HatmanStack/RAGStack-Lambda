@@ -73,7 +73,7 @@ class TestScrapeStartHandler:
                 "executionArn": "arn:aws:states:us-east-1:123:exec:test"
             }
 
-            def client_factory(service):
+            def client_factory(service, **kwargs):
                 if service == "sqs":
                     return mock_sqs
                 return mock_sfn
@@ -115,7 +115,7 @@ class TestConfigParsing:
             mock_sfn = MagicMock()
             mock_sfn.start_execution.return_value = {"executionArn": "arn:test"}
 
-            def client_factory(service):
+            def client_factory(service, **kwargs):
                 if service == "sqs":
                     return mock_sqs
                 return mock_sfn
