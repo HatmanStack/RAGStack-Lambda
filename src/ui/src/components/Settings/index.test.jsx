@@ -59,6 +59,13 @@ const sampleDefault = {
 
 const sampleCustom = {};
 
+const sampleApiKeyResponse = {
+  apiKey: 'da2-test-api-key-12345',
+  id: 'da2-test-api-key-12345',
+  expires: '2025-12-31T23:59:59Z',
+  error: null
+};
+
 describe('Settings Component', () => {
   let mockClient;
 
@@ -68,6 +75,16 @@ describe('Settings Component', () => {
     };
     generateClient.mockReturnValue(mockClient);
   });
+
+  // Helper to set up mock that handles both getConfiguration and getApiKey
+  const setupMockGraphql = (configResponse, apiKeyResponse = sampleApiKeyResponse) => {
+    mockClient.graphql.mockImplementation(({ query }) => {
+      if (query.includes('GetApiKey')) {
+        return Promise.resolve({ data: { getApiKey: apiKeyResponse } });
+      }
+      return Promise.resolve({ data: configResponse });
+    });
+  };
 
   const renderSettings = () => {
     return render(
@@ -84,13 +101,13 @@ describe('Settings Component', () => {
   });
 
   it('loads and displays configuration successfully', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -101,13 +118,13 @@ describe('Settings Component', () => {
   });
 
   it('renders form fields from schema in correct order', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -128,13 +145,13 @@ describe('Settings Component', () => {
   });
 
   it('displays save and reset buttons', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -145,24 +162,33 @@ describe('Settings Component', () => {
   });
 
   it('saves configuration successfully', async () => {
-    mockClient.graphql
-      .mockResolvedValueOnce(mockGraphqlResponse({
+    let callCount = 0;
+    mockClient.graphql = vi.fn().mockImplementation(({ query }) => {
+      if (query.includes('GetApiKey')) {
+        return Promise.resolve({ data: { getApiKey: sampleApiKeyResponse } });
+      }
+      if (query.includes('UpdateConfiguration')) {
+        return Promise.resolve({ data: { updateConfiguration: true } });
+      }
+      // getConfiguration - return different values based on call count
+      callCount++;
+      if (callCount > 1) {
+        return Promise.resolve({ data: {
+          getConfiguration: {
+            Schema: JSON.stringify(sampleSchema),
+            Default: JSON.stringify(sampleDefault),
+            Custom: JSON.stringify({ ocr_backend: 'bedrock' })
+          }
+        }});
+      }
+      return Promise.resolve({ data: {
         getConfiguration: {
           Schema: JSON.stringify(sampleSchema),
           Default: JSON.stringify(sampleDefault),
           Custom: JSON.stringify(sampleCustom)
         }
-      }))
-      .mockResolvedValueOnce(mockGraphqlResponse({
-        updateConfiguration: true
-      }))
-      .mockResolvedValueOnce(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(sampleSchema),
-          Default: JSON.stringify(sampleDefault),
-          Custom: JSON.stringify({ ocr_backend: 'bedrock' })
-        }
-      }));
+      }});
+    });
 
     renderSettings();
 
@@ -180,13 +206,13 @@ describe('Settings Component', () => {
   });
 
   it('handles conditional field visibility based on dependsOn', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -200,13 +226,13 @@ describe('Settings Component', () => {
   });
 
   it('renders chat_model_id field', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -220,14 +246,13 @@ describe('Settings Component', () => {
       ocr_backend: 'bedrock'
     };
 
-    mockClient.graphql
-      .mockResolvedValue(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(sampleSchema),
-          Default: JSON.stringify(sampleDefault),
-          Custom: JSON.stringify(customWithChanges)
-        }
-      }));
+    setupMockGraphql({
+      getConfiguration: {
+        Schema: JSON.stringify(sampleSchema),
+        Default: JSON.stringify(sampleDefault),
+        Custom: JSON.stringify(customWithChanges)
+      }
+    });
 
     renderSettings();
 
@@ -238,15 +263,23 @@ describe('Settings Component', () => {
   });
 
   it('displays loading state on save button while saving', async () => {
-    mockClient.graphql
-      .mockResolvedValueOnce(mockGraphqlResponse({
-        getConfiguration: {
-          Schema: JSON.stringify(sampleSchema),
-          Default: JSON.stringify(sampleDefault),
-          Custom: JSON.stringify(sampleCustom)
-        }
-      }))
-      .mockImplementation(() => new Promise(() => {})); // Never resolves
+    let resolveConfig;
+    mockClient.graphql = vi.fn().mockImplementation(({ query }) => {
+      if (query.includes('GetApiKey')) {
+        return Promise.resolve({ data: { getApiKey: sampleApiKeyResponse } });
+      }
+      if (query.includes('GetConfiguration')) {
+        return Promise.resolve({ data: {
+          getConfiguration: {
+            Schema: JSON.stringify(sampleSchema),
+            Default: JSON.stringify(sampleDefault),
+            Custom: JSON.stringify(sampleCustom)
+          }
+        }});
+      }
+      // UpdateConfiguration - never resolves
+      return new Promise((resolve) => { resolveConfig = resolve; });
+    });
 
     renderSettings();
 
@@ -263,13 +296,13 @@ describe('Settings Component', () => {
   });
 
   it('resets form values when reset button is clicked', async () => {
-    mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+    setupMockGraphql({
       getConfiguration: {
         Schema: JSON.stringify(sampleSchema),
         Default: JSON.stringify(sampleDefault),
         Custom: JSON.stringify(sampleCustom)
       }
-    }));
+    });
 
     renderSettings();
 
@@ -318,13 +351,13 @@ describe('Settings Component', () => {
         chat_require_auth: false
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      setupMockGraphql({
         getConfiguration: {
           Schema: JSON.stringify(schemaWithBoolean),
           Default: JSON.stringify(defaultWithBoolean),
           Custom: JSON.stringify({})
         }
-      }));
+      });
 
       renderSettings();
 
@@ -351,13 +384,13 @@ describe('Settings Component', () => {
         chat_global_quota_daily: 10000
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      setupMockGraphql({
         getConfiguration: {
           Schema: JSON.stringify(schemaWithNumber),
           Default: JSON.stringify(defaultWithNumber),
           Custom: JSON.stringify({})
         }
-      }));
+      });
 
       renderSettings();
 
@@ -392,13 +425,13 @@ describe('Settings Component', () => {
         }
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      setupMockGraphql({
         getConfiguration: {
           Schema: JSON.stringify(schemaWithObject),
           Default: JSON.stringify(defaultWithObject),
           Custom: JSON.stringify({})
         }
-      }));
+      });
 
       renderSettings();
 
@@ -438,13 +471,13 @@ describe('Settings Component', () => {
         chat_model_id: 'model1'
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      setupMockGraphql({
         getConfiguration: {
           Schema: JSON.stringify(schemaWithChat),
           Default: JSON.stringify(defaultConfig),
           Custom: JSON.stringify({})
         }
-      }));
+      });
 
       renderSettings();
 
@@ -475,13 +508,13 @@ describe('Settings Component', () => {
         chat_global_quota_daily: 10000
       };
 
-      mockClient.graphql.mockResolvedValue(mockGraphqlResponse({
+      setupMockGraphql({
         getConfiguration: {
           Schema: JSON.stringify(schemaWithNumber),
           Default: JSON.stringify(defaultWithNumber),
           Custom: JSON.stringify({})
         }
-      }));
+      });
 
       renderSettings();
 
@@ -500,6 +533,44 @@ describe('Settings Component', () => {
       // Should show validation error
       await waitFor(() => {
         expect(screen.getByText(/fix validation errors/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('API Key section', () => {
+    it('displays API key section with key data', async () => {
+      setupMockGraphql({
+        getConfiguration: {
+          Schema: JSON.stringify(sampleSchema),
+          Default: JSON.stringify(sampleDefault),
+          Custom: JSON.stringify(sampleCustom)
+        }
+      });
+
+      renderSettings();
+
+      await waitFor(() => {
+        // Check header exists - use getAllByText since there are multiple "API Key" instances
+        const apiKeyElements = screen.getAllByText(/API Key/i);
+        expect(apiKeyElements.length).toBeGreaterThan(0);
+        // Check regenerate button exists
+        expect(screen.getByRole('button', { name: /Regenerate API Key/i })).toBeInTheDocument();
+      });
+    });
+
+    it('shows API key expiration date', async () => {
+      setupMockGraphql({
+        getConfiguration: {
+          Schema: JSON.stringify(sampleSchema),
+          Default: JSON.stringify(sampleDefault),
+          Custom: JSON.stringify(sampleCustom)
+        }
+      });
+
+      renderSettings();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Expires:/i)).toBeInTheDocument();
       });
     });
   });

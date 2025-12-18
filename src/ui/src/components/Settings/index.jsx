@@ -39,7 +39,9 @@ import {
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import { getApiKey } from '../../graphql/queries/getApiKey';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import { regenerateApiKey } from '../../graphql/mutations/regenerateApiKey';
 import {
   validateThemeOverrides,
   validateQuota,
@@ -60,6 +62,13 @@ export function Settings() {
 
   // State for validation errors
   const [validationErrors, setValidationErrors] = useState({});
+
+  // State for API key management
+  const [apiKeyData, setApiKeyData] = useState(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   // Memoize the client to prevent recreation on every render
   const client = React.useMemo(() => generateClient(), []);
@@ -93,10 +102,58 @@ export function Settings() {
     }
   }, [client]);
 
-  // Load configuration on mount
+  const loadApiKey = useCallback(async () => {
+    try {
+      setApiKeyLoading(true);
+      setApiKeyError(null);
+
+      const response = await client.graphql({ query: getApiKey });
+      const data = response.data.getApiKey;
+
+      if (data.error) {
+        setApiKeyError(data.error);
+      } else {
+        setApiKeyData(data);
+      }
+    } catch (err) {
+      console.error('Error loading API key:', err);
+      setApiKeyError('Failed to load API key');
+    } finally {
+      setApiKeyLoading(false);
+    }
+  }, [client]);
+
+  const handleRegenerateApiKey = async () => {
+    if (!window.confirm('Are you sure you want to regenerate the API key? The old key will stop working immediately.')) {
+      return;
+    }
+
+    try {
+      setRegenerating(true);
+      setApiKeyError(null);
+
+      const response = await client.graphql({ query: regenerateApiKey });
+      const data = response.data.regenerateApiKey;
+
+      if (data.error) {
+        setApiKeyError(data.error);
+      } else {
+        setApiKeyData(data);
+        setShowApiKey(true); // Show the new key
+      }
+    } catch (err) {
+      console.error('Error regenerating API key:', err);
+      setApiKeyError('Failed to regenerate API key');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // Load configuration and API key on mount
   useEffect(() => {
     loadConfiguration();
-  }, [loadConfiguration]);
+    loadApiKey();
+  }, [loadConfiguration, loadApiKey]);
 
   const handleSave = async () => {
     try {
@@ -407,6 +464,61 @@ export function Settings() {
           Configuration saved successfully
         </Alert>
       )}
+
+      <Container header={<Header variant="h2">API Key</Header>}>
+        <SpaceBetween size="m">
+          <Box variant="p">
+            Use this API key to access the search and query endpoints from external applications.
+          </Box>
+
+          {apiKeyError && (
+            <Alert type="error" dismissible onDismiss={() => setApiKeyError(null)}>
+              {apiKeyError}
+            </Alert>
+          )}
+
+          {apiKeyLoading ? (
+            <Box>Loading API key...</Box>
+          ) : apiKeyData ? (
+            <SpaceBetween size="s">
+              <FormField label="API Key">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKeyData.apiKey}
+                    readOnly
+                  />
+                  <Button
+                    iconName={showApiKey ? 'view-hidden' : 'view-visible'}
+                    variant="icon"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    ariaLabel={showApiKey ? 'Hide API key' : 'Show API key'}
+                  />
+                  <CopyToClipboard
+                    copyText={apiKeyData.apiKey}
+                    copyButtonText="Copy"
+                    copySuccessText="Copied!"
+                  />
+                </SpaceBetween>
+              </FormField>
+
+              <Box variant="small" color="text-body-secondary">
+                Expires: {new Date(apiKeyData.expires).toLocaleDateString()}
+              </Box>
+
+              <Button
+                onClick={handleRegenerateApiKey}
+                loading={regenerating}
+                iconName="refresh"
+              >
+                Regenerate API Key
+              </Button>
+            </SpaceBetween>
+          ) : (
+            <Box>No API key available</Box>
+          )}
+        </SpaceBetween>
+      </Container>
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
         <Form

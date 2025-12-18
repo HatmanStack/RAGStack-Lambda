@@ -6,6 +6,29 @@ All settings are stored in DynamoDB and apply immediately without redeployment.
 
 **Dashboard → Settings** - Change any setting, click Save.
 
+## API Key Management
+
+The API key enables programmatic access to all GraphQL operations (search, chat, upload, scrape).
+
+**View/Regenerate:** Dashboard → Settings → API Key section
+
+| Action | Description |
+|--------|-------------|
+| View API Key | Shows current key (click to reveal) |
+| Regenerate | Creates new key, invalidates old one immediately |
+
+**Auto-rotation:** Keys auto-rotate monthly via EventBridge to stay within the 365-day expiry limit.
+
+**Usage:** Include in requests as `x-api-key` header:
+```bash
+curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "..."}'
+```
+
+**Alternative:** Use Cognito tokens (`Authorization: Bearer TOKEN`) for user-scoped access.
+
 ## Document Processing
 
 | Setting | Values | Default | Notes |

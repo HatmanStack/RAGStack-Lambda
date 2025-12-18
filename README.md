@@ -54,6 +54,28 @@ Use AI chat in **any web application** (React, Vue, Angular, Svelte, etc.):
 
 Load the CDN script once, then use `<ragstack-chat>` in any framework.
 
+## API Access
+
+All features are accessible via GraphQL API with API key or Cognito authentication.
+
+**Get your API key:** Dashboard → Settings → API Key section
+
+```bash
+# Search documents
+curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
+  -H 'Content-Type: application/json' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -d '{"query": "query { searchKnowledgeBase(query: \"your question\") { results { content source } } }"}'
+```
+
+**Available operations:**
+- **Search** - Query knowledge base directly
+- **Chat** - AI-powered Q&A with sources
+- **Upload** - Upload documents and images programmatically
+- **Scrape** - Start and monitor web scraping jobs
+
+Each UI tab shows API usage examples in an expandable section.
+
 ## Architecture
 
 ```
@@ -80,10 +102,10 @@ Ask questions about your content. Sources show where answers came from.
 
 ## Documentation
 
-- [Configuration](docs/CONFIGURATION.md) - Settings & quotas
+- [Configuration](docs/CONFIGURATION.md) - Settings, quotas & API keys
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
-- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 
