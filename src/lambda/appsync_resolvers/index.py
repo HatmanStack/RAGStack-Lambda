@@ -30,6 +30,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.scraper import ScrapeStatus
@@ -40,6 +41,18 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 sfn = boto3.client("stepfunctions")
+
+# Module-level configuration manager (lazy init for resolvers that need access control)
+_config_manager = None
+
+
+def get_config_manager():
+    """Lazy initialization of ConfigurationManager."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = ConfigurationManager()
+    return _config_manager
+
 
 TRACKING_TABLE = os.environ["TRACKING_TABLE"]
 DATA_BUCKET = os.environ["DATA_BUCKET"]
@@ -70,6 +83,22 @@ def lambda_handler(event, context):
     logger.info(f"Arguments: {json.dumps(event.get('arguments', {}))}")
 
     field_name = event["info"]["fieldName"]
+
+    # Check public access for upload-related resolvers
+    # Map field names to their required access types
+    access_requirements = {
+        "createUploadUrl": "upload",
+        "createImageUploadUrl": "image_upload",
+        "generateCaption": "image_upload",
+        "submitImage": "image_upload",
+        "createZipUploadUrl": "image_upload",
+    }
+
+    if field_name in access_requirements:
+        access_type = access_requirements[field_name]
+        allowed, error_msg = check_public_access(event, access_type, get_config_manager())
+        if not allowed:
+            raise ValueError(error_msg)
 
     resolvers = {
         "getDocument": get_document,

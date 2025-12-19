@@ -1,0 +1,37 @@
+[project]
+name = "ragstack-mcp"
+version = "0.1.0"
+description = "MCP server for RAGStack knowledge base - search, chat, upload, and scrape"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "RAGStack Team" }]
+keywords = ["mcp", "rag", "knowledge-base", "bedrock", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+ragstack-mcp = "ragstack_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/HatmanStack/RAGStack-Lambda"
+Repository = "https://github.com/HatmanStack/RAGStack-Lambda"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ragstack_mcp"]

@@ -560,15 +560,18 @@ Resources:
             build:
               commands:
                 - echo "Building web component..."
-                - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" SAM_GRAPHQL_API_KEY="$SAM_API_KEY" npm run build:wc
+                - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" npm run build:wc
                 - ls -lh dist/
             post_build:
               commands:
                 - echo "Deploying to S3..."
                 - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/ragstack-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
                 - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/ragstack-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
+                - echo "Generating config.json..."
+                - echo "{\"apiEndpoint\":\"${SAM_API_ENDPOINT}\",\"identityPoolId\":\"${IDENTITY_POOL_ID}\",\"region\":\"${AWS_REGION}\"}" > dist/config.json
+                - aws s3 cp dist/config.json s3://${ASSET_BUCKET}/config.json --content-type application/json --cache-control "public, max-age=300"
                 - echo "Invalidating CloudFront cache..."
-                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/ragstack-chat.js" "/ragstack-chat.esm.js"
+                - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/ragstack-chat.js" "/ragstack-chat.esm.js" "/config.json"
                 - echo "Deployment complete!"
       Environment:
         Type: LINUX_CONTAINER
@@ -585,8 +588,10 @@ Resources:
             Value: !Ref ConfigurationTable
           - Name: SAM_API_ENDPOINT
             Value: !GetAtt GraphQLApi.GraphQLUrl
-          - Name: SAM_API_KEY
-            Value: !GetAtt GraphQLApiKey.ApiKey
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
       TimeoutInMinutes: 15
       Tags:
         - Key: Project
@@ -1155,6 +1160,36 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !Ref ProcessingStateMachine
+
+  ##########################################################################
+  # API Key Resolver Lambda
+  ##########################################################################
+
+  ApiKeyResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-apikey-${DeploymentSuffix}'
+      CodeUri: src/lambda/api_key_resolver/
+      Handler: index.lambda_handler
+      Description: GraphQL resolver for API key management
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          APPSYNC_API_ID: !GetAtt GraphQLApi.ApiId
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - appsync:ListApiKeys
+                - appsync:CreateApiKey
+                - appsync:DeleteApiKey
+              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:*'
 
   # =========================================================================
   # Scrape Workflow Lambda Functions
@@ -1965,7 +2000,7 @@ Resources:
                 - appsync:ListApiKeys
                 - appsync:CreateApiKey
                 - appsync:DeleteApiKey
-              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:*'
 
   # EventBridge rule to rotate API key monthly (ensures rotation before 365-day expiry)
   ApiKeyRotationSchedule:
@@ -2150,6 +2185,7 @@ Resources:
                   - !GetAtt QueryKBFunction.Arn
                   - !GetAtt SearchKBFunction.Arn
                   - !GetAtt ConfigurationResolverFunction.Arn
+                  - !GetAtt ApiKeyResolverFunction.Arn
 
   # Data source for KB queries
   KBQueryDataSource:
@@ -2183,6 +2219,17 @@ Resources:
       ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
       LambdaConfig:
         LambdaFunctionArn: !GetAtt ConfigurationResolverFunction.Arn
+
+  # Data source for API Key Resolver
+  ApiKeyResolverDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: ApiKeyResolverDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn: !GetAtt AppSyncLambdaRole.Arn
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt ApiKeyResolverFunction.Arn
 
   # Resolvers
   GetDocumentResolver:
@@ -2266,6 +2313,25 @@ Resources:
       TypeName: Query
       FieldName: getThemeConfig
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
+
+  # API Key Resolvers
+  GetApiKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getApiKey
+      DataSourceName: !GetAtt ApiKeyResolverDataSource.Name
+
+  RegenerateApiKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: regenerateApiKey
+      DataSourceName: !GetAtt ApiKeyResolverDataSource.Name
 
   # =========================================================================
   # Scrape Resolvers

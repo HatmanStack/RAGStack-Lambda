@@ -25,10 +25,7 @@ export default defineConfig({
     'SAM_GRAPHQL_API_KEY': JSON.stringify(process.env.SAM_GRAPHQL_API_KEY || ''),
   },
   esbuild: {
-    // SECURITY: Always strip console.log and debugger in web component builds.
-    // Unlike the main UI (which has dev/prod modes), the web component is always
-    // built for production distribution via CDN. Removing console statements
-    // prevents third-party embedders from seeing internal debugging info.
+    // Strip console.log and debugger in production builds
     drop: ['console', 'debugger'],
   },
   build: {

@@ -1,0 +1,55 @@
+name: Publish ragstack-mcp to PyPI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/ragstack-mcp/**'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set version
+        working-directory: src/ragstack-mcp
+        run: |
+          # Get base version and append .dev + short SHA
+          BASE_VERSION=$(grep '^version' pyproject.toml | cut -d'"' -f2)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          NEW_VERSION="${BASE_VERSION}.dev${SHORT_SHA}"
+          sed -i "s/^version = .*/version = \"${NEW_VERSION}\"/" pyproject.toml
+          echo "Version: ${NEW_VERSION}"
+
+      - name: Build package
+        working-directory: src/ragstack-mcp
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: src/ragstack-mcp/dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi  # Must match PyPI trusted publisher config
+    permissions:
+      id-token: write  # Required for OIDC
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

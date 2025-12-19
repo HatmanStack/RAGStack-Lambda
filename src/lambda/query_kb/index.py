@@ -38,6 +38,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 
 # Initialize AWS clients
@@ -774,6 +775,16 @@ def lambda_handler(event, context):
     Returns:
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
+    # Check public access control
+    allowed, error_msg = check_public_access(event, "chat", config_manager)
+    if not allowed:
+        return {
+            "answer": "",
+            "conversationId": None,
+            "sources": [],
+            "error": error_msg,
+        }
+
     # Get environment variables (moved here for testability)
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     if not knowledge_base_id:

@@ -54,6 +54,49 @@ Use AI chat in **any web application** (React, Vue, Angular, Svelte, etc.):
 
 Load the CDN script once, then use `<ragstack-chat>` in any framework.
 
+## API Access
+
+**Server-side integrations** use API key authentication. Get your key from Dashboard → Settings.
+
+```bash
+curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "query { searchKnowledgeBase(query: \"...\") { results { content } } }"}'
+```
+
+**Web component** uses IAM auth (no API key needed - handled automatically).
+
+Each UI tab shows server-side API examples in an expandable section.
+
+## MCP Server (AI Assistant Integration)
+
+Use your knowledge base directly in Claude Desktop, Cursor, VS Code, Amazon Q CLI, and other MCP-compatible tools.
+
+```bash
+# Install (or use uvx for zero-install)
+pip install ragstack-mcp
+```
+
+Add to your AI assistant's MCP config:
+
+```json
+{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "YOUR_ENDPOINT",
+      "RAGSTACK_API_KEY": "YOUR_API_KEY"
+    }
+  }
+}
+```
+
+Then ask naturally: *"Search my knowledge base for authentication docs"*
+
+See [MCP Server docs](src/ragstack-mcp/README.md) for full setup instructions.
+
 ## Architecture
 
 ```
@@ -80,10 +123,10 @@ Ask questions about your content. Sources show where answers came from.
 
 ## Documentation
 
-- [Configuration](docs/CONFIGURATION.md) - Settings & quotas
+- [Configuration](docs/CONFIGURATION.md) - Settings, quotas & API keys
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
-- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 

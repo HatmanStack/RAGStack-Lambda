@@ -82,9 +82,24 @@ UI subscribes on load, updates automatically without polling.
 - HTTPS/TLS everywhere
 - S3 SSE, DynamoDB encryption
 - Cognito auth + optional MFA
-- API key support for public chat
+- API key for programmatic access (all operations)
+- Monthly API key auto-rotation
 - Least-privilege IAM
 - Public S3 blocked
+
+## API Access
+
+All operations support both API key and Cognito authentication:
+
+| Operation | Endpoint | Auth |
+|-----------|----------|------|
+| Search KB | `searchKnowledgeBase` | API key / Cognito |
+| Chat | `queryKnowledgeBase` | API key / Cognito |
+| Upload docs | `createUploadUrl` | API key / Cognito |
+| Upload images | `createImageUploadUrl`, `submitImage` | API key / Cognito |
+| Scrape | `startScrape`, `getScrapeJob` | API key / Cognito |
+
+**In-app documentation:** Each UI tab includes an expandable section with GraphQL queries and code examples.
 
 ## Performance
 

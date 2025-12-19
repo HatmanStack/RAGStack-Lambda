@@ -39,7 +39,9 @@ import {
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import { getApiKey } from '../../graphql/queries/getApiKey';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import { regenerateApiKey } from '../../graphql/mutations/regenerateApiKey';
 import {
   validateThemeOverrides,
   validateQuota,
@@ -60,6 +62,13 @@ export function Settings() {
 
   // State for validation errors
   const [validationErrors, setValidationErrors] = useState({});
+
+  // State for API key management
+  const [apiKeyData, setApiKeyData] = useState(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   // Memoize the client to prevent recreation on every render
   const client = React.useMemo(() => generateClient(), []);
@@ -93,10 +102,58 @@ export function Settings() {
     }
   }, [client]);
 
-  // Load configuration on mount
+  const loadApiKey = useCallback(async () => {
+    try {
+      setApiKeyLoading(true);
+      setApiKeyError(null);
+
+      const response = await client.graphql({ query: getApiKey });
+      const data = response.data.getApiKey;
+
+      if (data.error) {
+        setApiKeyError(data.error);
+      } else {
+        setApiKeyData(data);
+      }
+    } catch (err) {
+      console.error('Error loading API key:', err);
+      setApiKeyError('Failed to load API key');
+    } finally {
+      setApiKeyLoading(false);
+    }
+  }, [client]);
+
+  const handleRegenerateApiKey = async () => {
+    if (!window.confirm('Are you sure you want to regenerate the API key? The old key will stop working immediately.')) {
+      return;
+    }
+
+    try {
+      setRegenerating(true);
+      setApiKeyError(null);
+
+      const response = await client.graphql({ query: regenerateApiKey });
+      const data = response.data.regenerateApiKey;
+
+      if (data.error) {
+        setApiKeyError(data.error);
+      } else {
+        setApiKeyData(data);
+        setShowApiKey(true); // Show the new key
+      }
+    } catch (err) {
+      console.error('Error regenerating API key:', err);
+      setApiKeyError('Failed to regenerate API key');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // Load configuration and API key on mount
   useEffect(() => {
     loadConfiguration();
-  }, [loadConfiguration]);
+    loadApiKey();
+  }, [loadConfiguration, loadApiKey]);
 
   const handleSave = async () => {
     try {
@@ -171,33 +228,19 @@ export function Settings() {
     const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, key);
     const validationError = validationErrors[key];
 
-    // Note: chat_deployed check removed - chat is always deployed with SAM stack
-    // All chat fields are now always visible
+    // Skip chat_cdn_url - shown in Chat tab instead
+    if (key === 'chat_cdn_url') {
+      return null;
+    }
 
-    // Special handling for chat_cdn_url - display with embed code
-    if (key === 'chat_cdn_url' && value) {
-      return (
-        <Alert type="success" header="Web Component Embed Code">
-          <SpaceBetween size="s">
-            <Box variant="p">
-              Copy and paste this code into any HTML page to add the chat component:
-            </Box>
-            <Box>
-              <code style={{ display: 'block', whiteSpace: 'pre-wrap', padding: '12px', background: '#f4f4f4', borderRadius: '4px' }}>
-                {`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
-              </code>
-            </Box>
-            <CopyToClipboard
-              copyText={`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
-              copyButtonText="Copy Embed Code"
-              copySuccessText="Copied!"
-            />
-            <Box variant="small" color="text-body-secondary">
-              CDN URL: {value}
-            </Box>
-          </SpaceBetween>
-        </Alert>
-      );
+    // Skip chat_allow_document_access - rendered separately in API Key section
+    if (key === 'chat_allow_document_access') {
+      return null;
+    }
+
+    // Skip public_access_* fields - rendered separately in Public Access section
+    if (key.startsWith('public_access_')) {
+      return null;
     }
 
     // Handle conditional visibility (dependsOn)
@@ -408,31 +451,239 @@ export function Settings() {
         </Alert>
       )}
 
-      <Container header={<Header variant="h2">Runtime Configuration</Header>}>
-        <Form
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={handleReset} disabled={saving}>
-                Reset
-              </Button>
-              <Button variant="primary" onClick={handleSave} loading={saving}>
-                Save changes
+      <Container header={<Header variant="h2">API Key (Server-side Only)</Header>}>
+        <SpaceBetween size="m">
+          <Alert type="warning">
+            <strong>For server-side use only.</strong> Never expose this key in frontend code, browser applications, or public repositories. Use it for MCP servers, backend integrations, and scripts.
+          </Alert>
+
+          {apiKeyError && (
+            <Alert type="error" dismissible onDismiss={() => setApiKeyError(null)}>
+              {apiKeyError}
+            </Alert>
+          )}
+
+          {apiKeyLoading ? (
+            <Box>Loading API key...</Box>
+          ) : apiKeyData ? (
+            <SpaceBetween size="s">
+              <FormField label="API Key">
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKeyData.apiKey}
+                    readOnly
+                  />
+                  <Button
+                    iconName={showApiKey ? 'view-hidden' : 'view-visible'}
+                    variant="icon"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    ariaLabel={showApiKey ? 'Hide API key' : 'Show API key'}
+                  />
+                  <CopyToClipboard
+                    copyText={apiKeyData.apiKey}
+                    copyButtonText="Copy"
+                    copySuccessText="Copied!"
+                  />
+                </SpaceBetween>
+              </FormField>
+
+              <Box variant="small" color="text-body-secondary">
+                Expires: {new Date(apiKeyData.expires).toLocaleDateString()}
+              </Box>
+
+              <Button
+                onClick={handleRegenerateApiKey}
+                loading={regenerating}
+                iconName="refresh"
+              >
+                Regenerate API Key
               </Button>
             </SpaceBetween>
-          }
-        >
-          <SpaceBetween size="l">
-            {schema.properties &&
-              Object.entries(schema.properties)
-                .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
-                .map(([key, property]) => (
-                  <React.Fragment key={key}>
-                    {renderField(key, property)}
-                  </React.Fragment>
-                ))}
-          </SpaceBetween>
-        </Form>
+          ) : (
+            <Box>No API key available</Box>
+          )}
+
+          <FormField
+            label="Allow Document Downloads"
+            description="Let users download original source documents via chat citations"
+          >
+            <Toggle
+              checked={formValues.chat_allow_document_access === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, chat_allow_document_access: detail.checked });
+              }}
+            >
+              {formValues.chat_allow_document_access ? 'Enabled' : 'Disabled'}
+            </Toggle>
+          </FormField>
+
+          <ExpandableSection
+            headerText="MCP Server Setup"
+            variant="footer"
+          >
+            <SpaceBetween size="s">
+              <Box variant="small" color="text-body-secondary">
+                Connect Claude Desktop, Cursor, VS Code, or Amazon Q CLI to your knowledge base.
+              </Box>
+
+              {apiKeyData && (
+                <>
+                  <Box>
+                    <code
+                      style={{
+                        display: 'block',
+                        whiteSpace: 'pre-wrap',
+                        padding: '12px',
+                        background: '#1a1a2e',
+                        color: '#e6e6e6',
+                        borderRadius: '6px',
+                        fontFamily: "'Fira Code', 'Monaco', monospace",
+                        fontSize: '12px',
+                        lineHeight: '1.5',
+                      }}
+                    >
+{`{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "${import.meta.env.VITE_GRAPHQL_URL || 'YOUR_ENDPOINT'}",
+      "RAGSTACK_API_KEY": "${apiKeyData.apiKey}"
+    }
+  }
+}`}
+                    </code>
+                  </Box>
+                  <CopyToClipboard
+                    copyText={`{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "${import.meta.env.VITE_GRAPHQL_URL || 'YOUR_ENDPOINT'}",
+      "RAGSTACK_API_KEY": "${apiKeyData.apiKey}"
+    }
+  }
+}`}
+                    copyButtonText="Copy Config"
+                    copySuccessText="Copied!"
+                    variant="inline"
+                  />
+                </>
+              )}
+
+              <Box variant="small" color="text-body-secondary">
+                <strong>Config locations:</strong> Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json •
+                Amazon Q: ~/.aws/amazonq/mcp.json • Cursor: Settings → MCP Servers
+              </Box>
+            </SpaceBetween>
+          </ExpandableSection>
+        </SpaceBetween>
       </Container>
+
+      <Container header={<Header variant="h2">Public Access</Header>}>
+        <SpaceBetween size="m">
+          <Alert type="info">
+            Control which API endpoints allow unauthenticated access. Disable to require authentication for that endpoint.
+          </Alert>
+
+          <FormField
+            label="Chat Queries"
+            description="Allow unauthenticated users to use the chat web component"
+          >
+            <Toggle
+              checked={formValues.public_access_chat === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_chat: detail.checked });
+              }}
+            >
+              {formValues.public_access_chat ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Search Queries"
+            description="Allow unauthenticated access to the search API"
+          >
+            <Toggle
+              checked={formValues.public_access_search === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_search: detail.checked });
+              }}
+            >
+              {formValues.public_access_search ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Document Uploads"
+            description="Allow unauthenticated document uploads to your knowledge base"
+          >
+            <Toggle
+              checked={formValues.public_access_upload === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_upload: detail.checked });
+              }}
+            >
+              {formValues.public_access_upload ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Image Uploads"
+            description="Allow unauthenticated image uploads to your knowledge base"
+          >
+            <Toggle
+              checked={formValues.public_access_image_upload === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_image_upload: detail.checked });
+              }}
+            >
+              {formValues.public_access_image_upload ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+        </SpaceBetween>
+      </Container>
+
+      <Container header={<Header variant="h2">Runtime Configuration</Header>}>
+        <SpaceBetween size="l">
+          {schema.properties &&
+            Object.entries(schema.properties)
+              .filter(([key]) => !key.includes('theme'))
+              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
+              .map(([key, property]) => (
+                <React.Fragment key={key}>
+                  {renderField(key, property)}
+                </React.Fragment>
+              ))}
+        </SpaceBetween>
+      </Container>
+
+      <Container header={<Header variant="h2">Theme</Header>}>
+        <SpaceBetween size="l">
+          {schema.properties &&
+            Object.entries(schema.properties)
+              .filter(([key]) => key.includes('theme'))
+              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
+              .map(([key, property]) => (
+                <React.Fragment key={key}>
+                  {renderField(key, property)}
+                </React.Fragment>
+              ))}
+        </SpaceBetween>
+      </Container>
+
+      <Box float="right" padding={{ top: 's' }}>
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button variant="link" onClick={handleReset} disabled={saving}>
+            Reset
+          </Button>
+          <Button variant="primary" onClick={handleSave} loading={saving}>
+            Save changes
+          </Button>
+        </SpaceBetween>
+      </Box>
     </SpaceBetween>
   );
 }

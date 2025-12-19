@@ -32,8 +32,14 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.auth import check_public_access
+from ragstack_common.config import ConfigurationManager
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Module-level initialization (reused across Lambda invocations)
+config_manager = ConfigurationManager()
 
 
 def lambda_handler(event, context):
@@ -47,6 +53,16 @@ def lambda_handler(event, context):
     Returns:
         dict: KBQueryResult with query, results, total, and optional error
     """
+    # Check public access control
+    allowed, error_msg = check_public_access(event, "search", config_manager)
+    if not allowed:
+        return {
+            "query": "",
+            "results": [],
+            "total": 0,
+            "error": error_msg,
+        }
+
     # Get environment variables
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     if not knowledge_base_id:

@@ -6,6 +6,98 @@ All settings are stored in DynamoDB and apply immediately without redeployment.
 
 **Dashboard → Settings** - Change any setting, click Save.
 
+## API Key Management
+
+The API key is for **server-side use only** - MCP servers, backend scripts, and integrations.
+
+**Never expose in frontend code, browser applications, or public repositories.**
+
+**View/Regenerate:** Dashboard → Settings → API Key section
+
+| Action | Description |
+|--------|-------------|
+| View API Key | Shows current key (click to reveal) |
+| Regenerate | Creates new key, invalidates old one immediately |
+
+**Auto-rotation:** Keys auto-rotate monthly via EventBridge.
+
+**Usage (server-side only):**
+```bash
+curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "..."}'
+```
+
+## Authentication Methods
+
+| Method | Use Case | Operations |
+|--------|----------|------------|
+| **IAM (unauth)** | Web component | Query, Search, Subscriptions |
+| **API Key** | Server-side integrations | All operations |
+| **Cognito** | Admin UI | All operations |
+
+The web component uses IAM authentication via Cognito Identity Pool (no API key needed).
+
+## MCP Server (AI Assistant Integration)
+
+Connect your knowledge base to Claude Desktop, Cursor, VS Code, Amazon Q CLI, and other MCP-compatible AI tools.
+
+**Install:** `pip install ragstack-mcp` or use `uvx` (zero-install)
+
+**Configure:** Add to your AI assistant's MCP config file:
+
+```json
+{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "YOUR_ENDPOINT",
+      "RAGSTACK_API_KEY": "YOUR_API_KEY"
+    }
+  }
+}
+```
+
+| Client | Config Location |
+|--------|-----------------|
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) |
+| Amazon Q CLI | `~/.aws/amazonq/mcp.json` |
+| Cursor | Settings → MCP Servers |
+| VS Code + Cline | `.vscode/cline_mcp_settings.json` |
+
+**Available tools:** `search_knowledge_base`, `chat_with_knowledge_base`, `start_scrape_job`, `get_scrape_job_status`, `list_scrape_jobs`, `upload_document_url`
+
+See [MCP Server README](../src/ragstack-mcp/README.md) for detailed setup per client.
+
+## User Management (Cognito)
+
+Users in the Cognito User Pool can authenticate to both the admin dashboard and the embedded chat widget.
+
+**Add a user via AWS Console:**
+1. Go to **Amazon Cognito** → **User pools** → `{ProjectName}-Users`
+2. Click **Create user**
+3. Enter email address and temporary password
+4. User receives email with login instructions
+
+**Add a user via CLI:**
+```bash
+aws cognito-idp admin-create-user \
+  --user-pool-id YOUR_USER_POOL_ID \
+  --username user@example.com \
+  --user-attributes Name=email,Value=user@example.com Name=email_verified,Value=true \
+  --temporary-password TempPass123!
+```
+
+**Get User Pool ID:**
+```bash
+aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text
+```
+
+**For web component auth:** Pass the user's Cognito JWT token to the `user-token` attribute. See the Chat tab's "Authenticated" embed example.
+
 ## Document Processing
 
 | Setting | Values | Default | Notes |

@@ -2,13 +2,15 @@
  * ChatInterface Component
  *
  * Main chat component that orchestrates message state management.
- * Uses direct fetch to SAM AppSync API.
+ * Uses IAM authentication via Cognito Identity Pool for AppSync API calls.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
+import { fetchCDNConfig } from '../utils/fetchThemeConfig';
+import { iamFetch } from '../utils/iamAuth';
 import styles from '../styles/ChatWithSources.module.css';
 
 // GraphQL query for SAM AppSync queryKnowledgeBase
@@ -30,11 +32,6 @@ const QUERY_KB_QUERY = `
   }
 `;
 
-// Get SAM API endpoint and key from build-time config
-// These are injected by the inject-amplify-config.js script
-declare const SAM_GRAPHQL_ENDPOINT: string | undefined;
-declare const SAM_GRAPHQL_API_KEY: string | undefined;
-
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
 
@@ -42,7 +39,8 @@ const MESSAGE_LIMIT = 50;
 const MAX_RETRIES = 3;
 
 /**
- * Query SAM AppSync API directly using fetch
+ * Query SAM AppSync API using IAM authentication
+ * Gets API endpoint and Identity Pool ID from config.json at runtime
  */
 async function queryKnowledgeBase(
   message: string,
@@ -60,27 +58,26 @@ async function queryKnowledgeBase(
   }>;
   error?: string;
 }> {
-  const endpoint = typeof SAM_GRAPHQL_ENDPOINT !== 'undefined' ? SAM_GRAPHQL_ENDPOINT : '';
-  const apiKey = typeof SAM_GRAPHQL_API_KEY !== 'undefined' ? SAM_GRAPHQL_API_KEY : '';
+  const config = await fetchCDNConfig();
 
-  if (!endpoint) {
-    throw new Error('SAM_GRAPHQL_ENDPOINT not configured. Check web component build configuration.');
+  if (!config?.apiEndpoint || !config?.identityPoolId || !config?.region) {
+    throw new Error('API endpoint not available. Please check your configuration.');
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(apiKey ? { 'x-api-key': apiKey } : {}),
+  const body = JSON.stringify({
+    query: QUERY_KB_QUERY,
+    variables: {
+      query: message,
+      conversationId: conversationId,
     },
-    body: JSON.stringify({
-      query: QUERY_KB_QUERY,
-      variables: {
-        query: message,
-        conversationId: conversationId,
-      },
-    }),
   });
+
+  const response = await iamFetch(
+    config.apiEndpoint,
+    body,
+    config.identityPoolId,
+    config.region
+  );
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);

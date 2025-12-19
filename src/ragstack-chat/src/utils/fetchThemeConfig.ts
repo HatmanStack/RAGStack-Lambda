@@ -2,18 +2,15 @@
  * Fetch theme configuration from the SAM AppSync API
  *
  * This utility fetches theme settings from the public getThemeConfig endpoint.
- * It uses the SAM stack's GraphQL API (not the Amplify API) because theme
- * config is stored in the SAM stack's DynamoDB table.
+ * It uses the SAM stack's GraphQL API because theme config is stored in
+ * the SAM stack's DynamoDB table.
  *
- * The API endpoint and key are embedded at build time via inject-amplify-config.js
+ * At runtime, the web component fetches config.json from the same CDN origin
+ * to discover the API endpoint and Identity Pool ID. This enables real-time
+ * theme updates without rebuilding the web component.
  */
 
-// THEME_API_CONFIG is generated at build time by inject-amplify-config.js
-// It may not exist in development or if the SAM stack hasn't been deployed
-import * as generatedConfig from '../amplify-config.generated';
-
-// Type-safe access to optional THEME_API_CONFIG export
-const THEME_API_CONFIG = (generatedConfig as { THEME_API_CONFIG?: { endpoint?: string; apiKey?: string } }).THEME_API_CONFIG;
+import { iamFetch } from './iamAuth';
 
 export interface ThemeConfig {
   themePreset: 'light' | 'dark' | 'brand';
@@ -23,6 +20,15 @@ export interface ThemeConfig {
     spacing?: 'compact' | 'comfortable' | 'spacious';
   };
 }
+
+export interface CDNConfig {
+  apiEndpoint: string;
+  identityPoolId: string;
+  region: string;
+}
+
+// Cache the CDN config to avoid refetching on every request
+let cachedCDNConfig: CDNConfig | null = null;
 
 const GET_THEME_CONFIG_QUERY = `
   query GetThemeConfig {
@@ -36,16 +42,59 @@ const GET_THEME_CONFIG_QUERY = `
 `;
 
 /**
+ * Fetch CDN config.json to get API endpoint and Identity Pool ID
+ * Uses the script's origin to construct the config URL
+ * Exported for use by ChatInterface as well
+ */
+export async function fetchCDNConfig(): Promise<CDNConfig | null> {
+  if (cachedCDNConfig) {
+    return cachedCDNConfig;
+  }
+
+  try {
+    // Get the base URL from the current script's location
+    const scripts = document.querySelectorAll('script[src*="ragstack-chat"]');
+    let baseUrl = '';
+
+    if (scripts.length > 0) {
+      const scriptSrc = (scripts[0] as HTMLScriptElement).src;
+      baseUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf('/'));
+    }
+
+    const configUrl = baseUrl ? `${baseUrl}/config.json` : '/config.json';
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(configUrl, {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const config = await response.json();
+    cachedCDNConfig = config;
+    return config;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch theme configuration from the SAM GraphQL API
  *
  * @returns Promise<ThemeConfig | null> - Theme config or null if fetch fails
  */
 export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
   try {
+    // Fetch CDN config to get API endpoint
+    const cdnConfig = await fetchCDNConfig();
 
-    // Check if theme API config is available
-    if (!THEME_API_CONFIG?.endpoint || !THEME_API_CONFIG?.apiKey) {
-      console.warn('[ThemeConfig] Theme API config not available, using defaults');
+    if (!cdnConfig?.apiEndpoint || !cdnConfig?.identityPoolId || !cdnConfig?.region) {
       return null;
     }
 
@@ -53,38 +102,35 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(THEME_API_CONFIG.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': THEME_API_CONFIG.apiKey,
-      },
-      body: JSON.stringify({
-        query: GET_THEME_CONFIG_QUERY,
-      }),
-      signal: controller.signal,
+    const body = JSON.stringify({
+      query: GET_THEME_CONFIG_QUERY,
     });
+
+    // Use IAM auth for the request
+    const response = await iamFetch(
+      cdnConfig.apiEndpoint,
+      body,
+      cdnConfig.identityPoolId,
+      cdnConfig.region,
+      controller.signal
+    );
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`[ThemeConfig] API returned ${response.status}`);
       return null;
     }
 
     const result = await response.json();
 
     if (result.errors) {
-      console.warn('[ThemeConfig] GraphQL errors:', result.errors);
       return null;
     }
 
     const themeData = result.data?.getThemeConfig;
     if (!themeData) {
-      console.warn('[ThemeConfig] No theme data in response');
       return null;
     }
-
 
     // Build theme config with overrides
     const themeOverrides: ThemeConfig['themeOverrides'] = {};
@@ -96,9 +142,7 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
       themePreset: themeData.themePreset || 'light',
       themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : undefined,
     };
-  } catch (err) {
-    console.warn('[ThemeConfig] Failed to fetch theme configuration:', err);
-    console.warn('[ThemeConfig] Falling back to default theme');
+  } catch {
     return null;
   }
 }
