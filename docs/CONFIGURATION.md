@@ -71,6 +71,33 @@ Connect your knowledge base to Claude Desktop, Cursor, VS Code, Amazon Q CLI, an
 
 See [MCP Server README](../src/ragstack-mcp/README.md) for detailed setup per client.
 
+## User Management (Cognito)
+
+Users in the Cognito User Pool can authenticate to both the admin dashboard and the embedded chat widget.
+
+**Add a user via AWS Console:**
+1. Go to **Amazon Cognito** → **User pools** → `{ProjectName}-Users`
+2. Click **Create user**
+3. Enter email address and temporary password
+4. User receives email with login instructions
+
+**Add a user via CLI:**
+```bash
+aws cognito-idp admin-create-user \
+  --user-pool-id YOUR_USER_POOL_ID \
+  --username user@example.com \
+  --user-attributes Name=email,Value=user@example.com Name=email_verified,Value=true \
+  --temporary-password TempPass123!
+```
+
+**Get User Pool ID:**
+```bash
+aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text
+```
+
+**For web component auth:** Pass the user's Cognito JWT token to the `user-token` attribute. See the Chat tab's "Authenticated" embed example.
+
 ## Document Processing
 
 | Setting | Values | Default | Notes |
