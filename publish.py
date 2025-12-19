@@ -1261,17 +1261,20 @@ Examples:
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
 
-        # Seed configuration table (preserve existing CDN URL if it exists)
+        # Seed configuration table with CDN URL
         config_table_name = outputs.get('ConfigurationTableName')
+        # Get CDN URL from stack outputs (set by CloudFormation)
+        cdn_url = outputs.get('WebComponentCDNUrl', '')
         if config_table_name:
-            # Check for existing chat CDN URL to preserve it
+            # Check for existing chat CDN URL to preserve it (fallback to stack output)
             _, existing_chat_cdn = get_existing_chat_config(
                 config_table_name, args.region
             )
-            seed_configuration_table(stack_name, args.region, chat_cdn_url=existing_chat_cdn)
+            chat_cdn_url = existing_chat_cdn or cdn_url
+            seed_configuration_table(stack_name, args.region, chat_cdn_url=chat_cdn_url)
         else:
             # Fallback if table name not in outputs
-            seed_configuration_table(stack_name, args.region)
+            seed_configuration_table(stack_name, args.region, chat_cdn_url=cdn_url)
 
         # Configure UI
         if not args.skip_ui:
