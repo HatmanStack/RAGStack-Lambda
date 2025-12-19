@@ -36,13 +36,12 @@ export function Chat() {
     loadConfig();
   }, [client]);
 
-  const basicEmbed = cdnUrl
-    ? `<script src="${cdnUrl}"></script>
-<ragstack-chat conversation-id="my-site"></ragstack-chat>`
-    : null;
+  const cdnPlaceholder = cdnUrl || 'https://your-cdn-url/ragstack-chat.js';
 
-  const authEmbed = cdnUrl
-    ? `<script src="${cdnUrl}"></script>
+  const basicEmbed = `<script src="${cdnPlaceholder}"></script>
+<ragstack-chat conversation-id="my-site"></ragstack-chat>`;
+
+  const authEmbed = `<script src="${cdnPlaceholder}"></script>
 <ragstack-chat
   conversation-id="my-site"
   user-id="USER_ID"
@@ -60,8 +59,7 @@ async function initChat() {
   chat.setAttribute('user-id', userId);
 }
 initChat();
-</script>`
-    : null;
+</script>`;
 
   return (
     <ContentLayout
@@ -77,9 +75,8 @@ initChat();
       <SpaceBetween size="l">
         <ChatPanel />
 
-        {cdnUrl && (
-          <Container>
-            <ExpandableSection headerText="Embed Chat Widget" variant="footer">
+        <Container>
+          <ExpandableSection headerText="Embed Chat Widget" variant="footer">
               <SpaceBetween size="m">
                 <Box variant="small" color="text-body-secondary">
                   Add to any HTML page. Works with React, Vue, Angular, Svelte, or plain HTML.
@@ -161,9 +158,8 @@ initChat();
                   ]}
                 />
               </SpaceBetween>
-            </ExpandableSection>
-          </Container>
-        )}
+          </ExpandableSection>
+        </Container>
       </SpaceBetween>
     </ContentLayout>
   );
