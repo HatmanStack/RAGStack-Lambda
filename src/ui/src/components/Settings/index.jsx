@@ -578,30 +578,43 @@ export function Settings() {
       </Container>
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
-        <Form
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={handleReset} disabled={saving}>
-                Reset
-              </Button>
-              <Button variant="primary" onClick={handleSave} loading={saving}>
-                Save changes
-              </Button>
-            </SpaceBetween>
-          }
-        >
-          <SpaceBetween size="l">
-            {schema.properties &&
-              Object.entries(schema.properties)
-                .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
-                .map(([key, property]) => (
-                  <React.Fragment key={key}>
-                    {renderField(key, property)}
-                  </React.Fragment>
-                ))}
-          </SpaceBetween>
-        </Form>
+        <SpaceBetween size="l">
+          {schema.properties &&
+            Object.entries(schema.properties)
+              .filter(([key]) => !key.includes('theme'))
+              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
+              .map(([key, property]) => (
+                <React.Fragment key={key}>
+                  {renderField(key, property)}
+                </React.Fragment>
+              ))}
+        </SpaceBetween>
       </Container>
+
+      <Container header={<Header variant="h2">Theme</Header>}>
+        <SpaceBetween size="l">
+          {schema.properties &&
+            Object.entries(schema.properties)
+              .filter(([key]) => key.includes('theme'))
+              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
+              .map(([key, property]) => (
+                <React.Fragment key={key}>
+                  {renderField(key, property)}
+                </React.Fragment>
+              ))}
+        </SpaceBetween>
+      </Container>
+
+      <Box float="right" padding={{ top: 's' }}>
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button variant="link" onClick={handleReset} disabled={saving}>
+            Reset
+          </Button>
+          <Button variant="primary" onClick={handleSave} loading={saving}>
+            Save changes
+          </Button>
+        </SpaceBetween>
+      </Box>
     </SpaceBetween>
   );
 }
