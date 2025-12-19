@@ -1998,12 +1998,9 @@ Resources:
             - Effect: Allow
               Action:
                 - appsync:ListApiKeys
-              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}'
-            - Effect: Allow
-              Action:
                 - appsync:CreateApiKey
                 - appsync:DeleteApiKey
-              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+              Resource: !Sub 'arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:*'
 
   # EventBridge rule to rotate API key monthly (ensures rotation before 365-day expiry)
   ApiKeyRotationSchedule:
