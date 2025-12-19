@@ -2,7 +2,7 @@
  * ChatInterface Component
  *
  * Main chat component that orchestrates message state management.
- * Uses direct fetch to SAM AppSync API.
+ * Uses IAM authentication via Cognito Identity Pool for AppSync API calls.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

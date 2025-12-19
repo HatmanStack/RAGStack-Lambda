@@ -38,6 +38,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 
 # Initialize AWS clients
@@ -763,43 +764,6 @@ def extract_sources(citations):
     return sources
 
 
-def check_public_access(event, access_type):
-    """
-    Check if the request is allowed based on authentication and public access settings.
-
-    Args:
-        event: AppSync event with identity information
-        access_type: Type of access to check ('chat', 'search', 'upload', 'image_upload')
-
-    Returns:
-        tuple: (allowed: bool, error_message: str or None)
-    """
-    identity = event.get("identity") or {}
-
-    # Check auth type
-    # 1. Cognito User Pools: identity has "sub" or "username"
-    # 2. API key: identity is empty/None (considered authenticated for server-side use)
-    # 3. IAM unauthenticated: identity has "cognitoIdentityAuthType" == "unauthenticated"
-
-    has_cognito_auth = bool(identity.get("sub") or identity.get("username"))
-    is_api_key = not identity  # Empty identity means API key auth
-    is_unauthenticated_iam = identity.get("cognitoIdentityAuthType") == "unauthenticated"
-
-    # If authenticated via Cognito or API key, always allow
-    if has_cognito_auth or is_api_key:
-        return (True, None)
-
-    # For unauthenticated IAM, check public access config
-    if is_unauthenticated_iam:
-        config_key = f"public_access_{access_type}"
-        public_access_allowed = config_manager.get_parameter(config_key, default=True)
-        if not public_access_allowed:
-            logger.info(f"Public access denied for {access_type} (unauthenticated IAM)")
-            return (False, f"Authentication required for {access_type} access")
-
-    return (True, None)
-
-
 def lambda_handler(event, context):
     """
     Query Bedrock Knowledge Base with DynamoDB-stored conversation history.
@@ -812,7 +776,7 @@ def lambda_handler(event, context):
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
     # Check public access control
-    allowed, error_msg = check_public_access(event, "chat")
+    allowed, error_msg = check_public_access(event, "chat", config_manager)
     if not allowed:
         return {
             "answer": "",

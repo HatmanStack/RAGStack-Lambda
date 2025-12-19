@@ -111,7 +111,8 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
       cdnConfig.apiEndpoint,
       body,
       cdnConfig.identityPoolId,
-      cdnConfig.region
+      cdnConfig.region,
+      controller.signal
     );
 
     clearTimeout(timeoutId);

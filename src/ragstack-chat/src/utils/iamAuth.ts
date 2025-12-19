@@ -16,8 +16,8 @@ interface SignedRequest {
   headers: Record<string, string>;
 }
 
-// Cache credentials to avoid fetching on every request
-let cachedCredentials: CognitoCredentials | null = null;
+// Cache credentials per identity pool to avoid fetching on every request
+const credentialsCache = new Map<string, CognitoCredentials>();
 
 /**
  * Get temporary AWS credentials from Cognito Identity Pool
@@ -27,8 +27,9 @@ export async function getCredentials(
   region: string
 ): Promise<CognitoCredentials | null> {
   // Return cached credentials if still valid (with 5 min buffer)
-  if (cachedCredentials && cachedCredentials.expiration > Date.now() + 300000) {
-    return cachedCredentials;
+  const cached = credentialsCache.get(identityPoolId);
+  if (cached && cached.expiration > Date.now() + 300000) {
+    return cached;
   }
 
   try {
@@ -76,14 +77,15 @@ export async function getCredentials(
 
     const { Credentials } = await getCredentialsResponse.json();
 
-    cachedCredentials = {
+    const credentials: CognitoCredentials = {
       accessKeyId: Credentials.AccessKeyId,
       secretAccessKey: Credentials.SecretKey,
       sessionToken: Credentials.SessionToken,
       expiration: Credentials.Expiration * 1000, // Convert to ms
     };
 
-    return cachedCredentials;
+    credentialsCache.set(identityPoolId, credentials);
+    return credentials;
   } catch (error) {
     console.error('[IAM Auth] Error getting credentials:', error);
     return null;
@@ -101,7 +103,9 @@ export async function signRequest(
   credentials: CognitoCredentials,
   region: string
 ): Promise<SignedRequest> {
-  const host = new URL(url).host;
+  const urlObj = new URL(url);
+  const host = urlObj.host;
+  const path = urlObj.pathname || '/';
   const datetime = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
   const date = datetime.slice(0, 8);
 
@@ -117,7 +121,7 @@ export async function signRequest(
 
   const canonicalRequest = [
     method,
-    '/graphql',
+    path,
     '',
     canonicalHeaders,
     '',
@@ -202,7 +206,8 @@ export async function iamFetch(
   url: string,
   body: string,
   identityPoolId: string,
-  region: string
+  region: string,
+  signal?: AbortSignal
 ): Promise<Response> {
   const credentials = await getCredentials(identityPoolId, region);
 
@@ -216,5 +221,6 @@ export async function iamFetch(
     method: 'POST',
     headers,
     body,
+    signal,
   });
 }

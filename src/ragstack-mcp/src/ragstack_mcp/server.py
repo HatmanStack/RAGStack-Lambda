@@ -2,6 +2,7 @@
 
 import os
 import json
+import sys
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -332,9 +333,9 @@ def upload_document_url(filename: str) -> str:
 def main():
     """Run the MCP server."""
     if not GRAPHQL_ENDPOINT:
-        print("Warning: RAGSTACK_GRAPHQL_ENDPOINT not set", flush=True)
+        print("Warning: RAGSTACK_GRAPHQL_ENDPOINT not set", file=sys.stderr, flush=True)
     if not API_KEY:
-        print("Warning: RAGSTACK_API_KEY not set", flush=True)
+        print("Warning: RAGSTACK_API_KEY not set", file=sys.stderr, flush=True)
     mcp.run()
 
 

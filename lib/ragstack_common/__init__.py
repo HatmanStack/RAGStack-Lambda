@@ -9,6 +9,7 @@ from ragstack_common.appsync import (
     publish_image_update,
     publish_scrape_update,
 )
+from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import (
     ImageStatus,
@@ -21,6 +22,7 @@ from ragstack_common.logging_utils import log_summary, safe_log_event
 __all__ = [
     "ConfigurationManager",
     "ImageStatus",
+    "check_public_access",
     "constants",
     "is_supported_image",
     "log_summary",
