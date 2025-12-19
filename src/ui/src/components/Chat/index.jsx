@@ -33,7 +33,8 @@ export function Chat() {
   }, [client]);
 
   const embedCode = cdnUrl
-    ? `<script src="${cdnUrl}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`
+    ? `<script src="${cdnUrl}"></script>
+<ragstack-chat conversation-id="my-site"></ragstack-chat>`
     : null;
 
   return (
@@ -52,13 +53,10 @@ export function Chat() {
 
         {cdnUrl && (
           <Container>
-            <ExpandableSection
-              headerText="Embed Chat on Your Website"
-              variant="footer"
-            >
+            <ExpandableSection headerText="Embed Chat Widget" variant="footer">
               <SpaceBetween size="s">
-                <Box variant="p">
-                  Add this chat component to any HTML page by copying the code below:
+                <Box variant="small" color="text-body-secondary">
+                  Add to any HTML page. Works with React, Vue, Angular, Svelte, or plain HTML.
                 </Box>
                 <Box>
                   <code
@@ -66,10 +64,11 @@ export function Chat() {
                       display: 'block',
                       whiteSpace: 'pre-wrap',
                       padding: '12px',
-                      background: 'var(--color-background-container-content)',
-                      border: '1px solid var(--color-border-divider-default)',
-                      borderRadius: '4px',
-                      fontFamily: 'monospace',
+                      background: '#1a1a2e',
+                      color: '#e6e6e6',
+                      borderRadius: '6px',
+                      fontFamily: "'Fira Code', monospace",
+                      fontSize: '12px',
                     }}
                   >
                     {embedCode}
@@ -79,10 +78,8 @@ export function Chat() {
                   copyText={embedCode}
                   copyButtonText="Copy Embed Code"
                   copySuccessText="Copied!"
+                  variant="inline"
                 />
-                <Box variant="small" color="text-body-secondary">
-                  The chat component works with any framework: React, Vue, Angular, Svelte, or plain HTML.
-                </Box>
               </SpaceBetween>
             </ExpandableSection>
           </Container>

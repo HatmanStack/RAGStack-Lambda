@@ -58,7 +58,7 @@ describe('Chat Page', () => {
     render(<Chat />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Embed Chat on Your Website/i)).toBeInTheDocument();
+      expect(screen.getByText(/Embed Chat Widget/i)).toBeInTheDocument();
     });
   });
 
@@ -80,6 +80,6 @@ describe('Chat Page', () => {
       expect(mockGraphql).toHaveBeenCalled();
     });
 
-    expect(screen.queryByText(/Embed Chat on Your Website/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Embed Chat Widget/i)).not.toBeInTheDocument();
   });
 });
