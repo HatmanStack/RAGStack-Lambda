@@ -12,6 +12,33 @@
       margin: 0 auto;
       background: #f5f5f5;
     }
+    .config-panel {
+      background: #fffde7;
+      padding: 15px;
+      margin-bottom: 20px;
+      border: 1px solid #fdd835;
+      border-radius: 8px;
+    }
+    .config-panel input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      font-family: monospace;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .config-panel button {
+      padding: 8px 16px;
+      margin: 5px 5px 5px 0;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: white;
+    }
+    .config-panel button:hover {
+      background: #0056b3;
+    }
     .test-container {
       border: 1px solid #ddd;
       padding: 20px;
@@ -43,117 +70,195 @@
       border-radius: 3px;
       font-family: 'Courier New', monospace;
     }
+    .status-panel {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .error { color: #c00; }
+    .success { color: #080; }
+    .info { color: #007bff; font-size: 12px; }
+    #error-log {
+      max-height: 150px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
-  <h1>RagStackChat Web Component Tests</h1>
+  <h1>RagStackChat Web Component Test</h1>
+
+  <div class="config-panel">
+    <h3>Script Source</h3>
+    <input type="text" id="cdn-url" placeholder="https://your-cloudfront-domain.cloudfront.net/ragstack-chat.js" />
+    <div>
+      <button onclick="loadFromCDN()">Load from CDN</button>
+      <button onclick="loadLocal()">Load Local Build</button>
+    </div>
+    <p class="info">
+      Local: Run <code>npm run build:wc</code> first, then serve this file via a local server.
+    </p>
+  </div>
+
+  <div class="status-panel">
+    <strong>Status:</strong>
+    <div id="script-status">No script loaded yet</div>
+    <div id="element-status"></div>
+    <div id="error-log"></div>
+  </div>
 
   <div class="test-info">
-    <strong>Test Status:</strong> Web component bundle loaded from CDN<br>
-    <strong>Bundle:</strong> <code>ragstack-chat.js</code><br>
-    <strong>Config:</strong> Fetched from CDN config.json, theme from GraphQL API<br>
-    <strong>Open DevTools Console:</strong> Check for component registration and errors
+    <strong>Test Cases:</strong><br>
+    <strong>Test 1:</strong> No theme attributes - fetches from Settings UI via GraphQL API<br>
+    <strong>Test 2:</strong> <code>theme-preset="dark"</code> - attribute override<br>
+    <strong>Test 3:</strong> <code>theme-overrides</code> - custom color override<br>
+    <strong>Test 4:</strong> Custom input placeholder
   </div>
 
-  <div class="test-container">
-    <h2>Test 1: Theme from Settings UI (API fetch)</h2>
-    <p><em>No theme attributes - fetches theme from GraphQL API based on Settings UI config</em></p>
-    <ragstack-chat
-      conversation-id="test-api-theme"
-      header-text="API Theme Chat"
-      header-subtitle="Theme loaded from Settings UI"
-    ></ragstack-chat>
+  <div id="test-cases" style="display: none;">
+    <div class="test-container">
+      <h2>Test 1: Theme from Settings UI (API fetch)</h2>
+      <p><em>No theme attributes - fetches theme from GraphQL API</em></p>
+      <ragstack-chat
+        conversation-id="test-api-theme"
+        header-text="API Theme Chat"
+        header-subtitle="Theme loaded from Settings UI"
+      ></ragstack-chat>
+    </div>
+
+    <div class="test-container">
+      <h2>Test 2: Dark Theme (attribute override)</h2>
+      <p><em>theme-preset="dark" overrides API theme</em></p>
+      <ragstack-chat
+        conversation-id="test-dark"
+        header-text="Dark Theme Chat"
+        header-subtitle="Testing dark theme preset"
+        theme-preset="dark"
+      ></ragstack-chat>
+    </div>
+
+    <div class="test-container">
+      <h2>Test 3: Custom Theme with Color Override</h2>
+      <p><em>theme-overrides attribute overrides API theme</em></p>
+      <ragstack-chat
+        conversation-id="test-custom"
+        header-text="Custom Purple Chat"
+        header-subtitle="Testing theme overrides"
+        theme-overrides='{"primaryColor": "#9c27b0"}'
+      ></ragstack-chat>
+    </div>
+
+    <div class="test-container">
+      <h2>Test 4: Custom Input Placeholder</h2>
+      <ragstack-chat
+        conversation-id="test-placeholder"
+        header-text="Custom Placeholder"
+        header-subtitle="Testing input-placeholder attribute"
+        input-placeholder="Type your custom question here..."
+      ></ragstack-chat>
+    </div>
   </div>
 
-  <div class="test-container">
-    <h2>Test 2: Dark Theme (attribute override)</h2>
-    <p><em>theme-preset="dark" overrides API theme</em></p>
-    <ragstack-chat
-      conversation-id="test-dark"
-      header-text="Dark Theme Chat"
-      header-subtitle="Testing dark theme preset"
-      theme-preset="dark"
-    ></ragstack-chat>
-  </div>
-
-  <div class="test-container">
-    <h2>Test 3: Custom Theme with Color Override</h2>
-    <p><em>theme-overrides attribute overrides API theme</em></p>
-    <ragstack-chat
-      conversation-id="test-custom"
-      header-text="Custom Purple Chat"
-      header-subtitle="Testing theme overrides"
-      theme-overrides='{"primaryColor": "#9c27b0"}'
-    ></ragstack-chat>
-  </div>
-
-  <div class="test-container">
-    <h2>Test 4: Custom Input Placeholder</h2>
-    <ragstack-chat
-      conversation-id="test-placeholder"
-      header-text="Custom Placeholder"
-      header-subtitle="Testing input-placeholder attribute"
-      input-placeholder="Type your custom question here..."
-    ></ragstack-chat>
-  </div>
-
-  <!-- Load the web component bundle from CDN -->
-  <script src="https://d2fk0t9sdkg4j7.cloudfront.net/ragstack-chat.js"></script>
-
-  <!-- Test script -->
   <script>
-    console.log('=== RagStackChat Web Component Test Page ===');
+    const errors = [];
 
-    // Check if custom element is registered
-    const isRegistered = customElements.get('ragstack-chat');
-    console.log('Custom element registered:', !!isRegistered);
+    // Capture all errors
+    window.addEventListener('error', (e) => {
+      errors.push(`${e.message} at ${e.filename}:${e.lineno}`);
+      updateErrors();
+    });
 
-    if (!isRegistered) {
-      console.error('❌ ragstack-chat custom element not registered!');
-      document.body.insertAdjacentHTML('afterbegin',
-        '<div style="background: #fee; border: 2px solid #c00; padding: 20px; margin: 20px 0;">' +
-        '<h3>⚠️ Error: Web component not loaded</h3>' +
-        '<p>The ragstack-chat custom element is not registered. Check console for errors.</p>' +
-        '</div>'
-      );
-    } else {
-      console.log('✅ ragstack-chat custom element registered successfully');
+    const originalError = console.error;
+    console.error = function(...args) {
+      errors.push(args.join(' '));
+      updateErrors();
+      originalError.apply(console, args);
+    };
+
+    function updateErrors() {
+      const el = document.getElementById('error-log');
+      el.innerHTML = errors.length > 0
+        ? errors.map(err => `<div class="error">${err}</div>`).join('')
+        : '';
     }
 
-    // Wait for components to mount
-    setTimeout(() => {
-      const chatElements = document.querySelectorAll('ragstack-chat');
-      console.log(`Found ${chatElements.length} chat instances on page`);
+    function checkComponent() {
+      const isDefined = customElements.get('ragstack-chat');
+      document.getElementById('element-status').innerHTML = isDefined
+        ? '<span class="success">✓ ragstack-chat element registered</span>'
+        : '<span class="error">✗ ragstack-chat element NOT registered</span>';
 
-      chatElements.forEach((chat, index) => {
-        console.log(`Chat ${index + 1}:`, {
-          conversationId: chat.getAttribute('conversation-id'),
-          headerText: chat.getAttribute('header-text'),
-          themePreset: chat.getAttribute('theme-preset') || '(from API)'
-        });
-      });
+      if (isDefined) {
+        document.getElementById('test-cases').style.display = 'block';
+        console.log('=== RagStackChat Web Component Test Page ===');
+        console.log('✅ Custom element registered successfully');
 
-      // Test programmatic API
-      const firstChat = chatElements[0];
-      if (firstChat && firstChat.getConversationId) {
-        console.log('Testing programmatic API...');
-        console.log('Current conversation ID:', firstChat.getConversationId());
+        setTimeout(() => {
+          const chatElements = document.querySelectorAll('ragstack-chat');
+          console.log(`Found ${chatElements.length} chat instances`);
+          chatElements.forEach((chat, i) => {
+            console.log(`Chat ${i + 1}:`, {
+              conversationId: chat.getAttribute('conversation-id'),
+              themePreset: chat.getAttribute('theme-preset') || '(from API)'
+            });
+          });
+        }, 1000);
       }
-    }, 1000);
+    }
+
+    function loadScript(src) {
+      const existing = document.getElementById('ragstack-script');
+      if (existing) existing.remove();
+
+      document.getElementById('script-status').innerHTML = `Loading: <code>${src}</code>`;
+      document.getElementById('test-cases').style.display = 'none';
+
+      const script = document.createElement('script');
+      script.id = 'ragstack-script';
+      script.src = src;
+      script.onload = () => {
+        document.getElementById('script-status').innerHTML =
+          `<span class="success">✓ Loaded:</span> <code>${src}</code>`;
+        setTimeout(checkComponent, 300);
+      };
+      script.onerror = () => {
+        document.getElementById('script-status').innerHTML =
+          `<span class="error">✗ Failed to load:</span> <code>${src}</code>`;
+        errors.push(`Script load failed: ${src}`);
+        updateErrors();
+      };
+      document.body.appendChild(script);
+    }
+
+    function loadFromCDN() {
+      const url = document.getElementById('cdn-url').value.trim();
+      if (!url) {
+        alert('Please enter a CDN URL');
+        return;
+      }
+      loadScript(url);
+    }
+
+    function loadLocal() {
+      loadScript('./dist/wc.js');
+    }
 
     // Listen for custom events
-    document.addEventListener('ragstack-chat:send-message', (event) => {
-      console.log('🚀 Message sent:', event.detail);
+    document.addEventListener('ragstack-chat:send-message', (e) => {
+      console.log('🚀 Message sent:', e.detail);
+    });
+    document.addEventListener('ragstack-chat:response-received', (e) => {
+      console.log('📨 Response received:', e.detail);
     });
 
-    document.addEventListener('ragstack-chat:response-received', (event) => {
-      console.log('📨 Response received:', event.detail);
-    });
-
-    console.log('Test page loaded. Try:');
-    console.log('1. Test 1 should use theme from Settings UI');
-    console.log('2. Test 2-3 use attribute overrides');
-    console.log('3. Check DevTools Network tab for config.json and getThemeConfig calls');
+    // Auto-load from URL param
+    const params = new URLSearchParams(window.location.search);
+    const cdnParam = params.get('cdn');
+    if (cdnParam) {
+      document.getElementById('cdn-url').value = cdnParam;
+      loadScript(cdnParam);
+    }
   </script>
 </body>
 </html>
