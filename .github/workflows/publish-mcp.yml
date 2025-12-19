@@ -19,10 +19,9 @@ jobs:
       - name: Set version
         working-directory: src/ragstack-mcp
         run: |
-          # Get base version and append .dev + short SHA
+          # Get base version and append .dev + run number (PEP 440 requires .devN where N is numeric)
           BASE_VERSION=$(grep '^version' pyproject.toml | cut -d'"' -f2)
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          NEW_VERSION="${BASE_VERSION}.dev${SHORT_SHA}"
+          NEW_VERSION="${BASE_VERSION}.dev${GITHUB_RUN_NUMBER}"
           sed -i "s/^version = .*/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "Version: ${NEW_VERSION}"
 
