@@ -48,13 +48,19 @@ const imgSubmitMutation = `mutation SubmitImage($input: SubmitImageInput!) {
   }
 }`;
 
+const imgCaptionMutation = `mutation GenerateCaption($imageS3Uri: String!) {
+  generateCaption(imageS3Uri: $imageS3Uri) {
+    caption
+  }
+}`;
+
 const imgJsExample = `// 1. Get presigned URL
 const res = await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({ query: CREATE_IMAGE_UPLOAD_URL, variables: { filename: 'photo.jpg' } })
 });
-const { uploadUrl, imageId, fields } = (await res.json()).data.createImageUploadUrl;
+const { uploadUrl, imageId, s3Uri, fields } = (await res.json()).data.createImageUploadUrl;
 
 // 2. Upload to S3
 const form = new FormData();
@@ -62,13 +68,21 @@ Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
 form.append('file', imageFile);
 await fetch(uploadUrl, { method: 'POST', body: form });
 
-// 3. Submit with caption (triggers processing)
+// 3. Generate AI caption (optional - or provide your own)
+const captionRes = await fetch(ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+  body: JSON.stringify({ query: GENERATE_CAPTION, variables: { imageS3Uri: s3Uri } })
+});
+const aiCaption = (await captionRes.json()).data.generateCaption.caption;
+
+// 4. Submit with caption (triggers processing)
 await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({
     query: SUBMIT_IMAGE,
-    variables: { input: { imageId, caption: 'Description of the image' } }
+    variables: { input: { imageId, userCaption: 'My description', aiCaption } }
   })
 });`;
 
@@ -110,9 +124,10 @@ const apiExamples = {
   },
   images: {
     title: 'Image Upload API',
-    description: 'Upload image, then submit with caption. Supports JPG, PNG, GIF, WEBP.',
+    description: 'Upload image, generate AI caption, then submit. Supports JPG, PNG, GIF, WEBP.',
     examples: [
       { id: 'url', label: 'Get URL', code: imgUrlMutation },
+      { id: 'caption', label: 'Generate Caption', code: imgCaptionMutation },
       { id: 'submit', label: 'Submit', code: imgSubmitMutation },
       { id: 'js', label: 'JavaScript', code: imgJsExample },
     ],
