@@ -11,8 +11,7 @@ import {
   Box,
   CollectionPreferences,
   Icon,
-  ProgressBar,
-  Badge
+  ProgressBar
 } from '@cloudscape-design/components';
 import { useCollection } from '@cloudscape-design/collection-hooks';
 

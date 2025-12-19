@@ -52,6 +52,10 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 MAX_CAPTION_LENGTH = 2000
 
+# Size limits for security
+MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500 MB max ZIP file
+MAX_IMAGE_SIZE = 50 * 1024 * 1024  # 50 MB max per image
+
 
 def lambda_handler(event, context):
     """Process ZIP archive and extract images with captions."""
@@ -108,6 +112,15 @@ def lambda_handler(event, context):
     }
 
     try:
+        # Check ZIP file size before downloading
+        head_response = s3.head_object(Bucket=bucket, Key=key)
+        zip_size = head_response.get("ContentLength", 0)
+        if zip_size > MAX_ZIP_SIZE:
+            raise ValueError(
+                f"ZIP file too large: {zip_size / (1024*1024):.1f} MB "
+                f"(max {MAX_ZIP_SIZE / (1024*1024):.0f} MB)"
+            )
+
         # Download ZIP file from S3
         zip_response = s3.get_object(Bucket=bucket, Key=key)
         zip_bytes = zip_response["Body"].read()
@@ -125,11 +138,14 @@ def lambda_handler(event, context):
                     logger.warning(f"Failed to parse captions.json: {e}")
                     result["errors"].append(f"Failed to parse captions.json: {str(e)}")
 
-            # Find image files
+            # Find image files (with path traversal protection)
             image_files = [
                 name
                 for name in zip_file.namelist()
-                if is_supported_image(name) and not name.startswith("__MACOSX")
+                if is_supported_image(name)
+                and not name.startswith("__MACOSX")
+                and ".." not in name  # Path traversal protection
+                and not name.startswith("/")  # Absolute path protection
             ]
             result["total_images"] = len(image_files)
             logger.info(f"Found {len(image_files)} images in ZIP")
@@ -137,6 +153,20 @@ def lambda_handler(event, context):
             # Process each image
             for filename in image_files:
                 try:
+                    # Check individual image size before reading
+                    info = zip_file.getinfo(filename)
+                    if info.file_size > MAX_IMAGE_SIZE:
+                        logger.warning(
+                            f"Skipping oversized image: {filename} "
+                            f"({info.file_size / (1024*1024):.1f} MB)"
+                        )
+                        result["failed_images"] += 1
+                        result["errors"].append(
+                            f"Image too large: {filename} "
+                            f"({info.file_size / (1024*1024):.1f} MB, max {MAX_IMAGE_SIZE / (1024*1024):.0f} MB)"
+                        )
+                        continue
+
                     image_data = zip_file.read(filename)
                     base_filename = Path(filename).name
 
