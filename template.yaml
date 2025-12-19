@@ -123,8 +123,6 @@ Resources:
               - GET
               - HEAD
             AllowedOrigins:
-              - 'http://localhost:5173'
-              - 'http://localhost:3000'
               - !Sub 'https://${CloudFrontDistribution.DomainName}'
             MaxAge: 3000
       Tags:
@@ -613,28 +611,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: document_id
           AttributeType: S
-        - AttributeName: created_at
-          AttributeType: S
-        - AttributeName: status
-          AttributeType: S
       KeySchema:
         - AttributeName: document_id
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: CreatedAtIndex
-          KeySchema:
-            - AttributeName: created_at
-              KeyType: HASH
-            - AttributeName: document_id
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: StatusIndex
-          KeySchema:
-            - AttributeName: status
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
@@ -843,10 +822,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
-          METERING_TABLE: !Ref MeteringTable
           DATA_BUCKET: !Ref DataBucket
-          OCR_BACKEND: !Ref OcrBackend
-          BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Tags:
@@ -1075,11 +1051,6 @@ Resources:
             - Effect: Allow
               Action: bedrock:GetInferenceProfile
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
-            - Effect: Allow
-              Action:
-                - aws-marketplace:ViewSubscriptions
-                - aws-marketplace:Subscribe
-              Resource: '*'
 
   SearchKBFunction:
     Type: AWS::Serverless::Function
@@ -1523,12 +1494,11 @@ Resources:
             InputPathsMap:
               bucket: $.detail.bucket.name
               key: $.detail.object.key
-            InputTemplate: !Sub |
+            InputTemplate: |
               {
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
-                "output_s3_prefix": "s3://<bucket>/output/<key>/",
-                "vector_bucket": "${VectorBucket}"
+                "output_s3_prefix": "s3://<bucket>/output/<key>/"
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
