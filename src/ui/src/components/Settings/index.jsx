@@ -36,6 +36,7 @@ import {
   Input,
   ExpandableSection,
   CopyToClipboard,
+  ColumnLayout,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
@@ -235,6 +236,11 @@ export function Settings() {
 
     // Skip chat_allow_document_access - rendered separately in API Key section
     if (key === 'chat_allow_document_access') {
+      return null;
+    }
+
+    // Skip chat_require_auth - handled by public_access_chat toggle
+    if (key === 'chat_require_auth') {
       return null;
     }
 
@@ -566,77 +572,48 @@ export function Settings() {
       </Container>
 
       <Container header={<Header variant="h2">Public Access</Header>}>
-        <SpaceBetween size="m">
-          <FormField
-            label="Chat Queries"
-            description="Allow unauthenticated users to use the chat web component"
+        <ColumnLayout columns={3} variant="text-grid">
+          <Toggle
+            checked={formValues.public_access_chat === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, public_access_chat: detail.checked });
+            }}
           >
-            <Toggle
-              checked={formValues.public_access_chat === true}
-              onChange={({ detail }) => {
-                setFormValues({ ...formValues, public_access_chat: detail.checked });
-              }}
-            >
-              {formValues.public_access_chat ? 'Public' : 'Authenticated only'}
-            </Toggle>
-          </FormField>
-
-          <FormField
-            label="Search Queries"
-            description="Allow unauthenticated access to the search API"
+            Chat Queries
+          </Toggle>
+          <Toggle
+            checked={formValues.public_access_search === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, public_access_search: detail.checked });
+            }}
           >
-            <Toggle
-              checked={formValues.public_access_search === true}
-              onChange={({ detail }) => {
-                setFormValues({ ...formValues, public_access_search: detail.checked });
-              }}
-            >
-              {formValues.public_access_search ? 'Public' : 'Authenticated only'}
-            </Toggle>
-          </FormField>
-
-          <FormField
-            label="Document Uploads"
-            description="Allow unauthenticated document uploads to your knowledge base"
+            Search API
+          </Toggle>
+          <Toggle
+            checked={formValues.public_access_upload === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, public_access_upload: detail.checked });
+            }}
           >
-            <Toggle
-              checked={formValues.public_access_upload === true}
-              onChange={({ detail }) => {
-                setFormValues({ ...formValues, public_access_upload: detail.checked });
-              }}
-            >
-              {formValues.public_access_upload ? 'Public' : 'Authenticated only'}
-            </Toggle>
-          </FormField>
-
-          <FormField
-            label="Image Uploads"
-            description="Allow unauthenticated image uploads to your knowledge base"
+            Document Uploads
+          </Toggle>
+          <Toggle
+            checked={formValues.public_access_image_upload === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, public_access_image_upload: detail.checked });
+            }}
           >
-            <Toggle
-              checked={formValues.public_access_image_upload === true}
-              onChange={({ detail }) => {
-                setFormValues({ ...formValues, public_access_image_upload: detail.checked });
-              }}
-            >
-              {formValues.public_access_image_upload ? 'Public' : 'Authenticated only'}
-            </Toggle>
-          </FormField>
-
-          <FormField
-            label="Web Scrape Jobs"
-            description="Allow unauthenticated web scrape jobs"
+            Image Uploads
+          </Toggle>
+          <Toggle
+            checked={formValues.public_access_scrape === true}
+            onChange={({ detail }) => {
+              setFormValues({ ...formValues, public_access_scrape: detail.checked });
+            }}
           >
-            <Toggle
-              checked={formValues.public_access_scrape === true}
-              onChange={({ detail }) => {
-                setFormValues({ ...formValues, public_access_scrape: detail.checked });
-              }}
-            >
-              {formValues.public_access_scrape ? 'Public' : 'Authenticated only'}
-            </Toggle>
-          </FormField>
-        </SpaceBetween>
+            Web Scraping
+          </Toggle>
+        </ColumnLayout>
       </Container>
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>

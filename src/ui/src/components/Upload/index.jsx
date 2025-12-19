@@ -4,9 +4,9 @@ import {
   Tabs,
   ContentLayout,
   Header,
+  Alert,
 } from '@cloudscape-design/components';
 import { UploadZone } from './UploadZone';
-import { UploadQueue } from './UploadQueue';
 import { ImageUpload } from '../ImageUpload';
 import { ZipUpload } from '../ImageUpload/ZipUpload';
 import { useUpload } from '../../hooks/useUpload';
@@ -128,23 +128,39 @@ const apiExamples = {
 };
 
 const DocumentUploadContent = () => {
-  const { addUpload, uploadFile, uploading, uploads, removeUpload, clearCompleted } = useUpload();
+  const { addUpload, uploadFile, uploading, error } = useUpload();
+  const [successCount, setSuccessCount] = useState(0);
 
-  const handleFilesSelected = useCallback((files) => {
-    files.forEach(file => {
+  const handleFilesSelected = useCallback(async (files) => {
+    let completed = 0;
+    for (const file of files) {
       const uploadId = addUpload(file);
-      uploadFile(uploadId);
-    });
+      try {
+        await uploadFile(uploadId);
+        completed++;
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
+    if (completed > 0) {
+      setSuccessCount(prev => prev + completed);
+      setTimeout(() => setSuccessCount(0), 3000);
+    }
   }, [addUpload, uploadFile]);
 
   return (
     <SpaceBetween size="l">
+      {successCount > 0 && (
+        <Alert type="success" dismissible onDismiss={() => setSuccessCount(0)}>
+          {successCount} document{successCount > 1 ? 's' : ''} uploaded successfully! Processing will begin shortly.
+        </Alert>
+      )}
+      {error && (
+        <Alert type="error">
+          {error}
+        </Alert>
+      )}
       <UploadZone onFilesSelected={handleFilesSelected} disabled={uploading} />
-      <UploadQueue
-        uploads={uploads}
-        onRemove={removeUpload}
-        onClearCompleted={clearCompleted}
-      />
     </SpaceBetween>
   );
 };

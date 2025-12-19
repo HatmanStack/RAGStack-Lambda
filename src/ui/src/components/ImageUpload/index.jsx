@@ -174,7 +174,8 @@ export const ImageUpload = () => {
         <Header variant="h2">Upload Image</Header>
 
         <Alert type="info">
-          Supported formats: PNG, JPG, GIF, WebP (max 10 MB)
+          <strong>How it works:</strong> Upload an image → Add a caption (type your own or generate with AI) → Submit to index in your knowledge base.
+          Supported formats: PNG, JPG, GIF, WebP (max 10 MB).
         </Alert>
 
         {displayError && (

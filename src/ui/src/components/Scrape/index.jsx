@@ -17,12 +17,24 @@ const statusQuery = `query GetScrapeJob($jobId: ID!) {
   }
 }`;
 
-const jsExample = `const res = await fetch(ENDPOINT, {
+const jsExample = `// Basic scrape
+const res = await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({
-    query: \`${startMutation}\`,
-    variables: { input: { url: 'https://docs.example.com', maxPages: 50, scope: 'HOSTNAME' } }
+    query: START_SCRAPE_MUTATION,
+    variables: {
+      input: {
+        url: 'https://docs.example.com',
+        maxPages: 100,           // Max pages to crawl (default: 100)
+        maxDepth: 3,             // Link depth from start (default: 3)
+        scope: 'HOSTNAME',       // SUBPAGES | HOSTNAME | DOMAIN
+        includePatterns: ['/docs/*', '/api/*'],  // Only these paths
+        excludePatterns: ['/blog/*'],            // Skip these paths
+        scrapeMode: 'AUTO',      // AUTO | FAST | FULL (browser)
+        forceRescrape: false     // Re-scrape unchanged pages
+      }
+    }
   })
 });
 const { jobId } = (await res.json()).data.startScrape;`;
@@ -101,8 +113,8 @@ export const Scrape = () => {
 
       {graphqlEndpoint && (
         <ApiDocs
-          title="Scrape API (Server-side)"
-          description="For backend integrations. Scope: SUBPAGES | HOSTNAME | DOMAIN"
+          title="Scrape API"
+          description="Start scrapes programmatically. Configure maxPages, maxDepth, scope (SUBPAGES|HOSTNAME|DOMAIN), include/exclude patterns, and scrapeMode (AUTO|FAST|FULL)."
           endpoint={graphqlEndpoint}
           examples={[
             { id: 'start', label: 'Start', code: startMutation },
