@@ -611,9 +611,20 @@ Resources:
       AttributeDefinitions:
         - AttributeName: document_id
           AttributeType: S
+        - AttributeName: status
+          AttributeType: S
       KeySchema:
         - AttributeName: document_id
           KeyType: HASH
+      # NOTE: Removing GSIs one at a time (DynamoDB limitation)
+      # StatusIndex will be removed in a follow-up deployment
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
