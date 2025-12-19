@@ -662,6 +662,9 @@ export function Settings() {
 
       <Container header={<Header variant="h2">Theme</Header>}>
         <SpaceBetween size="l">
+          <Alert type="info">
+            These theme settings customize the <code>&lt;ragstack-chat&gt;</code> web component appearance, not this web UI dashboard.
+          </Alert>
           {schema.properties &&
             Object.entries(schema.properties)
               .filter(([key]) => key.includes('theme'))
