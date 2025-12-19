@@ -19,7 +19,7 @@
  * - Boolean → Toggle
  * - Number → Input with validation
  * - Enum → Select dropdown
- * - Object → ExpandableSection with nested inputs
+ * - Object → Inline nested inputs
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -342,8 +342,6 @@ export function Settings() {
   };
 
   const renderObjectField = (parentKey, property, value) => {
-    const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, parentKey);
-
     const handleNestedChange = (nestedKey, nestedValue) => {
       const updatedObject = { ...value, [nestedKey]: nestedValue };
       setFormValues({ ...formValues, [parentKey]: updatedObject });
@@ -361,67 +359,56 @@ export function Settings() {
       }
     };
 
+    // Render fields directly without wrapper for theme overrides
     return (
-      <ExpandableSection
-        headerText={property.description || parentKey}
-        variant="container"
-        defaultExpanded={isCustomized}
-      >
-        <SpaceBetween size="s">
-          {isCustomized && (
-            <Alert type="info" dismissible={false}>
-              Customized from default
-            </Alert>
-          )}
+      <>
+        {validationErrors[parentKey] && (
+          <Alert type="error">
+            {validationErrors[parentKey]}
+          </Alert>
+        )}
 
-          {validationErrors[parentKey] && (
-            <Alert type="error">
-              {validationErrors[parentKey]}
-            </Alert>
-          )}
+        {Object.entries(property.properties).map(([nestedKey, nestedProp]) => {
+          const nestedValue = value[nestedKey] || '';
 
-          {Object.entries(property.properties).map(([nestedKey, nestedProp]) => {
-            const nestedValue = value[nestedKey] || '';
-
-            // Render nested enum as dropdown
-            if (nestedProp.enum) {
-              return (
-                <FormField
-                  key={nestedKey}
-                  label={nestedKey}
-                  description={nestedProp.description}
-                >
-                  <Select
-                    selectedOption={{ label: nestedValue, value: nestedValue }}
-                    onChange={({ detail }) => handleNestedChange(nestedKey, detail.selectedOption.value)}
-                    options={nestedProp.enum.map(v => ({ label: v, value: v, key: v }))}
-                  />
-                </FormField>
-              );
-            }
-
-            // Render nested string as input
+          // Render nested enum as dropdown
+          if (nestedProp.enum) {
             return (
               <FormField
                 key={nestedKey}
                 label={nestedKey}
                 description={nestedProp.description}
               >
-                <Input
-                  type="text"
-                  value={nestedValue}
-                  onChange={({ detail }) => handleNestedChange(nestedKey, detail.value)}
-                  placeholder={
-                    nestedKey === 'primaryColor' ? '#0073bb' :
-                    nestedKey === 'fontFamily' ? 'Inter, system-ui, sans-serif' :
-                    ''
-                  }
+                <Select
+                  selectedOption={{ label: nestedValue, value: nestedValue }}
+                  onChange={({ detail }) => handleNestedChange(nestedKey, detail.selectedOption.value)}
+                  options={nestedProp.enum.map(v => ({ label: v, value: v, key: v }))}
                 />
               </FormField>
             );
-          })}
-        </SpaceBetween>
-      </ExpandableSection>
+          }
+
+          // Render nested string as input
+          return (
+            <FormField
+              key={nestedKey}
+              label={nestedKey}
+              description={nestedProp.description}
+            >
+              <Input
+                type="text"
+                value={nestedValue}
+                onChange={({ detail }) => handleNestedChange(nestedKey, detail.value)}
+                placeholder={
+                  nestedKey === 'primaryColor' ? '#0073bb' :
+                  nestedKey === 'fontFamily' ? 'Inter, system-ui, sans-serif' :
+                  ''
+                }
+              />
+            </FormField>
+          );
+        })}
+      </>
     );
   };
 
@@ -451,12 +438,8 @@ export function Settings() {
         </Alert>
       )}
 
-      <Container header={<Header variant="h2">API Key (Server-side Only)</Header>}>
+      <Container header={<Header variant="h2">API Key</Header>}>
         <SpaceBetween size="m">
-          <Alert type="warning">
-            <strong>For server-side use only.</strong> Never expose this key in frontend code, browser applications, or public repositories. Use it for MCP servers, backend integrations, and scripts.
-          </Alert>
-
           {apiKeyError && (
             <Alert type="error" dismissible onDismiss={() => setApiKeyError(null)}>
               {apiKeyError}
@@ -584,10 +567,6 @@ export function Settings() {
 
       <Container header={<Header variant="h2">Public Access</Header>}>
         <SpaceBetween size="m">
-          <Alert type="info">
-            Control which API endpoints allow unauthenticated access. Disable to require authentication for that endpoint.
-          </Alert>
-
           <FormField
             label="Chat Queries"
             description="Allow unauthenticated users to use the chat web component"
@@ -643,6 +622,20 @@ export function Settings() {
               {formValues.public_access_image_upload ? 'Public' : 'Authenticated only'}
             </Toggle>
           </FormField>
+
+          <FormField
+            label="Web Scrape Jobs"
+            description="Allow unauthenticated web scrape jobs"
+          >
+            <Toggle
+              checked={formValues.public_access_scrape === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_scrape: detail.checked });
+              }}
+            >
+              {formValues.public_access_scrape ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
         </SpaceBetween>
       </Container>
 
@@ -660,11 +653,8 @@ export function Settings() {
         </SpaceBetween>
       </Container>
 
-      <Container header={<Header variant="h2">Theme</Header>}>
+      <Container header={<Header variant="h2">Theme (Web Component)</Header>}>
         <SpaceBetween size="l">
-          <Alert type="info">
-            These theme settings customize the <code>&lt;ragstack-chat&gt;</code> web component appearance, not this web UI dashboard.
-          </Alert>
           {schema.properties &&
             Object.entries(schema.properties)
               .filter(([key]) => key.includes('theme'))

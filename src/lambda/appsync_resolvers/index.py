@@ -92,6 +92,9 @@ def lambda_handler(event, context):
         "generateCaption": "image_upload",
         "submitImage": "image_upload",
         "createZipUploadUrl": "image_upload",
+        "startScrape": "scrape",
+        "checkScrapeUrl": "scrape",
+        "cancelScrape": "scrape",
     }
 
     if field_name in access_requirements:

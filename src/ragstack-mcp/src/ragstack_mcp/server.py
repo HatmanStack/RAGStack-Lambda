@@ -7,10 +7,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 # Initialize MCP server
-mcp = FastMCP(
-    "ragstack-kb",
-    description="Search, chat, upload, and scrape your RAGStack knowledge base",
-)
+mcp = FastMCP("ragstack-kb")
 
 # Configuration from environment
 GRAPHQL_ENDPOINT = os.environ.get("RAGSTACK_GRAPHQL_ENDPOINT", "")
@@ -49,11 +46,23 @@ def search_knowledge_base(query: str, max_results: int = 5) -> str:
     Search the RAGStack knowledge base for relevant documents.
 
     Args:
-        query: The search query
-        max_results: Maximum number of results to return (default: 5)
+        query: The search query (e.g., "authentication best practices", "API rate limits")
+        max_results: Maximum number of results to return (1-100, default: 5)
 
     Returns:
-        Search results with content snippets and sources
+        Multiline string with search results:
+        - "Found N results:" header
+        - For each result: "[index] (score: X.XX) source_path" followed by content snippet
+        - Content snippets are truncated to 500 characters
+        - Returns "No results found." if no matches
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "Search error: <message>" - Backend search failure
+
+    Example:
+        search_knowledge_base("how to authenticate users", max_results=3)
     """
     gql = """
     query SearchKnowledgeBase($query: String!, $maxResults: Int) {
@@ -98,11 +107,28 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
     Ask a question and get an AI-generated answer with source citations.
 
     Args:
-        query: Your question
-        conversation_id: Optional ID to maintain conversation context
+        query: Your question in natural language (e.g., "What are the API rate limits?")
+        conversation_id: Optional ID to maintain conversation context across multiple queries.
+            Pass the conversation_id from a previous response to continue the conversation.
 
     Returns:
-        AI-generated answer with source citations
+        Multiline string with:
+        - AI-generated answer text
+        - "Sources:" section listing cited documents with titles and URLs
+        - "[Conversation ID: xxx]" footer for continuing the conversation
+        - Returns "No answer generated." if the AI couldn't generate a response
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "Error: HTTP error: <details>" - Network or API failure
+
+    Example:
+        # First question
+        chat_with_knowledge_base("What authentication methods are supported?")
+
+        # Follow-up question using conversation context
+        chat_with_knowledge_base("How do I implement OAuth?", conversation_id="abc-123")
     """
     gql = """
     query QueryKnowledgeBase($query: String!, $conversationId: String) {
@@ -151,18 +177,70 @@ def start_scrape_job(
     max_pages: int = 50,
     max_depth: int = 3,
     scope: str = "HOSTNAME",
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    scrape_mode: str = "AUTO",
+    cookies: str | None = None,
+    force_rescrape: bool = False,
 ) -> str:
     """
     Start a web scraping job to add website content to the knowledge base.
 
     Args:
-        url: The URL to start scraping from
-        max_pages: Maximum pages to scrape (default: 50)
-        max_depth: Maximum link depth to follow (default: 3)
-        scope: Scrape scope - SUBPAGES, HOSTNAME, or DOMAIN (default: HOSTNAME)
+        url: The starting URL to scrape (e.g., "https://docs.example.com/guide")
+        max_pages: Maximum pages to scrape (1-1000, default: 50)
+        max_depth: Maximum link depth to follow from start URL (0-10, default: 3).
+            0 = only the starting page, 1 = start page + direct links, etc.
+        scope: How far to crawl from the starting URL:
+            - "SUBPAGES" - Only URLs under the starting path (e.g., /docs/*)
+            - "HOSTNAME" - All pages on the same subdomain (default)
+            - "DOMAIN" - All subdomains of the domain
+        include_patterns: Only scrape URLs matching these glob patterns.
+            Example: ["/docs/*", "/api/*"] to only scrape docs and api sections.
+        exclude_patterns: Skip URLs matching these glob patterns.
+            Example: ["/blog/*", "*.pdf"] to skip blog posts and PDFs.
+        scrape_mode: How to fetch page content:
+            - "AUTO" - Try fast HTTP, fall back to browser for JavaScript sites (default)
+            - "FAST" - HTTP only, faster but may miss JavaScript-rendered content
+            - "FULL" - Uses headless browser, slower but handles SPAs and JS content
+        cookies: Cookie string for authenticated sites.
+            Format: "name1=value1; name2=value2" (e.g., "session=abc123; auth=xyz")
+        force_rescrape: If True, re-scrape all pages even if content hasn't changed.
+            Useful when you want to refresh all content (default: False).
 
     Returns:
-        Job ID and status
+        Multiline string with:
+        - "Scrape job started!" confirmation
+        - "Job ID: <uuid>" - Use this ID to check status
+        - "URL: <starting_url>"
+        - "Status: PENDING" (initial status)
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "GraphQL error: <message>" - Invalid input or server error
+        - "Error: HTTP error: <details>" - Network failure
+
+    Example:
+        # Basic scrape
+        start_scrape_job("https://docs.example.com")
+
+        # Scrape only docs section, excluding blog
+        start_scrape_job(
+            url="https://example.com",
+            max_pages=200,
+            max_depth=5,
+            scope="HOSTNAME",
+            include_patterns=["/docs/*", "/api/*"],
+            exclude_patterns=["/blog/*", "/changelog/*"]
+        )
+
+        # Scrape authenticated site
+        start_scrape_job(
+            url="https://internal.example.com/docs",
+            cookies="session=abc123; csrf_token=xyz789",
+            scrape_mode="FULL"
+        )
     """
     gql = """
     mutation StartScrape($input: StartScrapeInput!) {
@@ -173,14 +251,22 @@ def start_scrape_job(
         }
     }
     """
-    variables = {
-        "input": {
-            "url": url,
-            "maxPages": max_pages,
-            "maxDepth": max_depth,
-            "scope": scope,
-        }
+    input_data = {
+        "url": url,
+        "maxPages": max_pages,
+        "maxDepth": max_depth,
+        "scope": scope,
+        "scrapeMode": scrape_mode,
+        "forceRescrape": force_rescrape,
     }
+    if include_patterns:
+        input_data["includePatterns"] = include_patterns
+    if exclude_patterns:
+        input_data["excludePatterns"] = exclude_patterns
+    if cookies:
+        input_data["cookies"] = cookies
+
+    variables = {"input": input_data}
     result = _graphql_request(gql, variables)
 
     if "error" in result:
@@ -203,10 +289,25 @@ def get_scrape_job_status(job_id: str) -> str:
     Check the status of a scrape job.
 
     Args:
-        job_id: The scrape job ID
+        job_id: The scrape job ID returned from start_scrape_job (UUID format)
 
     Returns:
-        Job status and progress
+        Multiline string with:
+        - "Job: <job_id>"
+        - "URL: <base_url>" - The starting URL
+        - "Title: <page_title>" - Title of the starting page (or "N/A")
+        - "Status: <status>" - One of: PENDING, DISCOVERING, PROCESSING, COMPLETED, FAILED, CANCELLED
+        - "Progress: X/Y pages" - Processed count / total discovered
+        - "Failed: N" - Number of failed pages
+        - Returns "Job <id> not found." if job doesn't exist
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "Error: HTTP error: <details>" - Network failure
+
+    Example:
+        get_scrape_job_status("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
     """
     gql = """
     query GetScrapeJob($jobId: ID!) {
@@ -248,10 +349,22 @@ def list_scrape_jobs(limit: int = 10) -> str:
     List recent scrape jobs.
 
     Args:
-        limit: Maximum number of jobs to return (default: 10)
+        limit: Maximum number of jobs to return (1-100, default: 10)
 
     Returns:
-        List of scrape jobs with status
+        Multiline string with:
+        - "Recent scrape jobs:" header
+        - For each job: "[STATUS] title (X/Y pages) - job_id"
+        - Status is one of: PENDING, DISCOVERING, PROCESSING, COMPLETED, FAILED, CANCELLED
+        - Returns "No scrape jobs found." if no jobs exist
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "Error: HTTP error: <details>" - Network failure
+
+    Example:
+        list_scrape_jobs(limit=5)
     """
     gql = """
     query ListScrapeJobs($limit: Int) {
@@ -291,11 +404,37 @@ def upload_document_url(filename: str) -> str:
     """
     Get a presigned URL to upload a document to the knowledge base.
 
+    Supported file types: PDF, TXT, MD, HTML, DOC, DOCX, CSV, JSON, XML
+
     Args:
-        filename: Name of the file to upload (e.g., 'report.pdf')
+        filename: Name of the file to upload with extension (e.g., "report.pdf", "notes.md").
+            The filename is used to determine content type and for display in the knowledge base.
 
     Returns:
-        Upload URL and instructions
+        Multiline string with:
+        - "Upload URL generated!" confirmation
+        - "Document ID: <uuid>" - Unique ID for tracking the document
+        - "Upload URL: <presigned_s3_url>" - URL to POST the file to
+        - "To upload, POST a multipart form with these fields:" - Required form fields
+        - JSON object with form fields to include in the upload
+        - "Then append your file as 'file' field."
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "GraphQL error: Invalid filename" - Unsupported file type or invalid characters
+        - "GraphQL error: <message>" - Server error
+
+    Example:
+        # Get upload URL for a PDF
+        upload_document_url("quarterly-report.pdf")
+
+        # Get upload URL for markdown
+        upload_document_url("api-documentation.md")
+
+    Note:
+        After getting the URL, use a tool like curl to upload:
+        curl -X POST "<upload_url>" -F "key=<key>" -F "...other fields..." -F "file=@report.pdf"
     """
     gql = """
     mutation CreateUploadUrl($filename: String!) {

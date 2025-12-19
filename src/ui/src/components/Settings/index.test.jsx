@@ -397,7 +397,7 @@ describe('Settings Component', () => {
       });
     });
 
-    it('renders object fields as expandable sections with nested inputs', async () => {
+    it('renders object fields with nested inputs inline', async () => {
       const schemaWithObject = {
         properties: {
           chat_theme_overrides: {
@@ -430,8 +430,9 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      // Object fields are now rendered inline (not in expandable sections)
       await waitFor(() => {
-        expect(screen.getByText('Custom theme overrides')).toBeInTheDocument();
+        expect(screen.getByText('primaryColor')).toBeInTheDocument();
       });
     });
   });

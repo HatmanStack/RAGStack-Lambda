@@ -113,14 +113,73 @@ Edit `~/.continue/config.json`, add to `mcpServers` array:
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `search_knowledge_base` | Search for relevant documents |
-| `chat_with_knowledge_base` | Ask questions with AI-generated answers and citations |
-| `start_scrape_job` | Scrape a website into the knowledge base |
-| `get_scrape_job_status` | Check scrape job progress |
-| `list_scrape_jobs` | List recent scrape jobs |
-| `upload_document_url` | Get a presigned URL to upload documents |
+### search_knowledge_base
+
+Search for relevant documents in the knowledge base.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | Yes | - | The search query |
+| `max_results` | int | No | 5 | Maximum results to return |
+
+### chat_with_knowledge_base
+
+Ask questions and get AI-generated answers with source citations.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | Yes | - | Your question |
+| `conversation_id` | string | No | null | ID to maintain conversation context |
+
+### start_scrape_job
+
+Scrape a website into the knowledge base.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | string | Yes | - | Starting URL to scrape |
+| `max_pages` | int | No | 50 | Maximum pages to scrape |
+| `max_depth` | int | No | 3 | How deep to follow links (0 = start page only) |
+| `scope` | string | No | "HOSTNAME" | `SUBPAGES`, `HOSTNAME`, or `DOMAIN` |
+| `include_patterns` | list[str] | No | null | Only scrape URLs matching these glob patterns |
+| `exclude_patterns` | list[str] | No | null | Skip URLs matching these glob patterns |
+| `scrape_mode` | string | No | "AUTO" | `AUTO`, `FAST` (HTTP only), or `FULL` (browser) |
+| `cookies` | string | No | null | Cookie string for authenticated sites |
+| `force_rescrape` | bool | No | false | Re-scrape even if content unchanged |
+
+**Scope values:**
+- `SUBPAGES` - Only URLs under the starting path
+- `HOSTNAME` - All pages on the same subdomain
+- `DOMAIN` - All subdomains of the domain
+
+**Scrape mode values:**
+- `AUTO` - Try fast mode, fall back to full for SPAs
+- `FAST` - HTTP only, faster but may miss JavaScript content
+- `FULL` - Uses headless browser, handles all JavaScript
+
+### get_scrape_job_status
+
+Check the status of a scrape job.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `job_id` | string | Yes | The scrape job ID |
+
+### list_scrape_jobs
+
+List recent scrape jobs.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | int | No | 10 | Maximum jobs to return |
+
+### upload_document_url
+
+Get a presigned URL to upload a document.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `filename` | string | Yes | Name of the file (e.g., 'report.pdf') |
 
 ## Usage Examples
 
