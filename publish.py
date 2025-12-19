@@ -931,29 +931,10 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                         'value': 'bedrock'
                     }
                 },
-                'chat_model_id': {
-                    'type': 'string',
-                    'order': 3,
-                    'description': 'Bedrock model for Knowledge Base chat queries',
-                    'enum': [
-                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
-                        'us.amazon.nova-pro-v1:0',
-                        'us.amazon.nova-lite-v1:0',
-                        'us.amazon.nova-micro-v1:0'
-                    ],
-                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
-                },
-                'chat_require_auth': {
-                    'type': 'boolean',
-                    'order': 4,
-                    'description': 'Require authentication for chat access',
-                    'default': False
-                },
                 'chat_primary_model': {
                     'type': 'string',
-                    'order': 5,
-                    'description': 'Primary Bedrock model for chat (before quota limits)',
+                    'order': 3,
+                    'description': 'Primary chat model (switches to fallback when quota exceeded)',
                     'enum': [
                         'us.anthropic.claude-sonnet-4-20250514-v1:0',
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -964,7 +945,7 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_fallback_model': {
                     'type': 'string',
-                    'order': 6,
+                    'order': 4,
                     'description': 'Fallback model when quotas exceeded',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -975,26 +956,26 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_global_quota_daily': {
                     'type': 'number',
-                    'order': 7,
+                    'order': 5,
                     'description': 'Max messages per day (all users combined) on primary model',
                     'default': 10000
                 },
                 'chat_per_user_quota_daily': {
                     'type': 'number',
-                    'order': 8,
+                    'order': 6,
                     'description': 'Max messages per user per day on primary model',
                     'default': 100
                 },
                 'chat_theme_preset': {
                     'type': 'string',
-                    'order': 9,
+                    'order': 7,
                     'description': 'UI theme preset',
                     'enum': ['light', 'dark', 'brand'],
                     'default': 'light'
                 },
                 'chat_theme_overrides': {
                     'type': 'object',
-                    'order': 10,
+                    'order': 8,
                     'description': 'Custom theme overrides (optional)',
                     'properties': {
                         'primaryColor': {'type': 'string'},
@@ -1007,43 +988,43 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_cdn_url': {
                     'type': 'string',
-                    'order': 11,
+                    'order': 9,
                     'description': 'Web component CDN URL (read-only)',
                     'readOnly': True
                 },
                 'chat_allow_document_access': {
                     'type': 'boolean',
-                    'order': 12,
+                    'order': 10,
                     'description': 'Allow users to download original source documents via presigned URLs',
                     'default': False
                 },
                 'public_access_chat': {
                     'type': 'boolean',
-                    'order': 13,
+                    'order': 11,
                     'description': 'Allow unauthenticated chat queries (web component)',
                     'default': True
                 },
                 'public_access_search': {
                     'type': 'boolean',
-                    'order': 14,
+                    'order': 12,
                     'description': 'Allow unauthenticated search queries',
                     'default': True
                 },
                 'public_access_upload': {
                     'type': 'boolean',
-                    'order': 15,
+                    'order': 13,
                     'description': 'Allow unauthenticated document uploads',
                     'default': False
                 },
                 'public_access_image_upload': {
                     'type': 'boolean',
-                    'order': 16,
+                    'order': 14,
                     'description': 'Allow unauthenticated image uploads',
                     'default': False
                 },
                 'public_access_scrape': {
                     'type': 'boolean',
-                    'order': 17,
+                    'order': 15,
                     'description': 'Allow unauthenticated web scrape jobs',
                     'default': False
                 }
@@ -1059,8 +1040,6 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'chat_cdn_url': chat_cdn_url,
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
-        'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-        'chat_require_auth': False,
         'chat_primary_model': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
         'chat_fallback_model': 'us.amazon.nova-micro-v1:0',
         'chat_global_quota_daily': 10000,
