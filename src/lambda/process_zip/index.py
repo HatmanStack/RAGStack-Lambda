@@ -117,8 +117,8 @@ def lambda_handler(event, context):
         zip_size = head_response.get("ContentLength", 0)
         if zip_size > MAX_ZIP_SIZE:
             raise ValueError(
-                f"ZIP file too large: {zip_size / (1024*1024):.1f} MB "
-                f"(max {MAX_ZIP_SIZE / (1024*1024):.0f} MB)"
+                f"ZIP file too large: {zip_size / (1024 * 1024):.1f} MB "
+                f"(max {MAX_ZIP_SIZE / (1024 * 1024):.0f} MB)"
             )
 
         # Download ZIP file from S3
@@ -158,12 +158,13 @@ def lambda_handler(event, context):
                     if info.file_size > MAX_IMAGE_SIZE:
                         logger.warning(
                             f"Skipping oversized image: {filename} "
-                            f"({info.file_size / (1024*1024):.1f} MB)"
+                            f"({info.file_size / (1024 * 1024):.1f} MB)"
                         )
                         result["failed_images"] += 1
+                        max_mb = MAX_IMAGE_SIZE / (1024 * 1024)
                         result["errors"].append(
                             f"Image too large: {filename} "
-                            f"({info.file_size / (1024*1024):.1f} MB, max {MAX_IMAGE_SIZE / (1024*1024):.0f} MB)"
+                            f"({info.file_size / (1024 * 1024):.1f} MB, max {max_mb:.0f} MB)"
                         )
                         continue
 
