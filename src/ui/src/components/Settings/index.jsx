@@ -228,33 +228,14 @@ export function Settings() {
     const isCustomized = Object.prototype.hasOwnProperty.call(customConfig, key);
     const validationError = validationErrors[key];
 
-    // Note: chat_deployed check removed - chat is always deployed with SAM stack
-    // All chat fields are now always visible
+    // Skip chat_cdn_url - shown in Chat tab instead
+    if (key === 'chat_cdn_url') {
+      return null;
+    }
 
-    // Special handling for chat_cdn_url - display with embed code
-    if (key === 'chat_cdn_url' && value) {
-      return (
-        <Alert type="success" header="Web Component Embed Code">
-          <SpaceBetween size="s">
-            <Box variant="p">
-              Copy and paste this code into any HTML page to add the chat component:
-            </Box>
-            <Box>
-              <code style={{ display: 'block', whiteSpace: 'pre-wrap', padding: '12px', background: '#f4f4f4', borderRadius: '4px' }}>
-                {`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
-              </code>
-            </Box>
-            <CopyToClipboard
-              copyText={`<script src="${value}"></script>\n<ragstack-chat conversation-id="my-site"></ragstack-chat>`}
-              copyButtonText="Copy Embed Code"
-              copySuccessText="Copied!"
-            />
-            <Box variant="small" color="text-body-secondary">
-              CDN URL: {value}
-            </Box>
-          </SpaceBetween>
-        </Alert>
-      );
+    // Skip chat_allow_document_access - rendered separately in API Key section
+    if (key === 'chat_allow_document_access') {
+      return null;
     }
 
     // Handle conditional visibility (dependsOn)
@@ -517,6 +498,20 @@ export function Settings() {
           ) : (
             <Box>No API key available</Box>
           )}
+
+          <FormField
+            label="Allow Document Downloads"
+            description="Let users download original source documents via chat citations"
+          >
+            <Toggle
+              checked={formValues.chat_allow_document_access === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, chat_allow_document_access: detail.checked });
+              }}
+            >
+              {formValues.chat_allow_document_access ? 'Enabled' : 'Disabled'}
+            </Toggle>
+          </FormField>
 
           <ExpandableSection
             headerText="MCP Server Setup"
