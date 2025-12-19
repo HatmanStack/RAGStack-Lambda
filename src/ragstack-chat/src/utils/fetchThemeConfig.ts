@@ -6,9 +6,11 @@
  * the SAM stack's DynamoDB table.
  *
  * At runtime, the web component fetches config.json from the same CDN origin
- * to discover the API endpoint and key. This enables real-time theme updates
- * without rebuilding the web component.
+ * to discover the API endpoint and Identity Pool ID. This enables real-time
+ * theme updates without rebuilding the web component.
  */
+
+import { iamFetch } from './iamAuth';
 
 export interface ThemeConfig {
   themePreset: 'light' | 'dark' | 'brand';
@@ -21,7 +23,8 @@ export interface ThemeConfig {
 
 export interface CDNConfig {
   apiEndpoint: string;
-  apiKey: string;
+  identityPoolId: string;
+  region: string;
 }
 
 // Cache the CDN config to avoid refetching on every request
@@ -39,7 +42,7 @@ const GET_THEME_CONFIG_QUERY = `
 `;
 
 /**
- * Fetch CDN config.json to get API endpoint and key
+ * Fetch CDN config.json to get API endpoint and Identity Pool ID
  * Uses the script's origin to construct the config URL
  * Exported for use by ChatInterface as well
  */
@@ -91,7 +94,7 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
     // Fetch CDN config to get API endpoint
     const cdnConfig = await fetchCDNConfig();
 
-    if (!cdnConfig?.apiEndpoint || !cdnConfig?.apiKey) {
+    if (!cdnConfig?.apiEndpoint || !cdnConfig?.identityPoolId || !cdnConfig?.region) {
       return null;
     }
 
@@ -99,17 +102,17 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(cdnConfig.apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': cdnConfig.apiKey,
-      },
-      body: JSON.stringify({
-        query: GET_THEME_CONFIG_QUERY,
-      }),
-      signal: controller.signal,
+    const body = JSON.stringify({
+      query: GET_THEME_CONFIG_QUERY,
     });
+
+    // Use IAM auth for the request
+    const response = await iamFetch(
+      cdnConfig.apiEndpoint,
+      body,
+      cdnConfig.identityPoolId,
+      cdnConfig.region
+    );
 
     clearTimeout(timeoutId);
 

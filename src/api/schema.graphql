@@ -9,12 +9,12 @@ type Query {
 
   # Query Knowledge Base with optional conversation ID for multi-turn chat
   # Note: sessionId is deprecated, use conversationId instead
-  # Accessible via API key for web component, or Cognito for admin UI
-  queryKnowledgeBase(query: String!, sessionId: String, conversationId: String): ChatResponse @aws_api_key @aws_cognito_user_pools
+  # Accessible via IAM (unauthenticated web component), API key (server-side), or Cognito (admin UI)
+  queryKnowledgeBase(query: String!, sessionId: String, conversationId: String): ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Search Knowledge Base and return raw vector search results
-  # Accessible via API key for external integrations
-  searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult @aws_api_key @aws_cognito_user_pools
+  # Accessible via IAM (unauthenticated), API key (server-side), or Cognito (admin UI)
+  searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse
@@ -207,7 +207,7 @@ type UploadUrl @aws_api_key @aws_cognito_user_pools {
 }
 
 # Chat response with conversation support for multi-turn context
-type ChatResponse @aws_api_key @aws_cognito_user_pools {
+type ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
   answer: String!
   sessionId: String  # Deprecated, use conversationId
   conversationId: String
@@ -216,7 +216,7 @@ type ChatResponse @aws_api_key @aws_cognito_user_pools {
 }
 
 # Source citation from Knowledge Base retrieval
-type Source @aws_api_key @aws_cognito_user_pools {
+type Source @aws_iam @aws_api_key @aws_cognito_user_pools {
   documentId: String!
   pageNumber: Int
   s3Uri: String!
@@ -230,7 +230,7 @@ type Source @aws_api_key @aws_cognito_user_pools {
 }
 
 # Knowledge Base search result (raw vector search)
-type KBQueryResult @aws_api_key @aws_cognito_user_pools {
+type KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools {
   query: String!
   results: [KBResult!]!
   total: Int
@@ -238,7 +238,7 @@ type KBQueryResult @aws_api_key @aws_cognito_user_pools {
 }
 
 # Individual KB search result
-type KBResult @aws_api_key @aws_cognito_user_pools {
+type KBResult @aws_iam @aws_api_key @aws_cognito_user_pools {
   content: String!
   source: String
   score: Float

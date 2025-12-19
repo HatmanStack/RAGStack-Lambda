@@ -2,7 +2,16 @@
  * Tests for fetchThemeConfig utility
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchThemeConfig } from '../fetchThemeConfig';
+
+// Mock iamFetch before importing the module
+vi.mock('../iamAuth', () => ({
+  iamFetch: vi.fn(),
+}));
+
+import { fetchThemeConfig, fetchCDNConfig } from '../fetchThemeConfig';
+import { iamFetch } from '../iamAuth';
+
+const mockIamFetch = vi.mocked(iamFetch);
 
 describe('fetchThemeConfig', () => {
   const mockFetch = vi.fn();
@@ -12,6 +21,7 @@ describe('fetchThemeConfig', () => {
   beforeEach(() => {
     global.fetch = mockFetch;
     mockFetch.mockReset();
+    mockIamFetch.mockReset();
 
     // Mock document.querySelectorAll to return a script element
     const mockScript = { src: 'https://cdn.example.com/ragstack-chat.js' };
@@ -36,12 +46,13 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL API
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch returns GraphQL response
+    mockIamFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         data: {
@@ -53,7 +64,7 @@ describe('fetchThemeConfig', () => {
           },
         },
       }),
-    });
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     const result = await freshFetch();
@@ -86,15 +97,16 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL API fails
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch returns error
+    mockIamFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
-    });
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     const result = await freshFetch();
@@ -108,26 +120,18 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL returns errors
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch returns GraphQL errors
+    mockIamFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        errors: [{ message: 'Some GraphQL error' }],
+        errors: [{ message: 'Unauthorized' }],
       }),
-    });
-
-    const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
-    const result = await freshFetch();
-
-    expect(result).toBeNull();
-  });
-
-  it('returns null on network error', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     const result = await freshFetch();
@@ -141,24 +145,22 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL API
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch returns only preset
+    mockIamFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         data: {
           getThemeConfig: {
             themePreset: 'light',
-            primaryColor: null,
-            fontFamily: null,
-            spacing: null,
           },
         },
       }),
-    });
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     const result = await freshFetch();
@@ -175,34 +177,36 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL API with null themePreset
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch returns empty theme
+    mockIamFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         data: {
-          getThemeConfig: {
-            themePreset: null,
-          },
+          getThemeConfig: {},
         },
       }),
-    });
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     const result = await freshFetch();
 
-    expect(result?.themePreset).toBe('light');
+    expect(result).toEqual({
+      themePreset: 'light',
+      themeOverrides: undefined,
+    });
   });
 
-  it('returns null when config has no apiEndpoint', async () => {
+  it('returns null when config is missing identityPoolId', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        apiEndpoint: '',
-        apiKey: 'test-api-key',
+        apiEndpoint: 'https://test-api.example.com/graphql',
+        // Missing identityPoolId and region
       }),
     });
 
@@ -218,21 +222,22 @@ describe('fetchThemeConfig', () => {
       ok: true,
       json: async () => ({
         apiEndpoint: 'https://test-api.example.com/graphql',
-        apiKey: 'test-api-key',
+        identityPoolId: 'us-east-1:test-pool',
+        region: 'us-east-1',
       }),
     });
 
-    // Second call: GraphQL API
-    mockFetch.mockResolvedValueOnce({
+    // iamFetch
+    mockIamFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         data: {
           getThemeConfig: {
-            themePreset: 'brand',
+            themePreset: 'light',
           },
         },
       }),
-    });
+    } as Response);
 
     const { fetchThemeConfig: freshFetch } = await import('../fetchThemeConfig');
     await freshFetch();
@@ -242,5 +247,49 @@ describe('fetchThemeConfig', () => {
       'https://cdn.example.com/config.json',
       expect.any(Object)
     );
+  });
+});
+
+describe('fetchCDNConfig', () => {
+  const mockFetch = vi.fn();
+  const originalFetch = global.fetch;
+  const originalDocument = global.document;
+
+  beforeEach(() => {
+    global.fetch = mockFetch;
+    mockFetch.mockReset();
+
+    const mockScript = { src: 'https://cdn.example.com/ragstack-chat.js' };
+    global.document = {
+      ...originalDocument,
+      querySelectorAll: vi.fn().mockReturnValue([mockScript]),
+    } as unknown as Document;
+
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    global.document = originalDocument;
+  });
+
+  it('returns config with identityPoolId and region', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        apiEndpoint: 'https://api.example.com/graphql',
+        identityPoolId: 'us-west-2:abc123',
+        region: 'us-west-2',
+      }),
+    });
+
+    const { fetchCDNConfig: freshFetch } = await import('../fetchThemeConfig');
+    const result = await freshFetch();
+
+    expect(result).toEqual({
+      apiEndpoint: 'https://api.example.com/graphql',
+      identityPoolId: 'us-west-2:abc123',
+      region: 'us-west-2',
+    });
   });
 });

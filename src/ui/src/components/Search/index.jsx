@@ -40,15 +40,14 @@ export const Search = () => {
 
         {graphqlEndpoint && (
           <ApiDocs
-            title="Search API"
-            description="Use API key or Cognito token for authentication."
+            title="Search API (Server-side)"
+            description="For backend integrations, MCP servers, and scripts."
             endpoint={graphqlEndpoint}
             examples={[
               { id: 'graphql', label: 'GraphQL', code: graphqlQuery },
               { id: 'js', label: 'JavaScript', code: jsExample },
               { id: 'curl', label: 'cURL', code: curlExample },
             ]}
-            footer="Replace API_KEY with your key from Settings."
           />
         )}
       </SpaceBetween>

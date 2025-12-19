@@ -7,18 +7,25 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatInterface } from '../ChatInterface';
 import { mockScrollIntoView, mockSessionStorage, cleanupTestUtils } from '../../test-utils';
 
-// Mock fetchCDNConfig from fetchThemeConfig module
+// Mock fetchCDNConfig and iamFetch
 vi.mock('../../utils/fetchThemeConfig', () => ({
   fetchCDNConfig: vi.fn(() =>
     Promise.resolve({
       apiEndpoint: 'https://test-api.example.com/graphql',
-      apiKey: 'test-api-key',
+      identityPoolId: 'us-east-1:test-identity-pool',
+      region: 'us-east-1',
     })
   ),
 }));
 
-// Mock fetch globally
-const mockFetch = vi.fn();
+// Import the mocked module to configure it
+import { iamFetch } from '../../utils/iamAuth';
+
+vi.mock('../../utils/iamAuth', () => ({
+  iamFetch: vi.fn(),
+}));
+
+const mockIamFetch = vi.mocked(iamFetch);
 
 describe('ChatInterface', () => {
   beforeEach(() => {
@@ -26,21 +33,20 @@ describe('ChatInterface', () => {
     mockScrollIntoView();
     mockSessionStorage();
 
-    // Reset and configure the fetch mock
-    mockFetch.mockReset();
-    globalThis.fetch = mockFetch;
+    // Reset and configure the iamFetch mock
+    mockIamFetch.mockReset();
 
-    // Default mock response
-    mockFetch.mockImplementation(async (_url, options) => {
-      const body = JSON.parse(options?.body || '{}');
-      const query = body.variables?.query || 'unknown';
+    // Default mock response for iamFetch
+    mockIamFetch.mockImplementation(async (_url, body) => {
+      const parsedBody = JSON.parse(body);
+      const query = parsedBody.variables?.query || 'unknown';
       return {
         ok: true,
         json: async () => ({
           data: {
             queryKnowledgeBase: {
               answer: `Mock response to: ${query}`,
-              conversationId: body.variables?.conversationId || 'test-conv',
+              conversationId: parsedBody.variables?.conversationId || 'test-conv',
               sources: [
                 {
                   documentId: 'test-doc.pdf',
@@ -52,7 +58,7 @@ describe('ChatInterface', () => {
             },
           },
         }),
-      };
+      } as Response;
     });
   });
 
@@ -87,9 +93,9 @@ describe('ChatInterface', () => {
     // User message should appear immediately
     expect(screen.getByText('Hello')).toBeInTheDocument();
 
-    // Wait for async fetch call to complete to avoid act() warnings
+    // Wait for async iamFetch call to complete to avoid act() warnings
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockIamFetch).toHaveBeenCalled();
     });
   });
 
@@ -199,7 +205,7 @@ describe('ChatInterface', () => {
 
     // Wait for async operations to complete
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockIamFetch).toHaveBeenCalled();
     });
   });
 

@@ -465,11 +465,11 @@ export function Settings() {
         </Alert>
       )}
 
-      <Container header={<Header variant="h2">API Key</Header>}>
+      <Container header={<Header variant="h2">API Key (Server-side Only)</Header>}>
         <SpaceBetween size="m">
-          <Box variant="p">
-            Use this API key to access the search and query endpoints from external applications.
-          </Box>
+          <Alert type="warning">
+            <strong>For server-side use only.</strong> Never expose this key in frontend code, browser applications, or public repositories. Use it for MCP servers, backend integrations, and scripts.
+          </Alert>
 
           {apiKeyError && (
             <Alert type="error" dismissible onDismiss={() => setApiKeyError(null)}>

@@ -560,7 +560,7 @@ Resources:
             build:
               commands:
                 - echo "Building web component..."
-                - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" SAM_GRAPHQL_API_KEY="$SAM_API_KEY" npm run build:wc
+                - SAM_GRAPHQL_ENDPOINT="$SAM_API_ENDPOINT" npm run build:wc
                 - ls -lh dist/
             post_build:
               commands:
@@ -568,7 +568,7 @@ Resources:
                 - aws s3 cp dist/wc.js s3://${ASSET_BUCKET}/ragstack-chat.js --content-type application/javascript --cache-control "public, max-age=31536000"
                 - aws s3 cp dist/wc.esm.js s3://${ASSET_BUCKET}/ragstack-chat.esm.js --content-type application/javascript --cache-control "public, max-age=31536000"
                 - echo "Generating config.json..."
-                - echo "{\"apiEndpoint\":\"${SAM_API_ENDPOINT}\",\"apiKey\":\"${SAM_API_KEY}\"}" > dist/config.json
+                - echo "{\"apiEndpoint\":\"${SAM_API_ENDPOINT}\",\"identityPoolId\":\"${IDENTITY_POOL_ID}\",\"region\":\"${AWS_REGION}\"}" > dist/config.json
                 - aws s3 cp dist/config.json s3://${ASSET_BUCKET}/config.json --content-type application/json --cache-control "public, max-age=300"
                 - echo "Invalidating CloudFront cache..."
                 - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/ragstack-chat.js" "/ragstack-chat.esm.js" "/config.json"
@@ -588,8 +588,10 @@ Resources:
             Value: !Ref ConfigurationTable
           - Name: SAM_API_ENDPOINT
             Value: !GetAtt GraphQLApi.GraphQLUrl
-          - Name: SAM_API_KEY
-            Value: !GetAtt GraphQLApiKey.ApiKey
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref IdentityPool
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
       TimeoutInMinutes: 15
       Tags:
         - Key: Project

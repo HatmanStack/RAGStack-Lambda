@@ -42,7 +42,7 @@ export const ApiDocs = ({
   description,
   endpoint,
   examples = [],
-  footer,
+  footer = 'Server-side only. Never expose API keys in frontend code.',
 }) => {
   const [activeTab, setActiveTab] = useState(examples[0]?.id || 'graphql');
 

@@ -10,6 +10,7 @@ import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { fetchCDNConfig } from '../utils/fetchThemeConfig';
+import { iamFetch } from '../utils/iamAuth';
 import styles from '../styles/ChatWithSources.module.css';
 
 // GraphQL query for SAM AppSync queryKnowledgeBase
@@ -38,8 +39,8 @@ const MESSAGE_LIMIT = 50;
 const MAX_RETRIES = 3;
 
 /**
- * Query SAM AppSync API directly using fetch
- * Gets API endpoint from config.json at runtime
+ * Query SAM AppSync API using IAM authentication
+ * Gets API endpoint and Identity Pool ID from config.json at runtime
  */
 async function queryKnowledgeBase(
   message: string,
@@ -59,24 +60,24 @@ async function queryKnowledgeBase(
 }> {
   const config = await fetchCDNConfig();
 
-  if (!config?.apiEndpoint) {
+  if (!config?.apiEndpoint || !config?.identityPoolId || !config?.region) {
     throw new Error('API endpoint not available. Please check your configuration.');
   }
 
-  const response = await fetch(config.apiEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(config.apiKey ? { 'x-api-key': config.apiKey } : {}),
+  const body = JSON.stringify({
+    query: QUERY_KB_QUERY,
+    variables: {
+      query: message,
+      conversationId: conversationId,
     },
-    body: JSON.stringify({
-      query: QUERY_KB_QUERY,
-      variables: {
-        query: message,
-        conversationId: conversationId,
-      },
-    }),
   });
+
+  const response = await iamFetch(
+    config.apiEndpoint,
+    body,
+    config.identityPoolId,
+    config.region
+  );
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
