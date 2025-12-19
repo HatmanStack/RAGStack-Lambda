@@ -98,3 +98,27 @@ export function validateQuota(value) {
 
   return { valid: true, error: null };
 }
+
+/**
+ * Validate budget threshold value
+ * @param {number} value - Budget threshold in USD
+ * @returns {{valid: boolean, error: string|null}} Validation result
+ */
+export function validateBudgetThreshold(value) {
+  if (!isWithinRange(value, 1, 100000)) {
+    return {
+      valid: false,
+      error: 'Budget must be between $1 and $100,000'
+    };
+  }
+
+  // Check if integer
+  if (!Number.isInteger(Number(value))) {
+    return {
+      valid: false,
+      error: 'Budget must be a whole number'
+    };
+  }
+
+  return { valid: true, error: null };
+}

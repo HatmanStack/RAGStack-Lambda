@@ -1027,6 +1027,18 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                     'order': 15,
                     'description': 'Allow unauthenticated web scrape jobs',
                     'default': False
+                },
+                'budget_alert_threshold': {
+                    'type': 'number',
+                    'order': 16,
+                    'description': 'Monthly budget alert threshold in USD (alerts sent to admin email)',
+                    'default': 100
+                },
+                'budget_alert_enabled': {
+                    'type': 'boolean',
+                    'order': 17,
+                    'description': 'Enable budget alerts (emails admin at 80% and 100% of threshold)',
+                    'default': True
                 }
             }
         }
@@ -1051,7 +1063,9 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'public_access_search': True,
         'public_access_upload': False,
         'public_access_image_upload': False,
-        'public_access_scrape': False
+        'public_access_scrape': False,
+        'budget_alert_threshold': 100,
+        'budget_alert_enabled': True
     }
 
     try:

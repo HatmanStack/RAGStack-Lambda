@@ -669,6 +669,8 @@ Resources:
       KeySchema:
         - AttributeName: Configuration
           KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -2759,6 +2761,48 @@ Resources:
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref AdminEmail
+
+  # =========================================================================
+  # Budget Sync Function - Syncs config changes to AWS Budgets
+  # =========================================================================
+
+  BudgetSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-budget-sync-${DeploymentSuffix}'
+      CodeUri: src/lambda/budget_sync/
+      Handler: index.lambda_handler
+      Description: Sync budget configuration changes to AWS Budgets
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          BUDGET_NAME: !Sub '${ProjectName}-Monthly-Budget'
+          ADMIN_EMAIL: !Ref AdminEmail
+          PROJECT_NAME: !Ref ProjectName
+      Events:
+        ConfigStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt ConfigurationTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 1
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"dynamodb":{"Keys":{"Configuration":{"S":["Custom"]}}}}'
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - budgets:ModifyBudget
+                - budgets:DescribeBudget
+                - budgets:UpdateBudget
+              Resource: '*'
 
 Outputs:
   # S3 Buckets

@@ -46,6 +46,7 @@ import { regenerateApiKey } from '../../graphql/mutations/regenerateApiKey';
 import {
   validateThemeOverrides,
   validateQuota,
+  validateBudgetThreshold,
 } from '../../utils/validation';
 
 export function Settings() {
@@ -313,6 +314,18 @@ export function Settings() {
         // Validate quota fields
         if (key.includes('quota')) {
           const validation = validateQuota(parsedValue);
+          if (!validation.valid) {
+            setValidationErrors({ ...validationErrors, [key]: validation.error });
+          } else {
+            const newErrors = { ...validationErrors };
+            delete newErrors[key];
+            setValidationErrors(newErrors);
+          }
+        }
+
+        // Validate budget threshold fields
+        if (key === 'budget_alert_threshold') {
+          const validation = validateBudgetThreshold(parsedValue);
           if (!validation.valid) {
             setValidationErrors({ ...validationErrors, [key]: validation.error });
           } else {
