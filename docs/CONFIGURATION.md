@@ -29,6 +29,38 @@ curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
 
 **Alternative:** Use Cognito tokens (`Authorization: Bearer TOKEN`) for user-scoped access.
 
+## MCP Server (AI Assistant Integration)
+
+Connect your knowledge base to Claude Desktop, Cursor, VS Code, Amazon Q CLI, and other MCP-compatible AI tools.
+
+**Install:** `pip install ragstack-mcp` or use `uvx` (zero-install)
+
+**Configure:** Add to your AI assistant's MCP config file:
+
+```json
+{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "YOUR_ENDPOINT",
+      "RAGSTACK_API_KEY": "YOUR_API_KEY"
+    }
+  }
+}
+```
+
+| Client | Config Location |
+|--------|-----------------|
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) |
+| Amazon Q CLI | `~/.aws/amazonq/mcp.json` |
+| Cursor | Settings → MCP Servers |
+| VS Code + Cline | `.vscode/cline_mcp_settings.json` |
+
+**Available tools:** `search_knowledge_base`, `chat_with_knowledge_base`, `start_scrape_job`, `get_scrape_job_status`, `list_scrape_jobs`, `upload_document_url`
+
+See [MCP Server README](../src/ragstack-mcp/README.md) for detailed setup per client.
+
 ## Document Processing
 
 | Setting | Values | Default | Notes |

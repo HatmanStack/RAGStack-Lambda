@@ -517,6 +517,102 @@ export function Settings() {
           ) : (
             <Box>No API key available</Box>
           )}
+
+          <ExpandableSection
+            headerText="MCP Server Setup (AI Assistant Integration)"
+            variant="footer"
+          >
+            <SpaceBetween size="m">
+              <Box variant="p">
+                Connect your knowledge base to Claude Desktop, Cursor, VS Code, Amazon Q CLI, and other MCP-compatible AI tools.
+              </Box>
+
+              <Box variant="h4">Install</Box>
+              <Box>
+                <code
+                  style={{
+                    display: 'block',
+                    padding: '8px 12px',
+                    background: 'var(--color-background-container-content)',
+                    border: '1px solid var(--color-border-divider-default)',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  pip install ragstack-mcp
+                </code>
+              </Box>
+              <CopyToClipboard
+                copyText="pip install ragstack-mcp"
+                copyButtonText="Copy Install Command"
+                copySuccessText="Copied!"
+              />
+
+              <Box variant="h4">MCP Configuration</Box>
+              <Box variant="small" color="text-body-secondary">
+                Add to your AI assistant's MCP config file (Claude Desktop, Cursor, Amazon Q CLI, etc.)
+              </Box>
+              {apiKeyData && (
+                <>
+                  <Box>
+                    <code
+                      style={{
+                        display: 'block',
+                        whiteSpace: 'pre-wrap',
+                        padding: '12px',
+                        background: 'var(--color-background-container-content)',
+                        border: '1px solid var(--color-border-divider-default)',
+                        borderRadius: '4px',
+                        fontFamily: 'monospace',
+                        fontSize: '13px',
+                      }}
+                    >
+{`{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "${import.meta.env.VITE_GRAPHQL_URL || 'YOUR_ENDPOINT'}",
+      "RAGSTACK_API_KEY": "${apiKeyData.apiKey}"
+    }
+  }
+}`}
+                    </code>
+                  </Box>
+                  <CopyToClipboard
+                    copyText={`{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "${import.meta.env.VITE_GRAPHQL_URL || 'YOUR_ENDPOINT'}",
+      "RAGSTACK_API_KEY": "${apiKeyData.apiKey}"
+    }
+  }
+}`}
+                    copyButtonText="Copy MCP Config"
+                    copySuccessText="Copied!"
+                  />
+                </>
+              )}
+
+              <Box variant="h4">Config File Locations</Box>
+              <Box>
+                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                  <li><strong>Claude Desktop (Mac):</strong> ~/Library/Application Support/Claude/claude_desktop_config.json</li>
+                  <li><strong>Claude Desktop (Win):</strong> %APPDATA%\Claude\claude_desktop_config.json</li>
+                  <li><strong>Amazon Q CLI:</strong> ~/.aws/amazonq/mcp.json</li>
+                  <li><strong>Cursor:</strong> Settings → MCP Servers</li>
+                  <li><strong>VS Code + Cline:</strong> .vscode/cline_mcp_settings.json</li>
+                </ul>
+              </Box>
+
+              <Box variant="h4">Available Tools</Box>
+              <Box variant="small" color="text-body-secondary">
+                search_knowledge_base, chat_with_knowledge_base, start_scrape_job, get_scrape_job_status, list_scrape_jobs, upload_document_url
+              </Box>
+            </SpaceBetween>
+          </ExpandableSection>
         </SpaceBetween>
       </Container>
 

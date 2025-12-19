@@ -76,6 +76,34 @@ curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
 
 Each UI tab shows API usage examples in an expandable section.
 
+## MCP Server (AI Assistant Integration)
+
+Use your knowledge base directly in Claude Desktop, Cursor, VS Code, Amazon Q CLI, and other MCP-compatible tools.
+
+```bash
+# Install (or use uvx for zero-install)
+pip install ragstack-mcp
+```
+
+Add to your AI assistant's MCP config:
+
+```json
+{
+  "ragstack-kb": {
+    "command": "uvx",
+    "args": ["ragstack-mcp"],
+    "env": {
+      "RAGSTACK_GRAPHQL_ENDPOINT": "YOUR_ENDPOINT",
+      "RAGSTACK_API_KEY": "YOUR_API_KEY"
+    }
+  }
+}
+```
+
+Then ask naturally: *"Search my knowledge base for authentication docs"*
+
+See [MCP Server docs](src/ragstack-mcp/README.md) for full setup instructions.
+
 ## Architecture
 
 ```
