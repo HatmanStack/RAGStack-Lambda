@@ -7,6 +7,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatInterface } from '../ChatInterface';
 import { mockScrollIntoView, mockSessionStorage, cleanupTestUtils } from '../../test-utils';
 
+// Mock fetchCDNConfig from fetchThemeConfig module
+vi.mock('../../utils/fetchThemeConfig', () => ({
+  fetchCDNConfig: vi.fn(() =>
+    Promise.resolve({
+      apiEndpoint: 'https://test-api.example.com/graphql',
+      apiKey: 'test-api-key',
+    })
+  ),
+}));
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 
@@ -15,11 +25,6 @@ describe('ChatInterface', () => {
     // Mock browser APIs
     mockScrollIntoView();
     mockSessionStorage();
-
-    // Set up global SAM_GRAPHQL_ENDPOINT
-    (globalThis as unknown as { SAM_GRAPHQL_ENDPOINT: string }).SAM_GRAPHQL_ENDPOINT =
-      'https://test-api.example.com/graphql';
-    (globalThis as unknown as { SAM_GRAPHQL_API_KEY: string }).SAM_GRAPHQL_API_KEY = 'test-api-key';
 
     // Reset and configure the fetch mock
     mockFetch.mockReset();
@@ -54,9 +59,6 @@ describe('ChatInterface', () => {
   afterEach(() => {
     cleanupTestUtils();
     vi.restoreAllMocks();
-    // Clean up global variables
-    delete (globalThis as unknown as { SAM_GRAPHQL_ENDPOINT?: string }).SAM_GRAPHQL_ENDPOINT;
-    delete (globalThis as unknown as { SAM_GRAPHQL_API_KEY?: string }).SAM_GRAPHQL_API_KEY;
   });
 
   it('renders MessageList and MessageInput components', () => {
