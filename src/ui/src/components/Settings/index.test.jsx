@@ -336,7 +336,7 @@ describe('Settings Component', () => {
         properties: {
           chat_require_auth: {
             type: 'boolean',
-            description: 'Require authentication for chat',
+            description: 'Require authentication for chat access',
             order: 1
           }
         }
@@ -357,10 +357,10 @@ describe('Settings Component', () => {
       renderSettings();
 
       await waitFor(() => {
-        expect(screen.getByText('Require authentication for chat')).toBeInTheDocument();
-        // Cloudscape Toggle component should render
-        const toggle = screen.getByText('Disabled');
-        expect(toggle).toBeInTheDocument();
+        expect(screen.getByText('Require authentication for chat access')).toBeInTheDocument();
+        // Cloudscape Toggle component should render - use getAllByText since there may be multiple toggles
+        const toggles = screen.getAllByText('Disabled');
+        expect(toggles.length).toBeGreaterThan(0);
       });
     });
 

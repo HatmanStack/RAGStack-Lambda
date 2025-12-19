@@ -62,7 +62,7 @@ describe('Chat Page', () => {
     });
   });
 
-  it('does not show embed section when CDN URL is not available', async () => {
+  it('shows embed section with placeholder when CDN URL is not available', async () => {
     mockGraphql.mockResolvedValue({
       data: {
         getConfiguration: {
@@ -75,11 +75,7 @@ describe('Chat Page', () => {
 
     render(<Chat />);
 
-    // Wait for config load to complete
-    await waitFor(() => {
-      expect(mockGraphql).toHaveBeenCalled();
-    });
-
-    expect(screen.queryByText(/Embed Chat Widget/i)).not.toBeInTheDocument();
+    // Embed section should always be shown (with placeholder URL if CDN not configured)
+    expect(screen.getByText(/Embed Chat Widget/i)).toBeInTheDocument();
   });
 });

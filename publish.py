@@ -1027,6 +1027,30 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                     'order': 12,
                     'description': 'Allow users to download original source documents via presigned URLs',
                     'default': False
+                },
+                'public_access_chat': {
+                    'type': 'boolean',
+                    'order': 13,
+                    'description': 'Allow unauthenticated chat queries (web component)',
+                    'default': True
+                },
+                'public_access_search': {
+                    'type': 'boolean',
+                    'order': 14,
+                    'description': 'Allow unauthenticated search queries',
+                    'default': True
+                },
+                'public_access_upload': {
+                    'type': 'boolean',
+                    'order': 15,
+                    'description': 'Allow unauthenticated document uploads',
+                    'default': False
+                },
+                'public_access_image_upload': {
+                    'type': 'boolean',
+                    'order': 16,
+                    'description': 'Allow unauthenticated image uploads',
+                    'default': False
                 }
             }
         }
@@ -1048,7 +1072,11 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'chat_per_user_quota_daily': 100,
         'chat_theme_preset': 'light',
         'chat_theme_overrides': {},
-        'chat_allow_document_access': False
+        'chat_allow_document_access': False,
+        'public_access_chat': True,
+        'public_access_search': True,
+        'public_access_upload': False,
+        'public_access_image_upload': False
     }
 
     try:

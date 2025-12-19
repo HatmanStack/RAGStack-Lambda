@@ -238,6 +238,11 @@ export function Settings() {
       return null;
     }
 
+    // Skip public_access_* fields - rendered separately in Public Access section
+    if (key.startsWith('public_access_')) {
+      return null;
+    }
+
     // Handle conditional visibility (dependsOn)
     if (property.dependsOn) {
       const depField = property.dependsOn.field;
@@ -574,6 +579,70 @@ export function Settings() {
               </Box>
             </SpaceBetween>
           </ExpandableSection>
+        </SpaceBetween>
+      </Container>
+
+      <Container header={<Header variant="h2">Public Access</Header>}>
+        <SpaceBetween size="m">
+          <Alert type="info">
+            Control which API endpoints allow unauthenticated access. Disable to require authentication for that endpoint.
+          </Alert>
+
+          <FormField
+            label="Chat Queries"
+            description="Allow unauthenticated users to use the chat web component"
+          >
+            <Toggle
+              checked={formValues.public_access_chat === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_chat: detail.checked });
+              }}
+            >
+              {formValues.public_access_chat ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Search Queries"
+            description="Allow unauthenticated access to the search API"
+          >
+            <Toggle
+              checked={formValues.public_access_search === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_search: detail.checked });
+              }}
+            >
+              {formValues.public_access_search ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Document Uploads"
+            description="Allow unauthenticated document uploads to your knowledge base"
+          >
+            <Toggle
+              checked={formValues.public_access_upload === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_upload: detail.checked });
+              }}
+            >
+              {formValues.public_access_upload ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Image Uploads"
+            description="Allow unauthenticated image uploads to your knowledge base"
+          >
+            <Toggle
+              checked={formValues.public_access_image_upload === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, public_access_image_upload: detail.checked });
+              }}
+            >
+              {formValues.public_access_image_upload ? 'Public' : 'Authenticated only'}
+            </Toggle>
+          </FormField>
         </SpaceBetween>
       </Container>
 

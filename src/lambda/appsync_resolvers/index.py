@@ -41,6 +41,56 @@ s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 sfn = boto3.client("stepfunctions")
 
+# Module-level configuration manager for public access checks
+_config_manager = None
+
+
+def get_config_manager():
+    """Lazy initialization of ConfigurationManager."""
+    global _config_manager
+    if _config_manager is None:
+        _config_manager = ConfigurationManager()
+    return _config_manager
+
+
+def check_public_access(event, access_type):
+    """
+    Check if the request is allowed based on authentication and public access settings.
+
+    Args:
+        event: AppSync event with identity information
+        access_type: Type of access to check ('chat', 'search', 'upload', 'image_upload')
+
+    Returns:
+        tuple: (allowed: bool, error_message: str or None)
+    """
+    identity = event.get("identity") or {}
+
+    # Check auth type
+    # 1. Cognito User Pools: identity has "sub" or "username"
+    # 2. API key: identity is empty/None (considered authenticated for server-side use)
+    # 3. IAM unauthenticated: identity has "cognitoIdentityAuthType" == "unauthenticated"
+
+    has_cognito_auth = bool(identity.get("sub") or identity.get("username"))
+    is_api_key = not identity  # Empty identity means API key auth
+    is_unauthenticated_iam = identity.get("cognitoIdentityAuthType") == "unauthenticated"
+
+    # If authenticated via Cognito or API key, always allow
+    if has_cognito_auth or is_api_key:
+        return (True, None)
+
+    # For unauthenticated IAM, check public access config
+    if is_unauthenticated_iam:
+        config_key = f"public_access_{access_type}"
+        config_manager = get_config_manager()
+        public_access_allowed = config_manager.get_parameter(config_key, default=True)
+        if not public_access_allowed:
+            logger.info(f"Public access denied for {access_type} (unauthenticated IAM)")
+            return (False, f"Authentication required for {access_type} access")
+
+    return (True, None)
+
+
 TRACKING_TABLE = os.environ["TRACKING_TABLE"]
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
@@ -70,6 +120,22 @@ def lambda_handler(event, context):
     logger.info(f"Arguments: {json.dumps(event.get('arguments', {}))}")
 
     field_name = event["info"]["fieldName"]
+
+    # Check public access for upload-related resolvers
+    # Map field names to their required access types
+    access_requirements = {
+        "createUploadUrl": "upload",
+        "createImageUploadUrl": "image_upload",
+        "generateCaption": "image_upload",
+        "submitImage": "image_upload",
+        "createZipUploadUrl": "image_upload",
+    }
+
+    if field_name in access_requirements:
+        access_type = access_requirements[field_name]
+        allowed, error_msg = check_public_access(event, access_type)
+        if not allowed:
+            raise ValueError(error_msg)
 
     resolvers = {
         "getDocument": get_document,
