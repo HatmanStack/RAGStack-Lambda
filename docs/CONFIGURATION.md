@@ -8,7 +8,9 @@ All settings are stored in DynamoDB and apply immediately without redeployment.
 
 ## API Key Management
 
-The API key enables programmatic access to all GraphQL operations (search, chat, upload, scrape).
+The API key is for **server-side use only** - MCP servers, backend scripts, and integrations.
+
+**Never expose in frontend code, browser applications, or public repositories.**
 
 **View/Regenerate:** Dashboard → Settings → API Key section
 
@@ -17,9 +19,9 @@ The API key enables programmatic access to all GraphQL operations (search, chat,
 | View API Key | Shows current key (click to reveal) |
 | Regenerate | Creates new key, invalidates old one immediately |
 
-**Auto-rotation:** Keys auto-rotate monthly via EventBridge to stay within the 365-day expiry limit.
+**Auto-rotation:** Keys auto-rotate monthly via EventBridge.
 
-**Usage:** Include in requests as `x-api-key` header:
+**Usage (server-side only):**
 ```bash
 curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
   -H 'x-api-key: YOUR_API_KEY' \
@@ -27,7 +29,15 @@ curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
   -d '{"query": "..."}'
 ```
 
-**Alternative:** Use Cognito tokens (`Authorization: Bearer TOKEN`) for user-scoped access.
+## Authentication Methods
+
+| Method | Use Case | Operations |
+|--------|----------|------------|
+| **IAM (unauth)** | Web component | Query, Search, Subscriptions |
+| **API Key** | Server-side integrations | All operations |
+| **Cognito** | Admin UI | All operations |
+
+The web component uses IAM authentication via Cognito Identity Pool (no API key needed).
 
 ## MCP Server (AI Assistant Integration)
 

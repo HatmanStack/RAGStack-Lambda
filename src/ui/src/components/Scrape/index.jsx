@@ -101,15 +101,14 @@ export const Scrape = () => {
 
       {graphqlEndpoint && (
         <ApiDocs
-          title="Scrape API"
-          description="Scope: SUBPAGES | HOSTNAME | DOMAIN. Mode: FAST | FULL | AUTO"
+          title="Scrape API (Server-side)"
+          description="For backend integrations. Scope: SUBPAGES | HOSTNAME | DOMAIN"
           endpoint={graphqlEndpoint}
           examples={[
             { id: 'start', label: 'Start', code: startMutation },
             { id: 'status', label: 'Status', code: statusQuery },
             { id: 'js', label: 'JavaScript', code: jsExample },
           ]}
-          footer="Pages are automatically indexed after scraping."
         />
       )}
     </SpaceBetween>

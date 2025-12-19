@@ -56,25 +56,18 @@ Load the CDN script once, then use `<ragstack-chat>` in any framework.
 
 ## API Access
 
-All features are accessible via GraphQL API with API key or Cognito authentication.
-
-**Get your API key:** Dashboard → Settings → API Key section
+**Server-side integrations** use API key authentication. Get your key from Dashboard → Settings.
 
 ```bash
-# Search documents
 curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
-  -H 'Content-Type: application/json' \
   -H 'x-api-key: YOUR_API_KEY' \
-  -d '{"query": "query { searchKnowledgeBase(query: \"your question\") { results { content source } } }"}'
+  -H 'Content-Type: application/json' \
+  -d '{"query": "query { searchKnowledgeBase(query: \"...\") { results { content } } }"}'
 ```
 
-**Available operations:**
-- **Search** - Query knowledge base directly
-- **Chat** - AI-powered Q&A with sources
-- **Upload** - Upload documents and images programmatically
-- **Scrape** - Start and monitor web scraping jobs
+**Web component** uses IAM auth (no API key needed - handled automatically).
 
-Each UI tab shows API usage examples in an expandable section.
+Each UI tab shows server-side API examples in an expandable section.
 
 ## MCP Server (AI Assistant Integration)
 

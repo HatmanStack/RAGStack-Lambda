@@ -85,15 +85,14 @@ export const Upload = () => {
 
         {graphqlEndpoint && (
           <ApiDocs
-            title="Upload API"
-            description="Get presigned URL, then POST file to S3. Supports PDF, DOCX, TXT, images."
+            title="Upload API (Server-side)"
+            description="For backend integrations. Get presigned URL, then POST to S3."
             endpoint={graphqlEndpoint}
             examples={[
               { id: 'doc', label: 'Document', code: docMutation },
               { id: 'img', label: 'Image', code: imgMutation },
               { id: 'js', label: 'JavaScript', code: jsExample },
             ]}
-            footer="Files are automatically processed after upload."
           />
         )}
       </SpaceBetween>
