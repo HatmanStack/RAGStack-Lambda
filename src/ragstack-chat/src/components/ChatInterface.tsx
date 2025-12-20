@@ -176,16 +176,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Handle send message
   const handleSend = useCallback(
-    async (messageText: string) => {
-      // Create user message
-      const userMessage: ChatMessage = {
-        role: 'user',
-        content: messageText,
-        timestamp: new Date().toISOString(),
-      };
+    async (messageText: string, isRetry = false) => {
+      // Only add user message on first attempt, not retries
+      if (!isRetry) {
+        const userMessage: ChatMessage = {
+          role: 'user',
+          content: messageText,
+          timestamp: new Date().toISOString(),
+        };
 
-      // Optimistic update: add user message immediately
-      setMessages((prev) => [...prev, userMessage]);
+        // Optimistic update: add user message immediately
+        setMessages((prev) => [...prev, userMessage]);
+      }
 
       // Call onSendMessage callback if provided
       if (onSendMessage) {
@@ -219,6 +221,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         // Add assistant message
         setMessages((prev) => [...prev, assistantMessage]);
+
+        // Reset retry count on successful response
+        retryCountRef.current = 0;
 
         // Call onResponseReceived callback if provided
         if (onResponseReceived) {
@@ -265,9 +270,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           retryCount: currentRetryCount,
           onRetry: canRetry
             ? () => {
-                // Increment retry count via ref and retry
+                // Increment retry count via ref and retry (isRetry=true to avoid duplicate message)
                 retryCountRef.current += 1;
-                handleSend(messageText);
+                handleSend(messageText, true);
               }
             : undefined,
         });
@@ -282,10 +287,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     [conversationId]
   );
 
-  // Reset retry count on successful message or conversation change
+  // Reset retry count on conversation change only
+  // (not on messages.length - that would reset during retry flow)
   useEffect(() => {
     retryCountRef.current = 0;
-  }, [conversationId, messages.length]);
+  }, [conversationId]);
 
   return (
     <div className={styles.chatContainer}>

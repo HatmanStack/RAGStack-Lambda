@@ -43,6 +43,9 @@ logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 # Blocked hostnames for SSRF protection
 BLOCKED_HOSTNAMES = {
     "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "169.254.169.254",
     "metadata.google.internal",
     "metadata.azure.internal",
 }
@@ -78,6 +81,12 @@ def validate_url_for_ssrf(url: str) -> None:
     # Try to parse hostname as IP address
     try:
         ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not an IP address, it's a hostname - that's fine
+        ip = None
+
+    # Check IP properties outside try block so blocking raises propagate
+    if ip is not None:
         if ip.is_private:
             raise ValueError("URL cannot target private IP addresses")
         if ip.is_loopback:
@@ -86,9 +95,6 @@ def validate_url_for_ssrf(url: str) -> None:
             raise ValueError("URL cannot target link-local addresses")
         if ip.is_reserved:
             raise ValueError("URL cannot target reserved IP addresses")
-    except ValueError:
-        # Not an IP address, it's a hostname - that's fine
-        pass
 
 
 def lambda_handler(event, context):
