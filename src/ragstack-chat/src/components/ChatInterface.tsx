@@ -5,7 +5,7 @@
  * Uses IAM authentication via Cognito Identity Pool for AppSync API calls.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
@@ -129,6 +129,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
 
+  // Use ref to track retry count to avoid stale closure issues in handleSend
+  const retryCountRef = useRef(0);
+
   // SessionStorage key with userId and conversationId for isolation
   const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
 
@@ -173,16 +176,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Handle send message
   const handleSend = useCallback(
-    async (messageText: string) => {
-      // Create user message
-      const userMessage: ChatMessage = {
-        role: 'user',
-        content: messageText,
-        timestamp: new Date().toISOString(),
-      };
+    async (messageText: string, isRetry = false) => {
+      // Only add user message on first attempt, not retries
+      if (!isRetry) {
+        const userMessage: ChatMessage = {
+          role: 'user',
+          content: messageText,
+          timestamp: new Date().toISOString(),
+        };
 
-      // Optimistic update: add user message immediately
-      setMessages((prev) => [...prev, userMessage]);
+        // Optimistic update: add user message immediately
+        setMessages((prev) => [...prev, userMessage]);
+      }
 
       // Call onSendMessage callback if provided
       if (onSendMessage) {
@@ -216,6 +221,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         // Add assistant message
         setMessages((prev) => [...prev, assistantMessage]);
+
+        // Reset retry count on successful response
+        retryCountRef.current = 0;
 
         // Call onResponseReceived callback if provided
         if (onResponseReceived) {
@@ -251,8 +259,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           retryable = false;
         }
 
-        // Get current retry count from error state
-        const currentRetryCount = error?.retryCount || 0;
+        // Get current retry count from ref (avoids stale closure issues)
+        const currentRetryCount = retryCountRef.current;
         const canRetry = retryable && currentRetryCount < MAX_RETRIES;
 
         setError({
@@ -262,12 +270,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           retryCount: currentRetryCount,
           onRetry: canRetry
             ? () => {
-                // Increment retry count and retry by re-sending the same message
-                setError((prevError) => ({
-                  ...prevError!,
-                  retryCount: (prevError?.retryCount || 0) + 1,
-                }));
-                handleSend(messageText);
+                // Increment retry count via ref and retry (isRetry=true to avoid duplicate message)
+                retryCountRef.current += 1;
+                handleSend(messageText, true);
               }
             : undefined,
         });
@@ -278,8 +283,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
     // to prevent handleSend recreation when parent passes new callback references.
     // These are optional side-effect callbacks that don't affect core functionality.
-    [conversationId, error]
+    // retryCountRef is a ref and doesn't need to be in deps.
+    [conversationId]
   );
+
+  // Reset retry count on conversation change only
+  // (not on messages.length - that would reset during retry flow)
+  useEffect(() => {
+    retryCountRef.current = 0;
+  }, [conversationId]);
 
   return (
     <div className={styles.chatContainer}>

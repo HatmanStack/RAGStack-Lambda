@@ -482,7 +482,7 @@ def create_sam_artifact_bucket(project_name, region):
     return bucket_name
 
 
-def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False, scrape_config=None):
+def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -547,17 +547,6 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     if wc_source_key:
         log_info("Web component will be deployed via CodeBuild during stack creation")
         param_overrides.append(f"WebComponentSourceKey={wc_source_key}")
-
-    # Add scrape configuration if provided
-    if scrape_config:
-        if scrape_config.get("max_pages"):
-            param_overrides.append(f"ScrapeMaxPages={scrape_config['max_pages']}")
-        if scrape_config.get("max_depth"):
-            param_overrides.append(f"ScrapeMaxDepth={scrape_config['max_depth']}")
-        if scrape_config.get("request_delay"):
-            param_overrides.append(f"ScrapeRequestDelayMs={scrape_config['request_delay']}")
-        if scrape_config.get("playwright_layer_arn"):
-            param_overrides.append(f"PlaywrightLayerArn={scrape_config['playwright_layer_arn']}")
 
     cmd = [
         "sam", "deploy",
@@ -942,29 +931,10 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                         'value': 'bedrock'
                     }
                 },
-                'chat_model_id': {
-                    'type': 'string',
-                    'order': 3,
-                    'description': 'Bedrock model for Knowledge Base chat queries',
-                    'enum': [
-                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
-                        'us.amazon.nova-pro-v1:0',
-                        'us.amazon.nova-lite-v1:0',
-                        'us.amazon.nova-micro-v1:0'
-                    ],
-                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
-                },
-                'chat_require_auth': {
-                    'type': 'boolean',
-                    'order': 4,
-                    'description': 'Require authentication for chat access',
-                    'default': False
-                },
                 'chat_primary_model': {
                     'type': 'string',
-                    'order': 5,
-                    'description': 'Primary Bedrock model for chat (before quota limits)',
+                    'order': 3,
+                    'description': 'Primary chat model (switches to fallback when quota exceeded)',
                     'enum': [
                         'us.anthropic.claude-sonnet-4-20250514-v1:0',
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -975,7 +945,7 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_fallback_model': {
                     'type': 'string',
-                    'order': 6,
+                    'order': 4,
                     'description': 'Fallback model when quotas exceeded',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -986,26 +956,26 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_global_quota_daily': {
                     'type': 'number',
-                    'order': 7,
+                    'order': 5,
                     'description': 'Max messages per day (all users combined) on primary model',
                     'default': 10000
                 },
                 'chat_per_user_quota_daily': {
                     'type': 'number',
-                    'order': 8,
+                    'order': 6,
                     'description': 'Max messages per user per day on primary model',
                     'default': 100
                 },
                 'chat_theme_preset': {
                     'type': 'string',
-                    'order': 9,
+                    'order': 7,
                     'description': 'UI theme preset',
                     'enum': ['light', 'dark', 'brand'],
                     'default': 'light'
                 },
                 'chat_theme_overrides': {
                     'type': 'object',
-                    'order': 10,
+                    'order': 8,
                     'description': 'Custom theme overrides (optional)',
                     'properties': {
                         'primaryColor': {'type': 'string'},
@@ -1018,39 +988,57 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                 },
                 'chat_cdn_url': {
                     'type': 'string',
-                    'order': 11,
+                    'order': 9,
                     'description': 'Web component CDN URL (read-only)',
                     'readOnly': True
                 },
                 'chat_allow_document_access': {
                     'type': 'boolean',
-                    'order': 12,
+                    'order': 10,
                     'description': 'Allow users to download original source documents via presigned URLs',
                     'default': False
                 },
                 'public_access_chat': {
                     'type': 'boolean',
-                    'order': 13,
+                    'order': 11,
                     'description': 'Allow unauthenticated chat queries (web component)',
                     'default': True
                 },
                 'public_access_search': {
                     'type': 'boolean',
-                    'order': 14,
+                    'order': 12,
                     'description': 'Allow unauthenticated search queries',
                     'default': True
                 },
                 'public_access_upload': {
                     'type': 'boolean',
-                    'order': 15,
+                    'order': 13,
                     'description': 'Allow unauthenticated document uploads',
                     'default': False
                 },
                 'public_access_image_upload': {
                     'type': 'boolean',
-                    'order': 16,
+                    'order': 14,
                     'description': 'Allow unauthenticated image uploads',
                     'default': False
+                },
+                'public_access_scrape': {
+                    'type': 'boolean',
+                    'order': 15,
+                    'description': 'Allow unauthenticated web scrape jobs',
+                    'default': False
+                },
+                'budget_alert_threshold': {
+                    'type': 'number',
+                    'order': 16,
+                    'description': 'Monthly budget alert threshold in USD (alerts sent to admin email)',
+                    'default': 100
+                },
+                'budget_alert_enabled': {
+                    'type': 'boolean',
+                    'order': 17,
+                    'description': 'Enable budget alerts (emails admin at 80% and 100% of threshold)',
+                    'default': True
                 }
             }
         }
@@ -1064,8 +1052,6 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'chat_cdn_url': chat_cdn_url,
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
-        'chat_model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-        'chat_require_auth': False,
         'chat_primary_model': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
         'chat_fallback_model': 'us.amazon.nova-micro-v1:0',
         'chat_global_quota_daily': 10000,
@@ -1076,7 +1062,10 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'public_access_chat': True,
         'public_access_search': True,
         'public_access_upload': False,
-        'public_access_image_upload': False
+        'public_access_image_upload': False,
+        'public_access_scrape': False,
+        'budget_alert_threshold': 100,
+        'budget_alert_enabled': True
     }
 
     try:
@@ -1147,35 +1136,6 @@ Examples:
         "--skip-ui-all",
         action="store_true",
         help="Skip all UI builds (dashboard and web component)"
-    )
-
-    # Scrape configuration arguments
-    parser.add_argument(
-        "--scrape-max-pages",
-        type=int,
-        default=1000,
-        help="Default maximum pages per scrape job (default: 1000)"
-    )
-
-    parser.add_argument(
-        "--scrape-max-depth",
-        type=int,
-        default=3,
-        help="Default crawl depth for scrape jobs (default: 3)"
-    )
-
-    parser.add_argument(
-        "--scrape-request-delay",
-        type=int,
-        default=500,
-        help="Delay between requests in milliseconds (default: 500)"
-    )
-
-    parser.add_argument(
-        "--playwright-layer-arn",
-        type=str,
-        default="",
-        help="ARN of Playwright/Chromium Lambda layer (optional, for Phase 2)"
     )
 
     args = parser.parse_args()
@@ -1269,12 +1229,6 @@ Examples:
             sys.exit(1)
 
         # SAM deploy with UI and web component parameters
-        scrape_config = {
-            "max_pages": args.scrape_max_pages,
-            "max_depth": args.scrape_max_depth,
-            "request_delay": args.scrape_request_delay,
-            "playwright_layer_arn": args.playwright_layer_arn if args.playwright_layer_arn else None,
-        }
         stack_name = sam_deploy(
             args.project_name,
             args.admin_email,
@@ -1282,8 +1236,7 @@ Examples:
             artifact_bucket,
             ui_source_key=ui_source_key,
             wc_source_key=wc_source_key,
-            skip_ui=args.skip_ui,
-            scrape_config=scrape_config
+            skip_ui=args.skip_ui
         )
 
         # Get outputs

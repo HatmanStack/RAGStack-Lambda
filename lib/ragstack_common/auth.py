@@ -18,7 +18,7 @@ def check_public_access(
 
     Args:
         event: AppSync event with identity information
-        access_type: Type of access to check ('chat', 'search', 'upload', 'image_upload')
+        access_type: Type of access to check ('chat', 'search', 'upload', 'image_upload', 'scrape')
         config_manager: ConfigurationManager instance for reading config values
 
     Returns:

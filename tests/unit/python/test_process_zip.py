@@ -39,6 +39,8 @@ def mock_boto3():
     ):
         # Mock S3 client
         mock_s3 = MagicMock()
+        # Mock head_object to return a valid ContentLength (10MB by default)
+        mock_s3.head_object.return_value = {"ContentLength": 10 * 1024 * 1024}
 
         # Mock Bedrock runtime client
         mock_bedrock = MagicMock()

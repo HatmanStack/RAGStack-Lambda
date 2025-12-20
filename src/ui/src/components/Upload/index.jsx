@@ -4,9 +4,9 @@ import {
   Tabs,
   ContentLayout,
   Header,
+  Alert,
 } from '@cloudscape-design/components';
 import { UploadZone } from './UploadZone';
-import { UploadQueue } from './UploadQueue';
 import { ImageUpload } from '../ImageUpload';
 import { ZipUpload } from '../ImageUpload/ZipUpload';
 import { useUpload } from '../../hooks/useUpload';
@@ -48,13 +48,19 @@ const imgSubmitMutation = `mutation SubmitImage($input: SubmitImageInput!) {
   }
 }`;
 
+const imgCaptionMutation = `mutation GenerateCaption($imageS3Uri: String!) {
+  generateCaption(imageS3Uri: $imageS3Uri) {
+    caption
+  }
+}`;
+
 const imgJsExample = `// 1. Get presigned URL
 const res = await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({ query: CREATE_IMAGE_UPLOAD_URL, variables: { filename: 'photo.jpg' } })
 });
-const { uploadUrl, imageId, fields } = (await res.json()).data.createImageUploadUrl;
+const { uploadUrl, imageId, s3Uri, fields } = (await res.json()).data.createImageUploadUrl;
 
 // 2. Upload to S3
 const form = new FormData();
@@ -62,13 +68,21 @@ Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
 form.append('file', imageFile);
 await fetch(uploadUrl, { method: 'POST', body: form });
 
-// 3. Submit with caption (triggers processing)
+// 3. Generate AI caption (optional - or provide your own)
+const captionRes = await fetch(ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+  body: JSON.stringify({ query: GENERATE_CAPTION, variables: { imageS3Uri: s3Uri } })
+});
+const aiCaption = (await captionRes.json()).data.generateCaption.caption;
+
+// 4. Submit with caption (triggers processing)
 await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({
     query: SUBMIT_IMAGE,
-    variables: { input: { imageId, caption: 'Description of the image' } }
+    variables: { input: { imageId, userCaption: 'My description', aiCaption } }
   })
 });`;
 
@@ -110,9 +124,10 @@ const apiExamples = {
   },
   images: {
     title: 'Image Upload API',
-    description: 'Upload image, then submit with caption. Supports JPG, PNG, GIF, WEBP.',
+    description: 'Upload image, generate AI caption, then submit. Supports JPG, PNG, GIF, WEBP.',
     examples: [
       { id: 'url', label: 'Get URL', code: imgUrlMutation },
+      { id: 'caption', label: 'Generate Caption', code: imgCaptionMutation },
       { id: 'submit', label: 'Submit', code: imgSubmitMutation },
       { id: 'js', label: 'JavaScript', code: imgJsExample },
     ],
@@ -128,23 +143,39 @@ const apiExamples = {
 };
 
 const DocumentUploadContent = () => {
-  const { addUpload, uploadFile, uploading, uploads, removeUpload, clearCompleted } = useUpload();
+  const { addUpload, uploadFile, uploading, error } = useUpload();
+  const [successCount, setSuccessCount] = useState(0);
 
-  const handleFilesSelected = useCallback((files) => {
-    files.forEach(file => {
+  const handleFilesSelected = useCallback(async (files) => {
+    let completed = 0;
+    for (const file of files) {
       const uploadId = addUpload(file);
-      uploadFile(uploadId);
-    });
+      try {
+        await uploadFile(uploadId);
+        completed++;
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
+    if (completed > 0) {
+      setSuccessCount(prev => prev + completed);
+      setTimeout(() => setSuccessCount(0), 3000);
+    }
   }, [addUpload, uploadFile]);
 
   return (
     <SpaceBetween size="l">
+      {successCount > 0 && (
+        <Alert type="success" dismissible onDismiss={() => setSuccessCount(0)}>
+          {successCount} document{successCount > 1 ? 's' : ''} uploaded successfully! Processing will begin shortly.
+        </Alert>
+      )}
+      {error && (
+        <Alert type="error">
+          {error}
+        </Alert>
+      )}
       <UploadZone onFilesSelected={handleFilesSelected} disabled={uploading} />
-      <UploadQueue
-        uploads={uploads}
-        onRemove={removeUpload}
-        onClearCompleted={clearCompleted}
-      />
     </SpaceBetween>
   );
 };

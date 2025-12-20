@@ -23,11 +23,13 @@ Output:
 }
 """
 
+import ipaddress
 import json
 import logging
 import os
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
@@ -37,6 +39,62 @@ from ragstack_common.scraper import ScrapeConfig, ScrapeJob, ScrapeStatus
 
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
+
+# Blocked hostnames for SSRF protection
+BLOCKED_HOSTNAMES = {
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata.azure.internal",
+}
+
+
+def validate_url_for_ssrf(url: str) -> None:
+    """
+    Validate URL to prevent SSRF attacks.
+
+    Blocks:
+    - Private/internal IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x)
+    - Link-local addresses (169.254.x)
+    - Cloud metadata endpoints
+    - Localhost variations
+
+    Raises ValueError if URL targets a blocked destination.
+    """
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        raise ValueError("Invalid URL: no hostname found")
+
+    # Block known dangerous hostnames
+    hostname_lower = hostname.lower()
+    if hostname_lower in BLOCKED_HOSTNAMES:
+        raise ValueError(f"URL cannot target internal service: {hostname}")
+
+    # Block cloud metadata IP explicitly
+    if "169.254.169.254" in url:
+        raise ValueError("URL cannot target cloud metadata endpoint")
+
+    # Try to parse hostname as IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not an IP address, it's a hostname - that's fine
+        ip = None
+
+    # Check IP properties outside try block so blocking raises propagate
+    if ip is not None:
+        if ip.is_private:
+            raise ValueError("URL cannot target private IP addresses")
+        if ip.is_loopback:
+            raise ValueError("URL cannot target loopback addresses")
+        if ip.is_link_local:
+            raise ValueError("URL cannot target link-local addresses")
+        if ip.is_reserved:
+            raise ValueError("URL cannot target reserved IP addresses")
 
 
 def lambda_handler(event, context):
@@ -66,6 +124,9 @@ def lambda_handler(event, context):
         # Validate URL format
         if not base_url.startswith(("http://", "https://")):
             raise ValueError("base_url must start with http:// or https://")
+
+        # SSRF protection: block private IPs, localhost, and cloud metadata endpoints
+        validate_url_for_ssrf(base_url)
 
         # Parse config from event
         config_data = event.get("config", {})

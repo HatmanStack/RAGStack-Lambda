@@ -334,16 +334,16 @@ describe('Settings Component', () => {
     it('renders boolean fields as toggles', async () => {
       const schemaWithBoolean = {
         properties: {
-          chat_require_auth: {
+          enable_feature: {
             type: 'boolean',
-            description: 'Require authentication for chat access',
+            description: 'Enable test feature',
             order: 1
           }
         }
       };
 
       const defaultWithBoolean = {
-        chat_require_auth: false
+        enable_feature: false
       };
 
       setupMockGraphql({
@@ -357,7 +357,7 @@ describe('Settings Component', () => {
       renderSettings();
 
       await waitFor(() => {
-        expect(screen.getByText('Require authentication for chat access')).toBeInTheDocument();
+        expect(screen.getByText('Enable test feature')).toBeInTheDocument();
         // Cloudscape Toggle component should render - use getAllByText since there may be multiple toggles
         const toggles = screen.getAllByText('Disabled');
         expect(toggles.length).toBeGreaterThan(0);
@@ -397,7 +397,7 @@ describe('Settings Component', () => {
       });
     });
 
-    it('renders object fields as expandable sections with nested inputs', async () => {
+    it('renders object fields with nested inputs inline', async () => {
       const schemaWithObject = {
         properties: {
           chat_theme_overrides: {
@@ -430,8 +430,9 @@ describe('Settings Component', () => {
 
       renderSettings();
 
+      // Object fields are now rendered inline (not in expandable sections)
       await waitFor(() => {
-        expect(screen.getByText('Custom theme overrides')).toBeInTheDocument();
+        expect(screen.getByText('primaryColor')).toBeInTheDocument();
       });
     });
   });
@@ -480,8 +481,7 @@ describe('Settings Component', () => {
         expect(screen.getByText('Settings')).toBeInTheDocument();
       });
 
-      // All chat fields should be visible
-      expect(screen.getByText('Require authentication')).toBeInTheDocument();
+      // Chat fields should be visible (chat_require_auth is hidden - handled by public_access_chat)
       expect(screen.getByText('Primary model')).toBeInTheDocument();
       expect(screen.getByText('Chat Model')).toBeInTheDocument();
     });

@@ -109,7 +109,7 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
-| `chat_require_auth` | boolean | false | Require authentication for chat |
+| `public_access_chat` | boolean | true | Allow unauthenticated chat queries |
 | `chat_primary_model` | Model ARN | claude-haiku | Model for chat responses |
 | `chat_fallback_model` | Model ARN | nova-micro | Used when quota exceeded |
 | `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |

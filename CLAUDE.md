@@ -235,5 +235,6 @@ Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer durin
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Local development
 - [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) - Chat component API
+- [docs/IMAGE_UPLOAD.md](docs/IMAGE_UPLOAD.md) - Image upload API with captions
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Runtime configuration
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues

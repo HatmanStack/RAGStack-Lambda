@@ -11,17 +11,107 @@ Scrape websites and index content into the knowledge base.
 
 ## Configuration
 
-| Setting | Values | Description |
-|---------|--------|-------------|
-| Scope | subpages, hostname, domain | How far to crawl |
-| Max Pages | 1-1000 | Limit total pages |
-| Max Depth | 1-10 | Link depth from start URL |
-| Mode | auto, fast, full | auto detects SPAs, full uses headless browser |
+| Setting | Values | Default | Description |
+|---------|--------|---------|-------------|
+| URL | string | - | Starting URL to scrape |
+| Max Pages | 1-1000 | 100 | Limit total pages |
+| Max Depth | 0-10 | 3 | Link depth from start URL (0 = start page only) |
+| Scope | SUBPAGES, HOSTNAME, DOMAIN | HOSTNAME | How far to crawl |
+| Include Patterns | glob patterns | - | Only scrape matching URLs |
+| Exclude Patterns | glob patterns | - | Skip matching URLs |
+| Scrape Mode | AUTO, FAST, FULL | AUTO | How to fetch pages |
+| Cookies | string | - | For authenticated sites |
+| Force Rescrape | boolean | false | Re-scrape even if unchanged |
 
-**Scope explained:**
-- `subpages` - Only pages under the starting path
-- `hostname` - All pages on same hostname
-- `domain` - Include subdomains
+**Scope values:**
+- `SUBPAGES` - Only pages under the starting path
+- `HOSTNAME` - All pages on same hostname
+- `DOMAIN` - Include subdomains
+
+**Scrape Mode values:**
+- `AUTO` - Try fast mode, fall back to full for SPAs
+- `FAST` - HTTP only, faster but may miss JavaScript content
+- `FULL` - Uses headless browser, handles all JavaScript
+
+## GraphQL API
+
+Start a scrape job programmatically:
+
+```graphql
+mutation StartScrape($input: StartScrapeInput!) {
+  startScrape(input: $input) {
+    jobId
+    baseUrl
+    status
+  }
+}
+```
+
+Variables:
+```json
+{
+  "input": {
+    "url": "https://docs.example.com",
+    "maxPages": 100,
+    "maxDepth": 3,
+    "scope": "HOSTNAME",
+    "includePatterns": ["/docs/*", "/api/*"],
+    "excludePatterns": ["/blog/*", "/changelog/*"],
+    "scrapeMode": "AUTO",
+    "cookies": "session=abc123; auth=xyz789",
+    "forceRescrape": false
+  }
+}
+```
+
+Check job status:
+```graphql
+query GetScrapeJob($jobId: ID!) {
+  getScrapeJob(jobId: $jobId) {
+    job {
+      jobId
+      status
+      totalUrls
+      processedCount
+      failedCount
+    }
+  }
+}
+```
+
+List jobs:
+```graphql
+query ListScrapeJobs($limit: Int) {
+  listScrapeJobs(limit: $limit) {
+    items {
+      jobId
+      baseUrl
+      status
+      processedCount
+      totalUrls
+    }
+  }
+}
+```
+
+Cancel a job:
+```graphql
+mutation CancelScrape($jobId: ID!) {
+  cancelScrape(jobId: $jobId) {
+    jobId
+    status
+  }
+}
+```
+
+### Authentication
+
+Include your API key in the request headers:
+```
+x-api-key: da2-xxxxxxxxxxxx
+```
+
+Get your API key from **Dashboard → Settings → API Key**.
 
 ## How It Works
 

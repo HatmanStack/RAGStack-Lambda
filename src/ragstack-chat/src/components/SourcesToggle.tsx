@@ -12,7 +12,7 @@
  * - Screen reader compatible
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Source } from '../types';
 import { SourcesDisplay } from './SourcesDisplay';
 import styles from './SourcesToggle.module.css';

@@ -67,8 +67,8 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.13
-    Timeout: 900  # 15 minutes
-    MemorySize: 2048
+    Timeout: 30  # Default 30s, override per-function as needed
+    MemorySize: 256  # Default 256MB, override per-function as needed
     Environment:
       Variables:
         LOG_LEVEL: INFO
@@ -123,8 +123,6 @@ Resources:
               - GET
               - HEAD
             AllowedOrigins:
-              - 'http://localhost:5173'
-              - 'http://localhost:3000'
               - !Sub 'https://${CloudFrontDistribution.DomainName}'
             MaxAge: 3000
       Tags:
@@ -613,28 +611,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: document_id
           AttributeType: S
-        - AttributeName: created_at
-          AttributeType: S
-        - AttributeName: status
-          AttributeType: S
       KeySchema:
         - AttributeName: document_id
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: CreatedAtIndex
-          KeySchema:
-            - AttributeName: created_at
-              KeyType: HASH
-            - AttributeName: document_id
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: StatusIndex
-          KeySchema:
-            - AttributeName: status
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
@@ -690,6 +669,8 @@ Resources:
       KeySchema:
         - AttributeName: Configuration
           KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -834,9 +815,8 @@ Resources:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 900  # 15 minutes for large documents
-      MemorySize: 3008  # Max memory for OCR processing
-      ReservedConcurrentExecutions: 50  # Limit to prevent account exhaustion
-      Tracing: Active
+      MemorySize: 3008  # High memory for OCR processing (Pillow, PDF parsing)
+      # No reserved concurrency - allows multi-stack deployments
       DeadLetterQueue:
         Type: SQS
         TargetArn: !GetAtt ProcessingDLQ.Arn
@@ -844,10 +824,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
-          METERING_TABLE: !Ref MeteringTable
           DATA_BUCKET: !Ref DataBucket
-          OCR_BACKEND: !Ref OcrBackend
-          BEDROCK_OCR_MODEL_ID: !Ref BedrockOcrModelId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Tags:
@@ -885,10 +862,9 @@ Resources:
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
-      Timeout: 300
-      MemorySize: 256
-      ReservedConcurrentExecutions: 25  # Limit to prevent account exhaustion
-      Tracing: Active
+      Timeout: 300  # 5 minutes for KB sync
+      MemorySize: 128  # Minimal - just API calls to Bedrock
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -935,9 +911,8 @@ Resources:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 300  # 5 minutes for image processing
-      MemorySize: 512
-      ReservedConcurrentExecutions: 25  # Limit to prevent account exhaustion
-      Tracing: Active
+      MemorySize: 512  # Moderate - image handling + Bedrock calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -986,9 +961,8 @@ Resources:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 600  # 10 minutes for ZIP processing (potentially many images)
-      MemorySize: 1024  # More memory for ZIP extraction
-      ReservedConcurrentExecutions: 10  # Limit concurrent ZIP processing
-      Tracing: Active
+      MemorySize: 1024  # Higher memory for ZIP extraction in memory
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1043,10 +1017,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 60
-      MemorySize: 512
-      # Removed ReservedConcurrentExecutions to use unreserved pool
-      Tracing: Active
+      Timeout: 60  # 1 minute for chat responses
+      MemorySize: 512  # Moderate - conversation handling + Bedrock calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1080,11 +1053,6 @@ Resources:
             - Effect: Allow
               Action: bedrock:GetInferenceProfile
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
-            - Effect: Allow
-              Action:
-                - aws-marketplace:ViewSubscriptions
-                - aws-marketplace:Subscribe
-              Resource: '*'
 
   SearchKBFunction:
     Type: AWS::Serverless::Function
@@ -1096,9 +1064,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 256
-      Tracing: Active
+      Timeout: 30  # Vector search is fast
+      MemorySize: 128  # Minimal - just API calls to Bedrock
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1127,8 +1095,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 256
+      Timeout: 30  # Simple DynamoDB operations
+      MemorySize: 128  # Minimal - just DynamoDB calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1173,8 +1142,9 @@ Resources:
       Handler: index.lambda_handler
       Description: GraphQL resolver for API key management
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 256
+      Timeout: 30  # Simple AppSync API calls
+      MemorySize: 128  # Minimal - just API calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1205,8 +1175,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 256
+      Timeout: 30  # Job creation is fast
+      MemorySize: 128  # Minimal - just DynamoDB/SQS calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1242,8 +1213,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 300
-      MemorySize: 512
+      Timeout: 300  # URL discovery can take time
+      MemorySize: 256  # Moderate - HTTP requests + HTML parsing
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1285,8 +1257,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 900
-      MemorySize: 1024
+      Timeout: 300  # 5 minutes for page processing (reduced from 15)
+      MemorySize: 512  # Moderate - HTML processing + S3 upload
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1325,8 +1298,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 10
-      MemorySize: 128
+      Timeout: 10  # Quick status check
+      MemorySize: 128  # Minimal - just DynamoDB/SQS reads
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1522,12 +1496,11 @@ Resources:
             InputPathsMap:
               bucket: $.detail.bucket.name
               key: $.detail.object.key
-            InputTemplate: !Sub |
+            InputTemplate: |
               {
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
-                "output_s3_prefix": "s3://<bucket>/output/<key>/",
-                "vector_bucket": "${VectorBucket}"
+                "output_s3_prefix": "s3://<bucket>/output/<key>/"
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
@@ -1734,8 +1707,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 300
-      MemorySize: 512
+      Timeout: 300  # KB creation can take time
+      MemorySize: 128  # Minimal - just API calls to Bedrock
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1976,7 +1950,7 @@ Resources:
       Description: Public API key for theme configuration
       Expires: 1795791181
 
-  # API Key Rotation Lambda
+  # API Key Rotation Lambda (scheduled monthly)
   RotateApiKeyFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1984,8 +1958,9 @@ Resources:
       CodeUri: src/lambda/rotate_api_key/
       Handler: index.lambda_handler
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 128
+      Timeout: 30  # Simple API key rotation
+      MemorySize: 128  # Minimal - just AppSync API calls
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           APPSYNC_API_ID: !GetAtt GraphQLApi.ApiId
@@ -2036,7 +2011,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
 
-  # AppSync resolver Lambda
+  # AppSync resolver Lambda - main CRUD operations
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -2045,7 +2020,10 @@ Resources:
       Handler: index.lambda_handler
       Layers:
         - !Ref RagstackCommonLayer
-      Tracing: Active
+      Runtime: python3.13
+      Timeout: 60  # 1 minute for complex operations
+      MemorySize: 512  # Moderate - image caption generation uses Bedrock
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           TRACKING_TABLE: !Ref TrackingTable
@@ -2108,8 +2086,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 300  # 5 minutes
-      MemorySize: 256
+      Timeout: 300  # 5 minutes (waits for CodeBuild)
+      MemorySize: 128  # Minimal - just triggers CodeBuild
+      # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -2782,6 +2761,48 @@ Resources:
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref AdminEmail
+
+  # =========================================================================
+  # Budget Sync Function - Syncs config changes to AWS Budgets
+  # =========================================================================
+
+  BudgetSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-budget-sync-${DeploymentSuffix}'
+      CodeUri: src/lambda/budget_sync/
+      Handler: index.lambda_handler
+      Description: Sync budget configuration changes to AWS Budgets
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          BUDGET_NAME: !Sub '${ProjectName}-Monthly-Budget'
+          ADMIN_EMAIL: !Ref AdminEmail
+          PROJECT_NAME: !Ref ProjectName
+      Events:
+        ConfigStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt ConfigurationTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 1
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"dynamodb":{"Keys":{"Configuration":{"S":["Custom"]}}}}'
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - budgets:ModifyBudget
+                - budgets:DescribeBudget
+                - budgets:UpdateBudget
+              Resource: '*'
 
 Outputs:
   # S3 Buckets

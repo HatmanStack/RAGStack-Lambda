@@ -102,46 +102,48 @@ export async function fetchThemeConfig(): Promise<ThemeConfig | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const body = JSON.stringify({
-      query: GET_THEME_CONFIG_QUERY,
-    });
+    try {
+      const body = JSON.stringify({
+        query: GET_THEME_CONFIG_QUERY,
+      });
 
-    // Use IAM auth for the request
-    const response = await iamFetch(
-      cdnConfig.apiEndpoint,
-      body,
-      cdnConfig.identityPoolId,
-      cdnConfig.region,
-      controller.signal
-    );
+      // Use IAM auth for the request
+      const response = await iamFetch(
+        cdnConfig.apiEndpoint,
+        body,
+        cdnConfig.identityPoolId,
+        cdnConfig.region,
+        controller.signal
+      );
 
-    clearTimeout(timeoutId);
+      if (!response.ok) {
+        return null;
+      }
 
-    if (!response.ok) {
-      return null;
+      const result = await response.json();
+
+      if (result.errors) {
+        return null;
+      }
+
+      const themeData = result.data?.getThemeConfig;
+      if (!themeData) {
+        return null;
+      }
+
+      // Build theme config with overrides
+      const themeOverrides: ThemeConfig['themeOverrides'] = {};
+      if (themeData.primaryColor) themeOverrides.primaryColor = themeData.primaryColor;
+      if (themeData.fontFamily) themeOverrides.fontFamily = themeData.fontFamily;
+      if (themeData.spacing) themeOverrides.spacing = themeData.spacing;
+
+      return {
+        themePreset: themeData.themePreset || 'light',
+        themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : undefined,
+      };
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const result = await response.json();
-
-    if (result.errors) {
-      return null;
-    }
-
-    const themeData = result.data?.getThemeConfig;
-    if (!themeData) {
-      return null;
-    }
-
-    // Build theme config with overrides
-    const themeOverrides: ThemeConfig['themeOverrides'] = {};
-    if (themeData.primaryColor) themeOverrides.primaryColor = themeData.primaryColor;
-    if (themeData.fontFamily) themeOverrides.fontFamily = themeData.fontFamily;
-    if (themeData.spacing) themeOverrides.spacing = themeData.spacing;
-
-    return {
-      themePreset: themeData.themePreset || 'light',
-      themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : undefined,
-    };
   } catch {
     return null;
   }
