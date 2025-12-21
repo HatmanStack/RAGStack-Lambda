@@ -1071,6 +1071,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -1080,6 +1081,11 @@ Resources:
               Action:
                 - bedrock:Retrieve
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt ConfigurationTable.Arn
 
   ##########################################################################
   # Configuration Resolver Lambda
