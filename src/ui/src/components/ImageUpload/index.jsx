@@ -191,9 +191,7 @@ export const ImageUpload = () => {
         )}
 
         {!selectedFile ? (
-          <Box
-            padding="xxl"
-            textAlign="center"
+          <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
@@ -206,7 +204,9 @@ export const ImageUpload = () => {
               minHeight: '200px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              padding: '32px',
+              textAlign: 'center'
             }}
           >
             <input
@@ -227,7 +227,7 @@ export const ImageUpload = () => {
                 </Box>
               </SpaceBetween>
             </label>
-          </Box>
+          </div>
         ) : (
           <SpaceBetween size="l">
             <ImagePreview

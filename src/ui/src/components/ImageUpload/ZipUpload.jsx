@@ -151,9 +151,7 @@ export const ZipUpload = () => {
         )}
 
         {!selectedFile ? (
-          <Box
-            padding="xxl"
-            textAlign="center"
+          <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
@@ -166,7 +164,9 @@ export const ZipUpload = () => {
               minHeight: '200px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              padding: '32px',
+              textAlign: 'center'
             }}
           >
             <input
@@ -187,7 +187,7 @@ export const ZipUpload = () => {
                 </Box>
               </SpaceBetween>
             </label>
-          </Box>
+          </div>
         ) : (
           <SpaceBetween size="l">
             {/* File preview */}
