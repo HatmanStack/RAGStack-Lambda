@@ -258,6 +258,15 @@ def create_knowledge_base(properties):
                     "inclusionPrefixes": ["output/"],
                 },
             },
+            vectorIngestionConfiguration={
+                "chunkingConfiguration": {
+                    "chunkingStrategy": "FIXED_SIZE",
+                    "fixedSizeChunkingConfiguration": {
+                        "maxTokens": 800,
+                        "overlapPercentage": 15,
+                    },
+                }
+            },
         )
 
         data_source_id = ds_response["dataSource"]["dataSourceId"]
