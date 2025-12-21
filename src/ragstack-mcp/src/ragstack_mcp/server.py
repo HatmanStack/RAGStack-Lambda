@@ -83,7 +83,13 @@ def search_knowledge_base(query: str, max_results: int = 5) -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("searchKnowledgeBase", {})
+    data = result.get("data", {}).get("searchKnowledgeBase")
+    if data is None:
+        errors = result.get("errors", [])
+        if errors:
+            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+        return "No results found."
+
     if data.get("error"):
         return f"Search error: {data['error']}"
 
@@ -135,10 +141,12 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
         queryKnowledgeBase(query: $query, conversationId: $conversationId) {
             answer
             conversationId
+            error
             sources {
-                title
+                documentId
+                s3Uri
                 snippet
-                url
+                documentUrl
             }
         }
     }
@@ -152,7 +160,16 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("queryKnowledgeBase", {})
+    data = result.get("data", {}).get("queryKnowledgeBase")
+    if data is None:
+        errors = result.get("errors", [])
+        if errors:
+            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+        return "No answer generated."
+
+    if data.get("error"):
+        return f"Query error: {data['error']}"
+
     answer = data.get("answer", "No answer generated.")
     sources = data.get("sources", [])
     conv_id = data.get("conversationId", "")
@@ -161,9 +178,12 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
     if sources:
         output.append("Sources:")
         for s in sources:
-            title = s.get("title", "Unknown")
-            url = s.get("url", "")
-            output.append(f"  - {title}" + (f" ({url})" if url else ""))
+            doc_id = s.get("documentId", "Unknown")
+            url = s.get("documentUrl") or s.get("s3Uri", "")
+            snippet = s.get("snippet", "")
+            output.append(f"  - {doc_id}" + (f" ({url})" if url else ""))
+            if snippet:
+                output.append(f"    \"{snippet[:200]}...\"" if len(snippet) > 200 else f"    \"{snippet}\"")
 
     if conv_id:
         output.append(f"\n[Conversation ID: {conv_id}]")
@@ -467,6 +487,132 @@ def upload_document_url(filename: str) -> str:
         f"{fields}\n\n"
         f"Then append your file as 'file' field."
     )
+
+
+@mcp.tool()
+def list_images(limit: int = 50) -> str:
+    """
+    List images in the knowledge base.
+
+    Args:
+        limit: Maximum number of images to return (1-100, default: 50)
+
+    Returns:
+        Multiline string with:
+        - "Found N images:" header with count
+        - For each image: "[STATUS] filename (imageId)" with optional caption
+        - Returns "No images found." if no images exist
+
+    Example:
+        list_images(limit=10)
+    """
+    gql = """
+    query ListImages($limit: Int) {
+        listImages(limit: $limit) {
+            items {
+                imageId
+                filename
+                caption
+                status
+                s3Uri
+            }
+            nextToken
+        }
+    }
+    """
+    result = _graphql_request(gql, {"limit": limit})
+
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    data = result.get("data", {}).get("listImages")
+    if data is None:
+        errors = result.get("errors", [])
+        if errors:
+            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+        return "No images found."
+
+    items = data.get("items", [])
+    if not items:
+        return "No images found."
+
+    output = [f"Found {len(items)} images:\n"]
+    for img in items:
+        status = img.get("status", "Unknown")
+        filename = img.get("filename", "Unknown")
+        image_id = img.get("imageId", "")
+        caption = img.get("caption", "")
+        line = f"  [{status}] {filename} ({image_id})"
+        if caption:
+            line += f"\n    Caption: {caption[:100]}{'...' if len(caption) > 100 else ''}"
+        output.append(line)
+
+    return "\n".join(output)
+
+
+@mcp.tool()
+def list_documents(limit: int = 50) -> str:
+    """
+    List documents in the knowledge base.
+
+    Args:
+        limit: Maximum number of documents to return (1-100, default: 50)
+
+    Returns:
+        Multiline string with:
+        - "Found N documents:" header with count
+        - For each document: "[STATUS] filename (documentId)" with page count if available
+        - Returns "No documents found." if no documents exist
+
+    Example:
+        list_documents(limit=10)
+    """
+    gql = """
+    query ListDocuments($limit: Int) {
+        listDocuments(limit: $limit) {
+            items {
+                documentId
+                filename
+                status
+                fileType
+                totalPages
+                inputS3Uri
+            }
+            nextToken
+        }
+    }
+    """
+    result = _graphql_request(gql, {"limit": limit})
+
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    data = result.get("data", {}).get("listDocuments")
+    if data is None:
+        errors = result.get("errors", [])
+        if errors:
+            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+        return "No documents found."
+
+    items = data.get("items", [])
+    if not items:
+        return "No documents found."
+
+    output = [f"Found {len(items)} documents:\n"]
+    for doc in items:
+        status = doc.get("status", "Unknown")
+        filename = doc.get("filename", "Unknown")
+        doc_id = doc.get("documentId", "")
+        file_type = doc.get("fileType", "")
+        pages = doc.get("totalPages")
+        line = f"  [{status}] {filename} ({doc_id})"
+        if file_type:
+            line += f" [{file_type}]"
+        if pages:
+            line += f" - {pages} pages"
+        output.append(line)
+
+    return "\n".join(output)
 
 
 def main():

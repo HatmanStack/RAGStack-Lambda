@@ -146,17 +146,140 @@ When `chat_allow_document_access` is enabled (admin UI -> Configuration):
 
 ## Styling
 
-### Design Tokens
+The widget is fully customizable via CSS variables. Override any variable on the `ragstack-chat` element or a parent container.
 
-Customize appearance with CSS variables:
+### Quick Example
 
 ```css
-:root {
-  --chat-color-user-bg: #your-color;
-  --chat-color-source-accent: #your-color;
-  --chat-font-family: 'Your Font', sans-serif;
-  --chat-spacing-lg: 20px;
+ragstack-chat {
+  --chat-color-user-bg: #7c3aed;
+  --chat-color-source-accent: #7c3aed;
+  --chat-font-family: 'Inter', sans-serif;
 }
+```
+
+### CSS Variables Reference
+
+#### Colors
+
+| Variable | Default (Light) | Default (Dark) | shadcn/ui Equivalent |
+|----------|-----------------|----------------|----------------------|
+| `--chat-color-bg` | `#ffffff` | `#1a1a1a` | `--background` |
+| `--chat-color-bg-secondary` | `#f5f5f5` | `#2a2a2a` | `--secondary` |
+| `--chat-color-text` | `#1a1a1a` | `#ffffff` | `--foreground` |
+| `--chat-color-text-secondary` | `#666666` | `#999999` | `--muted-foreground` |
+| `--chat-color-border` | `#d5d5d5` | `#333333` | `--border` |
+| `--chat-color-border-light` | `#e3e3e3` | `#2a2a2a` | `--border` (lighter) |
+| `--chat-color-primary` | `#0056b3` | `#0056b3` | `--primary` |
+| `--chat-color-user-bg` | `#0972d3` | `#0972d3` | `--primary` |
+| `--chat-color-user-text` | `#ffffff` | `#ffffff` | `--primary-foreground` |
+| `--chat-color-assistant-bg` | `#f5f5f5` | `#2a2a2a` | `--muted` |
+| `--chat-color-assistant-text` | `#1a1a1a` | `#ffffff` | `--muted-foreground` |
+| `--chat-color-source-bg` | `#f8f9fa` | `#252525` | `--card` |
+| `--chat-color-source-border` | `#d5d5d5` | `#333333` | `--border` |
+| `--chat-color-source-accent` | `#0972d3` | `#539fe5` | `--accent` |
+
+#### Spacing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--chat-spacing-xs` | `4px` | Extra small gaps |
+| `--chat-spacing-sm` | `8px` | Small gaps, button padding |
+| `--chat-spacing-md` | `12px` | Medium gaps, input padding |
+| `--chat-spacing-lg` | `16px` | Large gaps, section padding |
+| `--chat-spacing-xl` | `20px` | Extra large gaps |
+| `--chat-spacing-xxl` | `24px` | Container padding |
+
+#### Border Radius
+
+| Variable | Default | shadcn/ui Equivalent |
+|----------|---------|----------------------|
+| `--chat-radius-sm` | `2px` | `--radius` (sm) |
+| `--chat-radius-md` | `4px` | `--radius` |
+| `--chat-radius-lg` | `8px` | `--radius` (lg) |
+
+#### Typography
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--chat-font-family` | System fonts | Font stack |
+| `--chat-font-size-xs` | `12px` | Timestamps, labels |
+| `--chat-font-size-sm` | `13px` | Secondary text |
+| `--chat-font-size-base` | `14px` | Body text |
+| `--chat-font-size-lg` | `16px` | Headers |
+| `--chat-font-size-xl` | `18px` | Large headers |
+| `--chat-line-height-tight` | `1.4` | Compact text |
+| `--chat-line-height-normal` | `1.5` | Body text |
+| `--chat-line-height-relaxed` | `1.6` | Readable paragraphs |
+
+#### Transitions
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--chat-transition-fast` | `100ms ease-in-out` | Hover states |
+| `--chat-transition-normal` | `200ms ease-in-out` | UI changes |
+
+### HTML Attributes
+
+Configure the widget via HTML attributes:
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `conversation-id` | string | `"default"` | Unique conversation identifier |
+| `header-text` | string | `"Document Q&A"` | Header title text |
+| `header-subtitle` | string | `"Ask questions about your documents"` | Subtitle below header |
+| `input-placeholder` | string | `"Ask a question..."` | Input field placeholder |
+| `show-sources` | boolean | `true` | Show/hide source citations |
+| `max-width` | string | `"100%"` | Component max width |
+| `user-id` | string | - | User ID for authenticated mode |
+| `user-token` | string | - | Auth token for authenticated mode |
+| `theme-preset` | string | `"light"` | Theme: `light`, `dark`, or `brand` |
+| `theme-overrides` | JSON | - | JSON object with theme overrides |
+
+### Theme Presets
+
+Three built-in presets: `light`, `dark`, `brand` (AWS orange).
+
+```html
+<!-- Dark mode -->
+<ragstack-chat theme-preset="dark"></ragstack-chat>
+
+<!-- Brand theme with custom accent -->
+<ragstack-chat
+  theme-preset="brand"
+  theme-overrides='{"primaryColor": "#7c3aed"}'
+></ragstack-chat>
+```
+
+### Full Customization Example
+
+```html
+<style>
+  .my-chat {
+    /* Map to your design system */
+    --chat-color-bg: var(--background);
+    --chat-color-text: var(--foreground);
+    --chat-color-border: var(--border);
+    --chat-color-user-bg: var(--primary);
+    --chat-color-user-text: var(--primary-foreground);
+    --chat-color-assistant-bg: var(--muted);
+    --chat-color-source-accent: var(--accent);
+
+    /* Custom typography */
+    --chat-font-family: 'Inter', sans-serif;
+    --chat-font-size-base: 15px;
+
+    /* Rounder corners */
+    --chat-radius-md: 8px;
+    --chat-radius-lg: 12px;
+  }
+</style>
+
+<ragstack-chat
+  class="my-chat"
+  header-text="Support Chat"
+  header-subtitle="How can we help?"
+></ragstack-chat>
 ```
 
 ### CSS Classes

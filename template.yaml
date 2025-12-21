@@ -1806,6 +1806,8 @@ Resources:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
