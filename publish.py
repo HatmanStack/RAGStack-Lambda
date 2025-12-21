@@ -539,13 +539,13 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
 
     # Add UI parameters if building UI
     if not skip_ui and ui_source_key:
-        log_info("UI will be deployed via CodeBuild during stack creation")
+        log_info("UI source uploaded, will trigger CodeBuild after stack deploy")
         param_overrides.append(f"UISourceBucket={artifact_bucket}")
         param_overrides.append(f"UISourceKey={ui_source_key}")
 
     # Add web component source key if provided
     if wc_source_key:
-        log_info("Web component will be deployed via CodeBuild during stack creation")
+        log_info("Web component source uploaded, will trigger CodeBuild after stack deploy")
         param_overrides.append(f"WebComponentSourceKey={wc_source_key}")
 
     cmd = [
@@ -736,6 +736,80 @@ def get_stack_outputs(stack_name, region="us-east-1"):
     except Exception as e:
         log_error(f"Failed to get stack outputs: {e}")
         return {}
+
+
+def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False):
+    """
+    Trigger CodeBuild projects for UI and web component deployment.
+
+    Args:
+        outputs: Stack outputs containing CodeBuild project names
+        region: AWS region
+        skip_ui: If True, skip UI build (only build web component)
+    """
+    codebuild = boto3.client('codebuild', region_name=region)
+
+    projects_to_build = []
+
+    # Web component build
+    wc_project = outputs.get('WebComponentBuildProjectName')
+    if wc_project:
+        projects_to_build.append(('Web Component', wc_project))
+
+    # UI build (unless skipped)
+    if not skip_ui:
+        ui_project = outputs.get('AmplifyDeployProjectName')
+        if ui_project:
+            projects_to_build.append(('UI', ui_project))
+
+    if not projects_to_build:
+        log_warning("No CodeBuild projects found in stack outputs")
+        return
+
+    # Start all builds
+    build_ids = []
+    for name, project in projects_to_build:
+        try:
+            log_info(f"Starting {name} build ({project})...")
+            response = codebuild.start_build(projectName=project)
+            build_id = response['build']['id']
+            build_ids.append((name, build_id))
+            log_success(f"{name} build started: {build_id.split(':')[1][:8]}...")
+        except Exception as e:
+            log_error(f"Failed to start {name} build: {e}")
+
+    if not build_ids:
+        return
+
+    # Wait for builds to complete
+    log_info("Waiting for builds to complete...")
+    import time
+    max_wait = 600  # 10 minutes
+    poll_interval = 15
+    elapsed = 0
+
+    while build_ids and elapsed < max_wait:
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+
+        try:
+            response = codebuild.batch_get_builds(ids=[bid for _, bid in build_ids])
+            remaining = []
+            for build in response['builds']:
+                name = next((n for n, bid in build_ids if bid == build['id']), 'Unknown')
+                status = build['buildStatus']
+                if status == 'IN_PROGRESS':
+                    remaining.append((name, build['id']))
+                elif status == 'SUCCEEDED':
+                    log_success(f"{name} build completed successfully")
+                else:
+                    log_error(f"{name} build failed: {status}")
+            build_ids = remaining
+        except Exception as e:
+            log_warning(f"Error checking build status: {e}")
+
+    if build_ids:
+        log_warning(f"Builds still in progress after {max_wait}s: {[n for n, _ in build_ids]}")
 
 
 def configure_ui(stack_name, region="us-east-1"):
@@ -1241,6 +1315,9 @@ Examples:
 
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
+
+        # Trigger CodeBuild projects for UI and web component
+        trigger_codebuild_projects(outputs, args.region, skip_ui=args.skip_ui)
 
         # Seed configuration table with CDN URL
         config_table_name = outputs.get('ConfigurationTableName')
