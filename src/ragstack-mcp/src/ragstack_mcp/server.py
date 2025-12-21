@@ -490,129 +490,262 @@ def upload_document_url(filename: str) -> str:
 
 
 @mcp.tool()
-def list_images(limit: int = 50) -> str:
+def upload_image_url(filename: str) -> str:
     """
-    List images in the knowledge base.
+    Get a presigned URL to upload an image to the knowledge base.
+
+    This is step 1 of the image upload workflow:
+    1. Call upload_image_url() to get presigned URL and image ID
+    2. Upload the file to S3 using the returned URL and fields
+    3. Optionally call generate_image_caption() to get an AI-generated caption
+    4. Call submit_image() to finalize the upload with captions
+
+    Supported image types: JPEG, PNG, GIF, WebP, BMP, TIFF
 
     Args:
-        limit: Maximum number of images to return (1-100, default: 50)
+        filename: Name of the image file with extension (e.g., "photo.jpg", "diagram.png").
+            The filename determines content type and is displayed in the knowledge base.
 
     Returns:
         Multiline string with:
-        - "Found N images:" header with count
-        - For each image: "[STATUS] filename (imageId)" with optional caption
-        - Returns "No images found." if no images exist
+        - "Image upload URL generated!" confirmation
+        - "Image ID: <uuid>" - Unique ID for tracking (use in submit_image)
+        - "S3 URI: <s3://...>" - S3 location (use in generate_image_caption)
+        - "Upload URL: <presigned_url>" - URL to POST the file to
+        - "Form fields:" - JSON object with required form fields
+        - Upload instructions using curl
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "GraphQL error: Invalid filename" - Unsupported file type
+        - "GraphQL error: <message>" - Server error
 
     Example:
-        list_images(limit=10)
+        # Get upload URL for a JPEG image
+        upload_image_url("family-photo.jpg")
+
+        # Get upload URL for a PNG diagram
+        upload_image_url("architecture-diagram.png")
     """
     gql = """
-    query ListImages($limit: Int) {
-        listImages(limit: $limit) {
-            items {
-                imageId
-                filename
-                caption
-                status
-                s3Uri
-            }
-            nextToken
+    mutation CreateImageUploadUrl($filename: String!) {
+        createImageUploadUrl(filename: $filename) {
+            uploadUrl
+            imageId
+            s3Uri
+            fields
         }
     }
     """
-    result = _graphql_request(gql, {"limit": limit})
+    result = _graphql_request(gql, {"filename": filename})
 
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("listImages")
+    errors = result.get("errors")
+    if errors:
+        return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+
+    data = result.get("data", {}).get("createImageUploadUrl")
     if data is None:
-        errors = result.get("errors", [])
-        if errors:
-            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
-        return "No images found."
+        return "Error: No response from server"
 
-    items = data.get("items", [])
-    if not items:
-        return "No images found."
+    upload_url = data.get("uploadUrl", "")
+    image_id = data.get("imageId", "")
+    s3_uri = data.get("s3Uri", "")
+    fields = data.get("fields", "{}")
 
-    output = [f"Found {len(items)} images:\n"]
-    for img in items:
-        status = img.get("status", "Unknown")
-        filename = img.get("filename", "Unknown")
-        image_id = img.get("imageId", "")
-        caption = img.get("caption", "")
-        line = f"  [{status}] {filename} ({image_id})"
-        if caption:
-            line += f"\n    Caption: {caption[:100]}{'...' if len(caption) > 100 else ''}"
-        output.append(line)
-
-    return "\n".join(output)
+    return (
+        f"Image upload URL generated!\n\n"
+        f"Image ID: {image_id}\n"
+        f"S3 URI: {s3_uri}\n"
+        f"Upload URL: {upload_url}\n\n"
+        f"Form fields:\n{fields}\n\n"
+        f"To upload with curl:\n"
+        f"  curl -X POST '{upload_url}' \\\n"
+        f"    -F '<field1>=<value1>' \\\n"
+        f"    -F '<field2>=<value2>' \\\n"
+        f"    ... (include all fields above) \\\n"
+        f"    -F 'file=@{filename}'\n\n"
+        f"After upload, call:\n"
+        f"  generate_image_caption('{s3_uri}') - to get AI caption\n"
+        f"  submit_image('{image_id}', ...) - to finalize with captions"
+    )
 
 
 @mcp.tool()
-def list_documents(limit: int = 50) -> str:
+def generate_image_caption(s3_uri: str) -> str:
     """
-    List documents in the knowledge base.
+    Generate an AI caption for an uploaded image using a vision model.
+
+    This is step 3 (optional) of the image upload workflow. Call this after
+    uploading the image file to S3 but before calling submit_image().
+
+    The vision model analyzes the image and generates a descriptive caption
+    that will be used for semantic search in the knowledge base.
 
     Args:
-        limit: Maximum number of documents to return (1-100, default: 50)
+        s3_uri: The S3 URI of the uploaded image (returned by upload_image_url).
+            Format: "s3://bucket-name/path/to/image.jpg"
 
     Returns:
         Multiline string with:
-        - "Found N documents:" header with count
-        - For each document: "[STATUS] filename (documentId)" with page count if available
-        - Returns "No documents found." if no documents exist
+        - "AI Caption generated!" confirmation
+        - "Caption: <generated_caption>" - The AI-generated description
+        - Instructions for next step (submit_image)
+
+        If generation fails:
+        - "Caption generation failed: <error_message>"
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "GraphQL error: Image not found" - S3 URI doesn't exist or not accessible
+        - "GraphQL error: <message>" - Vision model or server error
 
     Example:
-        list_documents(limit=10)
+        # Generate caption for an uploaded image
+        generate_image_caption("s3://my-bucket/images/abc-123/photo.jpg")
     """
     gql = """
-    query ListDocuments($limit: Int) {
-        listDocuments(limit: $limit) {
-            items {
-                documentId
-                filename
-                status
-                fileType
-                totalPages
-                inputS3Uri
-            }
-            nextToken
+    mutation GenerateCaption($imageS3Uri: String!) {
+        generateCaption(imageS3Uri: $imageS3Uri) {
+            caption
+            error
         }
     }
     """
-    result = _graphql_request(gql, {"limit": limit})
+    result = _graphql_request(gql, {"imageS3Uri": s3_uri})
 
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("listDocuments")
+    errors = result.get("errors")
+    if errors:
+        return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+
+    data = result.get("data", {}).get("generateCaption")
     if data is None:
-        errors = result.get("errors", [])
-        if errors:
-            return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
-        return "No documents found."
+        return "Error: No response from server"
 
-    items = data.get("items", [])
-    if not items:
-        return "No documents found."
+    if data.get("error"):
+        return f"Caption generation failed: {data['error']}"
 
-    output = [f"Found {len(items)} documents:\n"]
-    for doc in items:
-        status = doc.get("status", "Unknown")
-        filename = doc.get("filename", "Unknown")
-        doc_id = doc.get("documentId", "")
-        file_type = doc.get("fileType", "")
-        pages = doc.get("totalPages")
-        line = f"  [{status}] {filename} ({doc_id})"
-        if file_type:
-            line += f" [{file_type}]"
-        if pages:
-            line += f" - {pages} pages"
-        output.append(line)
+    caption = data.get("caption", "")
+    if not caption:
+        return "Caption generation failed: No caption returned"
 
-    return "\n".join(output)
+    return (
+        f"AI Caption generated!\n\n"
+        f"Caption: {caption}\n\n"
+        f"Use this caption in submit_image() as the 'ai_caption' parameter."
+    )
+
+
+@mcp.tool()
+def submit_image(
+    image_id: str,
+    caption: str | None = None,
+    user_caption: str | None = None,
+    ai_caption: str | None = None,
+) -> str:
+    """
+    Finalize an image upload and trigger indexing to the knowledge base.
+
+    This is the final step of the image upload workflow. Call this after:
+    1. Getting presigned URL with upload_image_url()
+    2. Uploading the file to S3
+    3. Optionally generating AI caption with generate_image_caption()
+
+    The image will be indexed into the knowledge base using the provided captions
+    for semantic search. At least one caption (caption, user_caption, or ai_caption)
+    should be provided for meaningful search results.
+
+    Args:
+        image_id: The image ID returned by upload_image_url() (UUID format).
+        caption: Primary caption for the image. If not provided, uses user_caption
+            or ai_caption as fallback.
+        user_caption: User-provided caption describing the image content.
+            Use this for human-written descriptions.
+        ai_caption: AI-generated caption from generate_image_caption().
+            Use this for automatically generated descriptions.
+
+    Returns:
+        Multiline string with:
+        - "Image submitted successfully!" confirmation
+        - "Image ID: <uuid>"
+        - "Filename: <original_filename>"
+        - "Status: <PENDING|PROCESSING|INDEXED|FAILED>"
+        - "Caption: <final_caption>" - The caption that will be indexed
+
+    Errors:
+        - "Error: RAGSTACK_GRAPHQL_ENDPOINT not configured" - Missing endpoint env var
+        - "Error: RAGSTACK_API_KEY not configured" - Missing API key env var
+        - "GraphQL error: Image not found" - Invalid image_id or image not uploaded
+        - "GraphQL error: <message>" - Server error
+
+    Example:
+        # Submit with user-provided caption only
+        submit_image("abc-123-uuid", user_caption="Family photo from 1985")
+
+        # Submit with AI-generated caption
+        submit_image("abc-123-uuid", ai_caption="A group of people standing outdoors")
+
+        # Submit with both user and AI captions
+        submit_image(
+            "abc-123-uuid",
+            user_caption="Grandpa's 80th birthday party",
+            ai_caption="A group of people gathered around a birthday cake"
+        )
+    """
+    gql = """
+    mutation SubmitImage($input: SubmitImageInput!) {
+        submitImage(input: $input) {
+            imageId
+            filename
+            status
+            caption
+            userCaption
+            aiCaption
+            errorMessage
+        }
+    }
+    """
+    input_data = {"imageId": image_id}
+    if caption:
+        input_data["caption"] = caption
+    if user_caption:
+        input_data["userCaption"] = user_caption
+    if ai_caption:
+        input_data["aiCaption"] = ai_caption
+
+    result = _graphql_request(gql, {"input": input_data})
+
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    errors = result.get("errors")
+    if errors:
+        return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
+
+    data = result.get("data", {}).get("submitImage")
+    if data is None:
+        return "Error: No response from server"
+
+    if data.get("errorMessage"):
+        return f"Submit failed: {data['errorMessage']}"
+
+    final_caption = data.get("caption") or data.get("userCaption") or data.get("aiCaption") or "None"
+
+    return (
+        f"Image submitted successfully!\n\n"
+        f"Image ID: {data.get('imageId')}\n"
+        f"Filename: {data.get('filename')}\n"
+        f"Status: {data.get('status')}\n"
+        f"Caption: {final_caption}\n\n"
+        f"The image is now being processed and will be indexed to the knowledge base."
+    )
 
 
 def main():
