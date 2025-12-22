@@ -17,6 +17,7 @@ Handles:
 - getImage
 - listImages
 - deleteImage
+- deleteDocuments
 """
 
 import json
@@ -122,6 +123,8 @@ def lambda_handler(event, context):
         "listImages": list_images,
         "deleteImage": delete_image,
         "createZipUploadUrl": create_zip_upload_url,
+        # Document management
+        "deleteDocuments": delete_documents,
     }
 
     resolver = resolvers.get(field_name)
@@ -222,6 +225,77 @@ def list_documents(args):
     except Exception as e:
         logger.error(f"Unexpected error in list_documents: {e}")
         raise
+
+
+def delete_documents(args):
+    """
+    Delete documents from DynamoDB tracking table (batch delete).
+
+    Note: This only deletes from DynamoDB, not from S3 or Knowledge Base.
+    S3 cleanup and KB sync happen separately.
+
+    Args:
+        args: Dictionary containing:
+            - documentIds: List of document IDs to delete
+
+    Returns:
+        DeleteDocumentsResult with deletedCount, failedIds, and errors
+    """
+    document_ids = args.get("documentIds", [])
+    logger.info(f"Deleting {len(document_ids)} documents from tracking table")
+
+    if not document_ids:
+        return {"deletedCount": 0, "failedIds": [], "errors": []}
+
+    # Limit batch size to prevent abuse
+    max_batch_size = 100
+    if len(document_ids) > max_batch_size:
+        raise ValueError(f"Cannot delete more than {max_batch_size} documents at once")
+
+    table = dynamodb.Table(TRACKING_TABLE)
+    deleted_count = 0
+    failed_ids = []
+    errors = []
+
+    for doc_id in document_ids:
+        try:
+            # Validate document ID format
+            if not is_valid_uuid(doc_id):
+                failed_ids.append(doc_id)
+                errors.append(f"Invalid document ID format: {doc_id}")
+                continue
+
+            # Check if document exists and get its type
+            response = table.get_item(Key={"document_id": doc_id})
+            item = response.get("Item")
+
+            if not item:
+                failed_ids.append(doc_id)
+                errors.append(f"Document not found: {doc_id}")
+                continue
+
+            # Delete from DynamoDB
+            table.delete_item(Key={"document_id": doc_id})
+            deleted_count += 1
+            logger.info(f"Deleted document from DynamoDB: {doc_id}")
+
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            failed_ids.append(doc_id)
+            errors.append(f"Failed to delete {doc_id}: {error_code}")
+            logger.error(f"DynamoDB error deleting {doc_id}: {e}")
+        except Exception as e:
+            failed_ids.append(doc_id)
+            errors.append(f"Failed to delete {doc_id}: {str(e)}")
+            logger.error(f"Unexpected error deleting {doc_id}: {e}")
+
+    logger.info(f"Delete complete: {deleted_count} deleted, {len(failed_ids)} failed")
+
+    return {
+        "deletedCount": deleted_count,
+        "failedIds": failed_ids if failed_ids else None,
+        "errors": errors if errors else None,
+    }
 
 
 def create_upload_url(args):

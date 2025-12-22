@@ -2491,6 +2491,15 @@ Resources:
       FieldName: deleteImage
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
+  DeleteDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteDocuments
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
   CreateZipUploadUrlResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema

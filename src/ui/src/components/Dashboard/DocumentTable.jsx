@@ -114,9 +114,10 @@ const getTypeLabel = (type) => {
   }
 };
 
-export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument }) => {
+export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument, onDelete }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [preferences, setPreferences] = useState(loadPreferences);
+  const [deleting, setDeleting] = useState(false);
 
   // Save preferences when they change
   useEffect(() => {
@@ -169,6 +170,21 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
       case 'scrape': return <Icon name="external" size="small" />;
       case 'image': return <Icon name="file" size="small" />;
       default: return null;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (selectedItems.length === 0 || !onDelete) return;
+
+    setDeleting(true);
+    try {
+      const documentIds = selectedItems.map(item => item.documentId);
+      await onDelete(documentIds);
+      setSelectedItems([]); // Clear selection after delete
+    } catch (err) {
+      console.error('Delete failed:', err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -238,6 +254,13 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
           description={`Showing: ${dateRangeLabel}`}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
+              <Button
+                onClick={handleDelete}
+                disabled={selectedItems.length === 0 || deleting}
+                loading={deleting}
+              >
+                Delete{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
+              </Button>
               <Button onClick={onRefresh} iconName="refresh" loading={loading}>
                 Refresh
               </Button>
@@ -252,7 +275,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument 
       items={items}
       loading={loading}
       loadingText="Loading items"
-      selectionType="single"
+      selectionType="multi"
       selectedItems={selectedItems}
       onSelectionChange={({ detail }) => setSelectedItems(detail.selectedItems)}
       filter={
