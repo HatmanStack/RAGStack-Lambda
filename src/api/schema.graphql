@@ -48,7 +48,7 @@ type Query {
 type Mutation {
   # Create presigned URL for document upload
   # Accessible via API key for external integrations, or Cognito for admin UI
-  createUploadUrl(filename: String!): UploadUrl @aws_api_key @aws_cognito_user_pools
+  createUploadUrl(filename: String!): UploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Manually trigger processing (if needed)
   processDocument(documentId: ID!): Document
@@ -58,11 +58,11 @@ type Mutation {
 
   # Start a new web scraping job
   # Accessible via API key for external integrations, or Cognito for admin UI
-  startScrape(input: StartScrapeInput!): ScrapeJob @aws_api_key @aws_cognito_user_pools
+  startScrape(input: StartScrapeInput!): ScrapeJob @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Cancel an in-progress scrape job
   # Accessible via API key for external integrations, or Cognito for admin UI
-  cancelScrape(jobId: ID!): ScrapeJob @aws_api_key @aws_cognito_user_pools
+  cancelScrape(jobId: ID!): ScrapeJob @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Internal: Publish document status update (called by Lambda)
   publishDocumentUpdate(
@@ -88,22 +88,22 @@ type Mutation {
 
   # Create presigned URL for image upload
   # Accessible via API key for external integrations, or Cognito for admin UI
-  createImageUploadUrl(filename: String!): ImageUploadUrl @aws_api_key @aws_cognito_user_pools
+  createImageUploadUrl(filename: String!): ImageUploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Generate AI caption for an image using vision model
   # Accessible via API key for external integrations, or Cognito for admin UI
-  generateCaption(imageS3Uri: String!): CaptionResult @aws_api_key @aws_cognito_user_pools
+  generateCaption(imageS3Uri: String!): CaptionResult @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Submit image with caption to finalize upload and trigger processing
   # Accessible via API key for external integrations, or Cognito for admin UI
-  submitImage(input: SubmitImageInput!): Image @aws_api_key @aws_cognito_user_pools
+  submitImage(input: SubmitImageInput!): Image @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Delete an image from S3, DynamoDB, and Knowledge Base
   deleteImage(imageId: ID!): Boolean
 
   # Create presigned URL for ZIP archive upload (batch image upload)
   # Accessible via API key for external integrations, or Cognito for admin UI
-  createZipUploadUrl(generateCaptions: Boolean): ZipUploadUrl @aws_api_key @aws_cognito_user_pools
+  createZipUploadUrl(generateCaptions: Boolean): ZipUploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Regenerate API key (admin only) - creates new key and deletes old ones
   regenerateApiKey: ApiKeyResponse @aws_cognito_user_pools

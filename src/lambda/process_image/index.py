@@ -7,10 +7,15 @@ Processes uploaded images using Nova Multimodal Embeddings. Ingests BOTH:
 
 Both vectors share the same image_id, enabling cross-modal retrieval.
 
+Trigger modes:
+1. metadata.json upload (web-UI): User provides caption via submitImage
+2. auto_process (API/MCP): AI generates caption automatically
+
 Input event (from Step Functions or S3 trigger):
 {
-    "image_id": "abc123",
-    "input_s3_uri": "s3://bucket/images/abc123/image.png"
+    "image_id": "abc123" or "images/abc123/image.jpg",
+    "input_s3_uri": "s3://bucket/images/abc123/image.png",
+    "trigger_type": "auto_process" (optional, for API/MCP uploads)
 }
 
 Output:
@@ -25,12 +30,14 @@ Output:
 import json
 import logging
 import os
+import re
 from datetime import UTC, datetime
 
 import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_image_update
+from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus
 
 logger = logging.getLogger()
@@ -38,8 +45,12 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
+bedrock_runtime = boto3.client("bedrock-runtime")
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
+
+# Configuration table name (optional, for getting chat model)
+CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 
 def lambda_handler(event, context):

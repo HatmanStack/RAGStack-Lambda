@@ -781,10 +781,18 @@ def create_image_upload_url(args):
 
     Returns upload URL and image ID for tracking.
     The image is stored at images/{imageId}/{filename}.
+
+    Args:
+        args: Dictionary containing:
+            - filename: Image filename (required)
+            - autoProcess: If True, process automatically after upload (optional)
+            - userCaption: User-provided caption for auto-process (optional)
     """
     try:
         filename = args["filename"]
-        logger.info(f"Creating image upload URL for file: {filename}")
+        auto_process = args.get("autoProcess", False)
+        user_caption = args.get("userCaption", "")
+        logger.info(f"Creating image upload URL for file: {filename}, autoProcess={auto_process}")
 
         # Validate filename length
         if not filename or len(filename) > MAX_FILENAME_LENGTH:

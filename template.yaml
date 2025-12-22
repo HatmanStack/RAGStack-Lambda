@@ -1576,6 +1576,56 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ImageUploadRule.Arn
 
+  # EventBridge Rule for Auto-Process Image Uploads (API/MCP)
+  # Triggers on actual image file uploads to images/ prefix
+  # The Lambda checks if auto_process=true in DynamoDB before processing
+  ImageAutoProcessRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-ImageAutoProcess'
+      Description: Trigger image processing on direct image upload (for API/MCP with autoProcess=true)
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: 'images/'
+              - wildcard: '*.jpg'
+              - wildcard: '*.jpeg'
+              - wildcard: '*.png'
+              - wildcard: '*.gif'
+              - wildcard: '*.webp'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessImageFunction.Arn
+          Id: TriggerImageAutoProcess
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "image_id": "<key>",
+                "input_s3_uri": "s3://<bucket>/<key>",
+                "trigger_type": "auto_process"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  ImageAutoProcessRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ImageAutoProcessRule.Arn
+
   # EventBridge rule to trigger ZIP processing
   ZipUploadRule:
     Type: AWS::Events::Rule
