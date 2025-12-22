@@ -176,6 +176,11 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
   const handleDelete = async () => {
     if (selectedItems.length === 0 || !onDelete) return;
 
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedItems.length} item(s)? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
     setDeleting(true);
     try {
       const documentIds = selectedItems.map(item => item.documentId);

@@ -1615,6 +1615,8 @@ Resources:
               - suffix: '.JPG'
               - suffix: '.JPEG'
               - suffix: '.PNG'
+              - suffix: '.GIF'
+              - suffix: '.WEBP'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessImageFunction.Arn

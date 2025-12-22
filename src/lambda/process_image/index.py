@@ -444,7 +444,7 @@ def generate_ai_caption(s3_uri: str) -> str:
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
-                caption_model = config_mgr.get_value("image_caption_model", caption_model)
+                caption_model = config_mgr.get_parameter("image_caption_model", caption_model)
             except Exception as e:
                 logger.warning(f"Failed to get caption model from config: {e}")
 
