@@ -47,3 +47,4 @@ TEST_FIXES_NEEDED.md
 amplify_outputs*
 amplifyconfiguration*
 amplify/data/config.ts
+.env
