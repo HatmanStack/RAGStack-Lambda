@@ -367,18 +367,13 @@ export const useDocuments = () => {
       console.error('[useDocuments] Failed to set up subscriptions:', err);
     }
 
-    // Fallback: poll every 2 minutes in case subscriptions fail
-    const interval = setInterval(() => {
-      fetchDocuments(true);
-    }, 120000);
-
+    // Cleanup subscriptions on unmount
     return () => {
-      clearInterval(interval);
       if (docSubscription) docSubscription.unsubscribe();
       if (imageSubscription) imageSubscription.unsubscribe();
       if (scrapeSubscription) scrapeSubscription.unsubscribe();
     };
-  }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
+  }, [handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
   // Merge and deduplicate by documentId with type precedence: image > scrape > document
   const allItems = useMemo(() => {
