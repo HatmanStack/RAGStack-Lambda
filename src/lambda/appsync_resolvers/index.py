@@ -175,15 +175,20 @@ def get_document(args):
 
 
 def list_documents(args):
-    """List all documents (excluding images and scraped pages)."""
-    try:
-        next_token = args.get("nextToken")
+    """
+    List all documents (excluding images and scraped pages).
 
+    Returns all documents in a single response (no pagination).
+    Images and scraped pages have their own list endpoints.
+    """
+    try:
         logger.info("Listing all documents")
 
         table = dynamodb.Table(TRACKING_TABLE)
 
         # Filter out images and scraped pages - they have their own list endpoints
+        # Note: We scan all items without DynamoDB Limit because Limit applies
+        # BEFORE FilterExpression, which would return inconsistent results.
         scan_kwargs = {
             "FilterExpression": (
                 "attribute_not_exists(#type) OR (#type <> :image_type AND #type <> :scraped_type)"
@@ -195,15 +200,7 @@ def list_documents(args):
             },
         }
 
-        if next_token:
-            try:
-                scan_kwargs["ExclusiveStartKey"] = json.loads(next_token)
-                logger.info("Continuing pagination with next token")
-            except json.JSONDecodeError:
-                logger.warning("Invalid next token provided")
-                raise ValueError("Invalid pagination token") from None
-
-        # Scan all items (no limit)
+        # Scan all items
         all_items = []
         while True:
             response = table.scan(**scan_kwargs)

@@ -4,8 +4,8 @@ type Query {
   # Get document by ID
   getDocument(documentId: ID!): Document
 
-  # List all documents (paginated)
-  listDocuments(limit: Int, nextToken: String): DocumentConnection
+  # List all documents (returns all items, no pagination)
+  listDocuments: DocumentConnection
 
   # Query Knowledge Base with optional conversation ID for multi-turn chat
   # Note: sessionId is deprecated, use conversationId instead
