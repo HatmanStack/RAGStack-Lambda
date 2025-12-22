@@ -186,8 +186,7 @@ def list_documents(args):
         # Filter out images and scraped pages - they have their own list endpoints
         scan_kwargs = {
             "FilterExpression": (
-                "attribute_not_exists(#type) OR "
-                "(#type <> :image_type AND #type <> :scraped_type)"
+                "attribute_not_exists(#type) OR (#type <> :image_type AND #type <> :scraped_type)"
             ),
             "ExpressionAttributeNames": {"#type": "type"},
             "ExpressionAttributeValues": {

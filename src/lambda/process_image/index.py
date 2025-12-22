@@ -124,8 +124,7 @@ def lambda_handler(event, context):
                     caption = generated_caption
                     # Update DynamoDB with generated caption
                     update_expr = (
-                        "SET caption = :caption, ai_caption = :ai_caption, "
-                        "updated_at = :updated_at"
+                        "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
                     )
                     tracking_table.update_item(
                         Key={"document_id": image_id},
@@ -445,9 +444,7 @@ def generate_ai_caption(s3_uri: str) -> str:
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
-                caption_model = config_mgr.get_value(
-                    "image_caption_model", caption_model
-                )
+                caption_model = config_mgr.get_value("image_caption_model", caption_model)
             except Exception as e:
                 logger.warning(f"Failed to get caption model from config: {e}")
 
