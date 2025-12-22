@@ -1488,7 +1488,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${ProjectName}-S3UploadTrigger'
-      Description: Trigger processing pipeline on S3 upload to input/ prefix
+      Description: Trigger processing pipeline on S3 upload to input/ prefix (excludes scraped content)
       EventPattern:
         source:
           - aws.s3
@@ -1501,6 +1501,8 @@ Resources:
           object:
             key:
               - prefix: 'input/'
+              - anything-but:
+                  suffix: '.scraped.md'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessingStateMachine.Arn

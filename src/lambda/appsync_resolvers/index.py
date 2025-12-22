@@ -172,21 +172,26 @@ def get_document(args):
 
 
 def list_documents(args):
-    """List all documents with pagination."""
+    """List all documents (excluding images and scraped pages)."""
     try:
-        limit = args.get("limit", 50)
         next_token = args.get("nextToken")
 
-        # Validate limit
-        if limit < 1 or limit > MAX_DOCUMENTS_LIMIT:
-            logger.warning(f"Invalid limit requested: {limit}")
-            raise ValueError(f"Limit must be between 1 and {MAX_DOCUMENTS_LIMIT}")
-
-        logger.info(f"Listing documents with limit: {limit}")
+        logger.info("Listing all documents")
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        scan_kwargs = {"Limit": limit}
+        # Filter out images and scraped pages - they have their own list endpoints
+        scan_kwargs = {
+            "FilterExpression": (
+                "attribute_not_exists(#type) OR "
+                "(#type <> :image_type AND #type <> :scraped_type)"
+            ),
+            "ExpressionAttributeNames": {"#type": "type"},
+            "ExpressionAttributeValues": {
+                ":image_type": "image",
+                ":scraped_type": "scraped",
+            },
+        }
 
         if next_token:
             try:
@@ -196,18 +201,20 @@ def list_documents(args):
                 logger.warning("Invalid next token provided")
                 raise ValueError("Invalid pagination token") from None
 
-        response = table.scan(**scan_kwargs)
+        # Scan all items (no limit)
+        all_items = []
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
 
-        items = [format_document(item) for item in response.get("Items", [])]
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        items = [format_document(item) for item in all_items]
         logger.info(f"Retrieved {len(items)} documents")
 
-        result = {"items": items}
-
-        if "LastEvaluatedKey" in response:
-            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
-            logger.info("More results available")
-
-        return result
+        return {"items": items}
 
     except ClientError as e:
         logger.error(f"DynamoDB error in list_documents: {e}")
