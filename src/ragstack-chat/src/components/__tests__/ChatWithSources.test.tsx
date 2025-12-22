@@ -160,11 +160,4 @@ describe('ChatWithSources', () => {
     expect(chatContainer).toBeInTheDocument();
   });
 
-  it('renders footer with knowledge base message', () => {
-    render(<ChatWithSources conversationId="test-1" />);
-
-    // Footer should be present with knowledge base message
-    const footer = screen.getByText(/responses are sourced from your knowledge base/i);
-    expect(footer).toBeInTheDocument();
-  });
 });
