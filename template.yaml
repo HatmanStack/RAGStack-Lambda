@@ -921,6 +921,7 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -931,6 +932,8 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
@@ -949,6 +952,11 @@ Resources:
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function

@@ -88,7 +88,9 @@ type Mutation {
 
   # Create presigned URL for image upload
   # Accessible via API key for external integrations, or Cognito for admin UI
-  createImageUploadUrl(filename: String!): ImageUploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
+  # autoProcess: If true, image will be captioned and indexed automatically after upload
+  # caption: Optional user-provided caption (if not provided and autoProcess=true, AI generates one)
+  createImageUploadUrl(filename: String!, autoProcess: Boolean, caption: String): ImageUploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Generate AI caption for an image using vision model
   # Accessible via API key for external integrations, or Cognito for admin UI

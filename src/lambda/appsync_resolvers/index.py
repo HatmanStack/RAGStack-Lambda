@@ -819,11 +819,27 @@ def create_image_upload_url(args):
         # Generate S3 key with images/ prefix
         s3_key = f"images/{image_id}/{filename}"
 
-        # Create presigned POST
-        logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        # Build presigned POST conditions and fields
+        # Include metadata for auto-processing if requested
+        conditions = []
+        fields = {}
+
+        if auto_process:
+            # Add metadata fields that will be stored with the S3 object
+            fields["x-amz-meta-auto-process"] = "true"
+            conditions.append({"x-amz-meta-auto-process": "true"})
+
+            if user_caption:
+                fields["x-amz-meta-caption"] = user_caption
+                conditions.append({"x-amz-meta-caption": user_caption})
+
+        # Create presigned POST with conditions
+        logger.info(f"Generating presigned POST for S3 key: {s3_key}, autoProcess={auto_process}")
         presigned = s3.generate_presigned_post(
             Bucket=DATA_BUCKET,
             Key=s3_key,
+            Fields=fields if fields else None,
+            Conditions=conditions if conditions else None,
             ExpiresIn=3600,  # 1 hour
         )
 
@@ -831,17 +847,23 @@ def create_image_upload_url(args):
         logger.info(f"Creating tracking record for image: {image_id}")
         now = datetime.now(UTC).isoformat()
         table = dynamodb.Table(TRACKING_TABLE)
-        table.put_item(
-            Item={
-                "document_id": image_id,  # Using document_id field for consistency
-                "filename": filename,
-                "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
-                "status": ImageStatus.PENDING.value,
-                "type": "image",  # Differentiate from documents
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
+        item = {
+            "document_id": image_id,  # Using document_id field for consistency
+            "filename": filename,
+            "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
+            "status": ImageStatus.PENDING.value,
+            "type": "image",  # Differentiate from documents
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        # Store auto-process settings for Lambda to read
+        if auto_process:
+            item["auto_process"] = True
+            if user_caption:
+                item["user_caption"] = user_caption
+
+        table.put_item(Item=item)
 
         s3_uri = f"s3://{DATA_BUCKET}/{s3_key}"
         logger.info(f"Image upload URL created successfully for image: {image_id}")

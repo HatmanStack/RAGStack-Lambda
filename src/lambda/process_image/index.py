@@ -68,23 +68,22 @@ def lambda_handler(event, context):
         raise ValueError("TRACKING_TABLE environment variable is required")
 
     # Extract image info from event
-    # EventBridge passes: image_id = "images/{imageId}/metadata.json", input_s3_uri = full S3 URI
+    # EventBridge passes image_id as path like "images/{imageId}/file.ext"
     raw_image_id = event.get("image_id", "")
     input_s3_uri = event.get("input_s3_uri", "")
+    trigger_type = event.get("trigger_type", "")
 
-    # Parse imageId from the key path: images/{imageId}/metadata.json
-    if raw_image_id and "/metadata.json" in raw_image_id:
-        # Extract imageId from path like "images/abc123/metadata.json"
-        parts = raw_image_id.replace("/metadata.json", "").split("/")
-        image_id = parts[-1] if parts else None
-    else:
-        # Direct invocation with just the imageId
-        image_id = raw_image_id
+    # Parse imageId from the key path
+    image_id = None
+    if raw_image_id:
+        # Handle paths like "images/abc123/metadata.json" or "images/abc123/image.jpg"
+        match = re.match(r"images/([^/]+)/", raw_image_id)
+        image_id = match.group(1) if match else raw_image_id
 
     if not image_id:
         raise ValueError("image_id is required in event (either as path or direct ID)")
 
-    logger.info(f"Processing image {image_id}, raw_id={raw_image_id}")
+    logger.info(f"Processing image {image_id}, raw_id={raw_image_id}, trigger_type={trigger_type}")
 
     # Get DynamoDB table
     tracking_table = dynamodb.Table(tracking_table_name)
@@ -102,6 +101,53 @@ def lambda_handler(event, context):
 
         filename = item.get("filename", "unknown")
         caption = item.get("caption", "")
+        auto_process = item.get("auto_process", False)
+        user_caption = item.get("user_caption", "")
+
+        # Handle auto_process trigger (API/MCP uploads)
+        if trigger_type == "auto_process":
+            if not auto_process:
+                # Image uploaded but auto-process not requested - skip
+                logger.info(f"Skipping image {image_id}: auto_process not enabled")
+                return {
+                    "image_id": image_id,
+                    "status": "SKIPPED",
+                    "message": "auto_process not enabled, waiting for submitImage",
+                }
+
+            # Auto-process enabled - generate caption if not provided
+            if not caption and not user_caption:
+                logger.info(f"Generating AI caption for image {image_id}")
+                input_s3_uri = item.get("input_s3_uri", "")
+                generated_caption = generate_ai_caption(input_s3_uri)
+                if generated_caption:
+                    caption = generated_caption
+                    # Update DynamoDB with generated caption
+                    update_expr = (
+                        "SET caption = :caption, ai_caption = :ai_caption, "
+                        "updated_at = :updated_at"
+                    )
+                    tracking_table.update_item(
+                        Key={"document_id": image_id},
+                        UpdateExpression=update_expr,
+                        ExpressionAttributeValues={
+                            ":caption": caption,
+                            ":ai_caption": caption,
+                            ":updated_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
+                    logger.info(f"Generated caption for {image_id}: {caption[:100]}...")
+            elif user_caption and not caption:
+                # Use user-provided caption
+                caption = user_caption
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression="SET caption = :caption, updated_at = :updated_at",
+                    ExpressionAttributeValues={
+                        ":caption": caption,
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
 
         # Get actual image S3 URI from tracking record (not from event, which has metadata.json)
         input_s3_uri = item.get("input_s3_uri", "")
@@ -363,3 +409,87 @@ def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: d
     lines.append("")
 
     return "\n".join(lines)
+
+
+def generate_ai_caption(s3_uri: str) -> str:
+    """
+    Generate an AI caption for an image using Bedrock vision model.
+
+    Args:
+        s3_uri: S3 URI of the image (s3://bucket/key)
+
+    Returns:
+        Generated caption text, or empty string on failure
+    """
+    try:
+        # Parse S3 URI
+        uri_path = s3_uri.replace("s3://", "")
+        parts = uri_path.split("/", 1)
+        if len(parts) != 2:
+            logger.error(f"Invalid S3 URI for caption generation: {s3_uri}")
+            return ""
+
+        bucket, key = parts
+
+        # Get image from S3
+        response = s3.get_object(Bucket=bucket, Key=key)
+        image_bytes = response["Body"].read()
+
+        # Determine image format from extension
+        ext = key.lower().rsplit(".", 1)[-1] if "." in key else "jpeg"
+        if ext == "jpg":
+            ext = "jpeg"  # Normalize for Bedrock API
+
+        # Get caption model from config or use default
+        caption_model = "us.anthropic.claude-3-haiku-20240307-v1:0"
+        if CONFIGURATION_TABLE_NAME:
+            try:
+                config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
+                caption_model = config_mgr.get_value(
+                    "image_caption_model", caption_model
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get caption model from config: {e}")
+
+        # Call Bedrock Converse API with vision
+
+        converse_response = bedrock_runtime.converse(
+            modelId=caption_model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "image": {
+                                "format": ext if ext in ("png", "gif", "webp", "jpeg") else "jpeg",
+                                "source": {"bytes": image_bytes},
+                            }
+                        },
+                        {
+                            "text": (
+                                "Describe this image in detail for semantic search indexing. "
+                                "Include: main subjects, setting, colors, mood, any text visible, "
+                                "and notable details. Be thorough but concise (2-4 sentences)."
+                            )
+                        },
+                    ],
+                }
+            ],
+            inferenceConfig={"maxTokens": 300, "temperature": 0.3},
+        )
+
+        # Extract caption from response
+        output = converse_response.get("output", {})
+        message = output.get("message", {})
+        content = message.get("content", [])
+
+        for block in content:
+            if "text" in block:
+                return block["text"].strip()
+
+        logger.warning("No text content in caption response")
+        return ""
+
+    except Exception as e:
+        logger.error(f"Failed to generate AI caption: {e}", exc_info=True)
+        return ""
