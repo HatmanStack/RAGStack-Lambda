@@ -109,6 +109,8 @@ export interface ChatWithSourcesProps {
    */
   themeOverrides?: {
     primaryColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
     fontFamily?: string;
     spacing?: 'compact' | 'comfortable' | 'spacious';
   };
