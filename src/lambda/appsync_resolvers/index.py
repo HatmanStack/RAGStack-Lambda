@@ -186,23 +186,7 @@ def list_documents(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Filter out images and scraped pages - they're listed via listImages and listScrapeJobs
-        # Check both type field and input_s3_uri path for robustness
-        scan_kwargs = {
-            "Limit": limit,
-            "FilterExpression": (
-                "(attribute_not_exists(#type) OR "
-                "(#type <> :image_type AND #type <> :scraped_type)) "
-                "AND (attribute_not_exists(input_s3_uri) OR "
-                "NOT contains(input_s3_uri, :images_prefix))"
-            ),
-            "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {
-                ":image_type": "image",
-                ":scraped_type": "scraped",
-                ":images_prefix": "/images/",
-            },
-        }
+        scan_kwargs = {"Limit": limit}
 
         if next_token:
             try:
@@ -1277,8 +1261,9 @@ def list_images(args):
         table = dynamodb.Table(TRACKING_TABLE)
 
         # Scan with filter for type="image" OR input_s3_uri contains /images/
+        # Note: Don't use DynamoDB Limit with FilterExpression - Limit applies BEFORE
+        # filtering, which can return 0 results. Scan all and apply limit after.
         scan_kwargs = {
-            "Limit": limit,
             "FilterExpression": "#type = :image_type OR contains(input_s3_uri, :images_prefix)",
             "ExpressionAttributeNames": {"#type": "type"},
             "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
@@ -1290,14 +1275,23 @@ def list_images(args):
             except json.JSONDecodeError:
                 raise ValueError("Invalid pagination token") from None
 
-        response = table.scan(**scan_kwargs)
+        # Scan and collect filtered items until we have enough
+        all_items = []
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
 
-        items = [format_image(item) for item in response.get("Items", [])]
+            if len(all_items) >= limit or "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        items = [format_image(item) for item in all_items[:limit]]
         logger.info(f"Retrieved {len(items)} images")
 
         result = {"items": items}
-        if "LastEvaluatedKey" in response:
-            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
+        if len(all_items) > limit:
+            last_item = all_items[limit - 1]
+            result["nextToken"] = json.dumps({"document_id": last_item["document_id"]})
 
         return result
 

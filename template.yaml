@@ -1974,6 +1974,9 @@ Resources:
 
   AdminUser:
     Type: AWS::Cognito::UserPoolUser
+    # Retain user during updates to preserve password and avoid re-sending temp password
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
     Properties:
       UserPoolId: !Ref UserPool
       Username: !Ref AdminEmail
@@ -2803,6 +2806,9 @@ Resources:
 
   MonthlyBudget:
     Type: AWS::Budgets::Budget
+    # Prevent "same name different internalId" errors during stack updates
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Budget:
         BudgetName: !Sub '${ProjectName}-Monthly-Budget'
