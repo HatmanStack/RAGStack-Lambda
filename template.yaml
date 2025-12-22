@@ -1500,9 +1500,9 @@ Resources:
               - !Ref DataBucket
           object:
             key:
+              # Match only input/ prefix
+              # Generated files (extracted_text.txt, etc.) are filtered in Lambda
               - prefix: 'input/'
-              - anything-but:
-                  suffix: '.scraped.md'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessingStateMachine.Arn

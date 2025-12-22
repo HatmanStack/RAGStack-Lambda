@@ -205,6 +205,16 @@ def lambda_handler(event, context):
         logger.info(f"Parsed document_id: {document_id}, filename: {filename}")
         logger.info(f"Output S3 prefix: {output_s3_prefix}")
 
+        # Skip processing for generated output files (prevent reprocessing loops)
+        skip_suffixes = ("extracted_text.txt", "full_text.txt", "metadata.json")
+        if input_s3_uri.endswith(skip_suffixes):
+            logger.info(f"Skipping generated output file: {filename}")
+            return {
+                "document_id": document_id,
+                "status": "skipped",
+                "message": "Generated output file - not reprocessing",
+            }
+
         # Check for scraped markdown passthrough (.scraped.md files skip OCR)
         if input_s3_uri.endswith(".scraped.md"):
             return _process_scraped_markdown(
