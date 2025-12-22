@@ -3,6 +3,7 @@ import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import { listScrapeJobs } from '../graphql/queries/listScrapeJobs';
 import { listImages } from '../graphql/queries/listImages';
+import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations/deleteDocuments';
 
 const LIST_DOCUMENTS = gql`
   query ListDocuments($limit: Int, $nextToken: String) {
@@ -311,6 +312,43 @@ export const useDocuments = () => {
     });
   }, []);
 
+  // Delete documents by IDs
+  const deleteDocuments = useCallback(async (documentIds) => {
+    if (!documentIds || documentIds.length === 0) {
+      return { deletedCount: 0, failedIds: [], errors: [] };
+    }
+
+    try {
+      const response = await client.graphql({
+        query: deleteDocumentsMutation,
+        variables: { documentIds }
+      });
+
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors deleting documents:', response.errors);
+        throw new Error(response.errors[0]?.message || 'Failed to delete documents');
+      }
+
+      const result = response.data?.deleteDocuments || { deletedCount: 0 };
+
+      // Remove successfully deleted documents from local state
+      if (result.deletedCount > 0) {
+        const deletedSet = new Set(documentIds);
+        const failedSet = new Set(result.failedIds || []);
+
+        // Filter out successfully deleted items from all collections
+        setDocuments(prev => prev.filter(d => !deletedSet.has(d.documentId) || failedSet.has(d.documentId)));
+        setScrapeJobs(prev => prev.filter(j => !deletedSet.has(j.documentId) || failedSet.has(j.documentId)));
+        setImages(prev => prev.filter(i => !deletedSet.has(i.documentId) || failedSet.has(i.documentId)));
+      }
+
+      return result;
+    } catch (err) {
+      console.error('Failed to delete documents:', err);
+      throw err;
+    }
+  }, []);
+
   useEffect(() => {
     // Initial fetch on mount
     fetchDocuments(true);
@@ -367,13 +405,8 @@ export const useDocuments = () => {
       console.error('[useDocuments] Failed to set up subscriptions:', err);
     }
 
-    // Fallback: poll every 2 minutes in case subscriptions fail
-    const interval = setInterval(() => {
-      fetchDocuments(true);
-    }, 120000);
-
+    // Cleanup subscriptions on unmount
     return () => {
-      clearInterval(interval);
       if (docSubscription) docSubscription.unsubscribe();
       if (imageSubscription) imageSubscription.unsubscribe();
       if (scrapeSubscription) scrapeSubscription.unsubscribe();
@@ -406,6 +439,7 @@ export const useDocuments = () => {
     hasMore: !!nextToken,
     fetchDocuments,
     refreshDocuments,
-    fetchDocument
+    fetchDocument,
+    deleteDocuments
   };
 };

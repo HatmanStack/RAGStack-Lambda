@@ -39,9 +39,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
           Supported formats: PDF, JPG, PNG, TIFF, DOCX, XLSX, TXT, CSV, MD, EPUB
         </Alert>
 
-        <Box
-          padding="xxl"
-          textAlign="center"
+        <div
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
@@ -55,7 +53,9 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
             minHeight: '200px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            padding: '32px',
+            textAlign: 'center'
           }}
         >
           <input
@@ -81,7 +81,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
               </Box>
             </SpaceBetween>
           </label>
-        </Box>
+        </div>
       </SpaceBetween>
     </Container>
   );

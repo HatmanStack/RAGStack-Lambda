@@ -17,6 +17,7 @@ Handles:
 - getImage
 - listImages
 - deleteImage
+- deleteDocuments
 """
 
 import json
@@ -122,6 +123,8 @@ def lambda_handler(event, context):
         "listImages": list_images,
         "deleteImage": delete_image,
         "createZipUploadUrl": create_zip_upload_url,
+        # Document management
+        "deleteDocuments": delete_documents,
     }
 
     resolver = resolvers.get(field_name)
@@ -172,58 +175,45 @@ def get_document(args):
 
 
 def list_documents(args):
-    """List all documents with pagination."""
+    """
+    List all documents (excluding images and scraped pages).
+
+    Returns all documents in a single response (no pagination).
+    Images and scraped pages have their own list endpoints.
+    """
     try:
-        limit = args.get("limit", 50)
-        next_token = args.get("nextToken")
-
-        # Validate limit
-        if limit < 1 or limit > MAX_DOCUMENTS_LIMIT:
-            logger.warning(f"Invalid limit requested: {limit}")
-            raise ValueError(f"Limit must be between 1 and {MAX_DOCUMENTS_LIMIT}")
-
-        logger.info(f"Listing documents with limit: {limit}")
+        logger.info("Listing all documents")
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Filter out images and scraped pages - they're listed via listImages and listScrapeJobs
-        # Check both type field and input_s3_uri path for robustness
+        # Filter out images and scraped pages - they have their own list endpoints
+        # Note: We scan all items without DynamoDB Limit because Limit applies
+        # BEFORE FilterExpression, which would return inconsistent results.
         scan_kwargs = {
-            "Limit": limit,
             "FilterExpression": (
-                "(attribute_not_exists(#type) OR "
-                "(#type <> :image_type AND #type <> :scraped_type)) "
-                "AND (attribute_not_exists(input_s3_uri) OR "
-                "NOT contains(input_s3_uri, :images_prefix))"
+                "attribute_not_exists(#type) OR (#type <> :image_type AND #type <> :scraped_type)"
             ),
             "ExpressionAttributeNames": {"#type": "type"},
             "ExpressionAttributeValues": {
                 ":image_type": "image",
                 ":scraped_type": "scraped",
-                ":images_prefix": "/images/",
             },
         }
 
-        if next_token:
-            try:
-                scan_kwargs["ExclusiveStartKey"] = json.loads(next_token)
-                logger.info("Continuing pagination with next token")
-            except json.JSONDecodeError:
-                logger.warning("Invalid next token provided")
-                raise ValueError("Invalid pagination token") from None
+        # Scan all items
+        all_items = []
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
 
-        response = table.scan(**scan_kwargs)
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
-        items = [format_document(item) for item in response.get("Items", [])]
+        items = [format_document(item) for item in all_items]
         logger.info(f"Retrieved {len(items)} documents")
 
-        result = {"items": items}
-
-        if "LastEvaluatedKey" in response:
-            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
-            logger.info("More results available")
-
-        return result
+        return {"items": items}
 
     except ClientError as e:
         logger.error(f"DynamoDB error in list_documents: {e}")
@@ -231,6 +221,77 @@ def list_documents(args):
     except Exception as e:
         logger.error(f"Unexpected error in list_documents: {e}")
         raise
+
+
+def delete_documents(args):
+    """
+    Delete documents from DynamoDB tracking table (batch delete).
+
+    Note: This only deletes from DynamoDB, not from S3 or Knowledge Base.
+    S3 cleanup and KB sync happen separately.
+
+    Args:
+        args: Dictionary containing:
+            - documentIds: List of document IDs to delete
+
+    Returns:
+        DeleteDocumentsResult with deletedCount, failedIds, and errors
+    """
+    document_ids = args.get("documentIds", [])
+    logger.info(f"Deleting {len(document_ids)} documents from tracking table")
+
+    if not document_ids:
+        return {"deletedCount": 0, "failedIds": [], "errors": []}
+
+    # Limit batch size to prevent abuse
+    max_batch_size = 100
+    if len(document_ids) > max_batch_size:
+        raise ValueError(f"Cannot delete more than {max_batch_size} documents at once")
+
+    table = dynamodb.Table(TRACKING_TABLE)
+    deleted_count = 0
+    failed_ids = []
+    errors = []
+
+    for doc_id in document_ids:
+        try:
+            # Validate document ID format
+            if not is_valid_uuid(doc_id):
+                failed_ids.append(doc_id)
+                errors.append(f"Invalid document ID format: {doc_id}")
+                continue
+
+            # Check if document exists and get its type
+            response = table.get_item(Key={"document_id": doc_id})
+            item = response.get("Item")
+
+            if not item:
+                failed_ids.append(doc_id)
+                errors.append(f"Document not found: {doc_id}")
+                continue
+
+            # Delete from DynamoDB
+            table.delete_item(Key={"document_id": doc_id})
+            deleted_count += 1
+            logger.info(f"Deleted document from DynamoDB: {doc_id}")
+
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            failed_ids.append(doc_id)
+            errors.append(f"Failed to delete {doc_id}: {error_code}")
+            logger.error(f"DynamoDB error deleting {doc_id}: {e}")
+        except Exception as e:
+            failed_ids.append(doc_id)
+            errors.append(f"Failed to delete {doc_id}: {str(e)}")
+            logger.error(f"Unexpected error deleting {doc_id}: {e}")
+
+    logger.info(f"Delete complete: {deleted_count} deleted, {len(failed_ids)} failed")
+
+    return {
+        "deletedCount": deleted_count,
+        "failedIds": failed_ids if failed_ids else None,
+        "errors": errors if errors else None,
+    }
 
 
 def create_upload_url(args):
@@ -781,10 +842,18 @@ def create_image_upload_url(args):
 
     Returns upload URL and image ID for tracking.
     The image is stored at images/{imageId}/{filename}.
+
+    Args:
+        args: Dictionary containing:
+            - filename: Image filename (required)
+            - autoProcess: If True, process automatically after upload (optional)
+            - userCaption: User-provided caption for auto-process (optional)
     """
     try:
         filename = args["filename"]
-        logger.info(f"Creating image upload URL for file: {filename}")
+        auto_process = args.get("autoProcess", False)
+        user_caption = args.get("userCaption", "")
+        logger.info(f"Creating image upload URL for file: {filename}, autoProcess={auto_process}")
 
         # Validate filename length
         if not filename or len(filename) > MAX_FILENAME_LENGTH:
@@ -811,11 +880,27 @@ def create_image_upload_url(args):
         # Generate S3 key with images/ prefix
         s3_key = f"images/{image_id}/{filename}"
 
-        # Create presigned POST
-        logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        # Build presigned POST conditions and fields
+        # Include metadata for auto-processing if requested
+        conditions = []
+        fields = {}
+
+        if auto_process:
+            # Add metadata fields that will be stored with the S3 object
+            fields["x-amz-meta-auto-process"] = "true"
+            conditions.append({"x-amz-meta-auto-process": "true"})
+
+            if user_caption:
+                fields["x-amz-meta-caption"] = user_caption
+                conditions.append({"x-amz-meta-caption": user_caption})
+
+        # Create presigned POST with conditions
+        logger.info(f"Generating presigned POST for S3 key: {s3_key}, autoProcess={auto_process}")
         presigned = s3.generate_presigned_post(
             Bucket=DATA_BUCKET,
             Key=s3_key,
+            Fields=fields if fields else None,
+            Conditions=conditions if conditions else None,
             ExpiresIn=3600,  # 1 hour
         )
 
@@ -823,17 +908,23 @@ def create_image_upload_url(args):
         logger.info(f"Creating tracking record for image: {image_id}")
         now = datetime.now(UTC).isoformat()
         table = dynamodb.Table(TRACKING_TABLE)
-        table.put_item(
-            Item={
-                "document_id": image_id,  # Using document_id field for consistency
-                "filename": filename,
-                "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
-                "status": ImageStatus.PENDING.value,
-                "type": "image",  # Differentiate from documents
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
+        item = {
+            "document_id": image_id,  # Using document_id field for consistency
+            "filename": filename,
+            "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
+            "status": ImageStatus.PENDING.value,
+            "type": "image",  # Differentiate from documents
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        # Store auto-process settings for Lambda to read
+        if auto_process:
+            item["auto_process"] = True
+            if user_caption:
+                item["user_caption"] = user_caption
+
+        table.put_item(Item=item)
 
         s3_uri = f"s3://{DATA_BUCKET}/{s3_key}"
         logger.info(f"Image upload URL created successfully for image: {image_id}")
@@ -1247,8 +1338,9 @@ def list_images(args):
         table = dynamodb.Table(TRACKING_TABLE)
 
         # Scan with filter for type="image" OR input_s3_uri contains /images/
+        # Note: Don't use DynamoDB Limit with FilterExpression - Limit applies BEFORE
+        # filtering, which can return 0 results. Scan all and apply limit after.
         scan_kwargs = {
-            "Limit": limit,
             "FilterExpression": "#type = :image_type OR contains(input_s3_uri, :images_prefix)",
             "ExpressionAttributeNames": {"#type": "type"},
             "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
@@ -1260,14 +1352,23 @@ def list_images(args):
             except json.JSONDecodeError:
                 raise ValueError("Invalid pagination token") from None
 
-        response = table.scan(**scan_kwargs)
+        # Scan and collect filtered items until we have enough
+        all_items = []
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
 
-        items = [format_image(item) for item in response.get("Items", [])]
+            if len(all_items) >= limit or "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        items = [format_image(item) for item in all_items[:limit]]
         logger.info(f"Retrieved {len(items)} images")
 
         result = {"items": items}
-        if "LastEvaluatedKey" in response:
-            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
+        if len(all_items) > limit:
+            last_item = all_items[limit - 1]
+            result["nextToken"] = json.dumps({"document_id": last_item["document_id"]})
 
         return result
 

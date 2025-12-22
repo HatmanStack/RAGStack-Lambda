@@ -34,6 +34,8 @@
  * - user-token: Authentication token for authenticated mode (optional)
  * - theme-preset: Theme preset - light, dark, or brand (default from build config)
  * - theme-overrides: JSON string with theme overrides (default from build config)
+ * - background-color: Background color override (e.g., "#ffffff")
+ * - text-color: Text color override (e.g., "#1a1a1a")
  *
  * Events:
  * - ragstack-chat:send-message: Fired when user sends a message
@@ -73,6 +75,8 @@ class RagStackChat extends HTMLElement {
       'user-token',
       'theme-preset',
       'theme-overrides',
+      'background-color',
+      'text-color',
     ];
   }
 
@@ -184,10 +188,19 @@ class RagStackChat extends HTMLElement {
                          this.fetchedTheme?.themePreset ||
                          THEME_CONFIG.themePreset ||
                          'light';
-      const themeOverrides = this.getThemeOverrides() ||
+      const baseOverrides = this.getThemeOverrides() ||
                             this.fetchedTheme?.themeOverrides ||
                             THEME_CONFIG.themeOverrides ||
-                            undefined;
+                            {};
+
+      // Merge direct color attributes into theme overrides
+      const backgroundColor = super.getAttribute('background-color');
+      const textColor = super.getAttribute('text-color');
+      const themeOverrides = {
+        ...baseOverrides,
+        ...(backgroundColor && { backgroundColor }),
+        ...(textColor && { textColor }),
+      };
 
       const props: ChatWithSourcesProps = {
         conversationId: this.getAttributeWithFallback(

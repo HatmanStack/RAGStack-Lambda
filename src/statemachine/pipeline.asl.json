@@ -8,8 +8,7 @@
       "Parameters": {
         "document_id.$": "States.ArrayGetItem(States.StringSplit($.document_id, '/'), 1)",
         "input_s3_uri.$": "$.input_s3_uri",
-        "output_s3_prefix.$": "$.output_s3_prefix",
-        "vector_bucket.$": "$.vector_bucket"
+        "output_s3_prefix.$": "$.output_s3_prefix"
       },
       "Next": "ProcessDocument"
     },

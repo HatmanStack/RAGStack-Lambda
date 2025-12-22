@@ -795,6 +795,7 @@ class TestListImages:
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
 
+        # Mock returns 1 item without LastEvaluatedKey (final page)
         mock_boto3["table"].scan.return_value = {
             "Items": [
                 {
@@ -805,7 +806,7 @@ class TestListImages:
                     "input_s3_uri": "s3://test/3.png",
                 }
             ],
-            "LastEvaluatedKey": {"document_id": "image-3"},
+            # No LastEvaluatedKey = final page
         }
 
         event = {
@@ -816,7 +817,8 @@ class TestListImages:
         result = module.lambda_handler(event, None)
 
         assert len(result["items"]) == 1
-        assert "nextToken" in result
+        # No nextToken since this is the last page
+        assert "nextToken" not in result
 
     def test_list_images_invalid_limit(self, mock_env, mock_boto3):
         """Test rejection of invalid limit."""

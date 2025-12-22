@@ -10,7 +10,8 @@ Project-based deployment automation for RAGStack-Lambda stack.
 
 Usage:
     python publish.py --project-name customer-docs --admin-email admin@example.com
-    python publish.py --project-name legal-archive --admin-email admin@example.com --skip-ui
+    python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
+    python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
 """
 
 import argparse
@@ -738,7 +739,7 @@ def get_stack_outputs(stack_name, region="us-east-1"):
         return {}
 
 
-def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False):
+def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False, skip_ui_all=False):
     """
     Trigger CodeBuild projects for UI and web component deployment.
 
@@ -746,15 +747,17 @@ def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False):
         outputs: Stack outputs containing CodeBuild project names
         region: AWS region
         skip_ui: If True, skip UI build (only build web component)
+        skip_ui_all: If True, skip all UI builds (dashboard and web component)
     """
     codebuild = boto3.client('codebuild', region_name=region)
 
     projects_to_build = []
 
-    # Web component build
-    wc_project = outputs.get('WebComponentBuildProjectName')
-    if wc_project:
-        projects_to_build.append(('Web Component', wc_project))
+    # Web component build (unless skip_ui_all)
+    if not skip_ui_all:
+        wc_project = outputs.get('WebComponentBuildProjectName')
+        if wc_project:
+            projects_to_build.append(('Web Component', wc_project))
 
     # UI build (unless skipped)
     if not skip_ui:
@@ -763,7 +766,12 @@ def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False):
             projects_to_build.append(('UI', ui_project))
 
     if not projects_to_build:
-        log_warning("No CodeBuild projects found in stack outputs")
+        if skip_ui_all:
+            log_info("Skipping all UI builds (--skip-ui-all flag)")
+        elif skip_ui:
+            log_info("Skipping UI dashboard build (--skip-ui flag)")
+        else:
+            log_warning("No CodeBuild projects found in stack outputs")
         return
 
     # Start all builds
@@ -1203,7 +1211,7 @@ Examples:
     parser.add_argument(
         "--skip-ui",
         action="store_true",
-        help="Skip UI build and deployment (still builds web component)"
+        help="Skip dashboard build (still builds web component)"
     )
 
     parser.add_argument(
@@ -1317,7 +1325,7 @@ Examples:
         outputs = get_stack_outputs(stack_name, args.region)
 
         # Trigger CodeBuild projects for UI and web component
-        trigger_codebuild_projects(outputs, args.region, skip_ui=args.skip_ui)
+        trigger_codebuild_projects(outputs, args.region, skip_ui=args.skip_ui, skip_ui_all=args.skip_ui_all)
 
         # Seed configuration table with CDN URL
         config_table_name = outputs.get('ConfigurationTableName')

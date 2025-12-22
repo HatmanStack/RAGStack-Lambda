@@ -150,10 +150,10 @@ python test.py
 # Full deployment (defaults to us-east-1)
 python publish.py --project-name myapp --admin-email admin@example.com
 
-# Backend only (skip dashboard rebuild)
+# Skip dashboard build (still builds web component)
 python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 
-# Backend only (skip ALL UI builds - dashboard and web component)
+# Skip ALL UI builds (dashboard and web component)
 python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
 ```
 

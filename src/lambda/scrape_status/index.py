@@ -304,8 +304,12 @@ def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
 
     query_kwargs = {
         "KeyConditionExpression": Key("job_id").eq(job_id),
-        "Limit": limit,
     }
+
+    # Only use DynamoDB Limit when there's no FilterExpression
+    # Limit applies BEFORE filtering, which can return fewer results than expected
+    if not status_filter:
+        query_kwargs["Limit"] = limit
 
     if next_token:
         try:
@@ -319,10 +323,19 @@ def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
         query_kwargs["ExpressionAttributeNames"] = {"#status": "status"}
         query_kwargs["ExpressionAttributeValues"] = {":status": status_filter}
 
-    response = urls_tbl.query(**query_kwargs)
+    # Query and collect items, continuing if filtering and need more results
+    all_items = []
+    while True:
+        response = urls_tbl.query(**query_kwargs)
+        all_items.extend(response.get("Items", []))
+
+        # Stop if we have enough items or no more pages
+        if len(all_items) >= limit or "LastEvaluatedKey" not in response:
+            break
+        query_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
     urls = []
-    for item in response.get("Items", []):
+    for item in all_items[:limit]:
         urls.append(
             {
                 "url": item.get("url"),
@@ -341,8 +354,9 @@ def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
         "count": len(urls),
     }
 
-    if "LastEvaluatedKey" in response:
-        result["next_token"] = json.dumps(response["LastEvaluatedKey"])
+    if len(all_items) > limit:
+        last_item = all_items[limit - 1]
+        result["next_token"] = json.dumps({"job_id": job_id, "url": last_item["url"]})
 
     return _response(200, result)
 

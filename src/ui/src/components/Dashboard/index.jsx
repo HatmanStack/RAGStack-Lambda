@@ -8,7 +8,7 @@ import { useDocuments } from '../../hooks/useDocuments';
 import { useScrape } from '../../hooks/useScrape';
 
 export const Dashboard = () => {
-  const { documents, loading, refreshDocuments } = useDocuments();
+  const { documents, loading, refreshDocuments, deleteDocuments } = useDocuments();
   const { fetchJobDetail, selectedJob, cancelScrape } = useScrape();
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
@@ -35,6 +35,19 @@ export const Dashboard = () => {
     }
   };
 
+  const handleDelete = async (documentIds) => {
+    try {
+      const result = await deleteDocuments(documentIds);
+      if (result.failedIds?.length > 0) {
+        console.warn('Some documents failed to delete:', result.failedIds);
+      }
+      return result;
+    } catch (err) {
+      console.error('Failed to delete documents:', err);
+      throw err;
+    }
+  };
+
   return (
     <ContentLayout
       header={
@@ -49,6 +62,7 @@ export const Dashboard = () => {
           loading={loading}
           onRefresh={refreshDocuments}
           onSelectDocument={handleSelectItem}
+          onDelete={handleDelete}
         />
       </SpaceBetween>
 

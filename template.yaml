@@ -921,6 +921,7 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -931,6 +932,8 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:
@@ -949,6 +952,11 @@ Resources:
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -1071,6 +1079,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -1080,6 +1089,11 @@ Resources:
               Action:
                 - bedrock:Retrieve
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt ConfigurationTable.Arn
 
   ##########################################################################
   # Configuration Resolver Lambda
@@ -1474,7 +1488,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${ProjectName}-S3UploadTrigger'
-      Description: Trigger processing pipeline on S3 upload to input/ prefix
+      Description: Trigger processing pipeline on S3 upload to input/ prefix (excludes scraped content)
       EventPattern:
         source:
           - aws.s3
@@ -1487,6 +1501,8 @@ Resources:
           object:
             key:
               - prefix: 'input/'
+              - anything-but:
+                  suffix: '.scraped.md'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessingStateMachine.Arn
@@ -1569,6 +1585,62 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ImageUploadRule.Arn
+
+  # EventBridge Rule for Auto-Process Image Uploads (API/MCP)
+  # Triggers on actual image file uploads to images/ prefix
+  # Uses suffix patterns to only match image files (not caption.txt or metadata.json)
+  # The Lambda checks if auto_process=true in DynamoDB before processing
+  ImageAutoProcessRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-ImageAutoProcess'
+      Description: Trigger image processing on direct image upload (for API/MCP with autoProcess=true)
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              # Match image files in images/ prefix (suffix patterns)
+              - suffix: '.jpg'
+              - suffix: '.jpeg'
+              - suffix: '.png'
+              - suffix: '.gif'
+              - suffix: '.webp'
+              - suffix: '.JPG'
+              - suffix: '.JPEG'
+              - suffix: '.PNG'
+              - suffix: '.GIF'
+              - suffix: '.WEBP'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessImageFunction.Arn
+          Id: TriggerImageAutoProcess
+          InputTransformer:
+            InputPathsMap:
+              bucket: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "image_id": "<key>",
+                "input_s3_uri": "s3://<bucket>/<key>",
+                "trigger_type": "auto_process"
+              }
+          RetryPolicy:
+            MaximumRetryAttempts: 0
+
+  ImageAutoProcessRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ImageAutoProcessRule.Arn
 
   # EventBridge rule to trigger ZIP processing
   ZipUploadRule:
@@ -1906,6 +1978,9 @@ Resources:
 
   AdminUser:
     Type: AWS::Cognito::UserPoolUser
+    # Retain user during updates to preserve password and avoid re-sending temp password
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
     Properties:
       UserPoolId: !Ref UserPool
       Username: !Ref AdminEmail
@@ -2418,6 +2493,15 @@ Resources:
       FieldName: deleteImage
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
+  DeleteDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteDocuments
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
   CreateZipUploadUrlResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -2735,6 +2819,9 @@ Resources:
 
   MonthlyBudget:
     Type: AWS::Budgets::Budget
+    # Prevent "same name different internalId" errors during stack updates
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Budget:
         BudgetName: !Sub '${ProjectName}-Monthly-Budget'

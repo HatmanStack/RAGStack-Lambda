@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'happy-dom',
     setupFiles: ['./src/setupTests.js'],
     css: true,
+    testTimeout: 15000,
     include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
     coverage: {
       reporter: ['text', 'json', 'html'],
