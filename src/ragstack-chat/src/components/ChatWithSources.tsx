@@ -144,12 +144,6 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
         />
       </div>
 
-      {/* Footer Section */}
-      <div className={styles.chatFooter}>
-        <p className={styles.footerText}>
-          Responses are sourced from your knowledge base
-        </p>
-      </div>
     </div>
   );
 };
