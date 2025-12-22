@@ -1586,6 +1586,7 @@ Resources:
 
   # EventBridge Rule for Auto-Process Image Uploads (API/MCP)
   # Triggers on actual image file uploads to images/ prefix
+  # Uses suffix patterns to only match image files (not caption.txt or metadata.json)
   # The Lambda checks if auto_process=true in DynamoDB before processing
   ImageAutoProcessRule:
     Type: AWS::Events::Rule
@@ -1603,12 +1604,15 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              - prefix: 'images/'
-              - wildcard: '*.jpg'
-              - wildcard: '*.jpeg'
-              - wildcard: '*.png'
-              - wildcard: '*.gif'
-              - wildcard: '*.webp'
+              # Match image files in images/ prefix (suffix patterns)
+              - suffix: '.jpg'
+              - suffix: '.jpeg'
+              - suffix: '.png'
+              - suffix: '.gif'
+              - suffix: '.webp'
+              - suffix: '.JPG'
+              - suffix: '.JPEG'
+              - suffix: '.PNG'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessImageFunction.Arn
@@ -1624,7 +1628,7 @@ Resources:
                 "trigger_type": "auto_process"
               }
           RetryPolicy:
-            MaximumRetryAttempts: 2
+            MaximumRetryAttempts: 0
 
   ImageAutoProcessRulePermission:
     Type: AWS::Lambda::Permission
