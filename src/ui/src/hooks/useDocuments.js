@@ -411,7 +411,7 @@ export const useDocuments = () => {
       if (imageSubscription) imageSubscription.unsubscribe();
       if (scrapeSubscription) scrapeSubscription.unsubscribe();
     };
-  }, [handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
+  }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
   // Merge and deduplicate by documentId with type precedence: image > scrape > document
   const allItems = useMemo(() => {
