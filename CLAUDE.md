@@ -62,8 +62,11 @@ python publish.py \
   --project-name my-docs \
   --admin-email admin@example.com
 
-# Skip UI deployment (backend only)
+# Skip dashboard build (still builds web component)
 python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui
+
+# Skip ALL UI builds (dashboard and web component)
+python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all
 ```
 
 > **Region Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available elsewhere, use `--region <region>`.
@@ -176,7 +179,8 @@ The `publish.py` script orchestrates:
 - `--project-name`: Unique project identifier (used in resource names)
 - `--admin-email`: Admin user email (Cognito, CloudWatch alerts)
 - `--region`: AWS region (default: us-east-1, required for Nova Multimodal Embeddings)
-- `--skip-ui`: Deploy backend only, skip React UI
+- `--skip-ui`: Skip React UI dashboard build (still builds web component)
+- `--skip-ui-all`: Skip all UI builds (dashboard and web component)
 
 ## Important Notes
 
