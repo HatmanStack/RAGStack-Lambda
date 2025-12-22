@@ -1080,6 +1080,7 @@ Resources:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          TRACKING_TABLE: !Ref TrackingTable
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -1093,7 +1094,9 @@ Resources:
             - Effect: Allow
               Action:
                 - dynamodb:GetItem
-              Resource: !GetAtt ConfigurationTable.Arn
+              Resource:
+                - !GetAtt ConfigurationTable.Arn
+                - !GetAtt TrackingTable.Arn
 
   ##########################################################################
   # Configuration Resolver Lambda

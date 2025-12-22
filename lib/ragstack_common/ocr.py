@@ -181,7 +181,8 @@ class OcrService:
                 # If base_key ends with /, use it as prefix, otherwise use as-is
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                output_key = f"{base_key}{document.document_id}/extracted_text.txt"
+                # base_key already includes document_id/ from caller
+                output_key = f"{base_key}extracted_text.txt"
             else:
                 # Fallback: use input bucket
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
@@ -276,7 +277,8 @@ class OcrService:
                 bucket, base_key = parse_s3_uri(document.output_s3_uri)
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                output_key = f"{base_key}{document.document_id}/extracted_text.txt"
+                # base_key already includes document_id/ from caller
+                output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
                 output_key = f"output/{document.document_id}/extracted_text.txt"
@@ -338,7 +340,8 @@ class OcrService:
                 bucket, base_key = parse_s3_uri(document.output_s3_uri)
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                output_key = f"{base_key}{document.document_id}/extracted_text.txt"
+                # base_key already includes document_id/ from caller
+                output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
                 output_key = f"output/{document.document_id}/extracted_text.txt"

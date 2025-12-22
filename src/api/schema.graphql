@@ -2,10 +2,10 @@
 
 type Query {
   # Get document by ID
-  getDocument(documentId: ID!): Document
+  getDocument(documentId: ID!): Document @aws_api_key @aws_cognito_user_pools
 
   # List all documents (returns all items, no pagination)
-  listDocuments: DocumentConnection
+  listDocuments: DocumentConnection @aws_api_key @aws_cognito_user_pools
 
   # Query Knowledge Base with optional conversation ID for multi-turn chat
   # Note: sessionId is deprecated, use conversationId instead
@@ -17,7 +17,7 @@ type Query {
   searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Get system configuration (Schema, Default, and Custom)
-  getConfiguration: ConfigurationResponse
+  getConfiguration: ConfigurationResponse @aws_cognito_user_pools
 
   # Get theme configuration (public, no auth required)
   # Returns only theme-related settings for the chat web component
@@ -36,10 +36,10 @@ type Query {
   checkScrapeUrl(url: String!): ScrapeUrlCheck @aws_api_key @aws_cognito_user_pools
 
   # Get image by ID
-  getImage(imageId: ID!): Image
+  getImage(imageId: ID!): Image @aws_api_key @aws_cognito_user_pools
 
   # List all images (paginated)
-  listImages(limit: Int, nextToken: String): ImageConnection
+  listImages(limit: Int, nextToken: String): ImageConnection @aws_api_key @aws_cognito_user_pools
 
   # Get current API key (admin only)
   getApiKey: ApiKeyResponse @aws_cognito_user_pools
@@ -51,10 +51,10 @@ type Mutation {
   createUploadUrl(filename: String!): UploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Manually trigger processing (if needed)
-  processDocument(documentId: ID!): Document
+  processDocument(documentId: ID!): Document @aws_api_key @aws_cognito_user_pools
 
   # Update custom configuration
-  updateConfiguration(customConfig: AWSJSON!): Boolean
+  updateConfiguration(customConfig: AWSJSON!): Boolean @aws_cognito_user_pools
 
   # Start a new web scraping job
   # Accessible via API key for external integrations, or Cognito for admin UI
@@ -101,11 +101,11 @@ type Mutation {
   submitImage(input: SubmitImageInput!): Image @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Delete an image from S3, DynamoDB, and Knowledge Base
-  deleteImage(imageId: ID!): Boolean
+  deleteImage(imageId: ID!): Boolean @aws_api_key @aws_cognito_user_pools
 
   # Delete documents from DynamoDB tracking table (batch delete)
   # Note: Does not delete from S3 or Knowledge Base - those are cleaned up separately
-  deleteDocuments(documentIds: [ID!]!): DeleteDocumentsResult
+  deleteDocuments(documentIds: [ID!]!): DeleteDocumentsResult @aws_api_key @aws_cognito_user_pools
 
   # Create presigned URL for ZIP archive upload (batch image upload)
   # Accessible via API key for external integrations, or Cognito for admin UI

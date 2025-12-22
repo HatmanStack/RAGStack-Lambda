@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import { listScrapeJobs } from '../graphql/queries/listScrapeJobs';
@@ -6,8 +6,8 @@ import { listImages } from '../graphql/queries/listImages';
 import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations/deleteDocuments';
 
 const LIST_DOCUMENTS = gql`
-  query ListDocuments($limit: Int, $nextToken: String) {
-    listDocuments(limit: $limit, nextToken: $nextToken) {
+  query ListDocuments {
+    listDocuments {
       items {
         documentId
         filename
@@ -19,7 +19,6 @@ const LIST_DOCUMENTS = gql`
         updatedAt
         errorMessage
       }
-      nextToken
     }
   }
 `;
@@ -98,15 +97,6 @@ export const useDocuments = () => {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [nextToken, setNextToken] = useState(null);
-
-  // Use ref to track the current nextToken without causing re-renders
-  const nextTokenRef = useRef(null);
-
-  // Update ref whenever nextToken changes
-  useEffect(() => {
-    nextTokenRef.current = nextToken;
-  }, [nextToken]);
 
   const fetchImages = useCallback(async () => {
     try {
@@ -176,17 +166,13 @@ export const useDocuments = () => {
     }
   }, []);
 
-  const fetchDocuments = useCallback(async (reset = false) => {
+  const fetchDocuments = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
       const response = await client.graphql({
-        query: LIST_DOCUMENTS,
-        variables: {
-          limit: 50,
-          nextToken: reset ? null : nextTokenRef.current
-        }
+        query: LIST_DOCUMENTS
       });
 
       if (response.errors) {
@@ -199,8 +185,7 @@ export const useDocuments = () => {
         type: 'document'
       }));
 
-      setDocuments(prev => reset ? newDocs : [...prev, ...newDocs]);
-      setNextToken(data?.listDocuments?.nextToken);
+      setDocuments(newDocs);
 
       // Also fetch scrape jobs and images
       await Promise.all([fetchScrapeJobs(), fetchImages()]);
@@ -214,7 +199,7 @@ export const useDocuments = () => {
   }, [fetchScrapeJobs, fetchImages]);
 
   const refreshDocuments = useCallback(() => {
-    fetchDocuments(true);
+    fetchDocuments();
   }, [fetchDocuments]);
 
   const fetchDocument = useCallback(async (documentId) => {
@@ -351,7 +336,7 @@ export const useDocuments = () => {
 
   useEffect(() => {
     // Initial fetch on mount
-    fetchDocuments(true);
+    fetchDocuments();
 
     // Set up subscriptions for real-time updates
     let docSubscription = null;
@@ -436,7 +421,6 @@ export const useDocuments = () => {
     documents: allItems,
     loading,
     error,
-    hasMore: !!nextToken,
     fetchDocuments,
     refreshDocuments,
     fetchDocument,

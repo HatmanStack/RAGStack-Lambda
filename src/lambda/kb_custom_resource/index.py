@@ -168,8 +168,9 @@ def create_knowledge_base(properties):
             distanceMetric="cosine",
             metadataConfiguration={
                 "nonFilterableMetadataKeys": [
+                    # S3 Vectors uses AMAZON_BEDROCK_TEXT (not TEXT_CHUNK like OpenSearch)
+                    "AMAZON_BEDROCK_TEXT",
                     "AMAZON_BEDROCK_METADATA",
-                    "AMAZON_BEDROCK_TEXT_CHUNK",
                 ]
             },
         )

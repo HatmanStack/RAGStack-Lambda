@@ -28,6 +28,7 @@ Output (KBQueryResult):
 import json
 import logging
 import os
+import re
 
 import boto3
 from botocore.exceptions import ClientError
@@ -40,6 +41,33 @@ logger.setLevel(logging.INFO)
 
 # Module-level initialization (reused across Lambda invocations)
 config_manager = ConfigurationManager()
+dynamodb = boto3.resource("dynamodb")
+
+
+def extract_document_id_from_uri(uri):
+    """Extract document_id from S3 URI like s3://bucket/output/{doc_id}/extracted_text.txt"""
+    if not uri:
+        return None
+    # Match output/{uuid}/... or images/{uuid}/...
+    match = re.search(r"(?:output|images)/([a-f0-9-]{36})/", uri)
+    if match:
+        return match.group(1)
+    return None
+
+
+def lookup_original_source(document_id, tracking_table_name):
+    """Look up the original input_s3_uri from tracking table."""
+    if not document_id or not tracking_table_name:
+        return None, None
+    try:
+        table = dynamodb.Table(tracking_table_name)
+        response = table.get_item(Key={"document_id": document_id})
+        item = response.get("Item")
+        if item:
+            return item.get("input_s3_uri"), item.get("filename")
+    except Exception as e:
+        logger.warning(f"Failed to lookup document {document_id}: {e}")
+    return None, None
 
 
 def lambda_handler(event, context):
@@ -65,6 +93,7 @@ def lambda_handler(event, context):
 
     # Get environment variables
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
+    tracking_table_name = os.environ.get("TRACKING_TABLE")
     if not knowledge_base_id:
         return {
             "query": "",
@@ -130,10 +159,21 @@ def lambda_handler(event, context):
         # Parse results
         results = []
         for item in response.get("retrievalResults", []):
+            kb_uri = item.get("location", {}).get("s3Location", {}).get("uri", "")
+
+            # Look up original source from tracking table
+            source_uri = kb_uri  # Default to KB URI
+            if tracking_table_name:
+                document_id = extract_document_id_from_uri(kb_uri)
+                if document_id:
+                    original_uri, _ = lookup_original_source(document_id, tracking_table_name)
+                    if original_uri:
+                        source_uri = original_uri
+
             results.append(
                 {
                     "content": item.get("content", {}).get("text", ""),
-                    "source": item.get("location", {}).get("s3Location", {}).get("uri", ""),
+                    "source": source_uri,
                     "score": item.get("score", 0.0),
                 }
             )
