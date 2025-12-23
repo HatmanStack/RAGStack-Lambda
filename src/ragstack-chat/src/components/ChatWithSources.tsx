@@ -9,7 +9,7 @@
  *
  * Usage:
  * ```tsx
- * import { ChatWithSources } from '@your-org/amplify-chat';
+ * import { ChatWithSources } from '@ragstack/ragstack-chat';
  *
  * <Authenticator> {// Optional auth wrapper for authenticated mode}
  *   <ChatWithSources
@@ -24,7 +24,7 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { ChatInterface } from './ChatInterface';
-import { ChatWithSourcesProps } from '../types';
+import { ChatWithSourcesProps, ChatMessage } from '../types';
 import styles from '../styles/ChatWithSources.module.css';
 
 /**
@@ -77,17 +77,9 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   );
 
   const handleResponseReceived = useCallback(
-    (response: any) => {
+    (response: ChatMessage) => {
       if (onResponseReceived && response) {
-        // Transform response data if needed
-        const chatMessage = {
-          role: 'assistant' as const,
-          content: response.message || response.content || '',
-          sources: response.sources || [],
-          timestamp: new Date().toISOString(),
-          modelUsed: response.modelUsed,
-        };
-        onResponseReceived(chatMessage);
+        onResponseReceived(response);
       }
     },
     [onResponseReceived]

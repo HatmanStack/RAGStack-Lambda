@@ -49,7 +49,6 @@ Web component includes configuration at build time (zero runtime config).
 | `maxWidth` | `max-width` | `string` | `"100%"` |
 | `userId` | `user-id` | `string \| null` | `null` |
 | `userToken` | `user-token` | `string \| null` | `null` |
-| `themePreset` | `theme-preset` | `'light' \| 'dark' \| 'brand'` | `'light'` |
 | `onSendMessage` | - | `(msg, convId) => void` | - |
 | `onResponseReceived` | - | `(response) => void` | - |
 

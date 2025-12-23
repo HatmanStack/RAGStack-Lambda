@@ -29,10 +29,10 @@ const GENERATED_CONFIG_PATH = path.join(__dirname, '../src/amplify-config.genera
  */
 function getThemeConfig() {
   // Priority 1: Environment variables (set by CodeBuild from DynamoDB)
-  if (process.env.CHAT_THEME_PRESET) {
+  const hasEnvOverrides = process.env.CHAT_PRIMARY_COLOR || process.env.CHAT_FONT_FAMILY || process.env.CHAT_SPACING;
+  if (hasEnvOverrides) {
     console.log('✓ Using theme config from environment variables');
     return {
-      themePreset: process.env.CHAT_THEME_PRESET || 'light',
       themeOverrides: {
         primaryColor: process.env.CHAT_PRIMARY_COLOR || undefined,
         fontFamily: process.env.CHAT_FONT_FAMILY || undefined,
@@ -50,6 +50,8 @@ function getThemeConfig() {
       const themeRaw = fs.readFileSync(themePath, 'utf-8');
       const theme = JSON.parse(themeRaw);
       console.log('✓ Using theme config from:', themePath);
+      // Remove themePreset if present in file
+      delete theme.themePreset;
       return theme;
     } catch (e) {
       console.warn('⚠ Failed to parse theme_config.json:', e.message);
@@ -57,9 +59,8 @@ function getThemeConfig() {
   }
 
   // Priority 3: Defaults
-  console.log('✓ Using default theme config (light)');
+  console.log('✓ Using default theme config');
   return {
-    themePreset: 'light',
     themeOverrides: {}
   };
 }
@@ -119,7 +120,6 @@ export const THEME_CONFIG = ${JSON.stringify(themeConfig, null, 2)} as const;
 
   console.log('✅ Configuration injected successfully');
   console.log(`   SAM Endpoint: ${samEndpoint || 'Not configured'}`);
-  console.log(`   Fallback Theme: ${themeConfig.themePreset}`);
 }
 
 main();

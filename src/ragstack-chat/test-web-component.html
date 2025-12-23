@@ -199,8 +199,7 @@
           console.log(`Found ${chatElements.length} chat instances`);
           chatElements.forEach((chat, i) => {
             console.log(`Chat ${i + 1}:`, {
-              conversationId: chat.getAttribute('conversation-id'),
-              themePreset: chat.getAttribute('theme-preset') || '(from API)'
+              conversationId: chat.getAttribute('conversation-id')
             });
           });
         }, 1000);

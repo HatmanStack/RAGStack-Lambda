@@ -41,7 +41,6 @@ export const AMPLIFY_OUTPUTS = {
  * Theme configuration - defaults used when no config is generated
  */
 export const THEME_CONFIG = {
-  themePreset: "light" as const,
   themeOverrides: {} as Record<string, unknown>,
 };
 

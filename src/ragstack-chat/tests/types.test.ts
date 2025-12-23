@@ -52,19 +52,4 @@ describe('Type definitions', () => {
     expect(props.userToken).toBe('token');
   });
 
-  it('ChatWithSourcesProps includes theme fields', () => {
-    const props: ChatWithSourcesProps = {
-      themePreset: 'dark',
-      themeOverrides: {
-        primaryColor: '#ff9900',
-        fontFamily: 'Arial',
-        spacing: 'comfortable',
-      },
-    };
-
-    expect(props.themePreset).toBe('dark');
-    expect(props.themeOverrides?.primaryColor).toBe('#ff9900');
-    expect(props.themeOverrides?.fontFamily).toBe('Arial');
-    expect(props.themeOverrides?.spacing).toBe('comfortable');
-  });
 });
