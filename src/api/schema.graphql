@@ -19,10 +19,6 @@ type Query {
   # Get system configuration (Schema, Default, and Custom)
   getConfiguration: ConfigurationResponse @aws_cognito_user_pools
 
-  # Get theme configuration (public, no auth required)
-  # Returns only theme-related settings for the chat web component
-  getThemeConfig: ThemeConfigResponse @aws_api_key @aws_iam
-
   # Get scrape job by ID with pages
   # Accessible via API key for external integrations, or Cognito for admin UI
   getScrapeJob(jobId: ID!): ScrapeJobDetail @aws_api_key @aws_cognito_user_pools
@@ -276,14 +272,6 @@ type ConfigurationResponse @aws_cognito_user_pools {
   Schema: AWSJSON
   Default: AWSJSON
   Custom: AWSJSON
-}
-
-# Theme configuration for chat web component (public access)
-type ThemeConfigResponse @aws_api_key @aws_iam {
-  themePreset: String!
-  primaryColor: String
-  fontFamily: String
-  spacing: String
 }
 
 # API Key response (admin only)

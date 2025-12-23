@@ -44,7 +44,6 @@ import { getApiKey } from '../../graphql/queries/getApiKey';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import { regenerateApiKey } from '../../graphql/mutations/regenerateApiKey';
 import {
-  validateThemeOverrides,
   validateQuota,
   validateBudgetThreshold,
 } from '../../utils/validation';
@@ -364,18 +363,6 @@ export function Settings() {
     const handleNestedChange = (nestedKey, nestedValue) => {
       const updatedObject = { ...value, [nestedKey]: nestedValue };
       setFormValues({ ...formValues, [parentKey]: updatedObject });
-
-      // Validate theme overrides
-      if (parentKey === 'chat_theme_overrides') {
-        const validation = validateThemeOverrides(updatedObject);
-        if (!validation.valid) {
-          setValidationErrors({ ...validationErrors, [parentKey]: validation.errors.join('; ') });
-        } else {
-          const newErrors = { ...validationErrors };
-          delete newErrors[parentKey];
-          setValidationErrors(newErrors);
-        }
-      }
     };
 
     // Render fields directly without wrapper for theme overrides
@@ -634,20 +621,6 @@ export function Settings() {
           {schema.properties &&
             Object.entries(schema.properties)
               .filter(([key]) => !key.includes('theme'))
-              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
-              .map(([key, property]) => (
-                <React.Fragment key={key}>
-                  {renderField(key, property)}
-                </React.Fragment>
-              ))}
-        </SpaceBetween>
-      </Container>
-
-      <Container header={<Header variant="h2">Theme (Web Component)</Header>}>
-        <SpaceBetween size="l">
-          {schema.properties &&
-            Object.entries(schema.properties)
-              .filter(([key]) => key.includes('theme'))
               .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
               .map(([key, property]) => (
                 <React.Fragment key={key}>

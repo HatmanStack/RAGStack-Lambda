@@ -1,31 +1,6 @@
 /**
  * Validation utilities for configuration fields
- *
- * Ensures values passed to chat component won't cause rendering issues.
  */
-
-/**
- * Validate hex color format
- * @param {string} color - Color value to validate
- * @returns {boolean} True if valid hex color
- */
-export function isValidHexColor(color) {
-  if (!color) return true; // Empty is valid (optional)
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
-}
-
-/**
- * Validate CSS font-family string
- * @param {string} fontFamily - Font family to validate
- * @returns {boolean} True if valid CSS font-family
- */
-export function isValidFontFamily(fontFamily) {
-  if (!fontFamily) return true; // Empty is valid (optional)
-
-  // Basic validation: check for common CSS font-family patterns
-  // Allow letters, numbers, spaces, hyphens, commas, and quotes
-  return /^[\w\s\-,'"]+$/.test(fontFamily);
-}
 
 /**
  * Validate number is within range
@@ -40,39 +15,6 @@ export function isWithinRange(value, min, max) {
   if (min !== undefined && num < min) return false;
   if (max !== undefined && num > max) return false;
   return true;
-}
-
-/**
- * Validate chat theme overrides object
- * @param {object} overrides - Theme overrides to validate
- * @returns {{valid: boolean, errors: string[]}} Validation result
- */
-export function validateThemeOverrides(overrides) {
-  const errors = [];
-
-  if (!overrides || typeof overrides !== 'object') {
-    return { valid: true, errors: [] }; // Empty is valid
-  }
-
-  // Validate primaryColor
-  if (overrides.primaryColor && !isValidHexColor(overrides.primaryColor)) {
-    errors.push('Primary color must be a valid hex color (e.g., #0073bb)');
-  }
-
-  // Validate fontFamily
-  if (overrides.fontFamily && !isValidFontFamily(overrides.fontFamily)) {
-    errors.push('Font family contains invalid characters');
-  }
-
-  // Validate spacing enum
-  if (overrides.spacing && !['compact', 'comfortable', 'spacious'].includes(overrides.spacing)) {
-    errors.push('Spacing must be one of: compact, comfortable, spacious');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors
-  };
 }
 
 /**

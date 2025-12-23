@@ -1048,77 +1048,57 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                     'description': 'Max messages per user per day on primary model',
                     'default': 100
                 },
-                'chat_theme_preset': {
-                    'type': 'string',
-                    'order': 7,
-                    'description': 'UI theme preset',
-                    'enum': ['light', 'dark', 'brand'],
-                    'default': 'light'
-                },
-                'chat_theme_overrides': {
-                    'type': 'object',
-                    'order': 8,
-                    'description': 'Custom theme overrides (optional)',
-                    'properties': {
-                        'primaryColor': {'type': 'string'},
-                        'fontFamily': {'type': 'string'},
-                        'spacing': {
-                            'type': 'string',
-                            'enum': ['compact', 'comfortable', 'spacious']
-                        }
-                    }
-                },
                 'chat_cdn_url': {
                     'type': 'string',
-                    'order': 9,
+                    'order': 7,
                     'description': 'Web component CDN URL (read-only)',
                     'readOnly': True
                 },
                 'chat_allow_document_access': {
                     'type': 'boolean',
-                    'order': 10,
+                    'order': 8,
                     'description': 'Allow users to download original source documents via presigned URLs',
                     'default': False
                 },
                 'public_access_chat': {
                     'type': 'boolean',
-                    'order': 11,
+                    'order': 9,
                     'description': 'Allow unauthenticated chat queries (web component)',
                     'default': True
                 },
                 'public_access_search': {
                     'type': 'boolean',
-                    'order': 12,
+                    'order': 10,
                     'description': 'Allow unauthenticated search queries',
                     'default': True
                 },
                 'public_access_upload': {
                     'type': 'boolean',
-                    'order': 13,
+                    'order': 11,
                     'description': 'Allow unauthenticated document uploads',
                     'default': False
                 },
                 'public_access_image_upload': {
                     'type': 'boolean',
-                    'order': 14,
+                    'order': 12,
                     'description': 'Allow unauthenticated image uploads',
                     'default': False
                 },
                 'public_access_scrape': {
                     'type': 'boolean',
-                    'order': 15,
+                    'order': 13,
                     'description': 'Allow unauthenticated web scrape jobs',
                     'default': False
                 },
                 'budget_alert_threshold': {
                     'type': 'number',
-                    'order': 16,
+                    'order': 14,
                     'description': 'Monthly budget alert threshold in USD (alerts sent to admin email)',
                     'default': 100
                 },
                 'budget_alert_enabled': {
                     'type': 'boolean',
-                    'order': 17,
+                    'order': 15,
                     'description': 'Enable budget alerts (emails admin at 80% and 100% of threshold)',
                     'default': True
                 }
@@ -1138,8 +1118,6 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'chat_fallback_model': 'us.amazon.nova-micro-v1:0',
         'chat_global_quota_daily': 10000,
         'chat_per_user_quota_daily': 100,
-        'chat_theme_preset': 'light',
-        'chat_theme_overrides': {},
         'chat_allow_document_access': False,
         'public_access_chat': True,
         'public_access_search': True,
