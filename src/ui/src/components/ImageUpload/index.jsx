@@ -17,8 +17,8 @@ import { ApiDocs } from '../common/ApiDocs';
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
 // API Examples for autoProcess (single-step upload)
-const autoProcessQuery = `mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean!, $caption: String) {
-  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, caption: $caption) {
+const autoProcessQuery = `mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean!, $userCaption: String) {
+  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, userCaption: $userCaption) {
     uploadUrl
     imageId
     s3Uri
@@ -34,7 +34,7 @@ async function uploadImage(imageFile, userCaption = '') {
     headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
     body: JSON.stringify({
       query: \`${autoProcessQuery}\`,
-      variables: { filename: imageFile.name, autoProcess: true, caption: userCaption }
+      variables: { filename: imageFile.name, autoProcess: true, userCaption: userCaption }
     })
   });
   const { uploadUrl, imageId, fields } = (await res.json()).data.createImageUploadUrl;
@@ -48,11 +48,11 @@ async function uploadImage(imageFile, userCaption = '') {
   return imageId;  // Image will be processed and indexed automatically
 }`;
 
-const curlExample = `# Step 1: Get upload URL with autoProcess
+const curlExample = `# Step 1: Get upload URL with autoProcess and optional userCaption
 curl -X POST 'ENDPOINT' \\
   -H 'Content-Type: application/json' \\
   -H 'x-api-key: API_KEY' \\
-  -d '{"query": "mutation { createImageUploadUrl(filename: \\"photo.jpg\\", autoProcess: true) { uploadUrl, imageId, fields } }"}'
+  -d '{"query": "mutation { createImageUploadUrl(filename: \\"photo.jpg\\", autoProcess: true, userCaption: \\"My description\\") { uploadUrl, imageId, fields } }"}'
 
 # Step 2: Upload file to the presigned URL (use uploadUrl and fields from response)`;
 

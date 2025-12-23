@@ -956,7 +956,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
 
@@ -997,7 +997,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow

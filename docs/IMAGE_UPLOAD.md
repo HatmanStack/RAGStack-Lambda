@@ -13,8 +13,8 @@ Images are indexed with both:
 For the simplest workflow, use `autoProcess: true` to let AI generate captions automatically:
 
 ```graphql
-mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean, $caption: String) {
-  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, caption: $caption) {
+mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean, $userCaption: String) {
+  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, userCaption: $userCaption) {
     uploadUrl    # Presigned S3 POST URL
     imageId      # Unique identifier for this upload
     s3Uri        # S3 URI for the image
@@ -26,7 +26,7 @@ mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean, $captio
 **Parameters:**
 - `filename` (required): Original filename with extension
 - `autoProcess`: Set to `true` for automatic AI caption generation after upload
-- `caption`: Optional user-provided caption (used with autoProcess)
+- `userCaption`: Optional user-provided caption (combined with AI caption if autoProcess=true)
 
 With `autoProcess: true`, just upload the file and processing happens automatically via EventBridge.
 
@@ -39,12 +39,12 @@ async function uploadImageAutoProcess(imageFile, userCaption = '') {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
     body: JSON.stringify({
-      query: `mutation($filename: String!, $autoProcess: Boolean!, $caption: String) {
-        createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, caption: $caption) {
+      query: `mutation($filename: String!, $autoProcess: Boolean!, $userCaption: String) {
+        createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, userCaption: $userCaption) {
           uploadUrl, imageId, fields
         }
       }`,
-      variables: { filename: imageFile.name, autoProcess: true, caption: userCaption }
+      variables: { filename: imageFile.name, autoProcess: true, userCaption: userCaption }
     })
   });
   const { uploadUrl, imageId, fields } = (await urlRes.json()).data.createImageUploadUrl;
