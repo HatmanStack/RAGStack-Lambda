@@ -235,46 +235,52 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         raise
 
-    # Step 5: Create Data Source for S3 data bucket (output/ prefix)
-    # This allows Bedrock KB to ingest documents from the output prefix
+    # Step 5: Create Data Sources for S3 data bucket
+    # AWS limits inclusionPrefixes to 1, so we need separate data sources for output/ and images/
     project_name = properties.get("ProjectName", "default")
-    data_source_name = f"{kb_name}-datasource"
-    logger.info(f"Creating Data Source: {data_source_name} for bucket {data_bucket}/output/")
+    sts_client = boto3.client("sts")
+    account_id = sts_client.get_caller_identity()["Account"]
+    data_bucket_arn = f"arn:aws:s3:::{data_bucket}"
 
-    try:
-        # Get the S3 bucket ARN for the data bucket
-        sts_client = boto3.client("sts")
-        account_id = sts_client.get_caller_identity()["Account"]
-        data_bucket_arn = f"arn:aws:s3:::{data_bucket}"
-
-        ds_response = bedrock_agent.create_data_source(
-            knowledgeBaseId=kb_id,
-            name=data_source_name,
-            description=f"S3 data source for {project_name} (output prefix)",
-            dataSourceConfiguration={
-                "type": "S3",
-                "s3Configuration": {
-                    "bucketArn": data_bucket_arn,
-                    "bucketOwnerAccountId": account_id,
-                    "inclusionPrefixes": ["output/"],
-                },
+    chunking_config = {
+        "chunkingConfiguration": {
+            "chunkingStrategy": "FIXED_SIZE",
+            "fixedSizeChunkingConfiguration": {
+                "maxTokens": 800,
+                "overlapPercentage": 15,
             },
-            vectorIngestionConfiguration={
-                "chunkingConfiguration": {
-                    "chunkingStrategy": "FIXED_SIZE",
-                    "fixedSizeChunkingConfiguration": {
-                        "maxTokens": 800,
-                        "overlapPercentage": 15,
+        }
+    }
+
+    data_source_id = None
+    for prefix, suffix in [("output/", ""), ("images/", "-images")]:
+        ds_name = f"{kb_name}-datasource{suffix}"
+        logger.info(f"Creating Data Source: {ds_name} for bucket {data_bucket}/{prefix}")
+
+        try:
+            ds_response = bedrock_agent.create_data_source(
+                knowledgeBaseId=kb_id,
+                name=ds_name,
+                description=f"S3 data source for {project_name} ({prefix.rstrip('/')})",
+                dataSourceConfiguration={
+                    "type": "S3",
+                    "s3Configuration": {
+                        "bucketArn": data_bucket_arn,
+                        "bucketOwnerAccountId": account_id,
+                        "inclusionPrefixes": [prefix],
                     },
-                }
-            },
-        )
+                },
+                vectorIngestionConfiguration=chunking_config,
+            )
 
-        data_source_id = ds_response["dataSource"]["dataSourceId"]
-        logger.info(f"Created Data Source: {data_source_id}")
-    except Exception as e:
-        logger.error(f"Failed to create Data Source: {e}")
-        raise
+            ds_id = ds_response["dataSource"]["dataSourceId"]
+            logger.info(f"Created Data Source: {ds_id}")
+            # Keep first data source ID for backwards compatibility
+            if data_source_id is None:
+                data_source_id = ds_id
+        except Exception as e:
+            logger.error(f"Failed to create Data Source for {prefix}: {e}")
+            raise
 
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "default")

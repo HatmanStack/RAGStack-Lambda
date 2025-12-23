@@ -8,7 +8,60 @@ Images are indexed with both:
 - **Visual embeddings** (Nova Multimodal) - find visually similar images
 - **Text embeddings** (captions) - find images by description
 
-## Single Image Upload
+## Single Image Upload (Auto-Process)
+
+For the simplest workflow, use `autoProcess: true` to let AI generate captions automatically:
+
+```graphql
+mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean, $caption: String) {
+  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, caption: $caption) {
+    uploadUrl    # Presigned S3 POST URL
+    imageId      # Unique identifier for this upload
+    s3Uri        # S3 URI for the image
+    fields       # Form fields for S3 POST (JSON string)
+  }
+}
+```
+
+**Parameters:**
+- `filename` (required): Original filename with extension
+- `autoProcess`: Set to `true` for automatic AI caption generation after upload
+- `caption`: Optional user-provided caption (used with autoProcess)
+
+With `autoProcess: true`, just upload the file and processing happens automatically via EventBridge.
+
+### Auto-Process JavaScript Example
+
+```javascript
+async function uploadImageAutoProcess(imageFile, userCaption = '') {
+  // 1. Get presigned URL with autoProcess enabled
+  const urlRes = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+    body: JSON.stringify({
+      query: `mutation($filename: String!, $autoProcess: Boolean!, $caption: String) {
+        createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, caption: $caption) {
+          uploadUrl, imageId, fields
+        }
+      }`,
+      variables: { filename: imageFile.name, autoProcess: true, caption: userCaption }
+    })
+  });
+  const { uploadUrl, imageId, fields } = (await urlRes.json()).data.createImageUploadUrl;
+
+  // 2. Upload to S3 - processing starts automatically
+  const form = new FormData();
+  Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
+  form.append('file', imageFile);
+  await fetch(uploadUrl, { method: 'POST', body: form });
+
+  return imageId;  // Image will be processed and indexed automatically
+}
+```
+
+## Single Image Upload (Manual Steps)
+
+For more control, use the 4-step process:
 
 ### Step 1: Get Upload URL
 
