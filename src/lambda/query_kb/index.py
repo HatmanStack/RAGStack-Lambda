@@ -44,6 +44,7 @@ from ragstack_common.config import ConfigurationManager
 # Initialize AWS clients
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
+dynamodb_client = boto3.client("dynamodb")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -140,7 +141,6 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
             )
 
         # Execute atomic transaction
-        dynamodb_client = boto3.client("dynamodb")
         dynamodb_client.transact_write_items(TransactItems=transact_items)
 
         user_prefix = tracking_id[:8] if tracking_id else "anon"

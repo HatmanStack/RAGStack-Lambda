@@ -24,6 +24,20 @@ DEFAULT_MAX_RETRIES = 7
 DEFAULT_INITIAL_BACKOFF = 2  # seconds
 DEFAULT_MAX_BACKOFF = 300  # 5 minutes
 
+# Retryable error codes (frozenset for O(1) lookup)
+_RETRYABLE_ERRORS = frozenset(
+    {
+        "ThrottlingException",
+        "ServiceQuotaExceededException",
+        "RequestLimitExceeded",
+        "TooManyRequestsException",
+        "ServiceUnavailableException",
+        "ModelErrorException",
+        "RequestTimeout",
+        "RequestTimeoutException",
+    }
+)
+
 
 class BedrockClient:
     """Client for interacting with Amazon Bedrock models."""
@@ -166,18 +180,7 @@ class BedrockClient:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
 
-            retryable_errors = [
-                "ThrottlingException",
-                "ServiceQuotaExceededException",
-                "RequestLimitExceeded",
-                "TooManyRequestsException",
-                "ServiceUnavailableException",
-                "ModelErrorException",
-                "RequestTimeout",
-                "RequestTimeoutException",
-            ]
-
-            if error_code in retryable_errors:
+            if error_code in _RETRYABLE_ERRORS:
                 # Check if we've reached max retries
                 if retry_count >= self.max_retries:
                     logger.error(

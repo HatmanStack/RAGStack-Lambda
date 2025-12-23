@@ -129,4 +129,3 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   );
 };
 
-export default ChatWithSources;

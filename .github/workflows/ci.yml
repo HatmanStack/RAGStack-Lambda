@@ -34,6 +34,9 @@ jobs:
       - name: Run ruff format check
         run: uv run ruff format . --check
 
+      - name: Run vulture dead code check
+        run: uvx vulture lib/ src/lambda/ --min-confidence 90
+
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -76,7 +79,7 @@ jobs:
 
       - name: Run ESLint
         working-directory: ./src/ui
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
 
   frontend-tests:
     name: Frontend Tests
@@ -118,7 +121,7 @@ jobs:
 
       - name: Run ESLint
         working-directory: ./src/ragstack-chat
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
 
   ragstack-chat-typecheck:
     name: RagStack Chat Typecheck
