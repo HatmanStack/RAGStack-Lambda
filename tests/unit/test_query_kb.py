@@ -410,7 +410,7 @@ def test_lambda_handler_uses_runtime_config(
 
     # Verify config_manager was called with correct parameter
     mock_config_manager.get_parameter.assert_called_once_with(
-        "chat_model_id", default="amazon.nova-pro-v1:0"
+        "chat_model_id", default="us.amazon.nova-pro-v1:0"
     )
 
     # Verify retrieve_and_generate was called with the configured model
@@ -477,7 +477,7 @@ def test_lambda_handler_uses_correct_region_in_model_arn(
 def test_lambda_handler_with_session_id(mock_boto3_client, mock_config_manager, lambda_context):
     """Test that sessionId is passed to Bedrock for conversation continuity."""
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "amazon.nova-pro-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.amazon.nova-pro-v1:0"
 
     # Mock Bedrock response with sessionId
     mock_bedrock_agent = Mock()
@@ -519,7 +519,7 @@ def test_lambda_handler_without_session_id_creates_new(
 ):
     """Test new conversation (no sessionId) - Bedrock creates new session."""
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "amazon.nova-pro-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.amazon.nova-pro-v1:0"
 
     # Mock Bedrock response with new sessionId
     mock_bedrock_agent = Mock()
@@ -560,7 +560,7 @@ def test_lambda_handler_session_expiration_error(
 ):
     """Test graceful handling of expired session."""
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "amazon.nova-pro-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.amazon.nova-pro-v1:0"
 
     # Bedrock returns validation error for expired session
     # Use index.ClientError to ensure we're using the same one the handler uses

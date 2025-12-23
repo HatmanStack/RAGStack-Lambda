@@ -1005,8 +1005,8 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                     'enum': [
                         'meta.llama3-2-90b-instruct-v1:0',
                         'meta.llama3-2-11b-instruct-v1:0',
-                        'anthropic.claude-sonnet-4-20250514-v1:0',
-                        'anthropic.claude-haiku-4-5-20251001-v1:0'
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                     ],
                     'dependsOn': {
                         'field': 'ocr_backend',
@@ -1018,23 +1018,23 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
                     'order': 3,
                     'description': 'Primary chat model (switches to fallback when quota exceeded)',
                     'enum': [
-                        'anthropic.claude-sonnet-4-20250514-v1:0',
-                        'anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'amazon.nova-pro-v1:0',
-                        'amazon.nova-lite-v1:0'
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-pro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
                     ],
-                    'default': 'anthropic.claude-haiku-4-5-20251001-v1:0'
+                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
                 'chat_fallback_model': {
                     'type': 'string',
                     'order': 4,
                     'description': 'Fallback model when quotas exceeded',
                     'enum': [
-                        'anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'amazon.nova-micro-v1:0',
-                        'amazon.nova-lite-v1:0'
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-micro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
                     ],
-                    'default': 'amazon.nova-micro-v1:0'
+                    'default': 'us.amazon.nova-micro-v1:0'
                 },
                 'chat_global_quota_daily': {
                     'type': 'number',
@@ -1134,8 +1134,8 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         'chat_cdn_url': chat_cdn_url,
         'ocr_backend': 'textract',
         'bedrock_ocr_model_id': 'meta.llama3-2-90b-instruct-v1:0',
-        'chat_primary_model': 'anthropic.claude-haiku-4-5-20251001-v1:0',
-        'chat_fallback_model': 'amazon.nova-micro-v1:0',
+        'chat_primary_model': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+        'chat_fallback_model': 'us.amazon.nova-micro-v1:0',
         'chat_global_quota_daily': 10000,
         'chat_per_user_quota_daily': 100,
         'chat_theme_preset': 'light',

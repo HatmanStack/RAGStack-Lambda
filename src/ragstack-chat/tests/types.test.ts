@@ -34,10 +34,10 @@ describe('Type definitions', () => {
       role: 'assistant',
       content: 'Hello',
       timestamp: new Date().toISOString(),
-      modelUsed: 'anthropic.claude-haiku-4-5-20251001-v1:0',
+      modelUsed: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
     };
 
-    expect(message.modelUsed).toBe('anthropic.claude-haiku-4-5-20251001-v1:0');
+    expect(message.modelUsed).toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
   });
 
   it('ChatWithSourcesProps includes auth fields', () => {

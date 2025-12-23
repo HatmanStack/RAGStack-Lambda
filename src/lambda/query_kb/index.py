@@ -77,10 +77,10 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     """
     # Load quota configuration
     primary_model = config_manager.get_parameter(
-        "chat_primary_model", default="anthropic.claude-haiku-4-5-20251001-v1:0"
+        "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
     )
     fallback_model = config_manager.get_parameter(
-        "chat_fallback_model", default="amazon.nova-micro-v1:0"
+        "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
     )
     global_quota_daily = config_manager.get_parameter("chat_global_quota_daily", default=10000)
     per_user_quota_daily = config_manager.get_parameter("chat_per_user_quota_daily", default=100)
