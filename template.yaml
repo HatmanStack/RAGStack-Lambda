@@ -34,14 +34,14 @@ Parameters:
     AllowedValues:
       - meta.llama3-2-90b-instruct-v1:0
       - meta.llama3-2-11b-instruct-v1:0
-      - us.anthropic.claude-sonnet-4-20250514-v1:0
-      - us.anthropic.claude-haiku-4-5-20251001-v1:0
+      - anthropic.claude-sonnet-4-20250514-v1:0
+      - anthropic.claude-haiku-4-5-20251001-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
 
   CaptionModelId:
     Type: String
-    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
-    Description: Bedrock model ID for image caption generation (cross-region inference profile)
+    Default: anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID for image caption generation
 
   UISourceBucket:
     Type: String
@@ -956,9 +956,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -997,9 +995,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments

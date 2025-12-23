@@ -440,7 +440,7 @@ def generate_ai_caption(s3_uri: str) -> str:
             ext = "jpeg"  # Normalize for Bedrock API
 
         # Get caption model from config - use same model as chat/query
-        caption_model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        caption_model = "anthropic.claude-haiku-4-5-20251001-v1:0"
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)

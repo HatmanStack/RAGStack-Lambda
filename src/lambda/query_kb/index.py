@@ -77,10 +77,10 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     """
     # Load quota configuration
     primary_model = config_manager.get_parameter(
-        "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        "chat_primary_model", default="anthropic.claude-haiku-4-5-20251001-v1:0"
     )
     fallback_model = config_manager.get_parameter(
-        "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
+        "chat_fallback_model", default="amazon.nova-micro-v1:0"
     )
     global_quota_daily = config_manager.get_parameter("chat_global_quota_daily", default=10000)
     per_user_quota_daily = config_manager.get_parameter("chat_per_user_quota_daily", default=100)
@@ -890,12 +890,6 @@ def lambda_handler(event, context):
         if conversation_id:
             history = get_conversation_history(conversation_id)
             logger.info(f"Retrieved {len(history)} turns for conversation {conversation_id[:8]}...")
-
-        # Validate account ID for inference profiles (required for proper billing/routing)
-        # Inference profiles start with region prefix (e.g., us.amazon.nova-pro-v1:0)
-        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")) and not account_id:
-            msg = f"Account ID is required for inference profile model {chat_model_id}"
-            raise ValueError(msg)
 
         logger.info(f"Using model: {chat_model_id} in region {region}")
 
