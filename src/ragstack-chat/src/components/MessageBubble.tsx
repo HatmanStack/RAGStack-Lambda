@@ -66,4 +66,3 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, showSou
 // Memoize to prevent unnecessary re-renders
 export const MessageBubble = React.memo(MessageBubbleComponent);
 
-export default MessageBubble;

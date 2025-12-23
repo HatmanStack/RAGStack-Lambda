@@ -400,23 +400,23 @@ describe('Settings Component', () => {
     it('renders object fields with nested inputs inline', async () => {
       const schemaWithObject = {
         properties: {
-          chat_theme_overrides: {
+          custom_settings: {
             type: 'object',
-            description: 'Custom theme overrides',
+            description: 'Custom settings',
             order: 1,
             properties: {
-              primaryColor: { type: 'string' },
-              fontFamily: { type: 'string' },
-              spacing: { type: 'string', enum: ['compact', 'comfortable', 'spacious'] }
+              setting1: { type: 'string' },
+              setting2: { type: 'string' },
+              mode: { type: 'string', enum: ['fast', 'slow', 'auto'] }
             }
           }
         }
       };
 
       const defaultWithObject = {
-        chat_theme_overrides: {
-          primaryColor: '#0073bb',
-          spacing: 'comfortable'
+        custom_settings: {
+          setting1: 'value1',
+          mode: 'fast'
         }
       };
 
@@ -432,7 +432,7 @@ describe('Settings Component', () => {
 
       // Object fields are now rendered inline (not in expandable sections)
       await waitFor(() => {
-        expect(screen.getByText('primaryColor')).toBeInTheDocument();
+        expect(screen.getByText('setting1')).toBeInTheDocument();
       });
     });
   });

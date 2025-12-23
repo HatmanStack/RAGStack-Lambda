@@ -7,14 +7,3 @@
  * For local development, this stub provides defaults.
  * In production, CodeBuild regenerates this with actual values.
  */
-
-/**
- * Theme configuration embedded at build time (fallback defaults)
- *
- * These defaults are used if runtime theme fetching fails.
- * Can be overridden per-instance using attributes on <ragstack-chat>.
- */
-export const THEME_CONFIG = {
-  themePreset: 'light',
-  themeOverrides: {}
-} as const;

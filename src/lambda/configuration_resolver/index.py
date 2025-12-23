@@ -74,9 +74,6 @@ def lambda_handler(event, context):
         if operation == "getConfiguration":
             return handle_get_configuration()
 
-        if operation == "getThemeConfig":
-            return handle_get_theme_config()
-
         if operation == "updateConfiguration":
             custom_config = event["arguments"].get("customConfig")
             logger.info(f"updateConfiguration called with customConfig type: {type(custom_config)}")
@@ -87,53 +84,6 @@ def lambda_handler(event, context):
 
     except Exception:
         logger.exception(f"Error processing {operation}")
-        raise
-
-
-def handle_get_theme_config():
-    """
-    Handle getThemeConfig query (public access, no auth required).
-
-    Returns theme-related configuration only:
-        {
-            'themePreset': 'light' | 'dark' | 'brand',
-            'primaryColor': '#hex' | null,
-            'fontFamily': 'font name' | null,
-            'spacing': 'compact' | 'comfortable' | 'spacious' | null
-        }
-    """
-    try:
-        # Get Default and Custom configuration
-        default_item = get_configuration_item("Default")
-        default_config = remove_partition_key(default_item) if default_item else {}
-
-        custom_item = get_configuration_item("Custom")
-        custom_config = remove_partition_key(custom_item) if custom_item else {}
-
-        # Theme overrides are nested under chat_theme_overrides object
-        default_overrides = default_config.get("chat_theme_overrides") or {}
-        custom_overrides = custom_config.get("chat_theme_overrides") or {}
-
-        # Custom overrides Default for top-level fields
-        def get_value(key, default=None):
-            return custom_config.get(key) or default_config.get(key) or default
-
-        # Custom overrides Default for nested override fields
-        def get_override(key, default=None):
-            return custom_overrides.get(key) or default_overrides.get(key) or default
-
-        result = {
-            "themePreset": get_value("chat_theme_preset", "light"),
-            "primaryColor": get_override("primaryColor"),
-            "fontFamily": get_override("fontFamily"),
-            "spacing": get_override("spacing"),
-        }
-
-        logger.info(f"Returning theme config: {result}")
-        return result
-
-    except Exception:
-        logger.exception("Error in getThemeConfig")
         raise
 
 

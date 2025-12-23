@@ -38,7 +38,7 @@ def mock_table():
         yield mock
 
 
-def test_lambda_handler_get_configuration(mock_env, mock_table):
+def test_lambda_handler_get_configuration(_mock_env, mock_table):
     """Test lambda_handler routing to getConfiguration."""
     # Mock table responses
     mock_table.get_item.side_effect = [
@@ -56,7 +56,7 @@ def test_lambda_handler_get_configuration(mock_env, mock_table):
     assert "Custom" in result
 
 
-def test_lambda_handler_update_configuration(mock_env, mock_table):
+def test_lambda_handler_update_configuration(_mock_env, mock_table):
     """Test lambda_handler routing to updateConfiguration."""
     mock_table.get_item.return_value = {
         "Item": {"config": json.dumps({"fields": {"test_field": {}}})}
@@ -74,7 +74,7 @@ def test_lambda_handler_update_configuration(mock_env, mock_table):
     assert mock_table.put_item.called
 
 
-def test_lambda_handler_unsupported_operation(mock_env):
+def test_lambda_handler_unsupported_operation(_mock_env):
     """Test lambda_handler with unsupported operation."""
     event = {"info": {"fieldName": "unsupportedOperation"}, "arguments": {}}
 
@@ -82,7 +82,7 @@ def test_lambda_handler_unsupported_operation(mock_env):
         lambda_handler(event, None)
 
 
-def test_handle_get_configuration(mock_env, mock_table):
+def test_handle_get_configuration(_mock_env, mock_table):
     """Test handle_get_configuration returns all configs."""
     mock_table.get_item.side_effect = [
         {"Item": {"Schema": {"type": "object", "properties": {}}}},
@@ -101,7 +101,7 @@ def test_handle_get_configuration(mock_env, mock_table):
     assert "Configuration" not in result["Default"]  # Partition key removed
 
 
-def test_handle_get_configuration_with_decimals(mock_env, mock_table):
+def test_handle_get_configuration_with_decimals(_mock_env, mock_table):
     """Test Decimal conversion in nested structures."""
     mock_table.get_item.side_effect = [
         {"Item": {"Schema": {}}},
@@ -124,7 +124,7 @@ def test_handle_get_configuration_with_decimals(mock_env, mock_table):
     assert result["Default"]["nested"]["list"][1] == 2.5
 
 
-def test_handle_update_configuration_valid(mock_env, mock_table):
+def test_handle_update_configuration_valid(_mock_env, mock_table):
     """Test update with valid configuration."""
     mock_table.get_item.return_value = {
         "Item": {"config": json.dumps({"fields": {"test_field": {}, "another_field": {}}})}
@@ -144,7 +144,7 @@ def test_handle_update_configuration_valid(mock_env, mock_table):
     assert written_item["test_field"] == "new_value"
 
 
-def test_handle_update_configuration_dict_input(mock_env, mock_table):
+def test_handle_update_configuration_dict_input(_mock_env, mock_table):
     """Test update with dict input instead of JSON string."""
     mock_table.get_item.return_value = {
         "Item": {"config": json.dumps({"fields": {"test_field": {}}})}
@@ -157,13 +157,13 @@ def test_handle_update_configuration_dict_input(mock_env, mock_table):
     assert result is True
 
 
-def test_handle_update_configuration_invalid_json(mock_env, mock_table):
+def test_handle_update_configuration_invalid_json(_mock_env, mock_table):
     """Test update with invalid JSON string."""
     with pytest.raises(ValueError, match="Invalid configuration format"):
         handle_update_configuration("invalid json {")
 
 
-def test_handle_update_configuration_invalid_keys(mock_env, mock_table):
+def test_handle_update_configuration_invalid_keys(_mock_env, mock_table):
     """Test update with invalid configuration keys."""
     mock_table.get_item.return_value = {
         "Item": {"config": json.dumps({"fields": {"valid_field": {}}})}
@@ -175,7 +175,7 @@ def test_handle_update_configuration_invalid_keys(mock_env, mock_table):
         handle_update_configuration(custom_config)
 
 
-def test_handle_update_configuration_prevents_partition_key_override(mock_env, mock_table):
+def test_handle_update_configuration_prevents_partition_key_override(_mock_env, mock_table):
     """Test that Configuration key cannot be overridden."""
     mock_table.get_item.return_value = {
         "Item": {"config": json.dumps({"fields": {"test_field": {}}})}
@@ -197,7 +197,7 @@ def test_handle_update_configuration_prevents_partition_key_override(mock_env, m
     assert written_item["Configuration"] == "Custom"
 
 
-def test_get_configuration_item_success(mock_env, mock_table):
+def test_get_configuration_item_success(_mock_env, mock_table):
     """Test successful retrieval of config item."""
     expected_item = {"Configuration": "Schema", "field": "value"}
     mock_table.get_item.return_value = {"Item": expected_item}
@@ -208,7 +208,7 @@ def test_get_configuration_item_success(mock_env, mock_table):
     mock_table.get_item.assert_called_once_with(Key={"Configuration": "Schema"})
 
 
-def test_get_configuration_item_not_found(mock_env, mock_table):
+def test_get_configuration_item_not_found(_mock_env, mock_table):
     """Test retrieval when item doesn't exist."""
     mock_table.get_item.return_value = {}
 

@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatInterfaceProps, ChatMessage, ErrorState } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
-import { fetchCDNConfig } from '../utils/fetchThemeConfig';
+import { fetchCDNConfig } from '../utils/fetchCDNConfig';
 import { iamFetch } from '../utils/iamAuth';
 import styles from '../styles/ChatWithSources.module.css';
 
@@ -119,7 +119,7 @@ async function queryKnowledgeBase(
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   conversationId,
   userId,
-  userToken,
+  userToken: _userToken,
   onSendMessage,
   onResponseReceived,
   showSources = true,
@@ -306,4 +306,3 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   );
 };
 
-export default ChatInterface;

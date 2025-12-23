@@ -13,12 +13,6 @@
  * ```
  */
 
-
-import { THEME_CONFIG } from './amplify-config.generated';
-
-// Export theme config for use by web component
-export { THEME_CONFIG };
-
 // Import and auto-register the Web Component
 // The import side effect will register the custom element
 import { RagStackChat } from './components/RagStackChat.wc';

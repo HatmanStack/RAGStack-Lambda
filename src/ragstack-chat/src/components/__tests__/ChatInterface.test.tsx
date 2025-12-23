@@ -8,7 +8,7 @@ import { ChatInterface } from '../ChatInterface';
 import { mockScrollIntoView, mockSessionStorage, cleanupTestUtils } from '../../test-utils';
 
 // Mock fetchCDNConfig and iamFetch
-vi.mock('../../utils/fetchThemeConfig', () => ({
+vi.mock('../../utils/fetchCDNConfig', () => ({
   fetchCDNConfig: vi.fn(() =>
     Promise.resolve({
       apiEndpoint: 'https://test-api.example.com/graphql',

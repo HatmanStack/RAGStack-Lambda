@@ -9,7 +9,7 @@
  *
  * Usage:
  * ```tsx
- * import { ChatWithSources } from '@your-org/amplify-chat';
+ * import { ChatWithSources } from '@ragstack/ragstack-chat';
  *
  * <Authenticator> {// Optional auth wrapper for authenticated mode}
  *   <ChatWithSources
@@ -22,10 +22,9 @@
  * ```
  */
 
-import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { ChatInterface } from './ChatInterface';
-import { ChatWithSourcesProps } from '../types';
-import { applyTheme, type ThemePreset, type ThemeOverrides } from '../styles/themes';
+import { ChatWithSourcesProps, ChatMessage } from '../types';
 import styles from '../styles/ChatWithSources.module.css';
 
 /**
@@ -34,7 +33,6 @@ import styles from '../styles/ChatWithSources.module.css';
  * Main embeddable chat interface that:
  * - Wraps custom ChatInterface component
  * - Provides header and footer UI chrome
- * - Applies theme configuration
  * - Forwards props and callbacks to ChatInterface
  * - Supports both authenticated and guest modes
  *
@@ -67,23 +65,7 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   maxWidth = '100%',
   userId = null,
   userToken = null,
-  themePreset = 'light',
-  themeOverrides,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Apply theme on mount and when theme changes
-  // Scope theme to this component instance to prevent conflicts
-  useEffect(() => {
-    if (!containerRef.current) {
-      return;
-    }
-    applyTheme(
-      containerRef.current,
-      themePreset as ThemePreset,
-      themeOverrides as ThemeOverrides
-    );
-  }, [themePreset, themeOverrides]);
   // Memoize callbacks to prevent unnecessary re-renders
   const handleSendMessage = useCallback(
     (message: string) => {
@@ -95,17 +77,9 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   );
 
   const handleResponseReceived = useCallback(
-    (response: any) => {
+    (response: ChatMessage) => {
       if (onResponseReceived && response) {
-        // Transform response data if needed
-        const chatMessage = {
-          role: 'assistant' as const,
-          content: response.message || response.content || '',
-          sources: response.sources || [],
-          timestamp: new Date().toISOString(),
-          modelUsed: response.modelUsed,
-        };
-        onResponseReceived(chatMessage);
+        onResponseReceived(response);
       }
     },
     [onResponseReceived]
@@ -119,7 +93,6 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
 
   return (
     <div
-      ref={containerRef}
       className={`${styles.chatContainer} ${className || ''}`}
       style={containerStyle}
     >
@@ -148,4 +121,3 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   );
 };
 
-export default ChatWithSources;

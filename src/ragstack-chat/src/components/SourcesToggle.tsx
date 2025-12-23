@@ -115,4 +115,3 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
 
 export const SourcesToggle = React.memo(SourcesToggleComponent);
 
-export default SourcesToggle;

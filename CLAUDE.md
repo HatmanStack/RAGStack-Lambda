@@ -23,35 +23,27 @@ RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS
 ### Testing
 
 ```bash
-# Run all tests (backend + frontend) with linting
-python test.py              # Installs dependencies, runs npm run test:all
+npm run test              # All tests (backend + frontend)
+npm run test:backend      # Python tests (pytest -n auto)
+npm run test:frontend     # UI + ragstack-chat tests (vitest)
+npm run test:integration  # Integration tests (requires deployed stack)
+npm run test:coverage     # Python coverage report
 
-# Individual test suites
-npm run test:backend                    # Python unit tests (uv run pytest)
-npm run test:backend:integration        # Python integration tests
-npm run test:backend:coverage          # Python tests with coverage report
-npm run test:frontend                   # React UI tests (src/ui)
-npm run test:ragstack-chat              # RagStackChat component tests
-npm run test:all                        # All tests + linting
-
-# Run single Python test
-uv run pytest tests/unit/python/test_config.py::test_get_value -v
+# Single test file
+uv run pytest tests/unit/python/test_config.py -v
 
 # Watch mode
 cd src/ui && npm run test:watch
 ```
 
-### Linting & Formatting
+### Linting
 
 ```bash
-# Backend (Python) - uses ruff
-npm run lint:backend        # uv run ruff check . --fix && uv run ruff format .
-npm run format              # uv run ruff format .
-npm run format:check        # uv run ruff format . --check
-
-# Frontend (JavaScript/TypeScript)
-npm run lint:frontend       # cd src/ui && npm run lint -- --fix
-npm run lint                # Lint both backend and frontend
+npm run lint              # Python (ruff check + format --check)
+npm run lint:fix          # Python autofix
+npm run lint:frontend     # TypeScript (ESLint --max-warnings 0)
+npm run lint:all          # All linting
+npm run check             # Lint + test (CI equivalent)
 ```
 
 ### Deployment
@@ -234,11 +226,11 @@ Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer durin
 
 ## Documentation
 
-- [README.md](README.md) - Quick start
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment guide
+- [README.md](README.md) - Quick start and deployment
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Local development
 - [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) - Chat component API
-- [docs/IMAGE_UPLOAD.md](docs/IMAGE_UPLOAD.md) - Image upload API with captions
+- [docs/IMAGE_UPLOAD.md](docs/IMAGE_UPLOAD.md) - Image upload API
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Runtime configuration
+- [docs/WEB_SCRAPING.md](docs/WEB_SCRAPING.md) - Web scraping
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues

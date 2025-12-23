@@ -1,59 +1,49 @@
 # RAGStack-Lambda Web UI
 
-React-based web interface for document upload, management, and search.
+React-based admin interface for document upload, management, and search.
 
 ## Quick Start
 
 ```bash
 npm install
-npm start
-# http://localhost:5173
+npm run dev   # http://localhost:5173
 ```
-
-## Full Documentation
-
-See [docs/UI.md](../../docs/UI.md) for:
-- Setup and configuration
-- Project structure
-- Development guide
-- Troubleshooting
-- Technology stack details
 
 ## Prerequisites
 
 - Node.js 24+
 - SAM stack deployed
 - AWS CLI configured
-- `.env.local` with credentials (see docs/UI.md)
+- `.env.local` with Cognito/AppSync credentials from SAM outputs
 
 ## Technology
 
 - React 19, Vite 7
-- AWS Amplify v6, Cloudscape Design System
-- GraphQL via AWS AppSync
+- Cloudscape Design System
+- AWS AppSync GraphQL
 - Cognito authentication
 
-## Available Commands
+## Commands
 
-```bash
-npm start / npm run dev   # Dev server
-npm run build             # Production build
-npm run lint              # ESLint
-npm test                  # Unit tests
+| Command | Action |
+|---------|--------|
+| `npm run dev` | Dev server (localhost:5173) |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint |
+| `npm test` | Unit tests |
+
+## Environment Variables
+
+Create `.env.local` from SAM stack outputs:
 ```
-
-## Features
-
-- Document upload (drag-and-drop)
-- Document management dashboard
-- Knowledge Base search
-- Real-time status tracking
-- Responsive design
+VITE_AWS_REGION=us-east-1
+VITE_USER_POOL_ID=us-east-1_XXXXXX
+VITE_USER_POOL_CLIENT_ID=XXXXXX
+VITE_IDENTITY_POOL_ID=us-east-1:XXXXXX
+VITE_GRAPHQL_URL=https://XXXXXX.appsync-api.us-east-1.amazonaws.com/graphql
+VITE_DATA_BUCKET=ragstack-data-XXXXXX
+```
 
 ## Troubleshooting
 
-Check [docs/UI.md](../../docs/UI.md#troubleshooting) and [docs/TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md)
-
-## Contributing
-
-See [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md)
+See [docs/TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md)

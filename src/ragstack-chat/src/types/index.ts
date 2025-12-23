@@ -97,23 +97,6 @@ export interface ChatWithSourcesProps {
    * Phase 4 will use this for auth
    */
   userToken?: string | null;
-
-  /**
-   * Theme preset (from configuration)
-   * @default "light"
-   */
-  themePreset?: 'light' | 'dark' | 'brand';
-
-  /**
-   * Theme overrides (from configuration)
-   */
-  themeOverrides?: {
-    primaryColor?: string;
-    backgroundColor?: string;
-    textColor?: string;
-    fontFamily?: string;
-    spacing?: 'compact' | 'comfortable' | 'spacious';
-  };
 }
 
 /**

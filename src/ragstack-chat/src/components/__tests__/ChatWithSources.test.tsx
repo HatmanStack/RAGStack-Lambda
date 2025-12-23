@@ -124,40 +124,4 @@ describe('ChatWithSources', () => {
     expect(screen.getByText('Document Q&A')).toBeInTheDocument();
   });
 
-  it('applies light theme by default', () => {
-    const { container } = render(<ChatWithSources conversationId="test-1" />);
-
-    const chatContainer = container.firstChild as HTMLElement;
-    // Theme is applied via CSS custom properties
-    expect(chatContainer).toBeInTheDocument();
-  });
-
-  it('applies dark theme when specified', () => {
-    const { container } = render(<ChatWithSources conversationId="test-1" themePreset="dark" />);
-
-    const chatContainer = container.firstChild as HTMLElement;
-    expect(chatContainer).toBeInTheDocument();
-  });
-
-  it('applies brand theme when specified', () => {
-    const { container } = render(<ChatWithSources conversationId="test-1" themePreset="brand" />);
-
-    const chatContainer = container.firstChild as HTMLElement;
-    expect(chatContainer).toBeInTheDocument();
-  });
-
-  it('applies custom theme overrides', () => {
-    const themeOverrides = {
-      primaryColor: '#FF0000',
-      fontFamily: 'Arial, sans-serif',
-    };
-
-    const { container } = render(
-      <ChatWithSources conversationId="test-1" themeOverrides={themeOverrides} />
-    );
-
-    const chatContainer = container.firstChild as HTMLElement;
-    expect(chatContainer).toBeInTheDocument();
-  });
-
 });

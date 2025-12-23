@@ -116,4 +116,3 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
 
 export const SourcesDisplay = React.memo(SourcesDisplayComponent);
 
-export default SourcesDisplay;

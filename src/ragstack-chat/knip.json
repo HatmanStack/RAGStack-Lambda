@@ -1,0 +1,5 @@
+{
+  "entry": ["src/index.ts", "src/components/RagStackChat.wc.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/**/*.test.*", "src/**/*.bench.*"]
+}

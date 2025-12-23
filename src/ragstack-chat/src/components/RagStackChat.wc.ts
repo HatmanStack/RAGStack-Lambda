@@ -4,23 +4,10 @@
  * A custom HTML element that wraps the ChatWithSources React component.
  * This allows the chat component to be used in any framework or vanilla JavaScript.
  *
- * **Theming:** Theme configuration (preset, colors, fonts) is embedded at build time
- * from the Settings UI configuration. Override per-instance using attributes.
- *
  * Usage:
  * ```html
  * <script src="https://your-cdn.com/ragstack-chat.js"></script>
- * <!-- Uses theme from Settings (embedded at build time) -->
  * <ragstack-chat conversation-id="my-chat"></ragstack-chat>
- * ```
- *
- * Override theme per instance:
- * ```html
- * <ragstack-chat
- *   conversation-id="my-chat"
- *   theme-preset="dark"
- *   theme-overrides='{"primaryColor": "#9c27b0"}'
- * ></ragstack-chat>
  * ```
  *
  * Attributes:
@@ -32,10 +19,6 @@
  * - max-width: Component max-width (default: "100%")
  * - user-id: User ID for authenticated mode (optional)
  * - user-token: Authentication token for authenticated mode (optional)
- * - theme-preset: Theme preset - light, dark, or brand (default from build config)
- * - theme-overrides: JSON string with theme overrides (default from build config)
- * - background-color: Background color override (e.g., "#ffffff")
- * - text-color: Text color override (e.g., "#1a1a1a")
  *
  * Events:
  * - ragstack-chat:send-message: Fired when user sends a message
@@ -46,8 +29,6 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ChatWithSources } from './ChatWithSources';
 import type { ChatWithSourcesProps, ChatMessage } from '../types';
-import { THEME_CONFIG } from '../amplify-config.generated';
-import { fetchThemeConfig, ThemeConfig } from '../utils/fetchThemeConfig';
 
 /**
  * RagStackChat Web Component
@@ -57,8 +38,6 @@ import { fetchThemeConfig, ThemeConfig } from '../utils/fetchThemeConfig';
  */
 class RagStackChat extends HTMLElement {
   private root: Root | null = null;
-  private fetchedTheme: ThemeConfig | null = null;
-  private themeFetched = false;
 
   /**
    * Observed attributes for reactivity
@@ -73,10 +52,6 @@ class RagStackChat extends HTMLElement {
       'max-width',
       'user-id',
       'user-token',
-      'theme-preset',
-      'theme-overrides',
-      'background-color',
-      'text-color',
     ];
   }
 
@@ -85,42 +60,10 @@ class RagStackChat extends HTMLElement {
    */
   connectedCallback(): void {
     try {
-      // Check if theme attributes are provided
-      const hasThemeAttrs = this.hasAttribute('theme-preset') ||
-                           this.hasAttribute('theme-overrides');
-
-      if (hasThemeAttrs) {
-        // Use provided attributes, don't fetch
-        this.render();
-      } else if (!this.themeFetched) {
-        // No attributes provided, fetch theme from SAM API
-        this.fetchAndApplyTheme();
-      } else {
-        this.render();
-      }
-
+      this.render();
     } catch (error) {
       console.error('[RagStackChat] Error in connectedCallback:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Fetch theme configuration from SAM API and apply it
-   */
-  private async fetchAndApplyTheme(): Promise<void> {
-    try {
-      const theme = await fetchThemeConfig();
-
-      if (theme) {
-        this.themeFetched = true;
-        this.fetchedTheme = theme;
-      }
-    } catch {
-      // Theme fetch failed, will use defaults
-    } finally {
-      // Always render, even if theme fetch failed
-      this.render();
     }
   }
 
@@ -158,21 +101,6 @@ class RagStackChat extends HTMLElement {
   }
 
   /**
-   * Get theme overrides from JSON attribute
-   */
-  private getThemeOverrides(): ChatWithSourcesProps['themeOverrides'] {
-    const overridesStr = super.getAttribute('theme-overrides');
-    if (!overridesStr) return undefined;
-
-    try {
-      return JSON.parse(overridesStr);
-    } catch {
-      console.warn('Invalid theme-overrides JSON');
-      return undefined;
-    }
-  }
-
-  /**
    * Render the React component into this element
    */
   private render(): void {
@@ -181,26 +109,6 @@ class RagStackChat extends HTMLElement {
       if (!this.root) {
         this.root = createRoot(this);
       }
-
-      // Build props from attributes
-      // Priority: attributes > runtime fetched > embedded build config > defaults
-      const themePreset = super.getAttribute('theme-preset') ||
-                         this.fetchedTheme?.themePreset ||
-                         THEME_CONFIG.themePreset ||
-                         'light';
-      const baseOverrides = this.getThemeOverrides() ||
-                            this.fetchedTheme?.themeOverrides ||
-                            THEME_CONFIG.themeOverrides ||
-                            {};
-
-      // Merge direct color attributes into theme overrides
-      const backgroundColor = super.getAttribute('background-color');
-      const textColor = super.getAttribute('text-color');
-      const themeOverrides = {
-        ...baseOverrides,
-        ...(backgroundColor && { backgroundColor }),
-        ...(textColor && { textColor }),
-      };
 
       const props: ChatWithSourcesProps = {
         conversationId: this.getAttributeWithFallback(
@@ -223,8 +131,6 @@ class RagStackChat extends HTMLElement {
         maxWidth: this.getAttributeWithFallback('max-width', '100%'),
         userId: super.getAttribute('user-id') || null,
         userToken: super.getAttribute('user-token') || null,
-        themePreset: themePreset as 'light' | 'dark' | 'brand',
-        themeOverrides: themeOverrides,
         onSendMessage: (message: string, conversationId: string) => {
           this.dispatchEvent(
             new CustomEvent('ragstack-chat:send-message', {
