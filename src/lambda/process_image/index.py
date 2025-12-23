@@ -142,35 +142,31 @@ def lambda_handler(event, context):
                     "message": "auto_process not enabled, waiting for submitImage",
                 }
 
-            # Auto-process enabled - generate caption if not provided
-            if not caption and not user_caption:
+            # Auto-process enabled - always generate AI caption
+            ai_caption = item.get("ai_caption", "")
+            if not ai_caption:
                 logger.info(f"Generating AI caption for image {image_id}")
                 input_s3_uri = item.get("input_s3_uri", "")
-                generated_caption = generate_ai_caption(input_s3_uri)
-                if generated_caption:
-                    caption = generated_caption
-                    # Update DynamoDB with generated caption
-                    update_expr = (
-                        "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
-                    )
-                    tracking_table.update_item(
-                        Key={"document_id": image_id},
-                        UpdateExpression=update_expr,
-                        ExpressionAttributeValues={
-                            ":caption": caption,
-                            ":ai_caption": caption,
-                            ":updated_at": datetime.now(UTC).isoformat(),
-                        },
-                    )
-                    logger.info(f"Generated caption for {image_id}: {caption[:100]}...")
-            elif user_caption and not caption:
-                # Use user-provided caption
+                ai_caption = generate_ai_caption(input_s3_uri) or ""
+                if ai_caption:
+                    logger.info(f"Generated AI caption for {image_id}: {ai_caption[:100]}...")
+
+            # Combine user caption + AI caption
+            if user_caption and ai_caption:
+                caption = f"{user_caption}. {ai_caption}"
+            elif ai_caption:
+                caption = ai_caption
+            elif user_caption:
                 caption = user_caption
+
+            # Update DynamoDB with captions
+            if caption or ai_caption:
                 tracking_table.update_item(
                     Key={"document_id": image_id},
-                    UpdateExpression="SET caption = :caption, updated_at = :updated_at",
+                    UpdateExpression="SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at",
                     ExpressionAttributeValues={
                         ":caption": caption,
+                        ":ai_caption": ai_caption,
                         ":updated_at": datetime.now(UTC).isoformat(),
                     },
                 )
