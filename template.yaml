@@ -957,6 +957,8 @@ Resources:
                 - bedrock:InvokeModel
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -997,6 +999,7 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:us:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
