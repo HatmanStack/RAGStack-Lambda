@@ -73,12 +73,29 @@ def lambda_handler(event, context):
     input_s3_uri = event.get("input_s3_uri", "")
     trigger_type = event.get("trigger_type", "")
 
+    # Supported image extensions
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
     # Parse imageId from the key path
     image_id = None
     if raw_image_id:
-        # Handle paths like "images/abc123/metadata.json" or "images/abc123/image.jpg"
+        # Skip non-image files (metadata.json, caption.txt, etc.)
+        ext = raw_image_id.lower().rsplit(".", 1)[-1] if "." in raw_image_id else ""
+        if f".{ext}" not in IMAGE_EXTENSIONS:
+            logger.info(f"Skipping non-image file: {raw_image_id}")
+            return {"status": "SKIPPED", "message": "Not an image file"}
+
+        # Handle paths like "images/abc123/image.jpg"
         match = re.match(r"images/([^/]+)/", raw_image_id)
-        image_id = match.group(1) if match else raw_image_id
+        if match:
+            image_id = match.group(1)
+        elif "/" not in raw_image_id:
+            # Direct image ID (UUID format)
+            image_id = raw_image_id
+        else:
+            # Path doesn't match expected format - skip silently
+            logger.info(f"Ignoring non-images path: {raw_image_id}")
+            return {"status": "SKIPPED", "message": "Not an images/ path"}
 
     if not image_id:
         raise ValueError("image_id is required in event (either as path or direct ID)")

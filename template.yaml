@@ -1608,17 +1608,8 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              # Match image files in images/ prefix (suffix patterns)
-              - suffix: '.jpg'
-              - suffix: '.jpeg'
-              - suffix: '.png'
-              - suffix: '.gif'
-              - suffix: '.webp'
-              - suffix: '.JPG'
-              - suffix: '.JPEG'
-              - suffix: '.PNG'
-              - suffix: '.GIF'
-              - suffix: '.WEBP'
+              # Match only files in images/ prefix (Lambda validates file type)
+              - prefix: 'images/'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessImageFunction.Arn
