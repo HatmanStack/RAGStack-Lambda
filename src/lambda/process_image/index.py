@@ -45,7 +45,8 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
-bedrock_runtime = boto3.client("bedrock-runtime")
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
+
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
 
@@ -57,6 +58,7 @@ def is_valid_uuid(value: str) -> bool:
     """Check if string is a valid UUID format."""
     try:
         import uuid
+
         uuid.UUID(value)
         return True
     except (ValueError, AttributeError):
@@ -161,9 +163,12 @@ def lambda_handler(event, context):
 
             # Update DynamoDB with captions
             if caption or ai_caption:
+                update_expr = (
+                    "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
+                )
                 tracking_table.update_item(
                     Key={"document_id": image_id},
-                    UpdateExpression="SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at",
+                    UpdateExpression=update_expr,
                     ExpressionAttributeValues={
                         ":caption": caption,
                         ":ai_caption": ai_caption,
@@ -356,7 +361,9 @@ def lambda_handler(event, context):
         # Only update tracking if image_id is a valid UUID (prevents ghost entries)
         if is_valid_uuid(image_id):
             try:
-                update_expr = "SET #status = :status, error_message = :error, updated_at = :updated_at"
+                update_expr = (
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
+                )
                 tracking_table.update_item(
                     Key={"document_id": image_id},
                     UpdateExpression=update_expr,
@@ -465,7 +472,7 @@ def generate_ai_caption(s3_uri: str) -> str:
             ext = "jpeg"  # Normalize for Bedrock API
 
         # Get caption model from config - use same model as chat/query
-        caption_model = "anthropic.claude-haiku-4-5-20251001-v1:0"
+        caption_model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
