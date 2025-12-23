@@ -40,8 +40,8 @@ Parameters:
 
   CaptionModelId:
     Type: String
-    Default: anthropic.claude-3-haiku-20240307-v1:0
-    Description: Bedrock model ID for image caption generation
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID for image caption generation (cross-region inference profile)
 
   UISourceBucket:
     Type: String
