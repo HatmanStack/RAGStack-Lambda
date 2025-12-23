@@ -53,6 +53,16 @@ s3 = boto3.client("s3")
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 
+def is_valid_uuid(value: str) -> bool:
+    """Check if string is a valid UUID format."""
+    try:
+        import uuid
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 def lambda_handler(event, context):
     """Process image and ingest into Knowledge Base."""
     # Get environment variables
@@ -312,55 +322,57 @@ def lambda_handler(event, context):
         error_msg = e.response.get("Error", {}).get("Message", str(e))
         logger.error(f"Failed to process image: {error_code} - {error_msg}")
 
-        # Update status to FAILED
-        try:
-            err_update_expr = (
-                "SET #status = :status, error_message = :error, updated_at = :updated_at"
-            )
-            tracking_table.update_item(
-                Key={"document_id": image_id},
-                UpdateExpression=err_update_expr,
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":status": ImageStatus.FAILED.value,
-                    ":error": error_msg,
-                    ":updated_at": datetime.now(UTC).isoformat(),
-                },
-            )
-
-            if graphql_endpoint:
-                response = tracking_table.get_item(Key={"document_id": image_id})
-                item = response.get("Item", {})
-                publish_image_update(
-                    graphql_endpoint,
-                    image_id,
-                    item.get("filename", "unknown"),
-                    ImageStatus.FAILED.value,
-                    error_message=error_msg,
+        # Only update tracking if image_id is a valid UUID (prevents ghost entries)
+        if is_valid_uuid(image_id):
+            try:
+                err_update_expr = (
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
                 )
-        except Exception:
-            logger.exception("Failed to update error status")
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression=err_update_expr,
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": ImageStatus.FAILED.value,
+                        ":error": error_msg,
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+
+                if graphql_endpoint:
+                    response = tracking_table.get_item(Key={"document_id": image_id})
+                    item = response.get("Item", {})
+                    publish_image_update(
+                        graphql_endpoint,
+                        image_id,
+                        item.get("filename", "unknown"),
+                        ImageStatus.FAILED.value,
+                        error_message=error_msg,
+                    )
+            except Exception:
+                logger.exception("Failed to update error status")
 
         raise
 
     except Exception as e:
         logger.error(f"Unexpected error processing image: {str(e)}", exc_info=True)
 
-        # Update status to FAILED
-        try:
-            update_expr = "SET #status = :status, error_message = :error, updated_at = :updated_at"
-            tracking_table.update_item(
-                Key={"document_id": image_id},
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":status": ImageStatus.FAILED.value,
-                    ":error": str(e),
-                    ":updated_at": datetime.now(UTC).isoformat(),
-                },
-            )
-        except Exception:
-            logger.exception("Failed to update error status")
+        # Only update tracking if image_id is a valid UUID (prevents ghost entries)
+        if is_valid_uuid(image_id):
+            try:
+                update_expr = "SET #status = :status, error_message = :error, updated_at = :updated_at"
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": ImageStatus.FAILED.value,
+                        ":error": str(e),
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+            except Exception:
+                logger.exception("Failed to update error status")
 
         raise
 
