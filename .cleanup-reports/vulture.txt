@@ -1,0 +1,13 @@
+Installed 1 package in 8ms
+src/lambda/configuration_resolver/test_index.py:41: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:59: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:77: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:85: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:104: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:127: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:147: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:160: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:166: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:178: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:200: unused variable 'mock_env' (100% confidence)
+src/lambda/configuration_resolver/test_index.py:211: unused variable 'mock_env' (100% confidence)

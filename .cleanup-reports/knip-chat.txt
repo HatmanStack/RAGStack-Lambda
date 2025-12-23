@@ -1,0 +1,27 @@
+Unused files (2)
+src/amplify-config.generated.ts  
+src/amplify-config.template.ts   
+Unused devDependencies (2)
+@vitest/coverage-v8  package.json:61:6
+jest-axe             package.json:64:6
+Unused exports (9)
+default                   src/components/ChatInterface.tsx:309:8  
+default                   src/components/ChatWithSources.tsx:132:8
+default                   src/components/MessageBubble.tsx:69:8   
+default                   src/components/MessageInput.tsx:133:8   
+default                   src/components/MessageList.tsx:105:8    
+default                   src/components/SourcesDisplay.tsx:119:8 
+default                   src/components/SourcesToggle.tsx:118:8  
+getCredentials  function  src/utils/iamAuth.ts:25:23              
+signRequest     function  src/utils/iamAuth.ts:99:23              
+Unused exported types (2)
+SourcesToggleProps  interface  src/components/SourcesToggle.tsx:22:18
+CDNConfig           interface  src/utils/fetchCDNConfig.ts:9:18      
+Duplicate exports (7)
+ChatInterface|default    src/components/ChatInterface.tsx  
+ChatWithSources|default  src/components/ChatWithSources.tsx
+MessageBubble|default    src/components/MessageBubble.tsx  
+MessageInput|default     src/components/MessageInput.tsx   
+MessageList|default      src/components/MessageList.tsx    
+SourcesDisplay|default   src/components/SourcesDisplay.tsx 
+SourcesToggle|default    src/components/SourcesToggle.tsx  
