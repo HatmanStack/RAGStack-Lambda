@@ -12,6 +12,49 @@ import {
 import { ImagePreview } from './ImagePreview';
 import { CaptionInput } from './CaptionInput';
 import { useImage } from '../../hooks/useImage';
+import { ApiDocs } from '../common/ApiDocs';
+
+const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
+
+// API Examples for autoProcess (single-step upload)
+const autoProcessQuery = `mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean!, $userCaption: String) {
+  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, userCaption: $userCaption) {
+    uploadUrl
+    imageId
+    s3Uri
+    fields
+  }
+}`;
+
+const autoProcessJsExample = `// Single-step image upload with auto-captioning
+async function uploadImage(imageFile, userCaption = '') {
+  // 1. Get presigned URL with autoProcess enabled
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+    body: JSON.stringify({
+      query: \`${autoProcessQuery}\`,
+      variables: { filename: imageFile.name, autoProcess: true, userCaption: userCaption }
+    })
+  });
+  const { uploadUrl, imageId, fields } = (await res.json()).data.createImageUploadUrl;
+
+  // 2. Upload to S3 - processing starts automatically
+  const form = new FormData();
+  Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
+  form.append('file', imageFile);
+  await fetch(uploadUrl, { method: 'POST', body: form });
+
+  return imageId;  // Image will be processed and indexed automatically
+}`;
+
+const curlExample = `# Step 1: Get upload URL with autoProcess and optional userCaption
+curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{"query": "mutation { createImageUploadUrl(filename: \\"photo.jpg\\", autoProcess: true, userCaption: \\"My description\\") { uploadUrl, imageId, fields } }"}'
+
+# Step 2: Upload file to the presigned URL (use uploadUrl and fields from response)`;
 
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -284,6 +327,19 @@ export const ImageUpload = () => {
               </Box>
             )}
           </SpaceBetween>
+        )}
+
+        {graphqlEndpoint && (
+          <ApiDocs
+            title="Image Upload API (Server-side)"
+            description="Use autoProcess: true for automatic AI captioning. The image will be processed and indexed after upload."
+            endpoint={graphqlEndpoint}
+            examples={[
+              { id: 'graphql', label: 'GraphQL', code: autoProcessQuery },
+              { id: 'js', label: 'JavaScript', code: autoProcessJsExample },
+              { id: 'curl', label: 'cURL', code: curlExample },
+            ]}
+          />
         )}
       </SpaceBetween>
     </Container>

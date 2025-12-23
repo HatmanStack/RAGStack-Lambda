@@ -40,7 +40,7 @@ Parameters:
 
   CaptionModelId:
     Type: String
-    Default: anthropic.claude-3-haiku-20240307-v1:0
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
     Description: Bedrock model ID for image caption generation
 
   UISourceBucket:
@@ -848,8 +848,9 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
+                # Wildcard regions needed: inference profiles route to any region
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
@@ -956,7 +957,9 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                # Wildcard regions needed: inference profiles route to any region
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -995,8 +998,9 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                # Wildcard regions needed: inference profiles route to any region
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
@@ -1056,11 +1060,12 @@ Resources:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource:
+                # Wildcard regions needed: inference profiles route to any region
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action: bedrock:GetInferenceProfile
-              Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+              Resource: !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
   SearchKBFunction:
     Type: AWS::Serverless::Function
@@ -1609,17 +1614,8 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              # Match image files in images/ prefix (suffix patterns)
-              - suffix: '.jpg'
-              - suffix: '.jpeg'
-              - suffix: '.png'
-              - suffix: '.gif'
-              - suffix: '.webp'
-              - suffix: '.JPG'
-              - suffix: '.JPEG'
-              - suffix: '.PNG'
-              - suffix: '.GIF'
-              - suffix: '.WEBP'
+              # Match only files in images/ prefix (Lambda validates file type)
+              - prefix: 'images/'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessImageFunction.Arn
@@ -2152,8 +2148,9 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
+                # Wildcard regions needed: inference profiles route to any region
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function

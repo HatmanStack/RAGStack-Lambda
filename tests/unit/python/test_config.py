@@ -59,7 +59,7 @@ def sample_schema():
                 },
                 "chat_model_id": {
                     "type": "string",
-                    "enum": ["amazon.nova-pro-v1:0"],
+                    "enum": ["us.amazon.nova-pro-v1:0"],
                     "description": "Chat model",
                 },
             }
@@ -74,7 +74,7 @@ def sample_default_config():
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "chat_model_id": "amazon.nova-pro-v1:0",
+        "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
 
@@ -242,7 +242,7 @@ def test_get_parameter_none_default(config_manager):
 
 def test_update_custom_config_success(config_manager):
     """Test updating custom configuration."""
-    new_config = {"ocr_backend": "bedrock", "chat_model_id": "amazon.nova-lite-v1:0"}
+    new_config = {"ocr_backend": "bedrock", "chat_model_id": "us.amazon.nova-lite-v1:0"}
 
     config_manager.update_custom_config(new_config)
 
@@ -250,7 +250,7 @@ def test_update_custom_config_success(config_manager):
         Item={
             "Configuration": "Custom",
             "ocr_backend": "bedrock",
-            "chat_model_id": "amazon.nova-lite-v1:0",
+            "chat_model_id": "us.amazon.nova-lite-v1:0",
         }
     )
 
@@ -323,7 +323,7 @@ def test_get_effective_config_with_new_fields(config_manager):
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "chat_model_id": "amazon.nova-pro-v1:0",
+        "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
     custom_config = {
@@ -356,7 +356,7 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
         "Configuration": "Default",
         "ocr_backend": "textract",
         "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "chat_model_id": "amazon.nova-pro-v1:0",
+        "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
     def mock_get_item(Key):
@@ -371,4 +371,4 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
     # Assert all values are from Default
     assert result["ocr_backend"] == "textract"
     assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
-    assert result["chat_model_id"] == "amazon.nova-pro-v1:0"
+    assert result["chat_model_id"] == "us.amazon.nova-pro-v1:0"

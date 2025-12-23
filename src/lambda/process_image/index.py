@@ -45,12 +45,24 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
-bedrock_runtime = boto3.client("bedrock-runtime")
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
+
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
 
 # Configuration table name (optional, for getting chat model)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
+
+
+def is_valid_uuid(value: str) -> bool:
+    """Check if string is a valid UUID format."""
+    try:
+        import uuid
+
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError):
+        return False
 
 
 def lambda_handler(event, context):
@@ -73,12 +85,29 @@ def lambda_handler(event, context):
     input_s3_uri = event.get("input_s3_uri", "")
     trigger_type = event.get("trigger_type", "")
 
+    # Supported image extensions
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
     # Parse imageId from the key path
     image_id = None
     if raw_image_id:
-        # Handle paths like "images/abc123/metadata.json" or "images/abc123/image.jpg"
+        # Skip non-image files (metadata.json, caption.txt, etc.)
+        ext = raw_image_id.lower().rsplit(".", 1)[-1] if "." in raw_image_id else ""
+        if f".{ext}" not in IMAGE_EXTENSIONS:
+            logger.info(f"Skipping non-image file: {raw_image_id}")
+            return {"status": "SKIPPED", "message": "Not an image file"}
+
+        # Handle paths like "images/abc123/image.jpg"
         match = re.match(r"images/([^/]+)/", raw_image_id)
-        image_id = match.group(1) if match else raw_image_id
+        if match:
+            image_id = match.group(1)
+        elif "/" not in raw_image_id:
+            # Direct image ID (UUID format)
+            image_id = raw_image_id
+        else:
+            # Path doesn't match expected format - skip silently
+            logger.info(f"Ignoring non-images path: {raw_image_id}")
+            return {"status": "SKIPPED", "message": "Not an images/ path"}
 
     if not image_id:
         raise ValueError("image_id is required in event (either as path or direct ID)")
@@ -115,35 +144,34 @@ def lambda_handler(event, context):
                     "message": "auto_process not enabled, waiting for submitImage",
                 }
 
-            # Auto-process enabled - generate caption if not provided
-            if not caption and not user_caption:
+            # Auto-process enabled - always generate AI caption
+            ai_caption = item.get("ai_caption", "")
+            if not ai_caption:
                 logger.info(f"Generating AI caption for image {image_id}")
                 input_s3_uri = item.get("input_s3_uri", "")
-                generated_caption = generate_ai_caption(input_s3_uri)
-                if generated_caption:
-                    caption = generated_caption
-                    # Update DynamoDB with generated caption
-                    update_expr = (
-                        "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
-                    )
-                    tracking_table.update_item(
-                        Key={"document_id": image_id},
-                        UpdateExpression=update_expr,
-                        ExpressionAttributeValues={
-                            ":caption": caption,
-                            ":ai_caption": caption,
-                            ":updated_at": datetime.now(UTC).isoformat(),
-                        },
-                    )
-                    logger.info(f"Generated caption for {image_id}: {caption[:100]}...")
-            elif user_caption and not caption:
-                # Use user-provided caption
+                ai_caption = generate_ai_caption(input_s3_uri) or ""
+                if ai_caption:
+                    logger.info(f"Generated AI caption for {image_id}: {ai_caption[:100]}...")
+
+            # Combine user caption + AI caption
+            if user_caption and ai_caption:
+                caption = f"{user_caption}. {ai_caption}"
+            elif ai_caption:
+                caption = ai_caption
+            elif user_caption:
                 caption = user_caption
+
+            # Update DynamoDB with captions
+            if caption or ai_caption:
+                update_expr = (
+                    "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
+                )
                 tracking_table.update_item(
                     Key={"document_id": image_id},
-                    UpdateExpression="SET caption = :caption, updated_at = :updated_at",
+                    UpdateExpression=update_expr,
                     ExpressionAttributeValues={
                         ":caption": caption,
+                        ":ai_caption": ai_caption,
                         ":updated_at": datetime.now(UTC).isoformat(),
                     },
                 )
@@ -295,55 +323,59 @@ def lambda_handler(event, context):
         error_msg = e.response.get("Error", {}).get("Message", str(e))
         logger.error(f"Failed to process image: {error_code} - {error_msg}")
 
-        # Update status to FAILED
-        try:
-            err_update_expr = (
-                "SET #status = :status, error_message = :error, updated_at = :updated_at"
-            )
-            tracking_table.update_item(
-                Key={"document_id": image_id},
-                UpdateExpression=err_update_expr,
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":status": ImageStatus.FAILED.value,
-                    ":error": error_msg,
-                    ":updated_at": datetime.now(UTC).isoformat(),
-                },
-            )
-
-            if graphql_endpoint:
-                response = tracking_table.get_item(Key={"document_id": image_id})
-                item = response.get("Item", {})
-                publish_image_update(
-                    graphql_endpoint,
-                    image_id,
-                    item.get("filename", "unknown"),
-                    ImageStatus.FAILED.value,
-                    error_message=error_msg,
+        # Only update tracking if image_id is a valid UUID (prevents ghost entries)
+        if is_valid_uuid(image_id):
+            try:
+                err_update_expr = (
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
                 )
-        except Exception:
-            logger.exception("Failed to update error status")
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression=err_update_expr,
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": ImageStatus.FAILED.value,
+                        ":error": error_msg,
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+
+                if graphql_endpoint:
+                    response = tracking_table.get_item(Key={"document_id": image_id})
+                    item = response.get("Item", {})
+                    publish_image_update(
+                        graphql_endpoint,
+                        image_id,
+                        item.get("filename", "unknown"),
+                        ImageStatus.FAILED.value,
+                        error_message=error_msg,
+                    )
+            except Exception:
+                logger.exception("Failed to update error status")
 
         raise
 
     except Exception as e:
         logger.error(f"Unexpected error processing image: {str(e)}", exc_info=True)
 
-        # Update status to FAILED
-        try:
-            update_expr = "SET #status = :status, error_message = :error, updated_at = :updated_at"
-            tracking_table.update_item(
-                Key={"document_id": image_id},
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":status": ImageStatus.FAILED.value,
-                    ":error": str(e),
-                    ":updated_at": datetime.now(UTC).isoformat(),
-                },
-            )
-        except Exception:
-            logger.exception("Failed to update error status")
+        # Only update tracking if image_id is a valid UUID (prevents ghost entries)
+        if is_valid_uuid(image_id):
+            try:
+                update_expr = (
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
+                )
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": ImageStatus.FAILED.value,
+                        ":error": str(e),
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+            except Exception:
+                logger.exception("Failed to update error status")
 
         raise
 
@@ -439,12 +471,12 @@ def generate_ai_caption(s3_uri: str) -> str:
         if ext == "jpg":
             ext = "jpeg"  # Normalize for Bedrock API
 
-        # Get caption model from config or use default
-        caption_model = "us.anthropic.claude-3-haiku-20240307-v1:0"
+        # Get caption model from config - use same model as chat/query
+        caption_model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
-                caption_model = config_mgr.get_parameter("image_caption_model", caption_model)
+                caption_model = config_mgr.get_parameter("chat_primary_model", caption_model)
             except Exception as e:
                 logger.warning(f"Failed to get caption model from config: {e}")
 

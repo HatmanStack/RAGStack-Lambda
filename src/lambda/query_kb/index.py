@@ -891,12 +891,6 @@ def lambda_handler(event, context):
             history = get_conversation_history(conversation_id)
             logger.info(f"Retrieved {len(history)} turns for conversation {conversation_id[:8]}...")
 
-        # Validate account ID for inference profiles (required for proper billing/routing)
-        # Inference profiles start with region prefix (e.g., us.amazon.nova-pro-v1:0)
-        if chat_model_id.startswith(("us.", "eu.", "ap-", "global.")) and not account_id:
-            msg = f"Account ID is required for inference profile model {chat_model_id}"
-            raise ValueError(msg)
-
         logger.info(f"Using model: {chat_model_id} in region {region}")
 
         # STEP 1: Retrieve relevant documents from KB

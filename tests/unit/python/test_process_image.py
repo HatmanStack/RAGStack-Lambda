@@ -109,7 +109,7 @@ class TestProcessImage:
         module.dynamodb = mock_boto3["dynamodb"]
 
         event = {
-            "image_id": "test-image-id",
+            "image_id": "images/test-image-id/test.png",
             "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
         }
 
@@ -141,7 +141,7 @@ class TestProcessImage:
         mock_boto3["table"].get_item.return_value = {}
 
         event = {
-            "image_id": "nonexistent-id",
+            "image_id": "images/nonexistent-id/test.png",
             "input_s3_uri": "s3://test-bucket/images/nonexistent-id/test.png",
         }
 
@@ -165,8 +165,8 @@ class TestProcessImage:
         }
 
         event = {
-            "image_id": "test-id",
-            "input_s3_uri": "s3://test-bucket/input/test-id/doc.pdf",
+            "image_id": "images/test-id/test.png",
+            "input_s3_uri": "s3://test-bucket/images/test-id/test.png",
         }
 
         with pytest.raises(ValueError, match="not an image"):
@@ -199,7 +199,7 @@ class TestProcessImage:
             }
         }
 
-        event = {"image_id": "test-image-id"}
+        event = {"image_id": "images/test-image-id/test.png"}
 
         with pytest.raises(ValueError, match="No input_s3_uri"):
             module.lambda_handler(event, None)
@@ -219,7 +219,7 @@ class TestProcessImage:
         )
 
         event = {
-            "image_id": "test-image-id",
+            "image_id": "images/test-image-id/test.png",
             "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
         }
 
@@ -235,7 +235,7 @@ class TestProcessImage:
         module = _load_process_image_module()
 
         event = {
-            "image_id": "test-image-id",
+            "image_id": "images/test-image-id/test.png",
             "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
         }
 
