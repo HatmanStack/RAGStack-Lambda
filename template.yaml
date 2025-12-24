@@ -2361,15 +2361,6 @@ Resources:
       FieldName: updateConfiguration
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
-  GetThemeConfigResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getThemeConfig
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
   # API Key Resolvers
   GetApiKeyResolver:
     Type: AWS::AppSync::Resolver
