@@ -413,6 +413,7 @@ class OcrService:
         start_idx = (page_start - 1) if page_start else 0
         end_idx = page_end if page_end else total_pages
 
+        pages_failed = 0
         for page_num in range(start_idx, end_idx):
             logger.info(f"Processing PDF page {page_num + 1}/{total_pages} with Bedrock")
             pdf_page = pdf_doc[page_num]
@@ -429,14 +430,24 @@ class OcrService:
                 {"text": "Extract all text from this image. Preserve the layout and structure."},
             ]
 
-            response = self.bedrock_client.invoke_model(
-                model_id=self.bedrock_model_id,
-                system_prompt=system_prompt,
-                content=content,
-                context="OCR",
-            )
+            try:
+                response = self.bedrock_client.invoke_model(
+                    model_id=self.bedrock_model_id,
+                    system_prompt=system_prompt,
+                    content=content,
+                    context="OCR",
+                )
+                text = self.bedrock_client.extract_text_from_response(response)
+            except Exception as e:
+                # Handle all page-level errors gracefully - use placeholder and continue
+                error_msg = str(e).lower()
+                if "content filtering" in error_msg or "output blocked" in error_msg:
+                    logger.warning(f"Page {page_num + 1} blocked by content filter")
+                else:
+                    logger.error(f"Page {page_num + 1} failed: {e}")
+                text = f"[Page {page_num + 1} could not be extracted: {type(e).__name__}]"
+                pages_failed += 1
 
-            text = self.bedrock_client.extract_text_from_response(response)
             all_text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
 
             page = Page(
@@ -448,7 +459,10 @@ class OcrService:
             pages.append(page)
 
         pdf_doc.close()
-        return pages, all_text_parts
+        pages_in_batch = end_idx - start_idx
+        pages_succeeded = pages_in_batch - pages_failed
+        logger.info(f"Batch complete: {pages_succeeded}/{pages_in_batch} pages succeeded")
+        return pages, all_text_parts, pages_succeeded, pages_failed
 
     def _process_with_bedrock(self, document: Document, document_bytes: bytes) -> Document:
         """
@@ -473,12 +487,15 @@ class OcrService:
                 pdf_doc.close()
 
                 # Convert PDF pages to images and process each (with page range)
-                pages, all_text_parts = self._process_pdf_with_bedrock(
+                result = self._process_pdf_with_bedrock(
                     document_bytes,
                     page_start=document.page_start,
                     page_end=document.page_end,
                 )
+                pages, all_text_parts, pages_succeeded, pages_failed = result
                 document.pages = pages
+                document.pages_succeeded = pages_succeeded
+                document.pages_failed = pages_failed
                 text = "\n\n".join(all_text_parts)
             else:
                 # Single image - process directly

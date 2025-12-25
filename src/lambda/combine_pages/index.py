@@ -2,18 +2,18 @@
 Combine Pages Lambda
 
 Merges partial text files from batch processing into final extracted_text.txt.
-Updates DynamoDB tracking table with final status.
+Updates DynamoDB tracking table with final status and invokes IngestToKB.
 
-Input event (from Map state results):
+Can be invoked two ways:
+1. From Step Functions Map state (with batch_results array) - legacy mode
+2. From BatchProcessor Lambda (without batch_results) - lists S3 for partial files
+
+Input event:
 {
     "document_id": "abc123",
     "output_s3_prefix": "s3://bucket/output/abc123/",
     "total_pages": 150,
-    "batch_results": [
-        {"page_start": 1, "page_end": 10, "partial_output_uri": "s3://..."},
-        {"page_start": 11, "page_end": 20, "partial_output_uri": "s3://..."},
-        ...
-    ]
+    "batch_results": [...]  # Optional - if not provided, lists S3 for partial files
 }
 
 Output:
@@ -25,8 +25,10 @@ Output:
 }
 """
 
+import json
 import logging
 import os
+import re
 from datetime import UTC, datetime
 
 import boto3
@@ -48,11 +50,73 @@ def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     return bucket, key
 
 
+def _list_partial_files(output_s3_prefix: str) -> list[dict]:
+    """
+    List partial files from S3 matching pages_XXX-YYY.txt pattern.
+
+    Returns list of dicts with page_start, page_end, and partial_output_uri.
+    """
+    bucket, prefix = _parse_s3_uri(output_s3_prefix)
+    if not prefix.endswith("/"):
+        prefix += "/"
+
+    s3 = boto3.client("s3")
+
+    # List objects with the prefix
+    response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+
+    partial_files = []
+    pattern = re.compile(r"pages_(\d+)-(\d+)\.txt$")
+
+    for obj in response.get("Contents", []):
+        key = obj["Key"]
+        match = pattern.search(key)
+        if match:
+            page_start = int(match.group(1))
+            page_end = int(match.group(2))
+            partial_files.append({
+                "page_start": page_start,
+                "page_end": page_end,
+                "partial_output_uri": f"s3://{bucket}/{key}",
+            })
+
+    # Sort by page_start
+    partial_files.sort(key=lambda x: x["page_start"])
+
+    logger.info(f"Found {len(partial_files)} partial files in {output_s3_prefix}")
+    return partial_files
+
+
+def _invoke_ingest_to_kb(document_id: str, output_s3_uri: str) -> None:
+    """Invoke IngestToKB Lambda asynchronously."""
+    ingest_function_arn = os.environ.get("INGEST_TO_KB_FUNCTION_ARN")
+    if not ingest_function_arn:
+        logger.warning("INGEST_TO_KB_FUNCTION_ARN not set, skipping ingestion")
+        return
+
+    lambda_client = boto3.client("lambda")
+
+    payload = {
+        "document_id": document_id,
+        "output_s3_uri": output_s3_uri,
+    }
+
+    logger.info(f"Invoking IngestToKB for document {document_id}")
+
+    lambda_client.invoke(
+        FunctionName=ingest_function_arn,
+        InvocationType="Event",  # Async invocation
+        Payload=json.dumps(payload),
+    )
+
+    logger.info("IngestToKB invoked successfully")
+
+
 def lambda_handler(event, context):
     """
     Main Lambda handler.
 
-    Combines partial text files and updates tracking table.
+    Combines partial text files, updates tracking table, and triggers ingestion.
     """
     logger.info(f"CombinePages event: {event}")
 
@@ -64,12 +128,30 @@ def lambda_handler(event, context):
     document_id = event["document_id"]
     output_s3_prefix = event["output_s3_prefix"]
     total_pages = event["total_pages"]
-    batch_results = event["batch_results"]
 
-    logger.info(f"Combining {len(batch_results)} batch results for document {document_id}")
+    # Get batch results - either from event or by listing S3
+    batch_results = event.get("batch_results")
+    if batch_results:
+        logger.info(f"Using {len(batch_results)} batch results from event")
+        sorted_results = sorted(batch_results, key=lambda x: x["page_start"])
+    else:
+        logger.info("No batch_results in event, listing S3 for partial files")
+        sorted_results = _list_partial_files(output_s3_prefix)
 
-    # Sort by page_start to ensure correct order
-    sorted_results = sorted(batch_results, key=lambda x: x["page_start"])
+    if not sorted_results:
+        raise ValueError(f"No partial files found for document {document_id}")
+
+    # Calculate pages found for logging (threshold already checked by BatchProcessor)
+    pages_found = 0
+    for result in sorted_results:
+        page_start = result["page_start"]
+        page_end = result["page_end"]
+        pages_found += (page_end - page_start + 1)
+
+    logger.info(
+        f"Combining {len(sorted_results)} batches ({pages_found}/{total_pages} pages) "
+        f"for document {document_id}"
+    )
 
     # Read and concatenate all partial files
     full_text_parts = []
@@ -146,6 +228,11 @@ def lambda_handler(event, context):
             "OCR_COMPLETE",
             total_pages=total_pages,
         )
+
+    # Trigger IngestToKB asynchronously (for async mode from BatchProcessor)
+    # In Step Functions mode, IngestToKB is called as next state, but we call anyway
+    # IngestToKB is idempotent so duplicate calls are safe
+    _invoke_ingest_to_kb(document_id, output_uri)
 
     return {
         "document_id": document_id,

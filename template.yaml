@@ -897,6 +897,7 @@ Resources:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
       Tags:
         Project: !Ref ProjectName
         CostCenter: Engineering
@@ -909,6 +910,10 @@ Resources:
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt IngestToKBFunction.Arn
 
   QueueProcessorFunction:
     Type: AWS::Serverless::Function
@@ -936,6 +941,89 @@ Resources:
           Type: SQS
           Properties:
             Queue: !GetAtt DocumentProcessingQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  EnqueueBatchesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-enqueue-batches-${DeploymentSuffix}'
+      CodeUri: src/lambda/enqueue_batches/
+      Handler: index.lambda_handler
+      Description: Queue individual batches to SQS for rate-limited processing
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          BATCH_QUEUE_URL: !Ref BatchProcessingQueue
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt BatchProcessingQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
+  BatchProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-batch-processor-${DeploymentSuffix}'
+      CodeUri: src/lambda/batch_processor/
+      Handler: index.lambda_handler
+      Description: Process individual 10-page batches with global rate limiting
+      Runtime: python3.13
+      Timeout: 900  # 15 minutes per batch
+      MemorySize: 3008  # Same as ProcessDocument for OCR workload
+      ReservedConcurrentExecutions: 10  # GLOBAL LIMIT - controls Bedrock API rate
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt CombinePagesFunction.Arn
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BatchProcessingQueue.Arn
             BatchSize: 1
             FunctionResponseTypes:
               - ReportBatchItemFailures
@@ -1467,7 +1555,7 @@ Resources:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
                   - !GetAtt GetPageInfoFunction.Arn
-                  - !GetAtt CombinePagesFunction.Arn
+                  - !GetAtt EnqueueBatchesFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -1494,7 +1582,7 @@ Resources:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
         GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
-        CombinePagesFunctionArn: !GetAtt CombinePagesFunction.Arn
+        EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
@@ -2625,6 +2713,34 @@ Resources:
             Condition:
               ArnEquals:
                 aws:SourceArn: !GetAtt S3UploadRule.Arn
+
+  # =========================================================================
+  # Batch Processing Queue (individual 10-page batches with global concurrency)
+  # =========================================================================
+
+  BatchProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-batch-processing-dlq-${DeploymentSuffix}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  BatchProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-batch-processing-${DeploymentSuffix}'
+      VisibilityTimeout: 960  # 16 min (Lambda 900s timeout + buffer)
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BatchProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
 
   # =========================================================================
   # Scrape Workflow SQS Queues

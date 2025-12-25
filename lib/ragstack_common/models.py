@@ -89,6 +89,9 @@ class Document:
     # Page range for batch processing (1-indexed, inclusive)
     page_start: int | None = None
     page_end: int | None = None
+    # Page success tracking for batch processing
+    pages_succeeded: int = 0
+    pages_failed: int = 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary for DynamoDB storage."""

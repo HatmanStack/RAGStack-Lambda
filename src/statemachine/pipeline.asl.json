@@ -39,12 +39,12 @@
 
     "CheckBatchingRequired": {
       "Type": "Choice",
-      "Comment": "Route to batched or single-pass processing",
+      "Comment": "Route to SQS batch queue or single-pass processing",
       "Choices": [
         {
           "Variable": "$.pageInfo.needs_batching",
           "BooleanEquals": true,
-          "Next": "ProcessPagesMap"
+          "Next": "EnqueueBatches"
         }
       ],
       "Default": "ProcessDocumentSingle"
@@ -79,63 +79,18 @@
       "Next": "IngestToKnowledgeBase"
     },
 
-    "ProcessPagesMap": {
-      "Type": "Map",
-      "Comment": "Process page batches in parallel",
-      "ItemsPath": "$.pageInfo.batches",
-      "MaxConcurrency": 30,
+    "EnqueueBatches": {
+      "Type": "Task",
+      "Resource": "${EnqueueBatchesFunctionArn}",
+      "Comment": "Queue batches to SQS for rate-limited processing. Step Functions exits here; CombinePages and IngestToKB are triggered async by last batch processor.",
+      "TimeoutSeconds": 120,
       "Parameters": {
         "document_id.$": "$.document_id",
         "input_s3_uri.$": "$.input_s3_uri",
         "output_s3_prefix.$": "$.output_s3_prefix",
-        "page_start.$": "$$.Map.Item.Value.page_start",
-        "page_end.$": "$$.Map.Item.Value.page_end"
-      },
-      "ItemProcessor": {
-        "ProcessorConfig": {
-          "Mode": "INLINE"
-        },
-        "StartAt": "ProcessBatch",
-        "States": {
-          "ProcessBatch": {
-            "Type": "Task",
-            "Resource": "${ProcessDocumentFunctionArn}",
-            "TimeoutSeconds": 600,
-            "Retry": [
-              {
-                "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
-                "IntervalSeconds": 5,
-                "MaxAttempts": 2,
-                "BackoffRate": 2.0
-              }
-            ],
-            "End": true
-          }
-        }
-      },
-      "ResultPath": "$.batchResults",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "ResultPath": "$.error",
-          "Next": "ProcessingFailed"
-        }
-      ],
-      "Next": "CombinePages"
-    },
-
-    "CombinePages": {
-      "Type": "Task",
-      "Resource": "${CombinePagesFunctionArn}",
-      "Comment": "Combine partial results into final output",
-      "TimeoutSeconds": 300,
-      "Parameters": {
-        "document_id.$": "$.document_id",
-        "output_s3_prefix.$": "$.output_s3_prefix",
         "total_pages.$": "$.pageInfo.total_pages",
-        "batch_results.$": "$.batchResults"
+        "batches.$": "$.pageInfo.batches"
       },
-      "ResultPath": "$.processResult",
       "Retry": [
         {
           "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
@@ -151,7 +106,18 @@
           "Next": "ProcessingFailed"
         }
       ],
-      "Next": "IngestToKnowledgeBase"
+      "Next": "BatchesEnqueued"
+    },
+
+    "BatchesEnqueued": {
+      "Type": "Pass",
+      "Comment": "Batches sent to SQS. Processing continues asynchronously via BatchProcessor Lambda.",
+      "Parameters": {
+        "document_id.$": "$.document_id",
+        "status": "batches_enqueued",
+        "message": "Document batches queued for processing. CombinePages and IngestToKB will run when all batches complete."
+      },
+      "End": true
     },
 
     "IngestToKnowledgeBase": {
