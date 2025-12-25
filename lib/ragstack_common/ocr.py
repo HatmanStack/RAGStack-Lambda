@@ -341,8 +341,6 @@ class OcrService:
         Returns:
             Tuple of (list of Page objects, list of text strings)
         """
-        import io
-
         pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         pages = []
         all_text_parts = []
@@ -409,7 +407,7 @@ class OcrService:
                 system_prompt = "You are an OCR system. Extract all text from the image."
                 content = [
                     image_attachment,
-                    {"text": "Extract all text from this image. Preserve the layout and structure."},
+                    {"text": "Extract all text from this image. Preserve layout and structure."},
                 ]
 
                 response = self.bedrock_client.invoke_model(

@@ -176,8 +176,9 @@ def lambda_handler(event, context):
                             }
                         },
                     )
-                    retrieval_results.extend(text_response.get("retrievalResults", []))
-                    logger.info(f"Retrieved {len(text_response.get('retrievalResults', []))} text results")
+                    text_results = text_response.get("retrievalResults", [])
+                    retrieval_results.extend(text_results)
+                    logger.info("Retrieved %d text results", len(text_results))
                 except Exception as e:
                     logger.warning(f"Text search failed: {e}")
 
@@ -199,16 +200,18 @@ def lambda_handler(event, context):
                             }
                         },
                     )
-                    retrieval_results.extend(image_response.get("retrievalResults", []))
-                    logger.info(f"Retrieved {len(image_response.get('retrievalResults', []))} image results")
+                    image_results = image_response.get("retrievalResults", [])
+                    retrieval_results.extend(image_results)
+                    logger.info("Retrieved %d image results", len(image_results))
                 except Exception as e:
                     logger.warning(f"Image search failed: {e}")
         else:
             # Fallback: unfiltered query if no data source IDs configured
+            vector_config = {"numberOfResults": max_results}
             response = bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
-                retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": max_results}},
+                retrievalConfiguration={"vectorSearchConfiguration": vector_config},
             )
             retrieval_results = response.get("retrievalResults", [])
 
