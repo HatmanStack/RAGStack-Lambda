@@ -910,6 +910,36 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
+  QueueProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-queue-processor-${DeploymentSuffix}'
+      CodeUri: src/lambda/queue_processor/
+      Handler: index.lambda_handler
+      Description: Process SQS messages to start Step Functions executions
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      ReservedConcurrentExecutions: 3  # Limit concurrent large doc processing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !GetAtt ProcessingStateMachine.Name
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentProcessingQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
   IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1576,9 +1606,8 @@ Resources:
               - prefix: 'input/'
       State: ENABLED
       Targets:
-        - Arn: !GetAtt ProcessingStateMachine.Arn
-          RoleArn: !GetAtt EventBridgeToStepFunctionsRole.Arn
-          Id: TriggerProcessing
+        - Arn: !GetAtt DocumentProcessingQueue.Arn
+          Id: SendToProcessingQueue
           InputTransformer:
             InputPathsMap:
               bucket: $.detail.bucket.name
@@ -1591,26 +1620,6 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
-
-  EventBridgeToStepFunctionsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StartExecution
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - states:StartExecution
-                Resource: !GetAtt ProcessingStateMachine.Arn
 
   # =========================================================================
   # EventBridge Rule for Image Upload Trigger
@@ -2578,6 +2587,40 @@ Resources:
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
+
+  # =========================================================================
+  # Document Processing Queue (SQS → Step Functions)
+  # =========================================================================
+
+  DocumentProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-doc-processing-${DeploymentSuffix}'
+      VisibilityTimeout: 1800  # 30 min - longer than Step Functions execution
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DocumentProcessingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DocumentProcessingQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt DocumentProcessingQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt S3UploadRule.Arn
 
   # =========================================================================
   # Scrape Workflow SQS Queues

@@ -83,7 +83,7 @@
       "Type": "Map",
       "Comment": "Process page batches in parallel",
       "ItemsPath": "$.pageInfo.batches",
-      "MaxConcurrency": 5,
+      "MaxConcurrency": 30,
       "Parameters": {
         "document_id.$": "$.document_id",
         "input_s3_uri.$": "$.input_s3_uri",
