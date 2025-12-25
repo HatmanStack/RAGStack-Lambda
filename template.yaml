@@ -870,7 +870,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # Text documents (output/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Layers:
@@ -918,7 +918,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # Images (images/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -978,7 +978,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # ZIP contains images (images/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -1036,6 +1036,8 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document retrieval
+          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image retrieval
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           TRACKING_TABLE: !Ref TrackingTable
@@ -1084,6 +1086,8 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document search
+          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image search
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
       Tags:
@@ -1846,6 +1850,8 @@ Resources:
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
+      # Version property forces custom resource update to return new attributes
+      Version: "2"  # Increment to force update and get TextDataSourceId/ImageDataSourceId
 
   # =========================================================================
   # Cognito Authentication
@@ -3057,10 +3063,22 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KnowledgeBaseArn'
 
   DataSourceId:
-    Description: Bedrock Knowledge Base Data Source ID
+    Description: Bedrock Knowledge Base Data Source ID (text documents - backwards compatible)
     Value: !GetAtt KnowledgeBase.DataSourceId
     Export:
       Name: !Sub '${AWS::StackName}-DataSourceId'
+
+  TextDataSourceId:
+    Description: Data Source ID for text documents (output/ prefix)
+    Value: !GetAtt KnowledgeBase.TextDataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-TextDataSourceId'
+
+  ImageDataSourceId:
+    Description: Data Source ID for images (images/ prefix)
+    Value: !GetAtt KnowledgeBase.ImageDataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-ImageDataSourceId'
 
   # API & Authentication
   GraphQLApiUrl:

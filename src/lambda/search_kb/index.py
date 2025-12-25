@@ -94,6 +94,8 @@ def lambda_handler(event, context):
     # Get environment variables
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     tracking_table_name = os.environ.get("TRACKING_TABLE")
+    text_data_source_id = os.environ.get("TEXT_DATA_SOURCE_ID")
+    image_data_source_id = os.environ.get("IMAGE_DATA_SOURCE_ID")
     if not knowledge_base_id:
         return {
             "query": "",
@@ -150,15 +152,69 @@ def lambda_handler(event, context):
             max_results = 5  # Use default if invalid
 
         # Query Knowledge Base using retrieve (raw vector search)
-        response = bedrock_agent.retrieve(
-            knowledgeBaseId=knowledge_base_id,
-            retrievalQuery={"text": query},
-            retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": max_results}},
-        )
+        # If data source IDs are configured, run separate queries for balanced results
+        retrieval_results = []
+
+        if text_data_source_id or image_data_source_id:
+            # Query each data source with full maxResults for comprehensive coverage
+
+            # Query text data source
+            if text_data_source_id:
+                try:
+                    text_response = bedrock_agent.retrieve(
+                        knowledgeBaseId=knowledge_base_id,
+                        retrievalQuery={"text": query},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": max_results,
+                                "filter": {
+                                    "equals": {
+                                        "key": "x-amz-bedrock-kb-data-source-id",
+                                        "value": text_data_source_id,
+                                    }
+                                },
+                            }
+                        },
+                    )
+                    retrieval_results.extend(text_response.get("retrievalResults", []))
+                    logger.info(f"Retrieved {len(text_response.get('retrievalResults', []))} text results")
+                except Exception as e:
+                    logger.warning(f"Text search failed: {e}")
+
+            # Query image data source
+            if image_data_source_id:
+                try:
+                    image_response = bedrock_agent.retrieve(
+                        knowledgeBaseId=knowledge_base_id,
+                        retrievalQuery={"text": query},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": max_results,
+                                "filter": {
+                                    "equals": {
+                                        "key": "x-amz-bedrock-kb-data-source-id",
+                                        "value": image_data_source_id,
+                                    }
+                                },
+                            }
+                        },
+                    )
+                    retrieval_results.extend(image_response.get("retrievalResults", []))
+                    logger.info(f"Retrieved {len(image_response.get('retrievalResults', []))} image results")
+                except Exception as e:
+                    logger.warning(f"Image search failed: {e}")
+        else:
+            # Fallback: unfiltered query if no data source IDs configured
+            response = bedrock_agent.retrieve(
+                knowledgeBaseId=knowledge_base_id,
+                retrievalQuery={"text": query},
+                retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": max_results}},
+            )
+            retrieval_results = response.get("retrievalResults", [])
 
         # Parse results
         results = []
-        for item in response.get("retrievalResults", []):
+        for item in retrieval_results:
             kb_uri = item.get("location", {}).get("s3Location", {}).get("uri", "")
 
             # Look up original source from tracking table

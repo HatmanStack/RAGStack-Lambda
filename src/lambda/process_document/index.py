@@ -215,8 +215,8 @@ def lambda_handler(event, context):
                 "message": "Generated output file - not reprocessing",
             }
 
-        # Check for scraped markdown passthrough (.scraped.md files skip OCR)
-        if input_s3_uri.endswith(".scraped.md"):
+        # Check for markdown passthrough (.md and .scraped.md files skip OCR)
+        if input_s3_uri.endswith(".md"):
             return _process_scraped_markdown(
                 document_id, input_s3_uri, output_s3_prefix, tracking_table
             )

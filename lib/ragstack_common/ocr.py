@@ -300,17 +300,63 @@ class OcrService:
             document.error_message = str(e)
             return document
 
-    def _process_with_bedrock(self, document: Document, document_bytes: bytes) -> Document:
+    def _render_page_to_image(self, pdf_page, max_size_bytes: int = 5 * 1024 * 1024) -> bytes:
         """
-        Process document with Amazon Bedrock.
+        Render PDF page to image, reducing quality if needed to stay under size limit.
+
+        Args:
+            pdf_page: PyMuPDF page object
+            max_size_bytes: Maximum image size (default 5MB for Bedrock)
+
+        Returns:
+            Image bytes (PNG or JPEG)
         """
-        try:
-            logger.info(f"Processing with Bedrock: {document.document_id}")
+        # Try different DPI levels until image is under size limit
+        for dpi in [150, 120, 100, 72]:
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = pdf_page.get_pixmap(matrix=mat)
+            img_bytes = pix.tobytes("png")
 
-            # Prepare image for Bedrock
-            image_attachment = prepare_bedrock_image_attachment(document_bytes)
+            if len(img_bytes) <= max_size_bytes:
+                logger.info(f"Page rendered at {dpi} DPI: {len(img_bytes) / 1024:.0f} KB")
+                return img_bytes
 
-            # Invoke Bedrock model for OCR
+            # Try JPEG compression if PNG is too large
+            img_bytes = pix.tobytes("jpeg")
+            if len(img_bytes) <= max_size_bytes:
+                logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
+                return img_bytes
+
+        # Last resort: lowest DPI with JPEG
+        logger.warning(f"Page still large at 72 DPI: {len(img_bytes) / 1024:.0f} KB")
+        return img_bytes
+
+    def _process_pdf_with_bedrock(self, pdf_bytes: bytes) -> tuple[list[Page], list[str]]:
+        """
+        Convert PDF pages to images and process each with Bedrock OCR.
+
+        Args:
+            pdf_bytes: PDF file bytes
+
+        Returns:
+            Tuple of (list of Page objects, list of text strings)
+        """
+        import io
+
+        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pages = []
+        all_text_parts = []
+
+        for page_num in range(len(pdf_doc)):
+            logger.info(f"Processing PDF page {page_num + 1}/{len(pdf_doc)} with Bedrock")
+            pdf_page = pdf_doc[page_num]
+
+            # Render page to image, auto-reducing quality if needed
+            img_bytes = self._render_page_to_image(pdf_page)
+
+            # Process image with Bedrock
+            image_attachment = prepare_bedrock_image_attachment(img_bytes)
+
             system_prompt = "You are an OCR system. Extract all text from the image."
             content = [
                 image_attachment,
@@ -324,16 +370,62 @@ class OcrService:
                 context="OCR",
             )
 
-            # Extract text from response
             text = self.bedrock_client.extract_text_from_response(response)
+            all_text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
 
-            # Create Page object (no confidence data for Bedrock OCR)
             page = Page(
-                page_number=1, text=text, ocr_backend=OcrBackend.BEDROCK.value, confidence=None
+                page_number=page_num + 1,
+                text=text,
+                ocr_backend=OcrBackend.BEDROCK.value,
+                confidence=None,
             )
+            pages.append(page)
 
-            document.pages = [page]
-            document.total_pages = 1
+        pdf_doc.close()
+        return pages, all_text_parts
+
+    def _process_with_bedrock(self, document: Document, document_bytes: bytes) -> Document:
+        """
+        Process document with Amazon Bedrock.
+
+        For PDFs, converts each page to an image first using PyMuPDF.
+        """
+        try:
+            logger.info(f"Processing with Bedrock: {document.document_id}")
+
+            # Check if this is a PDF - need to convert pages to images
+            is_pdf = document.filename.lower().endswith(".pdf")
+
+            if is_pdf:
+                # Convert PDF pages to images and process each
+                pages, all_text_parts = self._process_pdf_with_bedrock(document_bytes)
+                document.pages = pages
+                document.total_pages = len(pages)
+                text = "\n\n".join(all_text_parts)
+            else:
+                # Single image - process directly
+                image_attachment = prepare_bedrock_image_attachment(document_bytes)
+
+                system_prompt = "You are an OCR system. Extract all text from the image."
+                content = [
+                    image_attachment,
+                    {"text": "Extract all text from this image. Preserve the layout and structure."},
+                ]
+
+                response = self.bedrock_client.invoke_model(
+                    model_id=self.bedrock_model_id,
+                    system_prompt=system_prompt,
+                    content=content,
+                    context="OCR",
+                )
+
+                text = self.bedrock_client.extract_text_from_response(response)
+
+                page = Page(
+                    page_number=1, text=text, ocr_backend=OcrBackend.BEDROCK.value, confidence=None
+                )
+                document.pages = [page]
+                document.total_pages = 1
 
             # Save extracted text to S3
             if document.output_s3_uri:

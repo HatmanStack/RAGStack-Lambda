@@ -201,12 +201,14 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         <SpaceBetween direction="horizontal" size="xs">
           {getTypeIcon(item.type)}
           <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
-            {item.filename}
+            <span style={{ wordBreak: 'break-word' }}>{item.filename}</span>
           </Link>
         </SpaceBetween>
       ),
       sortingField: 'filename',
-      isRowHeader: true
+      isRowHeader: true,
+      width: 300,
+      minWidth: 150
     },
     {
       id: 'type',
