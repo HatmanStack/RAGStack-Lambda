@@ -2049,21 +2049,25 @@ Resources:
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
 
-  AdminUser:
-    Type: AWS::Cognito::UserPoolUser
-    # Retain user during updates to preserve password and avoid re-sending temp password
-    UpdateReplacePolicy: Retain
-    DeletionPolicy: Retain
-    Properties:
-      UserPoolId: !Ref UserPool
-      Username: !Ref AdminEmail
-      UserAttributes:
-        - Name: email
-          Value: !Ref AdminEmail
-        - Name: email_verified
-          Value: 'true'
-      DesiredDeliveryMediums:
-        - EMAIL
+  # AdminUser temporarily removed - user already exists in Cognito
+  # The previous DeletionPolicy: Retain kept the user, but CloudFormation
+  # tries to create a new one which conflicts. User management now handled
+  # directly in Cognito console.
+  #
+  # AdminUser:
+  #   Type: AWS::Cognito::UserPoolUser
+  #   UpdateReplacePolicy: Retain
+  #   DeletionPolicy: Retain
+  #   Properties:
+  #     UserPoolId: !Ref UserPool
+  #     Username: !Ref AdminEmail
+  #     UserAttributes:
+  #       - Name: email
+  #         Value: !Ref AdminEmail
+  #       - Name: email_verified
+  #         Value: 'true'
+  #     DesiredDeliveryMediums:
+  #       - EMAIL
 
   # =========================================================================
   # AppSync GraphQL API
@@ -2915,40 +2919,42 @@ Resources:
   # =========================================================================
   # Cost Management - Monthly Budget
   # =========================================================================
-
-  MonthlyBudget:
-    Type: AWS::Budgets::Budget
-    # Prevent "same name different internalId" errors during stack updates
-    UpdateReplacePolicy: Delete
-    DeletionPolicy: Delete
-    Properties:
-      Budget:
-        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
-        BudgetLimit:
-          Amount: 100
-          Unit: USD
-        TimeUnit: MONTHLY
-        BudgetType: COST
-        CostFilters:
-          TagKeyValue:
-            - !Sub 'user:Project$${ProjectName}'
-      NotificationsWithSubscribers:
-        - Notification:
-            NotificationType: ACTUAL
-            ComparisonOperator: GREATER_THAN
-            Threshold: 80
-            ThresholdType: PERCENTAGE
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Ref AdminEmail
-        - Notification:
-            NotificationType: FORECASTED
-            ComparisonOperator: GREATER_THAN
-            Threshold: 100
-            ThresholdType: PERCENTAGE
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Ref AdminEmail
+  # MonthlyBudget temporarily removed due to persistent "same name different
+  # internalId" conflicts during CloudFormation updates. Budget is managed
+  # via BudgetSyncFunction instead.
+  #
+  # MonthlyBudget:
+  #   Type: AWS::Budgets::Budget
+  #   UpdateReplacePolicy: Delete
+  #   DeletionPolicy: Delete
+  #   Properties:
+  #     Budget:
+  #       BudgetName: !Sub '${ProjectName}-Monthly-Budget'
+  #       BudgetLimit:
+  #         Amount: 100
+  #         Unit: USD
+  #       TimeUnit: MONTHLY
+  #       BudgetType: COST
+  #       CostFilters:
+  #         TagKeyValue:
+  #           - !Sub 'user:Project$${ProjectName}'
+  #     NotificationsWithSubscribers:
+  #       - Notification:
+  #           NotificationType: ACTUAL
+  #           ComparisonOperator: GREATER_THAN
+  #           Threshold: 80
+  #           ThresholdType: PERCENTAGE
+  #         Subscribers:
+  #           - SubscriptionType: EMAIL
+  #             Address: !Ref AdminEmail
+  #       - Notification:
+  #           NotificationType: FORECASTED
+  #           ComparisonOperator: GREATER_THAN
+  #           Threshold: 100
+  #           ThresholdType: PERCENTAGE
+  #         Subscribers:
+  #           - SubscriptionType: EMAIL
+  #             Address: !Ref AdminEmail
 
   # =========================================================================
   # Budget Sync Function - Syncs config changes to AWS Budgets
