@@ -104,9 +104,7 @@ def get_knowledge_base_attributes(kb_id):
             ds_id = ds_summary["dataSourceId"]
             # Get full data source details to check prefix
             try:
-                ds_detail = bedrock_agent.get_data_source(
-                    knowledgeBaseId=kb_id, dataSourceId=ds_id
-                )
+                ds_detail = bedrock_agent.get_data_source(knowledgeBaseId=kb_id, dataSourceId=ds_id)
                 ds_config = ds_detail.get("dataSource", {}).get("dataSourceConfiguration", {})
                 s3_config = ds_config.get("s3Configuration", {})
                 prefixes = s3_config.get("inclusionPrefixes", [])

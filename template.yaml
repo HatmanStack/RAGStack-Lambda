@@ -855,6 +855,61 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
+  GetPageInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-getpageinfo-${DeploymentSuffix}'
+      CodeUri: src/lambda/get_page_info/
+      Handler: index.lambda_handler
+      Description: Count PDF pages and determine processing strategy
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 120  # 2 minutes to download and count pages
+      MemorySize: 512  # Needs memory for PDF parsing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+
+  CombinePagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-combinepages-${DeploymentSuffix}'
+      CodeUri: src/lambda/combine_pages/
+      Handler: index.lambda_handler
+      Description: Combine partial text files from batch processing
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for large doc concatenation
+      MemorySize: 1024  # Needs memory for string concatenation
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
   IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1381,6 +1436,8 @@ Resources:
                 Resource:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
+                  - !GetAtt GetPageInfoFunction.Arn
+                  - !GetAtt CombinePagesFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -1406,6 +1463,8 @@ Resources:
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
+        GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
+        CombinePagesFunctionArn: !GetAtt CombinePagesFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL

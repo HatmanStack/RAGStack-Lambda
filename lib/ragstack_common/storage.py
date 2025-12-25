@@ -190,6 +190,21 @@ def s3_object_exists(s3_uri: str) -> bool:
         return False
 
 
+def delete_s3_object(s3_uri: str) -> None:
+    """
+    Delete an object from S3.
+
+    Args:
+        s3_uri: S3 URI (s3://bucket/key)
+
+    Raises:
+        ClientError: If deletion fails
+    """
+    bucket, key = parse_s3_uri(s3_uri)
+    get_s3_client().delete_object(Bucket=bucket, Key=key)
+    logger.debug(f"Deleted S3 object: {s3_uri}")
+
+
 # ============================================================================
 # DynamoDB Operations
 # ============================================================================

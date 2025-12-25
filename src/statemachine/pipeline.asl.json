@@ -1,5 +1,5 @@
 {
-  "Comment": "Document processing pipeline",
+  "Comment": "Document processing pipeline with parallel batch support for large documents",
   "StartAt": "ExtractDocumentId",
   "States": {
     "ExtractDocumentId": {
@@ -10,13 +10,50 @@
         "input_s3_uri.$": "$.input_s3_uri",
         "output_s3_prefix.$": "$.output_s3_prefix"
       },
-      "Next": "ProcessDocument"
+      "Next": "GetPageInfo"
     },
 
-    "ProcessDocument": {
+    "GetPageInfo": {
+      "Type": "Task",
+      "Resource": "${GetPageInfoFunctionArn}",
+      "Comment": "Count pages and determine processing strategy",
+      "TimeoutSeconds": 120,
+      "ResultPath": "$.pageInfo",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "CheckBatchingRequired"
+    },
+
+    "CheckBatchingRequired": {
+      "Type": "Choice",
+      "Comment": "Route to batched or single-pass processing",
+      "Choices": [
+        {
+          "Variable": "$.pageInfo.needs_batching",
+          "BooleanEquals": true,
+          "Next": "ProcessPagesMap"
+        }
+      ],
+      "Default": "ProcessDocumentSingle"
+    },
+
+    "ProcessDocumentSingle": {
       "Type": "Task",
       "Resource": "${ProcessDocumentFunctionArn}",
-      "Comment": "Perform OCR and extract text/images",
+      "Comment": "Process small documents in single pass",
       "TimeoutSeconds": 960,
       "ResultPath": "$.processResult",
       "Retry": [
@@ -42,10 +79,85 @@
       "Next": "IngestToKnowledgeBase"
     },
 
+    "ProcessPagesMap": {
+      "Type": "Map",
+      "Comment": "Process page batches in parallel",
+      "ItemsPath": "$.pageInfo.batches",
+      "MaxConcurrency": 5,
+      "Parameters": {
+        "document_id.$": "$.document_id",
+        "input_s3_uri.$": "$.input_s3_uri",
+        "output_s3_prefix.$": "$.output_s3_prefix",
+        "page_start.$": "$$.Map.Item.Value.page_start",
+        "page_end.$": "$$.Map.Item.Value.page_end"
+      },
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "ProcessBatch",
+        "States": {
+          "ProcessBatch": {
+            "Type": "Task",
+            "Resource": "${ProcessDocumentFunctionArn}",
+            "TimeoutSeconds": 600,
+            "Retry": [
+              {
+                "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+                "IntervalSeconds": 5,
+                "MaxAttempts": 2,
+                "BackoffRate": 2.0
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.batchResults",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "CombinePages"
+    },
+
+    "CombinePages": {
+      "Type": "Task",
+      "Resource": "${CombinePagesFunctionArn}",
+      "Comment": "Combine partial results into final output",
+      "TimeoutSeconds": 300,
+      "Parameters": {
+        "document_id.$": "$.document_id",
+        "output_s3_prefix.$": "$.output_s3_prefix",
+        "total_pages.$": "$.pageInfo.total_pages",
+        "batch_results.$": "$.batchResults"
+      },
+      "ResultPath": "$.processResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "IngestToKnowledgeBase"
+    },
+
     "IngestToKnowledgeBase": {
       "Type": "Task",
       "Resource": "${IngestToKBFunctionArn}",
-      "Comment": "Ingest document directly into Knowledge Base (Bedrock generates embeddings and indexes automatically)",
+      "Comment": "Ingest document into Knowledge Base",
       "TimeoutSeconds": 300,
       "Parameters": {
         "document_id.$": "$.document_id",
