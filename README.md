@@ -166,14 +166,6 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
 
-## Cost
-
-~1000 docs/month (5 pages):
-- OCR + Embeddings: $5-15
-- Infrastructure: $2
-- Bedrock queries: $0.50
-- **Total: $7-18/month**
-
 ## License
 
 MIT
