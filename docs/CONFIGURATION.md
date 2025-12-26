@@ -19,7 +19,7 @@ The API key is for **server-side use only** - MCP servers, backend scripts, and 
 | View API Key | Shows current key (click to reveal) |
 | Regenerate | Creates new key, invalidates old one immediately |
 
-**Auto-rotation:** Keys auto-rotate monthly via EventBridge.
+**Regenerate:** Dashboard → Settings → Regenerate to create a new key (invalidates old key immediately).
 
 **Usage (server-side only):**
 ```bash

@@ -99,7 +99,7 @@ UI subscribes on load, updates automatically without polling.
 - S3 SSE, DynamoDB encryption
 - Cognito auth + optional MFA
 - API key for programmatic access (all operations)
-- Monthly API key auto-rotation
+- API key regeneration (manual, via Settings UI)
 - Least-privilege IAM
 - Public S3 blocked
 

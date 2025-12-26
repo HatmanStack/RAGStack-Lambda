@@ -1,10 +1,24 @@
 # RAGStack-Lambda
 
-##   🚧🚧 Active Development 🚧🚧
+<p align="center">
+<a href="https://www.apache.org/licenses/LICENSE-2.0.html"><img src="https://img.shields.io/badge/license-Apache2.0-blue" alt="Apache 2.0 License" /></a>
+<a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.13-3776AB" alt="Python 3.13" /></a>
+<a href="https://react.dev"><img src="https://img.shields.io/badge/React-19-61DAFB" alt="React 19" /></a>
+</p>
+
+<p align="center">
+<a href="https://aws.amazon.com/lambda/"><img src="https://img.shields.io/badge/AWS-Lambda-FF9900" alt="AWS Lambda" /></a>
+<a href="https://aws.amazon.com/bedrock/"><img src="https://img.shields.io/badge/AWS-Bedrock-232F3E" alt="AWS Bedrock" /></a>
+<a href="https://aws.amazon.com/s3/"><img src="https://img.shields.io/badge/AWS-S3-569A31" alt="AWS S3" /></a>
+<a href="https://aws.amazon.com/dynamodb/"><img src="https://img.shields.io/badge/AWS-DynamoDB-4053D6" alt="AWS DynamoDB" /></a>
+<a href="https://aws.amazon.com/cognito/"><img src="https://img.shields.io/badge/AWS-Cognito-DD344C" alt="AWS Cognito" /></a>
+</p>
+
 Serverless document processing with AI chat. Upload documents, extract text with OCR, query using Amazon Bedrock.
 
 ## Features
 
+- ☁️ Fully serverless architecture (Lambda, Step Functions, S3, DynamoDB)
 - 📄 Document processing & vectorization (PDF, images, Office docs) → stored in managed knowledge base
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
@@ -129,19 +143,12 @@ Ask questions about your content. Sources show where answers came from.
 - [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
+- [Library Reference](docs/LIBRARY_REFERENCE.md) - Public API for lib/ragstack_common
 
-## Local Development
+## Development
 
-Setup (one time):
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-Run tests:
-```bash
-python test.py
+npm run check  # Lint + test all (backend + frontend)
 ```
 
 ## Deployment Options
@@ -158,14 +165,6 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 ```
 
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
-
-## Cost
-
-~1000 docs/month (5 pages):
-- OCR + Embeddings: $5-15
-- Infrastructure: $2
-- Bedrock queries: $0.50
-- **Total: $7-18/month**
 
 ## License
 

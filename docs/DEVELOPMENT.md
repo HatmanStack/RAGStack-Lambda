@@ -10,7 +10,7 @@ npm install
 cd src/ui && npm install && cd ../..
 
 # Verify everything works
-npm run test:all    # Lint + test
+npm run check       # Lint + test
 ```
 
 ## Commands
@@ -22,7 +22,7 @@ npm test                        # Run all unit tests (~3s)
 npm run test:backend            # Python unit tests only (~1s)
 npm run test:frontend           # React tests only (~2s)
 npm run test:coverage           # Full coverage reports
-npm run test:all                # Lint + all tests (recommended pre-commit)
+npm run check                   # Lint + all tests (recommended pre-commit)
 
 # Individual tests
 uv run pytest tests/unit/test_config.py -v                    # Single Python test
@@ -118,119 +118,6 @@ RAGStack-Lambda/
 - **UI Library**: Cloudscape Design System
 - **State Management**: AWS Amplify DataStore
 
-## Common Development Tasks
-
-### Adding a New Lambda Function
-
-1. Create function directory:
-   ```bash
-   mkdir -p src/lambda/my_function
-   ```
-
-2. Add handler code (src/lambda/my_function/index.py):
-   ```python
-   def lambda_handler(event, context):
-       """Lambda handler for my operation."""
-       # Import from ragstack_common if needed
-       from ragstack_common import storage
-       config = ConfigurationManager()
-       # ...
-       return {"statusCode": 200, "body": "..."}
-   ```
-
-3. Create requirements.txt:
-   ```
-   ./lib
-   boto3>=1.34.0
-   ```
-
-4. Add tests (tests/unit/test_my_function.py):
-   ```python
-   import pytest
-   from src.lambda.my_function.index import lambda_handler
-
-   def test_handler():
-       event = {"key": "value"}
-       result = lambda_handler(event, None)
-       assert result["statusCode"] == 200
-   ```
-
-5. Add to template.yaml:
-   ```yaml
-   MyFunction:
-     Type: AWS::Serverless::Function
-     Properties:
-       Handler: index.lambda_handler
-       CodeUri: src/lambda/my_function/
-       ...
-   ```
-
-6. Test:
-   ```bash
-   npm run test:backend
-   sam build
-   sam local invoke MyFunction -e tests/events/sample.json
-   ```
-
-### Modifying Configuration Schema
-
-Configuration is managed by ConfigurationManager (lib/ragstack_common/config.py):
-
-1. Update the schema in config.py:
-   ```python
-   class ConfigurationSchema:
-       NEW_SETTING = {
-           "description": "...",
-           "type": str,
-           "default": "...",
-           "validation_regex": "...",
-       }
-   ```
-
-2. Update tests (lib/ragstack_common/test_config.py):
-   ```python
-   def test_new_setting():
-       config = ConfigurationManager()
-       value = config.get_parameter("NEW_SETTING")
-       assert value == "..."
-   ```
-
-3. Update configuration_resolver if needed (src/lambda/configuration_resolver/):
-   - Add handler for getting/setting the new field
-   - Update GraphQL schema if exposing via API
-
-4. Test:
-   ```bash
-   npm run test:backend
-   ```
-
-### Adding React Components
-
-1. Create component file (src/ui/src/components/MyComponent.tsx):
-   ```typescript
-   import React from 'react';
-
-   export const MyComponent: React.FC = () => {
-     return <div>Hello</div>;
-   };
-   ```
-
-2. Add test (src/ui/src/components/MyComponent.test.tsx):
-   ```typescript
-   import { render, screen } from '@testing-library/react';
-   import { MyComponent } from './MyComponent';
-
-   test('renders component', () => {
-     render(<MyComponent />);
-     expect(screen.getByText('Hello')).toBeInTheDocument();
-   });
-   ```
-
-3. Test:
-   ```bash
-   npm run test:frontend
-   ```
-
 ### Updating Dependencies
 
 **Python**:
@@ -266,38 +153,6 @@ npm test
 
 - **Frontend tests**: Vitest files colocated with components (`*.test.tsx`)
   - Run with `npm run test:frontend` or `npm test`
-
-### Writing Tests
-
-**Python Unit Test** (tests/unit/test_my_lambda.py):
-```python
-import pytest
-
-@pytest.fixture
-def mock_config(monkeypatch):
-    """Mock ConfigurationManager"""
-    monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-table")
-    # Return mock or fixture
-
-def test_my_function(mock_config):
-    from src.lambda.my_lambda.index import lambda_handler
-    event = {"key": "value"}
-    result = lambda_handler(event, None)
-    assert result["statusCode"] == 200
-```
-
-**React Test** (src/ui/src/components/MyComponent.test.tsx):
-```typescript
-import { render, screen } from '@testing-library/react';
-import { MyComponent } from './MyComponent';
-
-describe('MyComponent', () => {
-  it('renders correctly', () => {
-    render(<MyComponent />);
-    expect(screen.getByText('Expected Text')).toBeInTheDocument();
-  });
-});
-```
 
 ### pytest Configuration
 
@@ -405,88 +260,6 @@ GitHub Actions workflow (.github/workflows/test.yml):
 - Runs all unit tests (pytest + Vitest)
 - Generates coverage reports
 - Already enabled - no setup needed
-
-## Lambda Function Pattern
-
-All Lambda handlers follow this pattern:
-
-```python
-def lambda_handler(event, context):
-    """Lambda handler for [operation]."""
-    try:
-        config = ConfigurationManager()
-
-        # Extract parameters
-        param = event.get("param")
-
-        # Use config for runtime settings
-        setting = config.get_parameter("SETTING_NAME")
-
-        # Perform operation
-        result = do_something(param)
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps(result)
-        }
-    except Exception as e:
-        logger.error(f"Error: {str(e)}", exc_info=True)
-        raise  # Let Step Functions or AppSync handle error
-```
-
-## Environment Variables
-
-Set in template.yaml:
-
-```yaml
-Globals:
-  Function:
-    Environment:
-      Variables:
-        LOG_LEVEL: INFO
-        CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
-
-MyFunction:
-  Properties:
-    Environment:
-      Variables:
-        SPECIFIC_VAR: value
-```
-
-## React UI Development
-
-### Local Dev Server
-
-```bash
-cd src/ui
-npm install
-npm run dev  # http://localhost:5173
-```
-
-### Environment Variables (.env.local)
-
-```bash
-VITE_AWS_REGION=us-east-1
-VITE_USER_POOL_ID=us-east-1_xxxxx
-VITE_USER_POOL_CLIENT_ID=xxxxx
-VITE_IDENTITY_POOL_ID=us-east-1:xxxxx
-VITE_GRAPHQL_URL=https://xxxxx.appsync-api.us-east-1.amazonaws.com/graphql
-VITE_DATA_BUCKET=ragstack-xxxxx-data-xxxxx
-```
-
-Get values: `aws cloudformation describe-stacks --stack-name RAGStack-<name> --query 'Stacks[0].Outputs'`
-
-### Stack
-
-React 19 + Vite + Cloudscape Design System + AWS Amplify v6
-
-### GraphQL Queries
-
-```javascript
-import { generateClient } from 'aws-amplify/api';
-const client = generateClient();
-const { data } = await client.graphql({ query: MY_QUERY });
-```
 
 ## Related Documentation
 
