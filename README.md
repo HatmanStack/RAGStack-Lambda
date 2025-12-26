@@ -19,7 +19,8 @@ Serverless document processing with AI chat. Upload documents, extract text with
 ## Features
 
 - ☁️ Fully serverless architecture (Lambda, Step Functions, S3, DynamoDB)
-- 📄 Document processing & vectorization (PDF, images, Office docs) with Amazon Nova multimodal embeddings
+- 🧠 Amazon Nova multimodal embeddings for text and image vectorization
+- 📄 Document processing & vectorization (PDF, images, Office docs) → stored in managed knowledge base
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
