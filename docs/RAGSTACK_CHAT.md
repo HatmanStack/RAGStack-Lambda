@@ -49,24 +49,6 @@ export function App() {
 }
 ```
 
-## Features
-
-- Web component embeddable in any framework
-- AI-Powered - Integrates with Bedrock and Claude
-- Source Attribution - Shows document sources with collapsible UI
-- Document Access - Download original source documents (admin-configurable)
-- Styled - Compatible with Cloudscape
-- Accessible - WCAG 2.1 AA compliant (keyboard nav, screen readers)
-- Responsive - Desktop, tablet, mobile
-- Dark Mode - System preference support
-- Tested - Comprehensive test suite
-
-## Prerequisites
-
-- React 18+ (for React component)
-- RAGStack-Lambda SAM deployment
-- Bedrock Knowledge Base
-
 ## Configuration
 
 ### Props
@@ -273,44 +255,6 @@ Configure the widget via HTML attributes:
 <ChatWithSources className="branded-chat" />
 ```
 
-## Advanced Usage
-
-### Multiple Conversations
-
-```tsx
-<ChatWithSources conversationId="support" headerText="Support" />
-<ChatWithSources conversationId="docs" headerText="Documentation" />
-```
-
-### With State Management (Redux)
-
-```tsx
-import { useDispatch } from 'react-redux';
-
-export function ConnectedChat() {
-  const dispatch = useDispatch();
-
-  return (
-    <ChatWithSources
-      onResponseReceived={(response) => {
-        dispatch(saveConversation({
-          message: response.content,
-          sources: response.sources,
-        }));
-      }}
-    />
-  );
-}
-```
-
-### Modal or Drawer
-
-```tsx
-<Dialog open={isOpen} onOpenChange={onClose}>
-  <ChatWithSources maxWidth="100%" headerText="" />
-</Dialog>
-```
-
 ## Web Components
 
 Use the component in any framework via Web Components:
@@ -374,36 +318,6 @@ The component requires:
 2. **Knowledge Base ID** - From SAM outputs, configured in web component build
 3. **AppSync GraphQL** - Query endpoint injected during build
 
-## Performance Optimization
-
-### Memoize Component
-
-```tsx
-import { useMemo } from 'react';
-
-const chatProps = useMemo(() => ({
-  conversationId: 'main',
-}), []);
-
-return <ChatWithSources {...chatProps} />;
-```
-
-### Lazy Load
-
-```tsx
-import { lazy, Suspense } from 'react';
-
-const ChatWithSources = lazy(() =>
-  import('@ragstack/ragstack-chat').then(m => ({
-    default: m.ChatWithSources,
-  }))
-);
-
-<Suspense fallback={<Loading />}>
-  <ChatWithSources />
-</Suspense>
-```
-
 ## Troubleshooting
 
 **Component doesn't render:**
@@ -419,15 +333,6 @@ const ChatWithSources = lazy(() =>
 - Check CSS specificity
 - Inspect in DevTools
 - Use `!important` if needed
-
-## Build from Source
-
-```bash
-cd src/ragstack-chat
-npm install
-npm run build
-npm test
-```
 
 ## Types
 

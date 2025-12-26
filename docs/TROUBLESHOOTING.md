@@ -130,16 +130,3 @@ aws bedrock-agent get-knowledge-base --knowledge-base-id <KB-ID>
 aws bedrock-agent list-data-sources --knowledge-base-id <KB-ID>
 ```
 
-## Get Help
-
-1. **Check logs first** - Most issues visible in CloudWatch
-2. **Search this guide** - Use Ctrl+F to search by error message
-3. **Review ARCHITECTURE.md** - Understand system design
-4. **Open GitHub issue** - Include logs, AWS region, error message
-
-Common resources:
-- AWS CloudWatch Logs
-- AWS CloudFormation events
-- Step Functions execution history
-- DynamoDB items
-- Bedrock console
