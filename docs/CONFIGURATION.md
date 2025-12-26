@@ -109,12 +109,28 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
-| `public_access_chat` | boolean | true | Allow unauthenticated chat queries |
 | `chat_primary_model` | Model ARN | claude-haiku | Model for chat responses |
 | `chat_fallback_model` | Model ARN | nova-micro | Used when quota exceeded |
 | `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |
 | `chat_per_user_quota_daily` | number | 100 | Queries/day per authenticated user |
 | `chat_allow_document_access` | boolean | false | Show "View Document" links in sources |
+
+## Access Control
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `public_access_chat` | boolean | true | Allow unauthenticated chat queries |
+| `public_access_search` | boolean | true | Allow unauthenticated search queries |
+| `public_access_upload` | boolean | false | Allow unauthenticated document uploads |
+| `public_access_image_upload` | boolean | false | Allow unauthenticated image uploads |
+| `public_access_scrape` | boolean | false | Allow unauthenticated web scrape jobs |
+
+## Budget Alerts
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `budget_alert_threshold` | number | 100 | Monthly budget alert threshold (USD) |
+| `budget_alert_enabled` | boolean | true | Enable email alerts at 80% and 100% |
 
 ## Quota System
 

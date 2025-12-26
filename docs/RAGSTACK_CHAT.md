@@ -233,31 +233,8 @@ Configure the widget via HTML attributes:
 | `max-width` | string | `"100%"` | Component max width |
 | `user-id` | string | - | User ID for authenticated mode |
 | `user-token` | string | - | Auth token for authenticated mode |
-| `theme-preset` | string | `"light"` | Theme: `light`, `dark`, or `brand` |
-| `theme-overrides` | JSON | - | JSON object with theme overrides |
 | `background-color` | string | - | Background color (e.g., `"#ffffff"`) |
 | `text-color` | string | - | Text color (e.g., `"#1a1a1a"`) |
-
-### Theme Presets
-
-Three built-in presets: `light`, `dark`, `brand` (AWS orange).
-
-```html
-<!-- Dark mode -->
-<ragstack-chat theme-preset="dark"></ragstack-chat>
-
-<!-- Brand theme with custom accent -->
-<ragstack-chat
-  theme-preset="brand"
-  theme-overrides='{"primaryColor": "#7c3aed"}'
-></ragstack-chat>
-
-<!-- Custom colors via attributes -->
-<ragstack-chat
-  background-color="#1a1a1a"
-  text-color="#ffffff"
-></ragstack-chat>
-```
 
 ### Full Customization Example
 

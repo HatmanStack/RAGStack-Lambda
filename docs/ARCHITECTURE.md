@@ -18,6 +18,10 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | Component | Purpose |
 |-----------|---------|
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) |
+| GetPageInfo Lambda | Count pages, determine batching strategy |
+| EnqueueBatches Lambda | Queue batch jobs to SQS |
+| BatchProcessor Lambda | Process 10-page batches (max 10 concurrent) |
+| CombinePages Lambda | Merge partial outputs into final document |
 | IngestToKB Lambda | Trigger Bedrock KB ingestion (Nova Multimodal embeddings) |
 | QueryKB Lambda | Query documents, chat with sources |
 | ProcessImage Lambda | Image ingestion with captions |
@@ -33,9 +37,21 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 ## Data Flow
 
 ### Document Processing
-1. **Upload:** User → S3 input/ → EventBridge → ProcessDocument
+
+**Small documents (≤20 pages or text-native):**
+1. **Upload:** User → S3 input/ → EventBridge → Step Functions
 2. **OCR:** ProcessDocument extracts text → S3 output/
-3. **Indexing:** IngestToKB → Bedrock KB API → Nova Multimodal embeddings → S3 vectors
+3. **Indexing:** IngestToKB → Bedrock KB
+
+**Large documents (>20 pages, requires OCR):**
+1. **Upload:** User → S3 input/ → EventBridge → Step Functions
+2. **Page Info:** GetPageInfo counts pages, creates 10-page batches
+3. **Queue:** EnqueueBatches → SQS batch queue
+4. **Process:** BatchProcessor Lambda (max 10 concurrent) → partial files
+5. **Combine:** Last batch triggers CombinePages → merged output
+6. **Indexing:** IngestToKB → Bedrock KB
+
+**95% threshold:** Ingestion proceeds if ≥95% of pages processed successfully. Failed batches retry 3x before DLQ.
 
 ### Web Scraping
 1. **Start:** User → AppSync → ScrapeStart Lambda → SQS discovery queue
