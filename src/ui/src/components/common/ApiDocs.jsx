@@ -28,9 +28,10 @@ const CodeBlock = ({ code, copyLabel = 'Copy' }) => (
     <code style={codeStyle}>{code}</code>
     <Box padding={{ top: 'xs' }}>
       <CopyToClipboard
-        copyText={code}
+        textToCopy={code}
         copyButtonText={copyLabel}
         copySuccessText="Copied!"
+        copyErrorText="Failed to copy"
         variant="inline"
       />
     </Box>
@@ -82,9 +83,10 @@ export const ApiDocs = ({
                   {endpoint}
                 </code>
                 <CopyToClipboard
-                  copyText={endpoint}
+                  textToCopy={endpoint}
                   copyButtonText="Copy"
                   copySuccessText="Copied!"
+                  copyErrorText="Failed to copy"
                   variant="inline"
                 />
               </SpaceBetween>
