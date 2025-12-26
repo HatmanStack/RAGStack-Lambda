@@ -3007,6 +3007,7 @@ Resources:
                 - budgets:CreateBudget
                 - budgets:ModifyBudget
                 - budgets:DescribeBudget
+                - budgets:ViewBudget
                 - budgets:UpdateBudget
               Resource: '*'
 
