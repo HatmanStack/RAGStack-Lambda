@@ -6,6 +6,7 @@ CloudFormation update conflicts when redeploying stacks.
 
 import json
 import logging
+import urllib.error
 import urllib.request
 
 import boto3
@@ -75,6 +76,19 @@ def create_user(user_pool_id: str, email: str) -> dict:
 
 def lambda_handler(event: dict, context) -> None:
     """Handle CloudFormation custom resource events."""
+    # CRITICAL: Always respond to CloudFormation, even if we crash
+    try:
+        return _handle_event(event, context)
+    except Exception as e:
+        logger.error(f"Unhandled exception: {e}", exc_info=True)
+        try:
+            send_response(event, context, "FAILED", f"Unhandled error: {str(e)}")
+        except Exception as resp_error:
+            logger.error(f"Failed to send error response: {resp_error}")
+
+
+def _handle_event(event: dict, context) -> None:
+    """Internal handler - separated for global exception handling."""
     logger.info(f"Event: {json.dumps(event)}")
 
     request_type = event["RequestType"]

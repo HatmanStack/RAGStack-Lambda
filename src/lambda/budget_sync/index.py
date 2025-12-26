@@ -10,6 +10,7 @@ It updates/creates the AWS Budget based on configuration.
 import json
 import logging
 import os
+import urllib.error
 import urllib.request
 from decimal import Decimal
 
@@ -60,7 +61,11 @@ def get_dynamodb_value(image: dict, key: str, default=None):
 
 def send_cfn_response(event: dict, context, status: str, reason: str = "") -> None:
     """Send response to CloudFormation."""
+    logger.info(f"send_cfn_response called with status={status}")
+
     physical_id = event.get("PhysicalResourceId") or event.get("LogicalResourceId", "BudgetInit")
+    logger.info(f"PhysicalResourceId: {physical_id}")
+
     response_body = {
         "Status": status,
         "Reason": reason or f"See CloudWatch Log Stream: {context.log_stream_name}",
@@ -71,19 +76,31 @@ def send_cfn_response(event: dict, context, status: str, reason: str = "") -> No
     }
 
     body = json.dumps(response_body).encode("utf-8")
+    logger.info(f"Response body: {response_body}")
+
+    response_url = event["ResponseURL"]
+    logger.info(f"ResponseURL: {response_url[:100]}...")  # Truncate for security
 
     req = urllib.request.Request(
-        event["ResponseURL"],
+        response_url,
         data=body,
         method="PUT",
         headers={"Content-Type": "", "Content-Length": len(body)},
     )
+    logger.info("urllib.request.Request created, sending...")
 
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             logger.info(f"CloudFormation response status: {response.status}")
+            logger.info(f"Response headers: {dict(response.headers)}")
+    except urllib.error.URLError as e:
+        logger.error(f"URLError sending response: {e.reason}")
+        raise
+    except urllib.error.HTTPError as e:
+        logger.error(f"HTTPError sending response: {e.code} {e.reason}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to send response to CloudFormation: {e}")
+        logger.error(f"Failed to send response to CloudFormation: {type(e).__name__}: {e}")
         raise
 
 
@@ -118,8 +135,44 @@ def lambda_handler(event: dict, context) -> dict:
     Returns:
         dict with statusCode
     """
-    # Detect CloudFormation custom resource event
+    # CRITICAL: If this is a CloudFormation event, we MUST respond even if we crash
+    # Wrap entire handler in try/except to guarantee response
+    is_cfn_event = "RequestType" in event and "ResponseURL" in event
+
+    try:
+        return _handle_event(event, context)
+    except Exception as e:
+        logger.error(f"Unhandled exception in lambda_handler: {e}", exc_info=True)
+        # If CloudFormation event, send FAILED response so stack doesn't hang
+        if is_cfn_event:
+            try:
+                send_cfn_response(event, context, "FAILED", f"Unhandled error: {str(e)}")
+            except Exception as resp_error:
+                logger.error(f"Failed to send error response to CFN: {resp_error}")
+        return {"statusCode": 500, "error": str(e)}
+
+
+def _handle_event(event: dict, context) -> dict:
+    """Internal handler - separated so we can wrap with global exception handling."""
+    # Log raw event immediately
+    logger.info(f"RAW EVENT: {json.dumps(event, default=str)}")
+    logger.info(f"Event keys: {list(event.keys())}")
+    logger.info(f"RequestType present: {'RequestType' in event}")
+    logger.info(f"ResponseURL present: {'ResponseURL' in event}")
+
+    # Handle CloudFormation DELETE immediately - before anything else can fail
+    if event.get("RequestType") == "Delete":
+        logger.info("DELETE request detected - sending SUCCESS immediately")
+        try:
+            send_cfn_response(event, context, "SUCCESS")
+            logger.info("SUCCESS response sent for DELETE")
+        except Exception as e:
+            logger.error(f"Failed to send DELETE response: {e}", exc_info=True)
+        return {"statusCode": 200}
+
+    # Detect other CloudFormation custom resource events
     if "RequestType" in event and "ResponseURL" in event:
+        logger.info("CloudFormation Create/Update event detected")
         return handle_cfn_event(event, context)
 
     # DynamoDB stream event

@@ -3016,6 +3016,7 @@ Resources:
     Type: Custom::BudgetInit
     Properties:
       ServiceToken: !GetAtt BudgetSyncFunction.Arn
+      ServiceTimeout: 120  # 2 minutes instead of default 1 hour
       # Include a version to trigger on updates if needed
       Version: '1'
       # Pass config to trigger budget creation
@@ -3062,6 +3063,7 @@ Resources:
     Type: Custom::AdminUser
     Properties:
       ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
+      ServiceTimeout: 120  # 2 minutes - user creation is fast
       UserPoolId: !Ref UserPool
       Email: !Ref AdminEmail
 
