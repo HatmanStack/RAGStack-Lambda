@@ -1,4 +1,4 @@
-<img src="ragstack_banner_resized.png" alt="RAGStack-Lambda-app icon">
+<img align="center" src="ragstack_banner_resized.png" alt="RAGStack-Lambda-app icon">
 
 <p align="center">
 <a href="https://www.apache.org/licenses/LICENSE-2.0.html"><img src="https://img.shields.io/badge/license-Apache2.0-blue" alt="Apache 2.0 License" /></a>
