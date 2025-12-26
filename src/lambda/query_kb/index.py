@@ -243,13 +243,140 @@ def store_conversation_turn(
         logger.error(f"Failed to store conversation turn: {e}")
 
 
+def _extract_id_pattern(query: str) -> str | None:
+    """Extract numeric ID pattern from query if present."""
+    import re
+
+    # Look for 10+ digit numbers (typical person/document IDs)
+    match = re.search(r"\b(\d{10,})\b", query)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _augment_with_id_lookup(
+    query: str, retrieval_results: list, tracking_table_name: str | None
+) -> list:
+    """
+    Augment vector search results with DynamoDB filename lookup for ID-based queries.
+
+    If the query contains a numeric ID pattern and vector search didn't find a
+    matching document, fall back to DynamoDB lookup by filename.
+    """
+    if not tracking_table_name:
+        return retrieval_results
+
+    # Extract ID pattern from query
+    id_pattern = _extract_id_pattern(query)
+    if not id_pattern:
+        return retrieval_results
+
+    # Check if any result already matches this ID
+    for result in retrieval_results:
+        location = result.get("location", {})
+        s3_location = location.get("s3Location", {})
+        uri = s3_location.get("uri", "")
+        if id_pattern in uri:
+            logger.info(f"ID {id_pattern} already in results, skipping fallback")
+            return retrieval_results
+
+    # Fallback: Query DynamoDB for document with matching filename
+    logger.info(f"ID {id_pattern} not in vector results, trying DynamoDB fallback")
+
+    try:
+        table = dynamodb.Table(tracking_table_name)
+
+        # Scan for documents with filename containing the ID
+        # Note: Scan is expensive for large tables - consider GSI on filename
+        # We paginate to find matches across the entire table
+        items = []
+        scan_kwargs = {
+            "FilterExpression": "contains(filename, :id)",
+            "ExpressionAttributeValues": {":id": id_pattern},
+            "ProjectionExpression": "document_id, filename, output_s3_uri, input_s3_uri",
+        }
+
+        while len(items) < 3:  # Find up to 3 matching documents
+            response = table.scan(**scan_kwargs)
+            items.extend(response.get("Items", []))
+
+            # Check for more pages
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        if not items:
+            logger.info(f"No document found with ID {id_pattern} in filename")
+            return retrieval_results
+
+        logger.info(f"DynamoDB fallback found {len(items)} documents matching ID {id_pattern}")
+
+        # Add matched documents to results
+        for item in items:
+            filename = item.get("filename", "")
+            doc_type = item.get("type", "")
+            document_id = item.get("document_id", "")
+            output_uri = item.get("output_s3_uri")
+            input_uri = item.get("input_s3_uri")
+
+            # Determine the S3 URI to use for the source
+            # For scraped content (.md), use output_uri (input may be deleted)
+            # For other content, prefer input_uri
+            is_scraped = doc_type == "scraped" or filename.lower().endswith(".md")
+            source_uri = (output_uri or input_uri) if is_scraped else (input_uri or output_uri)
+            if not source_uri:
+                continue
+
+            # For text files, try to read content for context
+            content = ""
+            is_binary = doc_type == "image" or filename.lower().endswith(
+                (".jpg", ".jpeg", ".png", ".gif", ".webp")
+            )
+
+            if not is_binary:
+                # Try to read text content from output (extracted) or input
+                uri_to_read = output_uri or input_uri
+                try:
+                    uri_path = uri_to_read.replace("s3://", "")
+                    parts = uri_path.split("/", 1)
+                    if len(parts) == 2:
+                        bucket, key = parts
+                        s3_response = s3_client.get_object(Bucket=bucket, Key=key)
+                        content = s3_response["Body"].read().decode("utf-8")[:10000]
+                except UnicodeDecodeError:
+                    logger.info(f"Binary file, adding as source only: {filename}")
+                except Exception as e:
+                    logger.warning(f"Could not read content for {filename}: {e}")
+
+            # Add as a retrieval result (always include in sources)
+            fallback_result = {
+                "content": {"text": content or f"[Document: {filename}]"},
+                "location": {
+                    "s3Location": {"uri": source_uri},
+                },
+                "metadata": {
+                    "source": "dynamo_fallback",
+                    "document_id": document_id,
+                    "filename": filename,
+                },
+                "score": 1.0,
+            }
+            retrieval_results.insert(0, fallback_result)
+            logger.info(f"Added fallback result from {filename}")
+
+        return retrieval_results
+
+    except Exception as e:
+        logger.warning(f"DynamoDB fallback lookup failed: {e}")
+        return retrieval_results
+
+
 def build_retrieval_query(current_query, history):
     """
     Build an optimized query for KB retrieval.
 
-    For multi-turn conversations, we expand the current query with key context
-    from conversation history to help disambiguate references (e.g., "it", "that"),
-    but keep it focused for effective retrieval.
+    For queries with explicit IDs/numbers, use as-is (no LLM rewrite needed).
+    For ambiguous queries with pronouns, use LLM to rewrite with context.
 
     Args:
         current_query (str): The user's current question
@@ -258,25 +385,85 @@ def build_retrieval_query(current_query, history):
     Returns:
         str: Query optimized for KB retrieval
     """
+    import re
+
     if not history:
         return current_query
 
-    # Extract key terms from recent conversation to help disambiguate
-    # Focus on the last 2 turns for context
-    recent_context = []
-    for turn in history[-2:]:
-        user_msg = turn.get("userMessage", "")
-        if user_msg:
-            recent_context.append(user_msg)
-
-    if not recent_context:
+    # Fast path: If query has explicit ID (10+ digits), skip LLM rewrite
+    if re.search(r"\b\d{10,}\b", current_query):
+        logger.info("Query has explicit ID, skipping LLM rewrite")
         return current_query
 
-    # Build a retrieval query that includes the current question
-    # plus brief context for disambiguation
-    context_summary = " | ".join(recent_context)
+    # Fast path: If query has no ambiguous pronouns, skip LLM rewrite
+    ambiguous_patterns = r"\b(it|this|that|these|those|he|she|they|him|her|them)\b"
+    if not re.search(ambiguous_patterns, current_query, re.IGNORECASE):
+        logger.info("Query has no ambiguous references, skipping LLM rewrite")
+        return current_query
 
-    return f"{current_query} (context: {context_summary})"
+    # Extract recent conversation context
+    recent_turns = []
+    for turn in history[-3:]:  # Last 3 turns for context
+        user_msg = turn.get("userMessage", "")
+        assistant_msg = turn.get("assistantResponse", "")
+        if user_msg:
+            recent_turns.append(f"User: {user_msg[:200]}")
+        if assistant_msg:
+            recent_turns.append(f"Assistant: {assistant_msg[:200]}")
+
+    if not recent_turns:
+        return current_query
+
+    # Use LLM to intelligently rewrite the query if needed
+    try:
+        rewritten = _rewrite_query_with_llm(current_query, recent_turns)
+        if rewritten and rewritten != current_query:
+            logger.info(f"Query rewritten: '{current_query[:50]}...' -> '{rewritten[:50]}...'")
+        return rewritten or current_query
+    except Exception as e:
+        logger.warning(f"Query rewrite failed, using original: {e}")
+        return current_query
+
+
+def _rewrite_query_with_llm(query: str, context: list[str]) -> str:
+    """
+    Use LLM to rewrite ambiguous queries to be self-contained.
+
+    If the query is already self-contained (specific IDs, names, explicit topics),
+    returns it unchanged. If it has ambiguous references, rewrites it using context.
+    """
+    context_text = "\n".join(context[-6:])  # Limit context size
+
+    prompt = f"""Analyze this search query and conversation context.
+
+QUERY: {query}
+
+RECENT CONVERSATION:
+{context_text}
+
+TASK: If the query is SELF-CONTAINED (has specific IDs, names, filenames, or clear
+topics), return it EXACTLY as-is. If the query has AMBIGUOUS references (pronouns
+like "it", "that", "he", "she", "they", or unclear references), rewrite it to be
+self-contained using the conversation context.
+
+RULES:
+- Do NOT add conversation topics that aren't relevant to the current query
+- Do NOT change specific IDs, numbers, or filenames
+- Keep the rewritten query concise (under 100 words)
+- Return ONLY the query, no explanation
+
+QUERY TO USE FOR SEARCH:"""
+
+    response = bedrock_runtime.converse(
+        modelId="us.anthropic.claude-3-5-haiku-20241022-v1:0",
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": 150, "temperature": 0},
+    )
+
+    result = response.get("output", {}).get("message", {}).get("content", [])
+    if result and "text" in result[0]:
+        return result[0]["text"].strip()
+    return query
 
 
 def build_conversation_messages(current_query, history, retrieved_context):
@@ -538,6 +725,16 @@ def extract_sources(citations):
                     # original_filename will be extracted from frontmatter later
                     logger.info(f"Image structure detected: imageId={document_id}")
 
+                elif len(parts) > 3 and parts[1] == "input":
+                    # Input structure: bucket/input/{docId}/{filename}
+                    document_id = unquote(parts[2])
+                    original_filename = unquote(parts[3]) if len(parts) > 3 else None
+                    input_prefix = "input"
+                    # Check if scraped based on filename
+                    if original_filename and original_filename.endswith(".md"):
+                        is_scraped = True
+                    logger.info(f"Input structure: docId={document_id}, file={original_filename}")
+
                 elif len(parts) > 2 and parts[1] == "output":
                     # Output structure: bucket/output/{docId}/...
                     document_id = unquote(parts[2])
@@ -613,9 +810,14 @@ def extract_sources(citations):
                 else:
                     logger.warning("[SOURCE] TRACKING_TABLE env var not set!")
 
-                # Construct input document URI
-                # Prefer input_s3_uri from tracking table (most reliable)
-                if tracking_input_uri:
+                # Construct document URI
+                # For scraped content, use output URI (input may be deleted after processing)
+                # For other content, prefer input_s3_uri from tracking table
+                if is_scraped:
+                    # Scraped content: use the output full_text.txt or the KB citation URI
+                    document_s3_uri = uri  # KB citation already points to output
+                    logger.info(f"[SOURCE] Scraped content, using KB URI: {document_s3_uri}")
+                elif tracking_input_uri:
                     document_s3_uri = tracking_input_uri
                     logger.info(f"[SOURCE] Using tracking input_s3_uri: {document_s3_uri}")
                 elif original_filename and len(original_filename) > 0:
@@ -967,6 +1169,12 @@ def lambda_handler(event, context):
             retrieval_results = retrieve_response.get("retrievalResults", [])
 
         logger.info(f"Retrieved {len(retrieval_results)} total results from KB")
+
+        # Fallback: If query contains an ID pattern, try DynamoDB filename lookup
+        tracking_table = os.environ.get("TRACKING_TABLE")
+        retrieval_results = _augment_with_id_lookup(
+            retrieval_query, retrieval_results, tracking_table
+        )
 
         # Build context from retrieved documents
         retrieved_chunks = []
