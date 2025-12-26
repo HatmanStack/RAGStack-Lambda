@@ -2140,26 +2140,6 @@ Resources:
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
 
-  # AdminUser temporarily removed - user already exists in Cognito
-  # The previous DeletionPolicy: Retain kept the user, but CloudFormation
-  # tries to create a new one which conflicts. User management now handled
-  # directly in Cognito console.
-  #
-  # AdminUser:
-  #   Type: AWS::Cognito::UserPoolUser
-  #   UpdateReplacePolicy: Retain
-  #   DeletionPolicy: Retain
-  #   Properties:
-  #     UserPoolId: !Ref UserPool
-  #     Username: !Ref AdminEmail
-  #     UserAttributes:
-  #       - Name: email
-  #         Value: !Ref AdminEmail
-  #       - Name: email_verified
-  #         Value: 'true'
-  #     DesiredDeliveryMediums:
-  #       - EMAIL
-
   # =========================================================================
   # AppSync GraphQL API
   # =========================================================================
@@ -3036,47 +3016,8 @@ Resources:
         - !Ref AlarmTopic
 
   # =========================================================================
-  # Cost Management - Monthly Budget
-  # =========================================================================
-  # MonthlyBudget temporarily removed due to persistent "same name different
-  # internalId" conflicts during CloudFormation updates. Budget is managed
-  # via BudgetSyncFunction instead.
-  #
-  # MonthlyBudget:
-  #   Type: AWS::Budgets::Budget
-  #   UpdateReplacePolicy: Delete
-  #   DeletionPolicy: Delete
-  #   Properties:
-  #     Budget:
-  #       BudgetName: !Sub '${ProjectName}-Monthly-Budget'
-  #       BudgetLimit:
-  #         Amount: 100
-  #         Unit: USD
-  #       TimeUnit: MONTHLY
-  #       BudgetType: COST
-  #       CostFilters:
-  #         TagKeyValue:
-  #           - !Sub 'user:Project$${ProjectName}'
-  #     NotificationsWithSubscribers:
-  #       - Notification:
-  #           NotificationType: ACTUAL
-  #           ComparisonOperator: GREATER_THAN
-  #           Threshold: 80
-  #           ThresholdType: PERCENTAGE
-  #         Subscribers:
-  #           - SubscriptionType: EMAIL
-  #             Address: !Ref AdminEmail
-  #       - Notification:
-  #           NotificationType: FORECASTED
-  #           ComparisonOperator: GREATER_THAN
-  #           Threshold: 100
-  #           ThresholdType: PERCENTAGE
-  #         Subscribers:
-  #           - SubscriptionType: EMAIL
-  #             Address: !Ref AdminEmail
-
-  # =========================================================================
-  # Budget Sync Function - Syncs config changes to AWS Budgets
+  # Budget Sync Function - Creates and syncs budget via Lambda
+  # (Avoids CloudFormation "same name different internalId" conflicts)
   # =========================================================================
 
   BudgetSyncFunction:
@@ -3112,10 +3053,65 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - budgets:CreateBudget
                 - budgets:ModifyBudget
                 - budgets:DescribeBudget
                 - budgets:UpdateBudget
               Resource: '*'
+
+  # Custom resource to trigger budget creation on initial deployment
+  BudgetInitTrigger:
+    Type: Custom::BudgetInit
+    Properties:
+      ServiceToken: !GetAtt BudgetSyncFunction.Arn
+      # Include a version to trigger on updates if needed
+      Version: '1'
+      # Pass config to trigger budget creation
+      Records:
+        - eventName: INSERT
+          dynamodb:
+            Keys:
+              Configuration:
+                S: Custom
+            NewImage:
+              Configuration:
+                S: Custom
+              budget_alert_threshold:
+                N: '100'
+              budget_alert_enabled:
+                BOOL: true
+
+  # =========================================================================
+  # Admin User Provisioner - Creates admin user idempotently
+  # =========================================================================
+
+  AdminUserProvisionerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-admin-provisioner-${DeploymentSuffix}'
+      CodeUri: src/lambda/admin_user_provisioner/
+      Handler: index.lambda_handler
+      Description: Creates admin user in Cognito idempotently (skips if exists)
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminCreateUser
+              Resource: !GetAtt UserPool.Arn
+
+  AdminUser:
+    Type: Custom::AdminUser
+    Properties:
+      ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
+      UserPoolId: !Ref UserPool
+      Email: !Ref AdminEmail
 
 Outputs:
   # S3 Buckets
