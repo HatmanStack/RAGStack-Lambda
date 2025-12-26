@@ -10,7 +10,7 @@ npm install
 cd src/ui && npm install && cd ../..
 
 # Verify everything works
-npm run test:all    # Lint + test
+npm run check       # Lint + test
 ```
 
 ## Commands
@@ -22,7 +22,7 @@ npm test                        # Run all unit tests (~3s)
 npm run test:backend            # Python unit tests only (~1s)
 npm run test:frontend           # React tests only (~2s)
 npm run test:coverage           # Full coverage reports
-npm run test:all                # Lint + all tests (recommended pre-commit)
+npm run check                   # Lint + all tests (recommended pre-commit)
 
 # Individual tests
 uv run pytest tests/unit/test_config.py -v                    # Single Python test
