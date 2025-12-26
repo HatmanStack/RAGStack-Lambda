@@ -92,7 +92,8 @@ def lambda_handler(event, context):
     )
     logger.info(f"Initialized batch tracking: {total_batches} batches")
 
-    # Send batch messages to SQS
+    # Send batch messages to SQS (in batches of 10, the SQS limit)
+    entries = []
     for i, batch in enumerate(batches):
         message_body = {
             "document_id": document_id,
@@ -104,11 +105,19 @@ def lambda_handler(event, context):
             "total_batches": total_batches,
             "total_pages": total_pages,
         }
-
-        sqs.send_message(
-            QueueUrl=batch_queue_url,
-            MessageBody=json.dumps(message_body),
+        entries.append(
+            {
+                "Id": str(i),
+                "MessageBody": json.dumps(message_body),
+            }
         )
+
+        if len(entries) == 10:
+            sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
+            entries = []
+
+    if entries:  # Send remaining
+        sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")
 

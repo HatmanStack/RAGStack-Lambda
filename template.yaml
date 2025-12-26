@@ -1013,7 +1013,10 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: '*'
+              Resource:
+                # Wildcard regions needed: inference profiles route to any region
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
             - Effect: Allow
               Action:
                 - textract:DetectDocumentText

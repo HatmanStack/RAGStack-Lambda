@@ -93,7 +93,7 @@
       },
       "Retry": [
         {
-          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException", "Lambda.SdkClientException"],
           "IntervalSeconds": 2,
           "MaxAttempts": 2,
           "BackoffRate": 2.0

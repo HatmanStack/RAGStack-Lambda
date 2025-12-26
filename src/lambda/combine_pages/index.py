@@ -35,19 +35,10 @@ import boto3
 
 from ragstack_common.appsync import publish_document_update
 from ragstack_common.models import Status
-from ragstack_common.storage import delete_s3_object, read_s3_text, write_s3_text
+from ragstack_common.storage import delete_s3_object, parse_s3_uri, read_s3_text, write_s3_text
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]
-    bucket, key = path.split("/", 1)
-    return bucket, key
 
 
 def _list_partial_files(output_s3_prefix: str) -> list[dict]:
@@ -56,31 +47,42 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict]:
 
     Returns list of dicts with page_start, page_end, and partial_output_uri.
     """
-    bucket, prefix = _parse_s3_uri(output_s3_prefix)
+    bucket, prefix = parse_s3_uri(output_s3_prefix)
     if not prefix.endswith("/"):
         prefix += "/"
 
     s3 = boto3.client("s3")
 
-    # List objects with the prefix
-    response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
-
+    # List objects with pagination (handles >1000 objects)
     partial_files = []
     pattern = re.compile(r"pages_(\d+)-(\d+)\.txt$")
+    continuation_token = None
 
-    for obj in response.get("Contents", []):
-        key = obj["Key"]
-        match = pattern.search(key)
-        if match:
-            page_start = int(match.group(1))
-            page_end = int(match.group(2))
-            partial_files.append(
-                {
-                    "page_start": page_start,
-                    "page_end": page_end,
-                    "partial_output_uri": f"s3://{bucket}/{key}",
-                }
-            )
+    while True:
+        list_kwargs = {"Bucket": bucket, "Prefix": prefix}
+        if continuation_token:
+            list_kwargs["ContinuationToken"] = continuation_token
+
+        response = s3.list_objects_v2(**list_kwargs)
+
+        for obj in response.get("Contents", []):
+            key = obj["Key"]
+            match = pattern.search(key)
+            if match:
+                page_start = int(match.group(1))
+                page_end = int(match.group(2))
+                partial_files.append(
+                    {
+                        "page_start": page_start,
+                        "page_end": page_end,
+                        "partial_output_uri": f"s3://{bucket}/{key}",
+                    }
+                )
+
+        if response.get("IsTruncated"):
+            continuation_token = response.get("NextContinuationToken")
+        else:
+            break
 
     # Sort by page_start
     partial_files.sort(key=lambda x: x["page_start"])
@@ -174,7 +176,7 @@ def lambda_handler(event, context):
             raise
 
     # Write combined output
-    bucket, base_key = _parse_s3_uri(output_s3_prefix)
+    bucket, base_key = parse_s3_uri(output_s3_prefix)
     if not base_key.endswith("/"):
         base_key += "/"
     output_key = f"{base_key}extracted_text.txt"

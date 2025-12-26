@@ -37,6 +37,7 @@ import boto3
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.models import Document, Status
 from ragstack_common.ocr import OcrService
+from ragstack_common.storage import parse_s3_uri
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -54,15 +55,6 @@ def _get_config_manager():
     if _config_manager is None:
         _config_manager = ConfigurationManager()
     return _config_manager
-
-
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]
-    bucket, key = path.split("/", 1)
-    return bucket, key
 
 
 def _process_batch(
@@ -89,7 +81,7 @@ def _process_batch(
     logger.info(f"Using OCR backend: {ocr_backend}")
 
     # Get filename from input URI
-    _, key = _parse_s3_uri(input_s3_uri)
+    _, key = parse_s3_uri(input_s3_uri)
     filename = key.split("/")[-1]
 
     # Create Document object with page range

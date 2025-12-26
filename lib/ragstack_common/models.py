@@ -71,6 +71,8 @@ class Document:
         metadata: Additional metadata (file size, etc.)
         page_start: Starting page for batch processing (1-indexed, inclusive)
         page_end: Ending page for batch processing (1-indexed, inclusive)
+        pages_succeeded: Count of successfully processed pages in batch
+        pages_failed: Count of failed pages in batch
     """
 
     document_id: str
