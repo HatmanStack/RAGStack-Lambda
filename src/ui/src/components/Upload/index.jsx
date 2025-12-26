@@ -14,8 +14,8 @@ import { ApiDocs } from '../common/ApiDocs';
 
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
-// Document mutations
-const docMutation = `mutation CreateUploadUrl($filename: String!) {
+// Document examples
+const docGraphql = `mutation CreateUploadUrl($filename: String!) {
   createUploadUrl(filename: $filename) {
     uploadUrl, documentId, fields
   }
@@ -35,23 +35,30 @@ Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
 form.append('file', file);
 await fetch(uploadUrl, { method: 'POST', body: form });`;
 
-// Image mutations (with captions)
-const imgUrlMutation = `mutation CreateImageUploadUrl($filename: String!) {
+const docCurlExample = `# Step 1: Get presigned URL
+curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{"query": "mutation { createUploadUrl(filename: \\"doc.pdf\\") { uploadUrl, documentId, fields } }"}'
+
+# Step 2: Upload file using uploadUrl and fields from response`;
+
+// Image examples (manual caption workflow)
+const imgGraphql = `# Step 1: Get upload URL
+mutation CreateImageUploadUrl($filename: String!) {
   createImageUploadUrl(filename: $filename) {
     uploadUrl, imageId, s3Uri, fields
   }
-}`;
+}
 
-const imgSubmitMutation = `mutation SubmitImage($input: SubmitImageInput!) {
-  submitImage(input: $input) {
-    imageId, filename, status
-  }
-}`;
+# Step 2: Generate AI caption (optional)
+mutation GenerateCaption($imageS3Uri: String!) {
+  generateCaption(imageS3Uri: $imageS3Uri) { caption }
+}
 
-const imgCaptionMutation = `mutation GenerateCaption($imageS3Uri: String!) {
-  generateCaption(imageS3Uri: $imageS3Uri) {
-    caption
-  }
+# Step 3: Submit with caption
+mutation SubmitImage($input: SubmitImageInput!) {
+  submitImage(input: $input) { imageId, filename, status }
 }`;
 
 const imgJsExample = `// 1. Get presigned URL
@@ -86,8 +93,16 @@ await fetch(ENDPOINT, {
   })
 });`;
 
-// ZIP archive mutations
-const zipMutation = `mutation CreateZipUploadUrl($generateCaptions: Boolean) {
+const imgCurlExample = `# Step 1: Get upload URL
+curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{"query": "mutation { createImageUploadUrl(filename: \\"photo.jpg\\") { uploadUrl, imageId, s3Uri, fields } }"}'
+
+# Step 2: Upload file, then call generateCaption and submitImage`;
+
+// ZIP archive examples
+const zipGraphql = `mutation CreateZipUploadUrl($generateCaptions: Boolean) {
   createZipUploadUrl(generateCaptions: $generateCaptions) {
     uploadUrl, uploadId, fields
   }
@@ -112,32 +127,40 @@ await fetch(uploadUrl, { method: 'POST', body: form });
 
 // Images are extracted and processed automatically`;
 
-// Examples config per tab
+const zipCurlExample = `curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{"query": "mutation { createZipUploadUrl(generateCaptions: true) { uploadUrl, uploadId, fields } }"}'
+
+# Then upload ZIP file using uploadUrl and fields from response`;
+
+// Examples config per tab (consistent: GraphQL → JavaScript → cURL)
 const apiExamples = {
   documents: {
     title: 'Document Upload API',
     description: 'Get presigned URL, upload to S3. Supports PDF, DOCX, TXT, HTML, MD.',
     examples: [
-      { id: 'mutation', label: 'GraphQL', code: docMutation },
+      { id: 'graphql', label: 'GraphQL', code: docGraphql },
       { id: 'js', label: 'JavaScript', code: docJsExample },
+      { id: 'curl', label: 'cURL', code: docCurlExample },
     ],
   },
   images: {
     title: 'Image Upload API',
     description: 'Upload image, generate AI caption, then submit. Supports JPG, PNG, GIF, WEBP.',
     examples: [
-      { id: 'url', label: 'Get URL', code: imgUrlMutation },
-      { id: 'caption', label: 'Generate Caption', code: imgCaptionMutation },
-      { id: 'submit', label: 'Submit', code: imgSubmitMutation },
+      { id: 'graphql', label: 'GraphQL', code: imgGraphql },
       { id: 'js', label: 'JavaScript', code: imgJsExample },
+      { id: 'curl', label: 'cURL', code: imgCurlExample },
     ],
   },
   archive: {
     title: 'Image Archive Upload API',
     description: 'Upload ZIP of images for batch processing. Optional AI caption generation.',
     examples: [
-      { id: 'mutation', label: 'GraphQL', code: zipMutation },
+      { id: 'graphql', label: 'GraphQL', code: zipGraphql },
       { id: 'js', label: 'JavaScript', code: zipJsExample },
+      { id: 'curl', label: 'cURL', code: zipCurlExample },
     ],
   },
 };

@@ -7,17 +7,19 @@ import { ApiDocs } from '../common/ApiDocs';
 
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
-const startMutation = `mutation StartScrape($input: StartScrapeInput!) {
+const graphqlExample = `# Start a scrape job
+mutation StartScrape($input: StartScrapeInput!) {
   startScrape(input: $input) { jobId, status }
-}`;
+}
 
-const statusQuery = `query GetScrapeJob($jobId: ID!) {
+# Check job status
+query GetScrapeJob($jobId: ID!) {
   getScrapeJob(jobId: $jobId) {
     job { status, processedCount, totalUrls }
   }
 }`;
 
-const jsExample = `// Basic scrape
+const jsExample = `// Start scrape job
 const res = await fetch(ENDPOINT, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
@@ -38,6 +40,20 @@ const res = await fetch(ENDPOINT, {
   })
 });
 const { jobId } = (await res.json()).data.startScrape;`;
+
+const curlExample = `curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{
+    "query": "mutation StartScrape($input: StartScrapeInput!) { startScrape(input: $input) { jobId, status } }",
+    "variables": {
+      "input": {
+        "url": "https://docs.example.com",
+        "maxPages": 100,
+        "scope": "HOSTNAME"
+      }
+    }
+  }'`;
 
 export const Scrape = () => {
   const navigate = useNavigate();
@@ -117,9 +133,9 @@ export const Scrape = () => {
           description="Start scrapes programmatically. Configure maxPages, maxDepth, scope (SUBPAGES|HOSTNAME|DOMAIN), include/exclude patterns, and scrapeMode (AUTO|FAST|FULL)."
           endpoint={graphqlEndpoint}
           examples={[
-            { id: 'start', label: 'Start', code: startMutation },
-            { id: 'status', label: 'Status', code: statusQuery },
+            { id: 'graphql', label: 'GraphQL', code: graphqlExample },
             { id: 'js', label: 'JavaScript', code: jsExample },
+            { id: 'curl', label: 'cURL', code: curlExample },
           ]}
         />
       )}
