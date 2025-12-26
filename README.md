@@ -143,19 +143,12 @@ Ask questions about your content. Sources show where answers came from.
 - [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
+- [Library Reference](docs/LIBRARY_REFERENCE.md) - Public API for lib/ragstack_common
 
-## Local Development
+## Development
 
-Setup (one time):
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-Run tests:
-```bash
-python test.py
+npm run check  # Lint + test all (backend + frontend)
 ```
 
 ## Deployment Options
