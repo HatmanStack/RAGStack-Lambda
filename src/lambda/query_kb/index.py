@@ -41,10 +41,12 @@ from botocore.exceptions import ClientError
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 
-# Initialize AWS clients
+# Initialize AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 dynamodb_client = boto3.client("dynamodb")
+bedrock_agent = boto3.client("bedrock-agent-runtime")
+bedrock_runtime = boto3.client("bedrock-runtime")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -795,7 +797,6 @@ def lambda_handler(event, context):
             "error": "KNOWLEDGE_BASE_ID environment variable is required",
         }
 
-    bedrock_agent = boto3.client("bedrock-agent-runtime")
     region = os.environ.get("AWS_REGION", "us-east-1")
 
     # Get AWS account ID from context
@@ -997,8 +998,6 @@ def lambda_handler(event, context):
         sources = extract_sources(citations)
 
         # STEP 2: Generate response using Converse API with conversation history
-        bedrock_runtime = boto3.client("bedrock-runtime", region_name=region)
-
         # Build messages with conversation history and retrieved context
         messages = build_conversation_messages(query, history, retrieved_context)
 

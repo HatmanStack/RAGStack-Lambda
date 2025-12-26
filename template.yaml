@@ -1206,7 +1206,7 @@ Resources:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
       Timeout: 60  # 1 minute for chat responses
-      MemorySize: 512  # Moderate - conversation handling + Bedrock calls
+      MemorySize: 1769  # 1 full vCPU for CPU-bound chat response generation
       # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:

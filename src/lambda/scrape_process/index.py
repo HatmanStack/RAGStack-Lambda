@@ -38,6 +38,10 @@ from ragstack_common.scraper.models import ScrapeConfig
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
+# Module-level AWS clients (reused across warm invocations)
+dynamodb = boto3.resource("dynamodb")
+s3 = boto3.client("s3")
+
 
 def sanitize_for_s3_metadata(value: str, max_length: int = 256) -> str:
     """Sanitize a string for S3 metadata (ASCII only, limited length)."""
@@ -67,10 +71,8 @@ def lambda_handler(event, context):
     if not data_bucket:
         raise ValueError("DATA_BUCKET environment variable required")
 
-    dynamodb = boto3.resource("dynamodb")
     jobs_tbl = dynamodb.Table(jobs_table)
     urls_tbl = dynamodb.Table(urls_table)
-    s3 = boto3.client("s3")
 
     # Initialize deduplication service
     dedup = DeduplicationService(urls_table)

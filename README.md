@@ -166,3 +166,10 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 ```
 
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
+
+## Acknowledgments
+
+This project was inspired by:
+
+- [Accelerated Intelligent Document Processing on AWS](https://github.com/aws-solutions-library-samples/accelerated-intelligent-document-processing-on-aws) - AWS Solutions Library reference architecture
+- [docs-mcp-server](https://github.com/arabold/docs-mcp-server) - MCP server for documentation search
