@@ -166,7 +166,3 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 ```
 
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
-
-## License
-
-MIT

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Setup configuration for ragstack_common package.
@@ -33,11 +33,11 @@ setup(
         "lxml>=5.0.0",
     ],
     author="Development Team",
-    license="MIT-0",
+    license="Apache-2.0",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
