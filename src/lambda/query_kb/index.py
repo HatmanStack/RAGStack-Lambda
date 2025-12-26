@@ -898,19 +898,74 @@ def lambda_handler(event, context):
         retrieval_query = build_retrieval_query(query, history)
         logger.info(f"Retrieval query: {retrieval_query[:100]}...")
 
-        retrieve_response = bedrock_agent.retrieve(
-            knowledgeBaseId=knowledge_base_id,
-            retrievalQuery={"text": retrieval_query},
-            retrievalConfiguration={
-                "vectorSearchConfiguration": {
-                    "numberOfResults": 5,  # Get top 5 relevant chunks
-                }
-            },
-        )
+        # Get data source IDs for separate queries (text vs images)
+        text_data_source_id = os.environ.get("TEXT_DATA_SOURCE_ID")
+        image_data_source_id = os.environ.get("IMAGE_DATA_SOURCE_ID")
 
-        # Extract retrieved results and build context
-        retrieval_results = retrieve_response.get("retrievalResults", [])
-        logger.info(f"Retrieved {len(retrieval_results)} results from KB")
+        retrieval_results = []
+
+        # Query text data source if configured
+        if text_data_source_id:
+            try:
+                text_response = bedrock_agent.retrieve(
+                    knowledgeBaseId=knowledge_base_id,
+                    retrievalQuery={"text": retrieval_query},
+                    retrievalConfiguration={
+                        "vectorSearchConfiguration": {
+                            "numberOfResults": 5,
+                            "filter": {
+                                "equals": {
+                                    "key": "x-amz-bedrock-kb-data-source-id",
+                                    "value": text_data_source_id,
+                                }
+                            },
+                        }
+                    },
+                )
+                text_results = text_response.get("retrievalResults", [])
+                logger.info(f"Retrieved {len(text_results)} text results")
+                retrieval_results.extend(text_results)
+            except Exception as e:
+                logger.warning(f"Text retrieval failed: {e}")
+
+        # Query image data source if configured
+        if image_data_source_id:
+            try:
+                image_response = bedrock_agent.retrieve(
+                    knowledgeBaseId=knowledge_base_id,
+                    retrievalQuery={"text": retrieval_query},
+                    retrievalConfiguration={
+                        "vectorSearchConfiguration": {
+                            "numberOfResults": 5,
+                            "filter": {
+                                "equals": {
+                                    "key": "x-amz-bedrock-kb-data-source-id",
+                                    "value": image_data_source_id,
+                                }
+                            },
+                        }
+                    },
+                )
+                image_results = image_response.get("retrievalResults", [])
+                logger.info(f"Retrieved {len(image_results)} image results")
+                retrieval_results.extend(image_results)
+            except Exception as e:
+                logger.warning(f"Image retrieval failed: {e}")
+
+        # Fallback: unfiltered query if no data source IDs configured
+        if not text_data_source_id and not image_data_source_id:
+            retrieve_response = bedrock_agent.retrieve(
+                knowledgeBaseId=knowledge_base_id,
+                retrievalQuery={"text": retrieval_query},
+                retrievalConfiguration={
+                    "vectorSearchConfiguration": {
+                        "numberOfResults": 5,
+                    }
+                },
+            )
+            retrieval_results = retrieve_response.get("retrievalResults", [])
+
+        logger.info(f"Retrieved {len(retrieval_results)} total results from KB")
 
         # Build context from retrieved documents
         retrieved_chunks = []

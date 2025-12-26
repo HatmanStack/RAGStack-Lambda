@@ -1,12 +1,16 @@
 """Sync budget configuration changes to AWS Budgets.
 
-This Lambda is triggered by DynamoDB Streams when the ConfigurationTable
-'Custom' item is modified. It updates the AWS Budget threshold based on
-the budget_alert_threshold and budget_alert_enabled config values.
+This Lambda is triggered by:
+1. DynamoDB Streams when ConfigurationTable 'Custom' item is modified
+2. CloudFormation custom resource on stack create/update (initial budget creation)
+
+It updates/creates the AWS Budget based on configuration.
 """
 
+import json
 import logging
 import os
+import urllib.request
 from decimal import Decimal
 
 import boto3
@@ -54,16 +58,71 @@ def get_dynamodb_value(image: dict, key: str, default=None):
     return default
 
 
+def send_cfn_response(event: dict, context, status: str, reason: str = "") -> None:
+    """Send response to CloudFormation."""
+    physical_id = event.get("PhysicalResourceId") or event.get("LogicalResourceId", "BudgetInit")
+    response_body = {
+        "Status": status,
+        "Reason": reason or f"See CloudWatch Log Stream: {context.log_stream_name}",
+        "PhysicalResourceId": physical_id,
+        "StackId": event["StackId"],
+        "RequestId": event["RequestId"],
+        "LogicalResourceId": event["LogicalResourceId"],
+    }
+
+    body = json.dumps(response_body).encode("utf-8")
+
+    req = urllib.request.Request(
+        event["ResponseURL"],
+        data=body,
+        method="PUT",
+        headers={"Content-Type": "", "Content-Length": len(body)},
+    )
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            logger.info(f"CloudFormation response status: {response.status}")
+    except Exception as e:
+        logger.error(f"Failed to send response to CloudFormation: {e}")
+        raise
+
+
+def handle_cfn_event(event: dict, context) -> dict:
+    """Handle CloudFormation custom resource event."""
+    request_type = event.get("RequestType")
+    logger.info(f"CloudFormation {request_type} request")
+
+    try:
+        if request_type in ("Create", "Update"):
+            # Get records from ResourceProperties (simulated DynamoDB event)
+            records = event.get("ResourceProperties", {}).get("Records", [])
+            for record in records:
+                process_record(record)
+        # Delete: nothing to do (budget persists)
+
+        send_cfn_response(event, context, "SUCCESS")
+    except Exception as e:
+        logger.error(f"CloudFormation handler error: {e}", exc_info=True)
+        send_cfn_response(event, context, "FAILED", str(e))
+
+    return {"statusCode": 200}
+
+
 def lambda_handler(event: dict, context) -> dict:
-    """Process DynamoDB stream events and sync budget configuration.
+    """Process DynamoDB stream events or CloudFormation custom resource events.
 
     Args:
-        event: DynamoDB stream event with Records
+        event: DynamoDB stream event with Records OR CloudFormation custom resource event
         context: Lambda context
 
     Returns:
         dict with statusCode
     """
+    # Detect CloudFormation custom resource event
+    if "RequestType" in event and "ResponseURL" in event:
+        return handle_cfn_event(event, context)
+
+    # DynamoDB stream event
     logger.info(f"Processing {len(event.get('Records', []))} records")
 
     for record in event.get("Records", []):
@@ -123,8 +182,52 @@ def process_record(record: dict) -> None:
         update_budget(999999)
 
 
+def create_budget(threshold: float) -> None:
+    """Create AWS Budget with notifications.
+
+    Args:
+        threshold: Budget limit in USD
+    """
+    account_id = get_account_id()
+
+    logger.info(f"Creating budget '{BUDGET_NAME}' with ${threshold} limit")
+
+    budgets.create_budget(
+        AccountId=account_id,
+        Budget={
+            "BudgetName": BUDGET_NAME,
+            "BudgetLimit": {"Amount": str(threshold), "Unit": "USD"},
+            "TimeUnit": "MONTHLY",
+            "BudgetType": "COST",
+            "CostFilters": {"TagKeyValue": [f"user:Project${PROJECT_NAME}"]},
+        },
+        NotificationsWithSubscribers=[
+            {
+                "Notification": {
+                    "NotificationType": "ACTUAL",
+                    "ComparisonOperator": "GREATER_THAN",
+                    "Threshold": 80,
+                    "ThresholdType": "PERCENTAGE",
+                },
+                "Subscribers": [{"SubscriptionType": "EMAIL", "Address": ADMIN_EMAIL}],
+            },
+            {
+                "Notification": {
+                    "NotificationType": "FORECASTED",
+                    "ComparisonOperator": "GREATER_THAN",
+                    "Threshold": 100,
+                    "ThresholdType": "PERCENTAGE",
+                },
+                "Subscribers": [{"SubscriptionType": "EMAIL", "Address": ADMIN_EMAIL}],
+            },
+        ],
+    )
+
+    logger.info(f"Successfully created budget '{BUDGET_NAME}'")
+
+
 def update_budget(threshold: float) -> None:
-    """Update the AWS Budget with new threshold.
+    """Update the AWS Budget with new threshold, creating if it doesn't exist.
 
     Args:
         threshold: New budget limit in USD
@@ -155,7 +258,9 @@ def update_budget(threshold: float) -> None:
         logger.info(f"Successfully updated budget to ${threshold}")
 
     except budgets.exceptions.NotFoundException:
-        logger.warning(f"Budget '{BUDGET_NAME}' not found - skipping update")
+        # Budget doesn't exist - create it
+        logger.info(f"Budget '{BUDGET_NAME}' not found - creating it")
+        create_budget(threshold)
     except Exception as e:
         logger.error(f"Failed to update budget: {e}", exc_info=True)
         raise

@@ -114,9 +114,10 @@ initChat();
                             {basicEmbed}
                           </code>
                           <CopyToClipboard
-                            copyText={basicEmbed}
+                            textToCopy={basicEmbed}
                             copyButtonText="Copy"
                             copySuccessText="Copied!"
+                            copyErrorText="Failed to copy"
                             variant="inline"
                           />
                         </SpaceBetween>
@@ -147,9 +148,10 @@ initChat();
                             {authEmbed}
                           </code>
                           <CopyToClipboard
-                            copyText={authEmbed}
+                            textToCopy={authEmbed}
                             copyButtonText="Copy"
                             copySuccessText="Copied!"
+                            copyErrorText="Failed to copy"
                             variant="inline"
                           />
                         </SpaceBetween>

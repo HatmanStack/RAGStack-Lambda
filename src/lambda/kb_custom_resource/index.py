@@ -95,11 +95,31 @@ def get_knowledge_base_attributes(kb_id):
         kb = kb_response["knowledgeBase"]
         kb_arn = kb["knowledgeBaseArn"]
 
-        # Get data source ID
+        # Get data source IDs - identify by inclusion prefix
         ds_response = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
-        data_source_id = ""
-        if ds_response.get("dataSourceSummaries"):
-            data_source_id = ds_response["dataSourceSummaries"][0]["dataSourceId"]
+        text_data_source_id = ""
+        image_data_source_id = ""
+
+        for ds_summary in ds_response.get("dataSourceSummaries", []):
+            ds_id = ds_summary["dataSourceId"]
+            # Get full data source details to check prefix
+            try:
+                ds_detail = bedrock_agent.get_data_source(knowledgeBaseId=kb_id, dataSourceId=ds_id)
+                ds_config = ds_detail.get("dataSource", {}).get("dataSourceConfiguration", {})
+                s3_config = ds_config.get("s3Configuration", {})
+                prefixes = s3_config.get("inclusionPrefixes", [])
+
+                if "output/" in prefixes:
+                    text_data_source_id = ds_id
+                elif "images/" in prefixes:
+                    image_data_source_id = ds_id
+            except Exception as e:
+                logger.warning(f"Could not get details for data source {ds_id}: {e}")
+                # Fallback: first one is text, second is images
+                if not text_data_source_id:
+                    text_data_source_id = ds_id
+                elif not image_data_source_id:
+                    image_data_source_id = ds_id
 
         # Get index ARN from storage config
         index_arn = ""
@@ -110,7 +130,9 @@ def get_knowledge_base_attributes(kb_id):
         return {
             "KnowledgeBaseId": kb_id,
             "KnowledgeBaseArn": kb_arn,
-            "DataSourceId": data_source_id,
+            "DataSourceId": text_data_source_id,  # Backwards compatible
+            "TextDataSourceId": text_data_source_id,  # output/ prefix
+            "ImageDataSourceId": image_data_source_id,  # images/ prefix
             "IndexArn": index_arn,
         }
     except Exception as e:
@@ -252,7 +274,10 @@ def create_knowledge_base(properties):
         }
     }
 
-    data_source_id = None
+    # Track both data source IDs separately
+    text_data_source_id = None  # output/ prefix for text documents
+    image_data_source_id = None  # images/ prefix for images
+
     for prefix, suffix in [("output/", ""), ("images/", "-images")]:
         ds_name = f"{kb_name}-datasource{suffix}"
         logger.info(f"Creating Data Source: {ds_name} for bucket {data_bucket}/{prefix}")
@@ -274,13 +299,19 @@ def create_knowledge_base(properties):
             )
 
             ds_id = ds_response["dataSource"]["dataSourceId"]
-            logger.info(f"Created Data Source: {ds_id}")
-            # Keep first data source ID for backwards compatibility
-            if data_source_id is None:
-                data_source_id = ds_id
+            logger.info(f"Created Data Source: {ds_id} for {prefix}")
+
+            # Track each data source ID separately
+            if prefix == "output/":
+                text_data_source_id = ds_id
+            elif prefix == "images/":
+                image_data_source_id = ds_id
         except Exception as e:
             logger.error(f"Failed to create Data Source for {prefix}: {e}")
             raise
+
+    # For backwards compatibility, DataSourceId points to text data source
+    data_source_id = text_data_source_id
 
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "default")
@@ -304,7 +335,9 @@ def create_knowledge_base(properties):
     return {
         "KnowledgeBaseId": kb_id,
         "KnowledgeBaseArn": kb_arn,
-        "DataSourceId": data_source_id,
+        "DataSourceId": data_source_id,  # Backwards compatible (text data source)
+        "TextDataSourceId": text_data_source_id,  # output/ prefix
+        "ImageDataSourceId": image_data_source_id,  # images/ prefix
         "IndexArn": index_arn,
     }
 

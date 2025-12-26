@@ -855,6 +855,182 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
+  GetPageInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-getpageinfo-${DeploymentSuffix}'
+      CodeUri: src/lambda/get_page_info/
+      Handler: index.lambda_handler
+      Description: Count PDF pages and determine processing strategy
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 120  # 2 minutes to download and count pages
+      MemorySize: 512  # Needs memory for PDF parsing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+
+  CombinePagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-combinepages-${DeploymentSuffix}'
+      CodeUri: src/lambda/combine_pages/
+      Handler: index.lambda_handler
+      Description: Combine partial text files from batch processing
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for large doc concatenation
+      MemorySize: 1024  # Needs memory for string concatenation
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt IngestToKBFunction.Arn
+
+  QueueProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-queue-processor-${DeploymentSuffix}'
+      CodeUri: src/lambda/queue_processor/
+      Handler: index.lambda_handler
+      Description: Process SQS messages to start Step Functions executions
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      ReservedConcurrentExecutions: 3  # Limit concurrent large doc processing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !GetAtt ProcessingStateMachine.Name
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentProcessingQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  EnqueueBatchesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-enqueue-batches-${DeploymentSuffix}'
+      CodeUri: src/lambda/enqueue_batches/
+      Handler: index.lambda_handler
+      Description: Queue individual batches to SQS for rate-limited processing
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          BATCH_QUEUE_URL: !Ref BatchProcessingQueue
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt BatchProcessingQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
+  BatchProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-batch-processor-${DeploymentSuffix}'
+      CodeUri: src/lambda/batch_processor/
+      Handler: index.lambda_handler
+      Description: Process individual 10-page batches with global rate limiting
+      Runtime: python3.13
+      Timeout: 900  # 15 minutes per batch
+      MemorySize: 3008  # Same as ProcessDocument for OCR workload
+      ReservedConcurrentExecutions: 10  # GLOBAL LIMIT - controls Bedrock API rate
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt CombinePagesFunction.Arn
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                # Wildcard regions needed: inference profiles route to any region
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BatchProcessingQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
   IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -870,7 +1046,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # Text documents (output/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Layers:
@@ -918,7 +1094,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # Images (images/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -978,7 +1154,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # ZIP contains images (images/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -1036,6 +1212,8 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document retrieval
+          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image retrieval
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           TRACKING_TABLE: !Ref TrackingTable
@@ -1084,6 +1262,8 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document search
+          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image search
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
       Tags:
@@ -1377,6 +1557,8 @@ Resources:
                 Resource:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
+                  - !GetAtt GetPageInfoFunction.Arn
+                  - !GetAtt EnqueueBatchesFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -1402,6 +1584,8 @@ Resources:
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
+        GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
+        EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
@@ -1513,9 +1697,8 @@ Resources:
               - prefix: 'input/'
       State: ENABLED
       Targets:
-        - Arn: !GetAtt ProcessingStateMachine.Arn
-          RoleArn: !GetAtt EventBridgeToStepFunctionsRole.Arn
-          Id: TriggerProcessing
+        - Arn: !GetAtt DocumentProcessingQueue.Arn
+          Id: SendToProcessingQueue
           InputTransformer:
             InputPathsMap:
               bucket: $.detail.bucket.name
@@ -1528,26 +1711,6 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
-
-  EventBridgeToStepFunctionsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StartExecution
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - states:StartExecution
-                Resource: !GetAtt ProcessingStateMachine.Arn
 
   # =========================================================================
   # EventBridge Rule for Image Upload Trigger
@@ -1846,6 +2009,8 @@ Resources:
       IndexName: !Sub '${ProjectName}-index-${DeploymentSuffix}'
       Region: !Ref AWS::Region
       ProjectName: !Ref ProjectName
+      # Version property forces custom resource update to return new attributes
+      Version: "2"  # Increment to force update and get TextDataSourceId/ImageDataSourceId
 
   # =========================================================================
   # Cognito Authentication
@@ -1974,22 +2139,6 @@ Resources:
                   - appsync:GraphQL
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
-
-  AdminUser:
-    Type: AWS::Cognito::UserPoolUser
-    # Retain user during updates to preserve password and avoid re-sending temp password
-    UpdateReplacePolicy: Retain
-    DeletionPolicy: Retain
-    Properties:
-      UserPoolId: !Ref UserPool
-      Username: !Ref AdminEmail
-      UserAttributes:
-        - Name: email
-          Value: !Ref AdminEmail
-        - Name: email_verified
-          Value: 'true'
-      DesiredDeliveryMediums:
-        - EMAIL
 
   # =========================================================================
   # AppSync GraphQL API
@@ -2361,15 +2510,6 @@ Resources:
       FieldName: updateConfiguration
       DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
 
-  GetThemeConfigResolver:
-    Type: AWS::AppSync::Resolver
-    DependsOn: GraphQLSchema
-    Properties:
-      ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
-      FieldName: getThemeConfig
-      DataSourceName: !GetAtt ConfigurationResolverDataSource.Name
-
   # API Key Resolvers
   GetApiKeyResolver:
     Type: AWS::AppSync::Resolver
@@ -2522,6 +2662,68 @@ Resources:
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
+
+  # =========================================================================
+  # Document Processing Queue (SQS → Step Functions)
+  # =========================================================================
+
+  DocumentProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-doc-processing-${DeploymentSuffix}'
+      VisibilityTimeout: 1800  # 30 min - longer than Step Functions execution
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DocumentProcessingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref DocumentProcessingQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt DocumentProcessingQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt S3UploadRule.Arn
+
+  # =========================================================================
+  # Batch Processing Queue (individual 10-page batches with global concurrency)
+  # =========================================================================
+
+  BatchProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-batch-processing-dlq-${DeploymentSuffix}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  BatchProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-batch-processing-${DeploymentSuffix}'
+      VisibilityTimeout: 960  # 16 min (Lambda 900s timeout + buffer)
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BatchProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
 
   # =========================================================================
   # Scrape Workflow SQS Queues
@@ -2814,45 +3016,8 @@ Resources:
         - !Ref AlarmTopic
 
   # =========================================================================
-  # Cost Management - Monthly Budget
-  # =========================================================================
-
-  MonthlyBudget:
-    Type: AWS::Budgets::Budget
-    # Prevent "same name different internalId" errors during stack updates
-    UpdateReplacePolicy: Delete
-    DeletionPolicy: Delete
-    Properties:
-      Budget:
-        BudgetName: !Sub '${ProjectName}-Monthly-Budget'
-        BudgetLimit:
-          Amount: 100
-          Unit: USD
-        TimeUnit: MONTHLY
-        BudgetType: COST
-        CostFilters:
-          TagKeyValue:
-            - !Sub 'user:Project$${ProjectName}'
-      NotificationsWithSubscribers:
-        - Notification:
-            NotificationType: ACTUAL
-            ComparisonOperator: GREATER_THAN
-            Threshold: 80
-            ThresholdType: PERCENTAGE
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Ref AdminEmail
-        - Notification:
-            NotificationType: FORECASTED
-            ComparisonOperator: GREATER_THAN
-            Threshold: 100
-            ThresholdType: PERCENTAGE
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Ref AdminEmail
-
-  # =========================================================================
-  # Budget Sync Function - Syncs config changes to AWS Budgets
+  # Budget Sync Function - Creates and syncs budget via Lambda
+  # (Avoids CloudFormation "same name different internalId" conflicts)
   # =========================================================================
 
   BudgetSyncFunction:
@@ -2888,10 +3053,65 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - budgets:CreateBudget
                 - budgets:ModifyBudget
                 - budgets:DescribeBudget
                 - budgets:UpdateBudget
               Resource: '*'
+
+  # Custom resource to trigger budget creation on initial deployment
+  BudgetInitTrigger:
+    Type: Custom::BudgetInit
+    Properties:
+      ServiceToken: !GetAtt BudgetSyncFunction.Arn
+      # Include a version to trigger on updates if needed
+      Version: '1'
+      # Pass config to trigger budget creation
+      Records:
+        - eventName: INSERT
+          dynamodb:
+            Keys:
+              Configuration:
+                S: Custom
+            NewImage:
+              Configuration:
+                S: Custom
+              budget_alert_threshold:
+                N: '100'
+              budget_alert_enabled:
+                BOOL: true
+
+  # =========================================================================
+  # Admin User Provisioner - Creates admin user idempotently
+  # =========================================================================
+
+  AdminUserProvisionerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-admin-provisioner-${DeploymentSuffix}'
+      CodeUri: src/lambda/admin_user_provisioner/
+      Handler: index.lambda_handler
+      Description: Creates admin user in Cognito idempotently (skips if exists)
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        Project: !Ref ProjectName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminCreateUser
+              Resource: !GetAtt UserPool.Arn
+
+  AdminUser:
+    Type: Custom::AdminUser
+    Properties:
+      ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
+      UserPoolId: !Ref UserPool
+      Email: !Ref AdminEmail
 
 Outputs:
   # S3 Buckets
@@ -3066,10 +3286,22 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KnowledgeBaseArn'
 
   DataSourceId:
-    Description: Bedrock Knowledge Base Data Source ID
+    Description: Bedrock Knowledge Base Data Source ID (text documents - backwards compatible)
     Value: !GetAtt KnowledgeBase.DataSourceId
     Export:
       Name: !Sub '${AWS::StackName}-DataSourceId'
+
+  TextDataSourceId:
+    Description: Data Source ID for text documents (output/ prefix)
+    Value: !GetAtt KnowledgeBase.TextDataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-TextDataSourceId'
+
+  ImageDataSourceId:
+    Description: Data Source ID for images (images/ prefix)
+    Value: !GetAtt KnowledgeBase.ImageDataSourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-ImageDataSourceId'
 
   # API & Authentication
   GraphQLApiUrl:

@@ -41,7 +41,7 @@ function main() {
 
   // Create CSS injection code
   // This IIFE creates a <style> element and appends it to <head>
-  const cssInjection = `(function(){try{var s=document.createElement('style');s.setAttribute('data-amplify-chat','');s.textContent=${JSON.stringify(cssContent)};document.head.appendChild(s);console.log('[AmplifyChat] CSS injected successfully');}catch(e){console.error('[AmplifyChat] Failed to inject CSS:',e);}})();`;
+  const cssInjection = `(function(){try{var s=document.createElement('style');s.setAttribute('data-ragstack-chat','');s.textContent=${JSON.stringify(cssContent)};document.head.appendChild(s);}catch(e){console.error('[RagStackChat] CSS injection failed:',e);}})();`;
 
   // Prepend CSS injection to JS bundle
   const newJsContent = cssInjection + jsContent;

@@ -470,9 +470,10 @@ export function Settings() {
                     ariaLabel={showApiKey ? 'Hide API key' : 'Show API key'}
                   />
                   <CopyToClipboard
-                    copyText={apiKeyData.apiKey}
+                    textToCopy={apiKeyData.apiKey}
                     copyButtonText="Copy"
                     copySuccessText="Copied!"
+                    copyErrorText="Failed to copy"
                   />
                 </SpaceBetween>
               </FormField>
@@ -545,7 +546,7 @@ export function Settings() {
                     </code>
                   </Box>
                   <CopyToClipboard
-                    copyText={`{
+                    textToCopy={`{
   "ragstack-kb": {
     "command": "uvx",
     "args": ["ragstack-mcp"],
@@ -557,6 +558,7 @@ export function Settings() {
 }`}
                     copyButtonText="Copy Config"
                     copySuccessText="Copied!"
+                    copyErrorText="Failed to copy"
                     variant="inline"
                   />
                 </>

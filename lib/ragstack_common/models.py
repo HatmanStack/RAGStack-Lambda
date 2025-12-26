@@ -69,6 +69,10 @@ class Document:
         created_at: Upload timestamp
         updated_at: Last update timestamp
         metadata: Additional metadata (file size, etc.)
+        page_start: Starting page for batch processing (1-indexed, inclusive)
+        page_end: Ending page for batch processing (1-indexed, inclusive)
+        pages_succeeded: Count of successfully processed pages in batch
+        pages_failed: Count of failed pages in batch
     """
 
     document_id: str
@@ -84,6 +88,12 @@ class Document:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Page range for batch processing (1-indexed, inclusive)
+    page_start: int | None = None
+    page_end: int | None = None
+    # Page success tracking for batch processing
+    pages_succeeded: int = 0
+    pages_failed: int = 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary for DynamoDB storage."""

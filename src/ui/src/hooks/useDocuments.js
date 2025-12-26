@@ -100,21 +100,28 @@ export const useDocuments = () => {
 
   const fetchImages = useCallback(async () => {
     try {
-      const response = await client.graphql({
-        query: listImages,
-        variables: { limit: 50 }
-      });
+      let allItems = [];
+      let nextToken = null;
 
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors fetching images:', response.errors);
-        return;
-      }
+      do {
+        const response = await client.graphql({
+          query: listImages,
+          variables: { limit: 100, nextToken }
+        });
 
-      const { data } = response;
-      const items = data?.listImages?.items || [];
+        if (response.errors) {
+          console.error('[useDocuments] GraphQL errors fetching images:', response.errors);
+          break;
+        }
+
+        const { data } = response;
+        const items = data?.listImages?.items || [];
+        allItems = [...allItems, ...items];
+        nextToken = data?.listImages?.nextToken;
+      } while (nextToken);
 
       // Transform images to match document structure for unified display
-      const transformedImages = items.map(img => ({
+      const transformedImages = allItems.map(img => ({
         documentId: img.imageId,
         filename: img.filename,
         status: img.status,
@@ -133,22 +140,28 @@ export const useDocuments = () => {
 
   const fetchScrapeJobs = useCallback(async () => {
     try {
-      const response = await client.graphql({
-        query: listScrapeJobs,
-        variables: { limit: 50 }
-      });
+      let allItems = [];
+      let nextToken = null;
 
-      // Check for errors in response
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors fetching scrape jobs:', response.errors);
-        return;
-      }
+      do {
+        const response = await client.graphql({
+          query: listScrapeJobs,
+          variables: { limit: 100, nextToken }
+        });
 
-      const { data } = response;
-      const items = data?.listScrapeJobs?.items || [];
+        if (response.errors) {
+          console.error('[useDocuments] GraphQL errors fetching scrape jobs:', response.errors);
+          break;
+        }
+
+        const { data } = response;
+        const items = data?.listScrapeJobs?.items || [];
+        allItems = [...allItems, ...items];
+        nextToken = data?.listScrapeJobs?.nextToken;
+      } while (nextToken);
 
       // Transform scrape jobs to match document structure for unified display
-      const transformedJobs = items.map(job => ({
+      const transformedJobs = allItems.map(job => ({
         documentId: job.jobId,
         filename: job.title || job.baseUrl,
         status: job.status,

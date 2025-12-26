@@ -215,8 +215,8 @@ def lambda_handler(event, context):
                 "message": "Generated output file - not reprocessing",
             }
 
-        # Check for scraped markdown passthrough (.scraped.md files skip OCR)
-        if input_s3_uri.endswith(".scraped.md"):
+        # Check for markdown passthrough (.md and .scraped.md files skip OCR)
+        if input_s3_uri.endswith(".md"):
             return _process_scraped_markdown(
                 document_id, input_s3_uri, output_s3_prefix, tracking_table
             )
@@ -239,9 +239,16 @@ def lambda_handler(event, context):
             {"status": Status.PROCESSING.value, "updated_at": datetime.now(UTC).isoformat()},
         )
 
-        # Publish real-time update
+        # Publish real-time update (skip in batch mode to avoid spam)
         graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-        publish_document_update(graphql_endpoint, document_id, filename, "PROCESSING")
+
+        # Extract optional page range for batch processing
+        page_start = event.get("page_start")
+        page_end = event.get("page_end")
+        is_batch_mode = page_start is not None and page_end is not None
+
+        if not is_batch_mode:
+            publish_document_update(graphql_endpoint, document_id, filename, "PROCESSING")
 
         # Create Document object (Phase 1 API)
         document = Document(
@@ -250,6 +257,8 @@ def lambda_handler(event, context):
             input_s3_uri=input_s3_uri,
             output_s3_uri=output_s3_prefix,  # Will be updated by OcrService
             status=Status.PROCESSING,
+            page_start=page_start,
+            page_end=page_end,
         )
 
         # Create OCR service and process document (Phase 1 API)
@@ -266,40 +275,54 @@ def lambda_handler(event, context):
         if processed_document.status == Status.FAILED:
             raise Exception(processed_document.error_message or "OCR processing failed")
 
-        # Update DynamoDB with results
-        # Include input_s3_uri and filename to ensure they're set for source delivery
-        logger.info(
-            f"[TRACKING] Updating tracking table for doc={document_id}: "
-            f"input_s3_uri={input_s3_uri}, filename={filename}, "
-            f"output_s3_uri={processed_document.output_s3_uri}"
-        )
-        dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.Table(tracking_table)
-        table.update_item(
-            Key={"document_id": document_id},
-            UpdateExpression=(
-                "SET #status = :status, "
-                "total_pages = :total_pages, "
-                "is_text_native = :is_text_native, "
-                "output_s3_uri = :output_s3_uri, "
-                "updated_at = :updated_at, "
-                "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
-                "filename = if_not_exists(filename, :filename)"
-            ),
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":status": Status.OCR_COMPLETE.value,
-                ":total_pages": processed_document.total_pages,
-                ":is_text_native": processed_document.is_text_native or False,
-                ":output_s3_uri": processed_document.output_s3_uri,
-                ":updated_at": datetime.now(UTC).isoformat(),
-                ":input_s3_uri": input_s3_uri,
-                ":filename": filename,
-            },
-        )
-        logger.info(f"[TRACKING] Successfully updated tracking table for doc={document_id}")
+        # Update DynamoDB with results (skip in batch mode - CombinePages handles final status)
+        if not is_batch_mode:
+            logger.info(
+                f"[TRACKING] Updating tracking table for doc={document_id}: "
+                f"input_s3_uri={input_s3_uri}, filename={filename}, "
+                f"output_s3_uri={processed_document.output_s3_uri}"
+            )
+            dynamodb = boto3.resource("dynamodb")
+            table = dynamodb.Table(tracking_table)
+            table.update_item(
+                Key={"document_id": document_id},
+                UpdateExpression=(
+                    "SET #status = :status, "
+                    "total_pages = :total_pages, "
+                    "is_text_native = :is_text_native, "
+                    "output_s3_uri = :output_s3_uri, "
+                    "updated_at = :updated_at, "
+                    "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
+                    "filename = if_not_exists(filename, :filename)"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": Status.OCR_COMPLETE.value,
+                    ":total_pages": processed_document.total_pages,
+                    ":is_text_native": processed_document.is_text_native or False,
+                    ":output_s3_uri": processed_document.output_s3_uri,
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                    ":input_s3_uri": input_s3_uri,
+                    ":filename": filename,
+                },
+            )
+            logger.info(f"[TRACKING] Successfully updated tracking table for doc={document_id}")
 
-        # Publish real-time update
+        # In batch mode, return partial result for Map state aggregation
+        if is_batch_mode:
+            logger.info(
+                f"Batch mode complete: pages {page_start}-{page_end}, "
+                f"output={processed_document.output_s3_uri}"
+            )
+            return {
+                "document_id": document_id,
+                "page_start": page_start,
+                "page_end": page_end,
+                "partial_output_uri": processed_document.output_s3_uri,
+                "pages_processed": len(processed_document.pages),
+            }
+
+        # Publish real-time update (full document mode only)
         publish_document_update(
             graphql_endpoint,
             document_id,
@@ -308,7 +331,7 @@ def lambda_handler(event, context):
             total_pages=processed_document.total_pages,
         )
 
-        # Return results for Step Functions
+        # Return results for Step Functions (full document mode)
         return {
             "document_id": document_id,
             "status": Status.OCR_COMPLETE.value,

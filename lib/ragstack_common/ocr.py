@@ -141,7 +141,7 @@ class OcrService:
         Extract text directly from a text-native PDF using PyMuPDF.
 
         Args:
-            document: Document object
+            document: Document object (may include page_start/page_end for batch mode)
             pdf_bytes: PDF file bytes
 
         Returns:
@@ -149,12 +149,17 @@ class OcrService:
         """
         try:
             pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            document.total_pages = len(pdf_doc)
+            total_pages = len(pdf_doc)
+            document.total_pages = total_pages
+
+            # Determine page range (convert 1-indexed to 0-indexed for PyMuPDF)
+            start_idx = (document.page_start - 1) if document.page_start else 0
+            end_idx = document.page_end if document.page_end else total_pages
 
             pages = []
             full_text_parts = []
 
-            for page_num in range(len(pdf_doc)):
+            for page_num in range(start_idx, end_idx):
                 page = pdf_doc[page_num]
 
                 # Extract text
@@ -172,8 +177,11 @@ class OcrService:
 
             pdf_doc.close()
 
-            # Save full text to S3
+            # Save text to S3
             full_text = "\n".join(full_text_parts)
+
+            # Determine if this is batch mode (partial page range)
+            is_batch_mode = document.page_start is not None and document.page_end is not None
 
             # Parse output_s3_uri to get bucket, then construct proper key
             if document.output_s3_uri:
@@ -181,12 +189,23 @@ class OcrService:
                 # If base_key ends with /, use it as prefix, otherwise use as-is
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                # base_key already includes document_id/ from caller
-                output_key = f"{base_key}extracted_text.txt"
+                # In batch mode, use pages_XXX-YYY.txt naming
+                if is_batch_mode:
+                    output_key = (
+                        f"{base_key}pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"{base_key}extracted_text.txt"
             else:
                 # Fallback: use input bucket
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
-                output_key = f"output/{document.document_id}/extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"output/{document.document_id}/"
+                        f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"output/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
@@ -195,7 +214,14 @@ class OcrService:
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
-            logger.info(f"Extracted text from {document.total_pages} pages (text-native PDF)")
+            pages_processed = len(pages)
+            if is_batch_mode:
+                logger.info(
+                    f"Extracted text from pages {document.page_start}-{document.page_end} "
+                    f"({pages_processed} pages, text-native PDF)"
+                )
+            else:
+                logger.info(f"Extracted text from {total_pages} pages (text-native PDF)")
             return document
 
         except Exception as e:
@@ -300,51 +326,225 @@ class OcrService:
             document.error_message = str(e)
             return document
 
-    def _process_with_bedrock(self, document: Document, document_bytes: bytes) -> Document:
+    def _render_page_to_image(self, pdf_page, max_size_bytes: int = 5 * 1024 * 1024) -> bytes:
         """
-        Process document with Amazon Bedrock.
+        Render PDF page to image, reducing quality if needed to stay under size limit.
+
+        Args:
+            pdf_page: PyMuPDF page object
+            max_size_bytes: Maximum image size (default 5MB for Bedrock)
+
+        Returns:
+            Image bytes (PNG or JPEG)
         """
-        try:
-            logger.info(f"Processing with Bedrock: {document.document_id}")
+        from io import BytesIO
 
-            # Prepare image for Bedrock
-            image_attachment = prepare_bedrock_image_attachment(document_bytes)
+        from PIL import Image
 
-            # Invoke Bedrock model for OCR
+        # Try different DPI levels until image is under size limit
+        for dpi in [150, 120, 100, 72, 50]:
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = pdf_page.get_pixmap(matrix=mat)
+            img_bytes = pix.tobytes("png")
+
+            if len(img_bytes) <= max_size_bytes:
+                logger.info(f"Page rendered at {dpi} DPI: {len(img_bytes) / 1024:.0f} KB")
+                return img_bytes
+
+            # Try JPEG compression if PNG is too large
+            img_bytes = pix.tobytes("jpeg")
+            if len(img_bytes) <= max_size_bytes:
+                logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
+                return img_bytes
+
+        # Still too large - use Pillow for aggressive JPEG compression
+        size_kb = len(img_bytes) / 1024
+        logger.warning(f"Page still large at 50 DPI: {size_kb:.0f} KB, applying compression")
+        pil_image = Image.open(BytesIO(img_bytes))
+
+        # Try progressively lower quality until under limit
+        for quality in [70, 50, 30, 20]:
+            buffer = BytesIO()
+            pil_image.save(buffer, format="JPEG", quality=quality, optimize=True)
+            img_bytes = buffer.getvalue()
+            if len(img_bytes) <= max_size_bytes:
+                size_kb = len(img_bytes) / 1024
+                logger.info(f"Page compressed to JPEG quality {quality}: {size_kb:.0f} KB")
+                return img_bytes
+
+        # Last resort: resize the image
+        logger.warning(f"Resizing image to fit under {max_size_bytes / 1024 / 1024:.1f} MB")
+        for scale in [0.75, 0.5, 0.25]:
+            new_size = (int(pil_image.width * scale), int(pil_image.height * scale))
+            resized = pil_image.resize(new_size, Image.Resampling.LANCZOS)
+            buffer = BytesIO()
+            resized.save(buffer, format="JPEG", quality=50, optimize=True)
+            img_bytes = buffer.getvalue()
+            if len(img_bytes) <= max_size_bytes:
+                logger.info(f"Page resized to {scale * 100:.0f}%: {len(img_bytes) / 1024:.0f} KB")
+                return img_bytes
+
+        logger.error(f"Could not reduce image below {max_size_bytes / 1024 / 1024:.1f} MB")
+        return img_bytes
+
+    def _process_pdf_with_bedrock(
+        self,
+        pdf_bytes: bytes,
+        page_start: int | None = None,
+        page_end: int | None = None,
+    ) -> tuple[list[Page], list[str], int, int]:
+        """
+        Convert PDF pages to images and process each with Bedrock OCR.
+
+        Args:
+            pdf_bytes: PDF file bytes
+            page_start: Starting page (1-indexed, inclusive). None = first page.
+            page_end: Ending page (1-indexed, inclusive). None = last page.
+
+        Returns:
+            Tuple of (list of Page objects, list of text strings)
+        """
+        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        total_pages = len(pdf_doc)
+        pages = []
+        all_text_parts = []
+
+        # Determine page range (convert 1-indexed to 0-indexed for PyMuPDF)
+        start_idx = (page_start - 1) if page_start else 0
+        end_idx = page_end if page_end else total_pages
+
+        pages_failed = 0
+        for page_num in range(start_idx, end_idx):
+            logger.info(f"Processing PDF page {page_num + 1}/{total_pages} with Bedrock")
+            pdf_page = pdf_doc[page_num]
+
+            # Render page to image, auto-reducing quality if needed
+            img_bytes = self._render_page_to_image(pdf_page)
+
+            # Process image with Bedrock
+            image_attachment = prepare_bedrock_image_attachment(img_bytes)
+
             system_prompt = "You are an OCR system. Extract all text from the image."
             content = [
                 image_attachment,
                 {"text": "Extract all text from this image. Preserve the layout and structure."},
             ]
 
-            response = self.bedrock_client.invoke_model(
-                model_id=self.bedrock_model_id,
-                system_prompt=system_prompt,
-                content=content,
-                context="OCR",
-            )
+            try:
+                response = self.bedrock_client.invoke_model(
+                    model_id=self.bedrock_model_id,
+                    system_prompt=system_prompt,
+                    content=content,
+                    context="OCR",
+                )
+                text = self.bedrock_client.extract_text_from_response(response)
+            except Exception as e:
+                # Handle all page-level errors gracefully - use placeholder and continue
+                error_msg = str(e).lower()
+                if "content filtering" in error_msg or "output blocked" in error_msg:
+                    logger.warning(f"Page {page_num + 1} blocked by content filter")
+                else:
+                    logger.error(f"Page {page_num + 1} failed: {e}")
+                text = f"[Page {page_num + 1} could not be extracted: {type(e).__name__}]"
+                pages_failed += 1
 
-            # Extract text from response
-            text = self.bedrock_client.extract_text_from_response(response)
+            all_text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
 
-            # Create Page object (no confidence data for Bedrock OCR)
             page = Page(
-                page_number=1, text=text, ocr_backend=OcrBackend.BEDROCK.value, confidence=None
+                page_number=page_num + 1,
+                text=text,
+                ocr_backend=OcrBackend.BEDROCK.value,
+                confidence=None,
             )
+            pages.append(page)
 
-            document.pages = [page]
-            document.total_pages = 1
+        pdf_doc.close()
+        pages_in_batch = end_idx - start_idx
+        pages_succeeded = pages_in_batch - pages_failed
+        logger.info(f"Batch complete: {pages_succeeded}/{pages_in_batch} pages succeeded")
+        return pages, all_text_parts, pages_succeeded, pages_failed
+
+    def _process_with_bedrock(self, document: Document, document_bytes: bytes) -> Document:
+        """
+        Process document with Amazon Bedrock.
+
+        For PDFs, converts each page to an image first using PyMuPDF.
+        Supports batch mode via document.page_start and document.page_end.
+        """
+        try:
+            logger.info(f"Processing with Bedrock: {document.document_id}")
+
+            # Check if this is a PDF - need to convert pages to images
+            is_pdf = document.filename.lower().endswith(".pdf")
+
+            # Determine if this is batch mode
+            is_batch_mode = document.page_start is not None and document.page_end is not None
+
+            if is_pdf:
+                # Get total page count first (needed for batch mode tracking)
+                pdf_doc = fitz.open(stream=document_bytes, filetype="pdf")
+                document.total_pages = len(pdf_doc)
+                pdf_doc.close()
+
+                # Convert PDF pages to images and process each (with page range)
+                result = self._process_pdf_with_bedrock(
+                    document_bytes,
+                    page_start=document.page_start,
+                    page_end=document.page_end,
+                )
+                pages, all_text_parts, pages_succeeded, pages_failed = result
+                document.pages = pages
+                document.pages_succeeded = pages_succeeded
+                document.pages_failed = pages_failed
+                text = "\n\n".join(all_text_parts)
+            else:
+                # Single image - process directly
+                image_attachment = prepare_bedrock_image_attachment(document_bytes)
+
+                system_prompt = "You are an OCR system. Extract all text from the image."
+                content = [
+                    image_attachment,
+                    {"text": "Extract all text from this image. Preserve layout and structure."},
+                ]
+
+                response = self.bedrock_client.invoke_model(
+                    model_id=self.bedrock_model_id,
+                    system_prompt=system_prompt,
+                    content=content,
+                    context="OCR",
+                )
+
+                text = self.bedrock_client.extract_text_from_response(response)
+
+                page = Page(
+                    page_number=1, text=text, ocr_backend=OcrBackend.BEDROCK.value, confidence=None
+                )
+                document.pages = [page]
+                document.total_pages = 1
+                document.pages_succeeded = 1
+                document.pages_failed = 0
 
             # Save extracted text to S3
             if document.output_s3_uri:
                 bucket, base_key = parse_s3_uri(document.output_s3_uri)
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                # base_key already includes document_id/ from caller
-                output_key = f"{base_key}extracted_text.txt"
+                # In batch mode, use pages_XXX-YYY.txt naming
+                if is_batch_mode:
+                    output_key = (
+                        f"{base_key}pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
-                output_key = f"output/{document.document_id}/extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"output/{document.document_id}/"
+                        f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"output/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, text)
@@ -352,7 +552,13 @@ class OcrService:
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
-            logger.info(f"Bedrock OCR complete: {len(text)} chars")
+            if is_batch_mode:
+                logger.info(
+                    f"Bedrock OCR complete for pages {document.page_start}-{document.page_end}: "
+                    f"{len(text)} chars"
+                )
+            else:
+                logger.info(f"Bedrock OCR complete: {len(text)} chars")
 
             # Add metering data to document metadata
             metering = self.bedrock_client.get_metering_data()
