@@ -381,7 +381,7 @@ class OcrService:
             resized.save(buffer, format="JPEG", quality=50, optimize=True)
             img_bytes = buffer.getvalue()
             if len(img_bytes) <= max_size_bytes:
-                logger.info(f"Page resized to {scale*100:.0f}%: {len(img_bytes) / 1024:.0f} KB")
+                logger.info(f"Page resized to {scale * 100:.0f}%: {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
         logger.error(f"Could not reduce image below {max_size_bytes / 1024 / 1024:.1f} MB")
@@ -392,7 +392,7 @@ class OcrService:
         pdf_bytes: bytes,
         page_start: int | None = None,
         page_end: int | None = None,
-    ) -> tuple[list[Page], list[str]]:
+    ) -> tuple[list[Page], list[str], int, int]:
         """
         Convert PDF pages to images and process each with Bedrock OCR.
 
@@ -521,6 +521,8 @@ class OcrService:
                 )
                 document.pages = [page]
                 document.total_pages = 1
+                document.pages_succeeded = 1
+                document.pages_failed = 0
 
             # Save extracted text to S3
             if document.output_s3_uri:

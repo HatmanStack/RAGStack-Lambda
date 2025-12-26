@@ -168,8 +168,9 @@ def _update_tracking_and_check(
     is_last_batch = batches_remaining == 0
 
     # Calculate if 95% is still possible
-    # Assume remaining batches could all succeed (10 pages each)
-    pages_remaining = batches_remaining * 10
+    # pages_remaining = total - already processed (more accurate than assuming 10/batch)
+    pages_processed = total_succeeded + total_failed
+    pages_remaining = total_pages - pages_processed
     max_possible_succeeded = total_succeeded + pages_remaining
     can_reach_threshold = (max_possible_succeeded / total_pages) >= SUCCESS_THRESHOLD
 
@@ -195,11 +196,7 @@ def _mark_document_failed(document_id: str, tracking_table: str, reason: str) ->
 
     table.update_item(
         Key={"document_id": document_id},
-        UpdateExpression=(
-            "SET #status = :failed, "
-            "error_message = :reason, "
-            "updated_at = :now"
-        ),
+        UpdateExpression=("SET #status = :failed, error_message = :reason, updated_at = :now"),
         ExpressionAttributeNames={"#status": "status"},
         ExpressionAttributeValues={
             ":failed": Status.FAILED.value,
@@ -315,7 +312,7 @@ def lambda_handler(event, context):
                     reason=(
                         f"Cannot reach {SUCCESS_THRESHOLD:.0%} page success threshold. "
                         f"Current: {result['total_pages_succeeded']}/{total_pages} pages "
-                        f"({result['total_pages_succeeded']/total_pages:.1%})"
+                        f"({result['total_pages_succeeded'] / total_pages:.1%})"
                     ),
                 )
                 # Don't process remaining batches - they'll be ignored

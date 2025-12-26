@@ -74,11 +74,13 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict]:
         if match:
             page_start = int(match.group(1))
             page_end = int(match.group(2))
-            partial_files.append({
-                "page_start": page_start,
-                "page_end": page_end,
-                "partial_output_uri": f"s3://{bucket}/{key}",
-            })
+            partial_files.append(
+                {
+                    "page_start": page_start,
+                    "page_end": page_end,
+                    "partial_output_uri": f"s3://{bucket}/{key}",
+                }
+            )
 
     # Sort by page_start
     partial_files.sort(key=lambda x: x["page_start"])
@@ -146,7 +148,7 @@ def lambda_handler(event, context):
     for result in sorted_results:
         page_start = result["page_start"]
         page_end = result["page_end"]
-        pages_found += (page_end - page_start + 1)
+        pages_found += page_end - page_start + 1
 
     logger.info(
         f"Combining {len(sorted_results)} batches ({pages_found}/{total_pages} pages) "
