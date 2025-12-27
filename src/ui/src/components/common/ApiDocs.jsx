@@ -23,16 +23,16 @@ const codeStyle = {
   maxHeight: '300px',
 };
 
-const CodeBlock = ({ code, copyLabel = 'Copy' }) => (
+const CodeBlock = ({ code }) => (
   <Box>
     <code style={codeStyle}>{code}</code>
     <Box padding={{ top: 'xs' }}>
       <CopyToClipboard
         textToCopy={code}
-        copyButtonText={copyLabel}
+        copyButtonText="Copy"
         copySuccessText="Copied!"
         copyErrorText="Failed to copy"
-        variant="inline"
+        variant="icon"
       />
     </Box>
   </Box>
@@ -50,7 +50,7 @@ export const ApiDocs = ({
   const tabs = examples.map((ex) => ({
     id: ex.id,
     label: ex.label,
-    content: <CodeBlock code={ex.code} copyLabel={`Copy ${ex.label}`} />,
+    content: <CodeBlock code={ex.code} />,
   }));
 
   return (
@@ -87,7 +87,7 @@ export const ApiDocs = ({
                   copyButtonText="Copy"
                   copySuccessText="Copied!"
                   copyErrorText="Failed to copy"
-                  variant="inline"
+                  variant="icon"
                 />
               </SpaceBetween>
             </Box>

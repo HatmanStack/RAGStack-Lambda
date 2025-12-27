@@ -291,6 +291,9 @@ Resources:
         BuildSpec: |
           version: 0.2
           phases:
+            install:
+              runtime-versions:
+                nodejs: 24
             pre_build:
               commands:
                 - echo "Installing dependencies..."
@@ -306,14 +309,8 @@ Resources:
                 - aws s3 sync dist/ s3://${UI_BUCKET}/ --delete
                 - echo "Invalidating CloudFront cache..."
                 - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths "/*"
-                - echo ""
                 - echo "============================================================"
-                - echo "DEPLOYMENT COMPLETE"
-                - echo "============================================================"
-                - echo ""
-                - echo "Dashboard UI:  https://${CLOUDFRONT_DOMAIN}"
-                - echo "GraphQL API:   ${VITE_GRAPHQL_URL}"
-                - echo ""
+                - echo "DEPLOYMENT COMPLETE - Dashboard UI https://${CLOUDFRONT_DOMAIN}"
                 - echo "============================================================"
       Environment:
         Type: LINUX_CONTAINER
@@ -2375,7 +2372,6 @@ Resources:
       ServiceToken: !GetAtt StartUICodeBuild.Arn
       BuildProjectName: !Ref UICodeBuildProject
       SourceLocationOverride: !Sub '${UISourceBucket}/${UISourceKey}'
-      SuccessUrl: !Sub 'https://${CloudFrontDistribution.DomainName}'
 
   # Trigger web component build
   WCCodeBuildRun:
@@ -2385,7 +2381,6 @@ Resources:
       ServiceToken: !GetAtt StartUICodeBuild.Arn
       BuildProjectName: !Ref WebComponentBuildProject
       SourceLocationOverride: !Sub '${UISourceBucket}/${WebComponentSourceKey}'
-      SuccessUrl: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
 
   # Data source for resolvers
   AppSyncLambdaDataSource:
@@ -3113,6 +3108,203 @@ Resources:
                 N: '100'
               budget_alert_enabled:
                 BOOL: true
+
+  # =========================================================================
+  # Configuration Seeder - Seeds Schema and Default config on deployment
+  # =========================================================================
+
+  ConfigurationSeederFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-config-seeder'
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ConfigurationTable
+          WC_CDN_URL: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConfigurationTable
+      InlineCode: |
+        import json
+        import os
+        import boto3
+        from urllib.request import Request, urlopen
+
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+        SCHEMA = {
+            'type': 'object',
+            'required': ['ocr_backend'],
+            'properties': {
+                'ocr_backend': {
+                    'type': 'string',
+                    'order': 1,
+                    'description': 'OCR backend for document processing',
+                    'enum': ['textract', 'bedrock'],
+                    'default': 'textract'
+                },
+                'bedrock_ocr_model_id': {
+                    'type': 'string',
+                    'order': 2,
+                    'description': 'Bedrock model for OCR (only if backend is bedrock)',
+                    'enum': [
+                        'meta.llama3-2-90b-instruct-v1:0',
+                        'meta.llama3-2-11b-instruct-v1:0',
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    ],
+                    'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}
+                },
+                'chat_primary_model': {
+                    'type': 'string',
+                    'order': 3,
+                    'description': 'Primary chat model',
+                    'enum': [
+                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-pro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
+                    ],
+                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                },
+                'chat_fallback_model': {
+                    'type': 'string',
+                    'order': 4,
+                    'description': 'Fallback model when quotas exceeded',
+                    'enum': [
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-micro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
+                    ],
+                    'default': 'us.amazon.nova-micro-v1:0'
+                },
+                'chat_global_quota_daily': {
+                    'type': 'number',
+                    'order': 5,
+                    'description': 'Max messages per day (all users)',
+                    'default': 10000
+                },
+                'chat_per_user_quota_daily': {
+                    'type': 'number',
+                    'order': 6,
+                    'description': 'Max messages per user per day',
+                    'default': 100
+                },
+                'chat_cdn_url': {
+                    'type': 'string',
+                    'order': 7,
+                    'description': 'Web component CDN URL',
+                    'readOnly': True
+                },
+                'chat_allow_document_access': {
+                    'type': 'boolean',
+                    'order': 8,
+                    'description': 'Allow document downloads via presigned URLs',
+                    'default': False
+                },
+                'public_access_chat': {
+                    'type': 'boolean',
+                    'order': 9,
+                    'description': 'Allow unauthenticated chat',
+                    'default': True
+                },
+                'public_access_search': {
+                    'type': 'boolean',
+                    'order': 10,
+                    'description': 'Allow unauthenticated search',
+                    'default': True
+                },
+                'public_access_upload': {
+                    'type': 'boolean',
+                    'order': 11,
+                    'description': 'Allow unauthenticated uploads',
+                    'default': False
+                },
+                'public_access_image_upload': {
+                    'type': 'boolean',
+                    'order': 12,
+                    'description': 'Allow unauthenticated image uploads',
+                    'default': False
+                },
+                'public_access_scrape': {
+                    'type': 'boolean',
+                    'order': 13,
+                    'description': 'Allow unauthenticated web scraping',
+                    'default': False
+                },
+                'budget_alert_threshold': {
+                    'type': 'number',
+                    'order': 14,
+                    'description': 'Monthly budget alert threshold (USD)',
+                    'default': 100
+                },
+                'budget_alert_enabled': {
+                    'type': 'boolean',
+                    'order': 15,
+                    'description': 'Enable budget alerts',
+                    'default': True
+                }
+            }
+        }
+
+        def lambda_handler(event, context):
+            print(f"Event: {json.dumps(event)}")
+            request_type = event.get('RequestType', '')
+
+            try:
+                if request_type in ['Create', 'Update']:
+                    # Build defaults from schema
+                    defaults = {'Configuration': 'Default'}
+                    for key, prop in SCHEMA['properties'].items():
+                        if 'default' in prop:
+                            defaults[key] = prop['default']
+                    defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')
+
+                    # Seed Schema (stored as dict, not JSON string)
+                    table.put_item(Item={
+                        'Configuration': 'Schema',
+                        'Schema': SCHEMA
+                    })
+
+                    # Seed Default (values at top level, not nested)
+                    table.put_item(Item=defaults)
+
+                    print("Configuration seeded successfully")
+
+                # Send success response
+                send_response(event, 'SUCCESS', {})
+
+            except Exception as e:
+                print(f"Error: {e}")
+                send_response(event, 'FAILED', {}, str(e))
+
+        def send_response(event, status, data, reason=''):
+            body = {
+                'Status': status,
+                'PhysicalResourceId': 'config-seeder',
+                'StackId': event['StackId'],
+                'RequestId': event['RequestId'],
+                'LogicalResourceId': event['LogicalResourceId'],
+                'Reason': reason or 'See CloudWatch logs',
+                'Data': data
+            }
+            request = Request(
+                event['ResponseURL'],
+                data=json.dumps(body).encode('utf-8'),
+                headers={'Content-Type': ''},
+                method='PUT'
+            )
+            urlopen(request)
+
+  ConfigurationSeeder:
+    Type: Custom::ConfigurationSeeder
+    Properties:
+      ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

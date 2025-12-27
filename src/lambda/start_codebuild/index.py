@@ -128,11 +128,6 @@ def poll_create_or_update(event, context):
 
         if build_status == "SUCCEEDED":
             logger.info("Build succeeded")
-            # Set custom success message with URL if provided
-            resource_properties = event.get("ResourceProperties", {})
-            success_url = resource_properties.get("SuccessUrl")
-            if success_url:
-                helper.Reason = f"Build complete! URL: {success_url}"
             return True
 
         if build_status == "IN_PROGRESS":

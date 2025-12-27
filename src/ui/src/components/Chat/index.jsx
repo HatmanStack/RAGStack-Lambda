@@ -118,7 +118,7 @@ initChat();
                             copyButtonText="Copy"
                             copySuccessText="Copied!"
                             copyErrorText="Failed to copy"
-                            variant="inline"
+                            variant="icon"
                           />
                         </SpaceBetween>
                       ),
@@ -152,7 +152,7 @@ initChat();
                             copyButtonText="Copy"
                             copySuccessText="Copied!"
                             copyErrorText="Failed to copy"
-                            variant="inline"
+                            variant="icon"
                           />
                         </SpaceBetween>
                       ),
