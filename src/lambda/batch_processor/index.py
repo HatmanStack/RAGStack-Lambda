@@ -45,6 +45,9 @@ logger.setLevel(logging.INFO)
 # 95% page success threshold for proceeding with ingestion
 SUCCESS_THRESHOLD = 0.95
 
+# Module-level AWS clients (reused across warm invocations)
+dynamodb = boto3.resource("dynamodb")
+
 # Module-level initialization (lazy-initialized)
 _config_manager = None
 
@@ -132,7 +135,6 @@ def _update_tracking_and_check(
         - is_last_batch: bool
         - can_reach_threshold: bool
     """
-    dynamodb = boto3.resource("dynamodb")
     table = dynamodb.Table(tracking_table)
 
     response = table.update_item(
@@ -183,7 +185,6 @@ def _update_tracking_and_check(
 
 def _mark_document_failed(document_id: str, tracking_table: str, reason: str) -> None:
     """Mark document as failed in DynamoDB."""
-    dynamodb = boto3.resource("dynamodb")
     table = dynamodb.Table(tracking_table)
 
     table.update_item(

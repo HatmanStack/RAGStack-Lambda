@@ -48,3 +48,4 @@ amplify_outputs*
 amplifyconfiguration*
 amplify/data/config.ts
 .env
+ragstack-packaged.yaml

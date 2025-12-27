@@ -42,6 +42,7 @@ logger.setLevel(logging.INFO)
 # Module-level initialization (reused across Lambda invocations)
 config_manager = ConfigurationManager()
 dynamodb = boto3.resource("dynamodb")
+bedrock_agent = boto3.client("bedrock-agent-runtime")
 
 
 def extract_document_id_from_uri(uri):
@@ -103,9 +104,6 @@ def lambda_handler(event, context):
             "total": 0,
             "error": "KNOWLEDGE_BASE_ID environment variable is required",
         }
-
-    # Create Bedrock client
-    bedrock_agent = boto3.client("bedrock-agent-runtime")
 
     # Extract inputs from AppSync event
     # AppSync sends: {"arguments": {"query": "...", "maxResults": 5}, ...}

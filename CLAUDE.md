@@ -59,6 +59,9 @@ python publish.py --project-name my-docs --admin-email admin@example.com --skip-
 
 # Skip ALL UI builds (dashboard and web component)
 python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all
+
+# Publish to AWS Marketplace (update one-click deploy template)
+python publish.py --publish-marketplace
 ```
 
 > **Region Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available elsewhere, use `--region <region>`.

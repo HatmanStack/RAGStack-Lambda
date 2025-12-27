@@ -474,6 +474,7 @@ export function Settings() {
                     copyButtonText="Copy"
                     copySuccessText="Copied!"
                     copyErrorText="Failed to copy"
+                    variant="icon"
                   />
                 </SpaceBetween>
               </FormField>
@@ -556,10 +557,10 @@ export function Settings() {
     }
   }
 }`}
-                    copyButtonText="Copy Config"
+                    copyButtonText="Copy"
                     copySuccessText="Copied!"
                     copyErrorText="Failed to copy"
-                    variant="inline"
+                    variant="icon"
                   />
                 </>
               )}

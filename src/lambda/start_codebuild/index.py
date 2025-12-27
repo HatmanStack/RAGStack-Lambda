@@ -51,21 +51,32 @@ def create_or_update(event, context):
     Start CodeBuild project on Create or Update.
 
     CloudFormation will invoke this function and wait for response.
+    Supports optional SourceLocationOverride for SAR deployments where
+    source is deployed to S3 by a custom resource.
     """
     logger.info("Starting CodeBuild project...")
 
     # Validate input
     resource_properties = event.get("ResourceProperties", {})
     project_name = resource_properties.get("BuildProjectName")
+    source_location_override = resource_properties.get("SourceLocationOverride")
 
     if not project_name:
         raise ValueError("BuildProjectName is required in ResourceProperties")
 
     try:
-        response = codebuild_client.start_build(
-            projectName=project_name,
-            idempotencyToken=event.get("RequestId"),  # Prevent duplicate builds on retries
-        )
+        # Build parameters
+        build_params = {
+            "projectName": project_name,
+            "idempotencyToken": event.get("RequestId"),  # Prevent duplicate builds on retries
+        }
+
+        # Add source location override for SAR deployments
+        if source_location_override:
+            logger.info(f"Using source location override: {source_location_override}")
+            build_params["sourceLocationOverride"] = source_location_override
+
+        response = codebuild_client.start_build(**build_params)
         build_id = response["build"]["id"]
 
         # Get AWS region for console URL (prefer client metadata)

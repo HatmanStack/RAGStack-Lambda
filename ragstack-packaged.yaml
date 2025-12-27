@@ -1,0 +1,4060 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: RAGStack - Serverless document processing with AI chat. IMPORTANT - Stack
+  name must be lowercase (e.g., my-docs).
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Required Settings
+      Parameters:
+      - AdminEmail
+    - Label:
+        default: Build Options
+      Parameters:
+      - BuildDashboard
+      - BuildWebComponent
+    - Label:
+        default: Advanced Settings (Optional)
+      Parameters:
+      - OcrBackend
+      - BedrockOcrModelId
+      - CaptionModelId
+      - UISourceBucket
+      - UISourceKey
+      - WebComponentSourceKey
+    ParameterLabels:
+      AdminEmail:
+        default: Admin Email
+      BuildDashboard:
+        default: Build Dashboard UI
+      BuildWebComponent:
+        default: Build Chat Widget
+      OcrBackend:
+        default: OCR Backend
+      BedrockOcrModelId:
+        default: Bedrock OCR Model
+      CaptionModelId:
+        default: Image Caption Model
+      UISourceBucket:
+        default: UI Source Bucket
+      UISourceKey:
+        default: UI Source Key
+      WebComponentSourceKey:
+        default: Web Component Source Key
+Parameters:
+  OcrBackend:
+    Type: String
+    Default: textract
+    AllowedValues:
+    - textract
+    - bedrock
+    Description: OCR backend to use (textract or bedrock)
+  BedrockOcrModelId:
+    Type: String
+    Default: meta.llama3-2-90b-instruct-v1:0
+    Description: Bedrock model ID for OCR (if backend=bedrock)
+    AllowedValues:
+    - meta.llama3-2-90b-instruct-v1:0
+    - meta.llama3-2-11b-instruct-v1:0
+    - us.anthropic.claude-sonnet-4-20250514-v1:0
+    - us.anthropic.claude-haiku-4-5-20251001-v1:0
+    ConstraintDescription: Must be a valid Bedrock vision-capable model ID
+  CaptionModelId:
+    Type: String
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID for image caption generation
+  UISourceBucket:
+    Type: String
+    Description: S3 bucket containing UI source code zip
+    Default: ragstack-quicklaunch-public-631094035453
+  UISourceKey:
+    Type: String
+    Description: S3 key for UI source code zip
+    Default: source/ui.zip
+  WebComponentSourceKey:
+    Type: String
+    Description: S3 key for web component source code zip
+    Default: source/ragstack-chat.zip
+  AdminEmail:
+    Type: String
+    Description: Admin email for Cognito user and CloudWatch/budget alerts
+    AllowedPattern: ^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$
+    ConstraintDescription: Must be a valid email address
+  BuildDashboard:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Description: Build and deploy the React admin dashboard UI
+  BuildWebComponent:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Description: Build and deploy the embeddable chat web component
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+Conditions:
+  BuildUI:
+    Fn::Equals:
+    - Ref: BuildDashboard
+    - 'true'
+  BuildWC:
+    Fn::Equals:
+    - Ref: BuildWebComponent
+    - 'true'
+  BuildAnyUI:
+    Fn::Or:
+    - Condition: BuildUI
+    - Condition: BuildWC
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-data-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: CleanupIncompleteUploads
+          Status: Enabled
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 7
+        - Id: DeleteWorkingFiles
+          Status: Enabled
+          ExpirationInDays: 7
+          Prefix: working/
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - '*'
+          AllowedMethods:
+          - PUT
+          - POST
+          - GET
+          - HEAD
+          AllowedOrigins:
+          - Fn::Sub: https://${CloudFrontDistribution.DomainName}
+          MaxAge: 3000
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: DataBucket
+  VectorBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-vectors-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: CleanupOldVectors
+          Status: Enabled
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 7
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: VectorBucket
+  UICodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Condition: BuildUI
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              Fn::Sub: codebuild.${AWS::URLSuffix}
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: CodeBuildUIPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:s3:::${UISourceBucket}/*
+          - Effect: Allow
+            Action:
+            - s3:ListBucket
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:s3:::${UISourceBucket}
+          - Effect: Allow
+            Action:
+            - s3:ListBucket
+            - s3:PutObject
+            - s3:DeleteObject
+            Resource:
+            - Fn::Sub: ${UIBucket.Arn}
+            - Fn::Sub: ${UIBucket.Arn}/*
+          - Effect: Allow
+            Action:
+            - cloudfront:CreateInvalidation
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
+          - Effect: Allow
+            Action:
+            - cloudformation:DescribeStacks
+            Resource:
+              Ref: AWS::StackId
+          - Effect: Allow
+            Action:
+            - events:PutRule
+            - events:PutTargets
+            - events:RemoveTargets
+            - events:DeleteRule
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: '*'
+    Metadata:
+      SamResourceId: UICodeBuildServiceRole
+  UICodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Condition: BuildUI
+    DependsOn: UICodeBuildServiceRole
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-webui-build
+      Description:
+        Fn::Sub: Web UI build for ${AWS::StackName}
+      ServiceRole:
+        Fn::GetAtt:
+        - UICodeBuildServiceRole
+        - Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location:
+          Fn::Sub: ${UISourceBucket}/${UISourceKey}
+        BuildSpec: "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo\
+          \ \"Installing dependencies...\"\n      - cd ui\n      - npm install\n \
+          \ build:\n    commands:\n      - echo \"Building React application...\"\n\
+          \      - npm run build\n  post_build:\n    commands:\n      - echo \"Deploying\
+          \ to S3...\"\n      - aws s3 sync dist/ s3://${UI_BUCKET}/ --delete\n  \
+          \    - echo \"Invalidating CloudFront cache...\"\n      - aws cloudfront\
+          \ create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths \"\
+          /*\"\n      - echo \"\"\n      - echo \"============================================================\"\
+          \n      - echo \"DEPLOYMENT COMPLETE\"\n      - echo \"============================================================\"\
+          \n      - echo \"\"\n      - echo \"Dashboard UI:  https://${CLOUDFRONT_DOMAIN}\"\
+          \n      - echo \"GraphQL API:   ${VITE_GRAPHQL_URL}\"\n      - echo \"\"\
+          \n      - echo \"============================================================\"\
+          \n"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+        - Name: VITE_AWS_REGION
+          Value:
+            Ref: AWS::Region
+        - Name: VITE_USER_POOL_ID
+          Value:
+            Ref: UserPool
+        - Name: VITE_USER_POOL_CLIENT_ID
+          Value:
+            Ref: UserPoolClient
+        - Name: VITE_IDENTITY_POOL_ID
+          Value:
+            Ref: IdentityPool
+        - Name: VITE_GRAPHQL_URL
+          Value:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+        - Name: VITE_DATA_BUCKET
+          Value:
+            Ref: DataBucket
+        - Name: UI_BUCKET
+          Value:
+            Ref: UIBucket
+        - Name: CLOUDFRONT_DIST_ID
+          Value:
+            Ref: CloudFrontDistribution
+        - Name: CLOUDFRONT_DOMAIN
+          Value:
+            Fn::GetAtt:
+            - CloudFrontDistribution
+            - DomainName
+      TimeoutInMinutes: 30
+    Metadata:
+      SamResourceId: UICodeBuildProject
+  UIBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-ui-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: UIBucket
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment:
+          Fn::Sub: OAI for ${AWS::StackName} UI
+    Metadata:
+      SamResourceId: CloudFrontOriginAccessIdentity
+  UIBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: UIBucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - CloudFrontOriginAccessIdentity
+              - S3CanonicalUserId
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: ${UIBucket.Arn}/*
+    Metadata:
+      SamResourceId: UIBucketPolicy
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment:
+          Fn::Sub: ${AWS::StackName} UI Distribution
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Origins:
+        - Id: S3Origin
+          DomainName:
+            Fn::GetAtt:
+            - UIBucket
+            - RegionalDomainName
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Sub: origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachedMethods:
+          - GET
+          - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+          ErrorCachingMinTTL: 300
+        - ErrorCode: 404
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+          ErrorCachingMinTTL: 300
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+    Metadata:
+      SamResourceId: CloudFrontDistribution
+  WebComponentAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-wc-assets-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: DeleteOldVersions
+          Status: Enabled
+          NoncurrentVersionExpirationInDays: 30
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: WebComponentAssetsBucket
+  WebComponentOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment:
+          Fn::Sub: OAI for ${AWS::StackName} web component CDN
+    Metadata:
+      SamResourceId: WebComponentOriginAccessIdentity
+  WebComponentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: WebComponentAssetsBucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - WebComponentOriginAccessIdentity
+              - S3CanonicalUserId
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: ${WebComponentAssetsBucket.Arn}/*
+    Metadata:
+      SamResourceId: WebComponentBucketPolicy
+  WebComponentCORSPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name:
+          Fn::Sub: ${AWS::StackName}-wc-cors
+        Comment: CORS policy for web component CDN
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items:
+            - '*'
+          AccessControlAllowHeaders:
+            Items:
+            - '*'
+          AccessControlAllowMethods:
+            Items:
+            - GET
+            - HEAD
+            - OPTIONS
+          AccessControlAllowCredentials: false
+          OriginOverride: true
+    Metadata:
+      SamResourceId: WebComponentCORSPolicy
+  WebComponentDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment:
+          Fn::Sub: CDN for ${AWS::StackName} web component
+        DefaultRootObject: ragstack-chat.js
+        Origins:
+        - Id: WebComponentS3Origin
+          DomainName:
+            Fn::GetAtt:
+            - WebComponentAssetsBucket
+            - RegionalDomainName
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Sub: origin-access-identity/cloudfront/${WebComponentOriginAccessIdentity}
+        DefaultCacheBehavior:
+          TargetOriginId: WebComponentS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachedMethods:
+          - GET
+          - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId:
+            Ref: WebComponentCORSPolicy
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: WebComponentDistribution
+  WebComponentBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: WebComponentBuildPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*
+            - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*:*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:ListBucket
+            Resource:
+            - Fn::GetAtt:
+              - WebComponentAssetsBucket
+              - Arn
+            - Fn::Sub: ${WebComponentAssetsBucket.Arn}/*
+          - Effect: Allow
+            Action:
+            - cloudfront:CreateInvalidation
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${WebComponentDistribution}
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:s3:::${UISourceBucket}/*
+          - Effect: Allow
+            Action:
+            - s3:ListBucket
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:s3:::${UISourceBucket}
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            Resource:
+            - Fn::GetAtt:
+              - ConfigurationTable
+              - Arn
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: WebComponentBuildRole
+  WebComponentBuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: WebComponentBuildRole
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-wc-build
+      Description: Build and deploy web component to CDN
+      ServiceRole:
+        Fn::GetAtt:
+        - WebComponentBuildRole
+        - Arn
+      EncryptionKey: alias/aws/s3
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: S3
+        Location:
+          Fn::Sub: ${UISourceBucket}/${WebComponentSourceKey}
+        BuildSpec: "version: 0.2\nphases:\n  install:\n    runtime-versions:\n   \
+          \   nodejs: 24\n    commands:\n      - echo \"Installing dependencies...\"\
+          \n      - cd src/ragstack-chat\n      - npm ci\n  pre_build:\n    commands:\n\
+          \      - echo \"Setting up build environment...\"\n      - echo \"\u2713\
+          \ SAM API endpoint for chat queries - $SAM_API_ENDPOINT\"\n  build:\n  \
+          \  commands:\n      - echo \"Building web component...\"\n      - SAM_GRAPHQL_ENDPOINT=\"\
+          $SAM_API_ENDPOINT\" npm run build:wc\n      - ls -lh dist/\n  post_build:\n\
+          \    commands:\n      - echo \"Deploying to S3...\"\n      - aws s3 cp dist/wc.js\
+          \ s3://${ASSET_BUCKET}/ragstack-chat.js --content-type application/javascript\
+          \ --cache-control \"public, max-age=31536000\"\n      - aws s3 cp dist/wc.esm.js\
+          \ s3://${ASSET_BUCKET}/ragstack-chat.esm.js --content-type application/javascript\
+          \ --cache-control \"public, max-age=31536000\"\n      - echo \"Generating\
+          \ config.json...\"\n      - echo \"{\\\"apiEndpoint\\\":\\\"${SAM_API_ENDPOINT}\\\
+          \",\\\"identityPoolId\\\":\\\"${IDENTITY_POOL_ID}\\\",\\\"region\\\":\\\"\
+          ${AWS_REGION}\\\"}\" > dist/config.json\n      - aws s3 cp dist/config.json\
+          \ s3://${ASSET_BUCKET}/config.json --content-type application/json --cache-control\
+          \ \"public, max-age=300\"\n      - echo \"Invalidating CloudFront cache...\"\
+          \n      - aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID}\
+          \ --paths \"/ragstack-chat.js\" \"/ragstack-chat.esm.js\" \"/config.json\"\
+          \n      - echo \"Deployment complete!\"\n"
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+        - Name: ASSET_BUCKET
+          Value:
+            Ref: WebComponentAssetsBucket
+        - Name: DISTRIBUTION_ID
+          Value:
+            Ref: WebComponentDistribution
+        - Name: ARTIFACT_BUCKET
+          Value:
+            Ref: UISourceBucket
+        - Name: CONFIG_TABLE
+          Value:
+            Ref: ConfigurationTable
+        - Name: SAM_API_ENDPOINT
+          Value:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+        - Name: IDENTITY_POOL_ID
+          Value:
+            Ref: IdentityPool
+        - Name: AWS_REGION
+          Value:
+            Ref: AWS::Region
+      TimeoutInMinutes: 15
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: WebComponentBuildProject
+  TrackingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-tracking
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: document_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: document_id
+        KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: TrackingTable
+  MeteringTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-metering
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: document_id
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: S
+      KeySchema:
+      - AttributeName: document_id
+        KeyType: HASH
+      - AttributeName: timestamp
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: CostCenter
+        Value: Engineering
+    Metadata:
+      SamResourceId: MeteringTable
+  ConfigurationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-config
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: Configuration
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Configuration
+        KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: Purpose
+        Value: Runtime Configuration Storage
+    Metadata:
+      SamResourceId: ConfigurationTable
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-conversations
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: conversationId
+        AttributeType: S
+      - AttributeName: turnNumber
+        AttributeType: N
+      KeySchema:
+      - AttributeName: conversationId
+        KeyType: HASH
+      - AttributeName: turnNumber
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: Purpose
+        Value: Conversation History Storage
+    Metadata:
+      SamResourceId: ConversationHistoryTable
+  ScrapeJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-scrape-jobs
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: job_id
+        AttributeType: S
+      - AttributeName: base_url
+        AttributeType: S
+      - AttributeName: created_at
+        AttributeType: S
+      KeySchema:
+      - AttributeName: job_id
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: BaseUrlIndex
+        KeySchema:
+        - AttributeName: base_url
+          KeyType: HASH
+        - AttributeName: created_at
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: Purpose
+        Value: Web Scraping Job Tracking
+    Metadata:
+      SamResourceId: ScrapeJobsTable
+  ScrapeUrlsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-scrape-urls
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: job_id
+        AttributeType: S
+      - AttributeName: url
+        AttributeType: S
+      - AttributeName: url_hash
+        AttributeType: S
+      KeySchema:
+      - AttributeName: job_id
+        KeyType: HASH
+      - AttributeName: url
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: UrlHashIndex
+        KeySchema:
+        - AttributeName: url_hash
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: Purpose
+        Value: Web Scraping URL Tracking
+    Metadata:
+      SamResourceId: ScrapeUrlsTable
+  RagstackCommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Sub: ${AWS::StackName}-Common
+      Description: Shared utilities for Lambda functions
+      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/97443234832150da2fe9b3bc06029e3f
+      CompatibleRuntimes:
+      - python3.13
+    Metadata:
+      BuildMethod: python3.13
+      SamResourceId: RagstackCommonLayer
+  ProcessDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-process
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f2cfa648e496e565141e74f9e20fd480
+      Handler: index.lambda_handler
+      Description: Process document - OCR and text extraction
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 3008
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn:
+          Fn::GetAtt:
+          - ProcessingDLQ
+          - Arn
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MeteringTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - textract:DetectDocumentText
+          - textract:AnalyzeDocument
+          Resource: '*'
+        - Effect: Allow
+          Action: bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ProcessDocumentFunction
+  GetPageInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-getpageinfo
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/521e43533f12d1beda332ea0271be77e
+      Handler: index.lambda_handler
+      Description: Count PDF pages and determine processing strategy
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+    Metadata:
+      SamResourceId: GetPageInfoFunction
+  CombinePagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-combinepages
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/3e33677afecfc59abcce9701e7c93f50
+      Handler: index.lambda_handler
+      Description: Combine partial text files from batch processing
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          INGEST_TO_KB_FUNCTION_ARN:
+            Fn::GetAtt:
+            - IngestToKBFunction
+            - Arn
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+      - Statement:
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - IngestToKBFunction
+            - Arn
+    Metadata:
+      SamResourceId: CombinePagesFunction
+  QueueProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-queue-processor
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4d5b6565150bc0255654d1e985006102
+      Handler: index.lambda_handler
+      Description: Process SQS messages to start Step Functions executions
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      ReservedConcurrentExecutions: 3
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          STATE_MACHINE_ARN:
+            Fn::GetAtt:
+            - ProcessingStateMachine
+            - Arn
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - StepFunctionsExecutionPolicy:
+          StateMachineName:
+            Fn::GetAtt:
+            - ProcessingStateMachine
+            - Name
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - DocumentProcessingQueue
+              - Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+            - ReportBatchItemFailures
+    Metadata:
+      SamResourceId: QueueProcessorFunction
+  EnqueueBatchesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-enqueue-batches
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f4d3800553a0c389361b12b76a1813a6
+      Handler: index.lambda_handler
+      Description: Queue individual batches to SQS for rate-limited processing
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+      - Ref: RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          BATCH_QUEUE_URL:
+            Ref: BatchProcessingQueue
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - BatchProcessingQueue
+            - QueueName
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: EnqueueBatchesFunction
+  BatchProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-batch-processor
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/6198bcf18b51187cf9a78bdf8ea495ad
+      Handler: index.lambda_handler
+      Description: Process individual 10-page batches with global rate limiting
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 3008
+      ReservedConcurrentExecutions: 10
+      Layers:
+      - Ref: RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          COMBINE_PAGES_FUNCTION_ARN:
+            Fn::GetAtt:
+            - CombinePagesFunction
+            - Arn
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - CombinePagesFunction
+            - Arn
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action:
+          - textract:DetectDocumentText
+          - textract:AnalyzeDocument
+          Resource: '*'
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - BatchProcessingQueue
+              - Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+            - ReportBatchItemFailures
+    Metadata:
+      SamResourceId: BatchProcessorFunction
+  IngestToKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-ingest
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/91c6dea9e6ca8aa0bfd5f156ee8e1a12
+      Handler: index.lambda_handler
+      Description: Ingest documents directly into Knowledge Base
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - TextDataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Layers:
+      - Ref: RagstackCommonLayer
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetKnowledgeBase
+          - bedrock:GetDataSource
+          - bedrock:ListDataSources
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: IngestToKBFunction
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-process-image
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/1bb7d1ae1330dc99face2e1e5123c1b8
+      Handler: index.lambda_handler
+      Description: Process uploaded images and ingest to Knowledge Base
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - ImageDataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          DATA_BUCKET:
+            Ref: DataBucket
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataBucket
+      - S3WritePolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetKnowledgeBase
+          - bedrock:GetDataSource
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+    Metadata:
+      SamResourceId: ProcessImageFunction
+  ProcessZipFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-process-zip
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/824ef920324472b699a5d03ef983833b
+      Handler: index.lambda_handler
+      Description: Process ZIP archives containing images with optional captions manifest
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 600
+      MemorySize: 1024
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - ImageDataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          DATA_BUCKET:
+            Ref: DataBucket
+          CAPTION_MODEL_ID:
+            Ref: CaptionModelId
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataBucket
+      - S3WritePolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action:
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetKnowledgeBase
+          - bedrock:GetDataSource
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ProcessZipFunction
+  QueryKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-query
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/cbdd311688dc68b8211f71878bd01cca
+      Handler: index.lambda_handler
+      Description: Query Bedrock Knowledge Base
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 1769
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - TextDataSourceId
+          IMAGE_DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - ImageDataSourceId
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          CONVERSATION_TABLE_NAME:
+            Ref: ConversationHistoryTable
+          TRACKING_TABLE:
+            Ref: TrackingTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConversationHistoryTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: TrackingTable
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataBucket
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:Retrieve
+          - bedrock:RetrieveAndGenerate
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action: bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action: bedrock:GetInferenceProfile
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+    Metadata:
+      SamResourceId: QueryKBFunction
+  SearchKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-search
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ae44867a0f5f1b24fa26dd5a19aa87ea
+      Handler: index.lambda_handler
+      Description: Search Bedrock Knowledge Base (raw vector search)
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - TextDataSourceId
+          IMAGE_DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - ImageDataSourceId
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          TRACKING_TABLE:
+            Ref: TrackingTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:Retrieve
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          Resource:
+          - Fn::GetAtt:
+            - ConfigurationTable
+            - Arn
+          - Fn::GetAtt:
+            - TrackingTable
+            - Arn
+    Metadata:
+      SamResourceId: SearchKBFunction
+  ConfigurationResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-config
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/53b11cfff80a7bbbdfc7dc9e28c5809a
+      Handler: index.lambda_handler
+      Description: GraphQL resolver for configuration management
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          STATE_MACHINE_ARN:
+            Ref: ProcessingStateMachine
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+          Resource:
+            Fn::GetAtt:
+            - ConfigurationTable
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          - dynamodb:Query
+          Resource:
+          - Fn::GetAtt:
+            - TrackingTable
+            - Arn
+          - Fn::Sub: ${TrackingTable.Arn}/index/StatusIndex
+      - Statement:
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: ProcessingStateMachine
+    Metadata:
+      SamResourceId: ConfigurationResolverFunction
+  ApiKeyResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-apikey
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/9da69d81df5e9c9ab476e75ff23acdff
+      Handler: index.lambda_handler
+      Description: GraphQL resolver for API key management
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          APPSYNC_API_ID:
+            Fn::GetAtt:
+            - GraphQLApi
+            - ApiId
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - appsync:ListApiKeys
+          - appsync:CreateApiKey
+          - appsync:DeleteApiKey
+          Resource:
+            Fn::Sub: arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:*
+    Metadata:
+      SamResourceId: ApiKeyResolverFunction
+  ScrapeStartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-scrape-start
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/bc87167c4af20135b322c4ca1f21dece
+      Handler: index.lambda_handler
+      Description: Initiate web scraping job
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+          SCRAPE_DISCOVERY_QUEUE_URL:
+            Ref: ScrapeDiscoveryQueue
+          SCRAPE_STATE_MACHINE_ARN:
+            Ref: ScrapeStateMachine
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - ScrapeDiscoveryQueue
+            - QueueName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: ScrapeStateMachine
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ScrapeStartFunction
+  ScrapeDiscoverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-scrape-discover
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/da6a66f101485f40ec989c050b83a443
+      Handler: index.lambda_handler
+      Description: Discover URLs during web scraping
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+          SCRAPE_URLS_TABLE:
+            Ref: ScrapeUrlsTable
+          SCRAPE_DISCOVERY_QUEUE_URL:
+            Ref: ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_QUEUE_URL:
+            Ref: ScrapeProcessingQueue
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - ScrapeDiscoveryQueue
+              - Arn
+            BatchSize: 1
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeUrlsTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - ScrapeDiscoveryQueue
+            - QueueName
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - ScrapeProcessingQueue
+            - QueueName
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ScrapeDiscoverFunction
+  ScrapeProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-scrape-process
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/2aaf512fae3a7df06a7270f231d11cf5
+      Handler: index.lambda_handler
+      Description: Process scraped pages and save to S3
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+          SCRAPE_URLS_TABLE:
+            Ref: ScrapeUrlsTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - ScrapeProcessingQueue
+              - Arn
+            BatchSize: 1
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeUrlsTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ScrapeProcessFunction
+  ScrapeStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-scrape-status
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/151d7f0aaa4816fa127af21266d27880
+      Handler: index.lambda_handler
+      Description: Return scrape job status for Step Functions polling
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+          SCRAPE_URLS_TABLE:
+            Ref: ScrapeUrlsTable
+          SCRAPE_DISCOVERY_QUEUE_URL:
+            Ref: ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_QUEUE_URL:
+            Ref: ScrapeProcessingQueue
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeUrlsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - sqs:GetQueueAttributes
+          - sqs:SendMessage
+          Resource:
+          - Fn::GetAtt:
+            - ScrapeDiscoveryQueue
+            - Arn
+          - Fn::GetAtt:
+            - ScrapeProcessingQueue
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ScrapeStatusFunction
+  StateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambdas
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::GetAtt:
+              - ProcessDocumentFunction
+              - Arn
+            - Fn::GetAtt:
+              - IngestToKBFunction
+              - Arn
+            - Fn::GetAtt:
+              - GetPageInfoFunction
+              - Arn
+            - Fn::GetAtt:
+              - EnqueueBatchesFunction
+              - Arn
+      - PolicyName: CloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogDelivery
+            - logs:GetLogDelivery
+            - logs:UpdateLogDelivery
+            - logs:DeleteLogDelivery
+            - logs:ListLogDeliveries
+            - logs:PutLogEvents
+            - logs:PutResourcePolicy
+            - logs:DescribeResourcePolicies
+            - logs:DescribeLogGroups
+            Resource: '*'
+    Metadata:
+      SamResourceId: StateMachineExecutionRole
+  ProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ProcessingPipeline
+      DefinitionUri:
+        Bucket: ragstack-quicklaunch-public-631094035453
+        Key: ragstack-quicklaunch/73f97de83b2fd9a4e1ae76847f2cecc0
+      DefinitionSubstitutions:
+        ProcessDocumentFunctionArn:
+          Fn::GetAtt:
+          - ProcessDocumentFunction
+          - Arn
+        IngestToKBFunctionArn:
+          Fn::GetAtt:
+          - IngestToKBFunction
+          - Arn
+        GetPageInfoFunctionArn:
+          Fn::GetAtt:
+          - GetPageInfoFunction
+          - Arn
+        EnqueueBatchesFunctionArn:
+          Fn::GetAtt:
+          - EnqueueBatchesFunction
+          - Arn
+      Role:
+        Fn::GetAtt:
+        - StateMachineExecutionRole
+        - Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+        - CloudWatchLogsLogGroup:
+            LogGroupArn:
+              Fn::GetAtt:
+              - StateMachineLogGroup
+              - Arn
+    Metadata:
+      SamResourceId: ProcessingStateMachine
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/vendedlogs/states/${AWS::StackName}-Pipeline
+      RetentionInDays: 30
+    Metadata:
+      SamResourceId: StateMachineLogGroup
+  ScrapeStateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambdas
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::GetAtt:
+              - ScrapeStatusFunction
+              - Arn
+      - PolicyName: DynamoDBAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:UpdateItem
+            Resource:
+            - Fn::GetAtt:
+              - ScrapeJobsTable
+              - Arn
+      - PolicyName: CloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogDelivery
+            - logs:GetLogDelivery
+            - logs:UpdateLogDelivery
+            - logs:DeleteLogDelivery
+            - logs:ListLogDeliveries
+            - logs:PutLogEvents
+            - logs:PutResourcePolicy
+            - logs:DescribeResourcePolicies
+            - logs:DescribeLogGroups
+            Resource: '*'
+    Metadata:
+      SamResourceId: ScrapeStateMachineExecutionRole
+  ScrapeStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeWorkflow
+      DefinitionUri:
+        Bucket: ragstack-quicklaunch-public-631094035453
+        Key: ragstack-quicklaunch/bbc1f04e89c20366d6682046bc86f6e9
+      DefinitionSubstitutions:
+        ScrapeStatusFunctionArn:
+          Fn::GetAtt:
+          - ScrapeStatusFunction
+          - Arn
+        ScrapeJobsTable:
+          Ref: ScrapeJobsTable
+      Role:
+        Fn::GetAtt:
+        - ScrapeStateMachineExecutionRole
+        - Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+        - CloudWatchLogsLogGroup:
+            LogGroupArn:
+              Fn::GetAtt:
+              - ScrapeStateMachineLogGroup
+              - Arn
+    Metadata:
+      SamResourceId: ScrapeStateMachine
+  ScrapeStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/vendedlogs/states/${AWS::StackName}-ScrapeWorkflow
+      RetentionInDays: 30
+    Metadata:
+      SamResourceId: ScrapeStateMachineLogGroup
+  S3UploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-S3UploadTrigger
+      Description: Trigger processing pipeline on S3 upload to input/ prefix (excludes
+        scraped content)
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: input/
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - DocumentProcessingQueue
+          - Arn
+        Id: SendToProcessingQueue
+        InputTransformer:
+          InputPathsMap:
+            bucket: $.detail.bucket.name
+            key: $.detail.object.key
+          InputTemplate: "{\n  \"document_id\": \"<key>\",\n  \"input_s3_uri\": \"\
+            s3://<bucket>/<key>\",\n  \"output_s3_prefix\": \"s3://<bucket>/output/<key>/\"\
+            \n}\n"
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+    Metadata:
+      SamResourceId: S3UploadRule
+  ImageUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ImageUploadTrigger
+      Description: Trigger image processing on S3 upload to images/ prefix (metadata.json)
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - suffix: /metadata.json
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessImageFunction
+          - Arn
+        Id: TriggerImageProcessing
+        InputTransformer:
+          InputPathsMap:
+            bucket: $.detail.bucket.name
+            key: $.detail.object.key
+          InputTemplate: "{\n  \"image_id\": \"<key>\",\n  \"input_s3_uri\": \"s3://<bucket>/<key>\"\
+            \n}\n"
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+    Metadata:
+      SamResourceId: ImageUploadRule
+  ImageUploadRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - ImageUploadRule
+        - Arn
+    Metadata:
+      SamResourceId: ImageUploadRulePermission
+  ImageAutoProcessRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ImageAutoProcess
+      Description: Trigger image processing on direct image upload (for API/MCP with
+        autoProcess=true)
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: images/
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessImageFunction
+          - Arn
+        Id: TriggerImageAutoProcess
+        InputTransformer:
+          InputPathsMap:
+            bucket: $.detail.bucket.name
+            key: $.detail.object.key
+          InputTemplate: "{\n  \"image_id\": \"<key>\",\n  \"input_s3_uri\": \"s3://<bucket>/<key>\"\
+            ,\n  \"trigger_type\": \"auto_process\"\n}\n"
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+    Metadata:
+      SamResourceId: ImageAutoProcessRule
+  ImageAutoProcessRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessImageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - ImageAutoProcessRule
+        - Arn
+    Metadata:
+      SamResourceId: ImageAutoProcessRulePermission
+  ZipUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-zip-upload
+      Description: Trigger ZIP processing on S3 upload to uploads/ prefix (.zip files)
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: uploads/
+            - suffix: .zip
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessZipFunction
+          - Arn
+        Id: TriggerZipProcessing
+        InputTransformer:
+          InputPathsMap:
+            bucket: $.detail.bucket.name
+            key: $.detail.object.key
+          InputTemplate: "{\n  \"bucket\": \"<bucket>\",\n  \"key\": \"<key>\"\n}\n"
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+    Metadata:
+      SamResourceId: ZipUploadRule
+  ZipUploadRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessZipFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - ZipUploadRule
+        - Arn
+    Metadata:
+      SamResourceId: ZipUploadRulePermission
+  KnowledgeBaseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: bedrock.amazonaws.com
+          Action: sts:AssumeRole
+          Condition:
+            StringEquals:
+              aws:SourceAccount:
+                Ref: AWS::AccountId
+            ArnLike:
+              aws:SourceArn:
+                Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+      Policies:
+      - PolicyName: S3DataSourceAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:ListBucket
+            - s3:GetBucketLocation
+            Resource:
+            - Fn::Sub: ${DataBucket.Arn}
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            Resource:
+            - Fn::Sub: ${DataBucket.Arn}/*
+      - PolicyName: S3VectorsAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:ListBucket
+            Resource:
+            - Fn::Sub: ${VectorBucket.Arn}
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            Resource:
+            - Fn::Sub: ${VectorBucket.Arn}/*
+          - Effect: Allow
+            Action:
+            - s3vectors:DescribeIndex
+            - s3vectors:ReadVectors
+            - s3vectors:WriteVectors
+            - s3vectors:PutVectors
+            - s3vectors:QueryVectors
+            - s3vectors:GetVectors
+            - s3vectors:DeleteVectors
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
+            - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+      - PolicyName: BedrockModelAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            - bedrock:GetAsyncInvoke
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:async-invoke/*
+    Metadata:
+      SamResourceId: KnowledgeBaseRole
+  KnowledgeBaseCustomResourceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-kb-init
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/26ff0bfbd9318571e46f469ce73ed9d7
+      Handler: index.lambda_handler
+      Description: Custom resource for Knowledge Base creation with S3 Vectors
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:CreateKnowledgeBase
+          - bedrock:DeleteKnowledgeBase
+          - bedrock:GetKnowledgeBase
+          - bedrock:UpdateKnowledgeBase
+          - bedrock:ListKnowledgeBases
+          - bedrock:CreateDataSource
+          - bedrock:DeleteDataSource
+          - bedrock:GetDataSource
+          - bedrock:ListDataSources
+          - bedrock-agent:CreateKnowledgeBase
+          - bedrock-agent:DeleteKnowledgeBase
+          - bedrock-agent:GetKnowledgeBase
+          - bedrock-agent:UpdateKnowledgeBase
+          - bedrock-agent:ListKnowledgeBases
+          - bedrock-agent:CreateDataSource
+          - bedrock-agent:DeleteDataSource
+          - bedrock-agent:GetDataSource
+          - bedrock-agent:ListDataSources
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - s3vectors:CreateVectorBucket
+          - s3vectors:GetVectorBucket
+          - s3vectors:CreateIndex
+          - s3vectors:DeleteIndex
+          - s3vectors:DescribeIndex
+          - s3vectors:ListIndices
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
+          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+        - Effect: Allow
+          Action:
+          - iam:PassRole
+          Resource:
+            Fn::GetAtt:
+            - KnowledgeBaseRole
+            - Arn
+        - Effect: Allow
+          Action:
+          - ssm:PutParameter
+          - ssm:DeleteParameter
+          - ssm:GetParameter
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/KnowledgeBaseId
+    Metadata:
+      SamResourceId: KnowledgeBaseCustomResourceFunction
+  KnowledgeBase:
+    Type: Custom::KnowledgeBase
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - KnowledgeBaseCustomResourceFunction
+        - Arn
+      KnowledgeBaseName:
+        Fn::Sub: ${AWS::StackName}-kb
+      RoleArn:
+        Fn::GetAtt:
+        - KnowledgeBaseRole
+        - Arn
+      VectorBucket:
+        Ref: VectorBucket
+      DataBucket:
+        Ref: DataBucket
+      EmbedModelArn:
+        Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0
+      IndexName:
+        Fn::Sub: ${AWS::StackName}-index
+      Region:
+        Ref: AWS::Region
+      ProjectName:
+        Ref: AWS::StackName
+      Version: '2'
+    Metadata:
+      SamResourceId: KnowledgeBase
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName:
+        Fn::Sub: ${AWS::StackName}-Users
+      AutoVerifiedAttributes:
+      - email
+      UsernameAttributes:
+      - email
+      Schema:
+      - Name: email
+        Required: true
+        Mutable: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+      - SOFTWARE_TOKEN_MFA
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+        - Name: verified_email
+          Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+    Metadata:
+      SamResourceId: UserPool
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:
+        Fn::Sub: ${AWS::StackName}-WebClient
+      UserPoolId:
+        Ref: UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+      - ALLOW_USER_SRP_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      TokenValidityUnits:
+        RefreshToken: days
+        AccessToken: minutes
+        IdToken: minutes
+    Metadata:
+      SamResourceId: UserPoolClient
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName:
+        Fn::Sub: ${AWS::StackName}Identity
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+      - ClientId:
+          Ref: UserPoolClient
+        ProviderName:
+          Fn::GetAtt:
+          - UserPool
+          - ProviderName
+    Metadata:
+      SamResourceId: IdentityPool
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId:
+        Ref: IdentityPool
+      Roles:
+        authenticated:
+          Fn::GetAtt:
+          - AuthenticatedRole
+          - Arn
+        unauthenticated:
+          Fn::GetAtt:
+          - UnauthenticatedRole
+          - Arn
+    Metadata:
+      SamResourceId: IdentityPoolRoleAttachment
+  UnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              cognito-identity.amazonaws.com:aud:
+                Ref: IdentityPool
+            ForAnyValue:StringLike:
+              cognito-identity.amazonaws.com:amr: unauthenticated
+      Policies:
+      - PolicyName: UnauthenticatedAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - appsync:GraphQL
+            Resource:
+            - Fn::Sub: ${GraphQLApi.Arn}/*
+            - Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/*/fields/*
+    Metadata:
+      SamResourceId: UnauthenticatedRole
+  AuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              cognito-identity.amazonaws.com:aud:
+                Ref: IdentityPool
+            ForAnyValue:StringLike:
+              cognito-identity.amazonaws.com:amr: authenticated
+      Policies:
+      - PolicyName: AuthenticatedAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:GetObject
+            Resource:
+            - Fn::Sub: ${DataBucket.Arn}/*
+          - Effect: Allow
+            Action:
+            - appsync:GraphQL
+            Resource:
+            - Fn::Sub: ${GraphQLApi.Arn}/*
+    Metadata:
+      SamResourceId: AuthenticatedRole
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-API
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      UserPoolConfig:
+        UserPoolId:
+          Ref: UserPool
+        AwsRegion:
+          Ref: AWS::Region
+        DefaultAction: ALLOW
+      AdditionalAuthenticationProviders:
+      - AuthenticationType: AWS_IAM
+      - AuthenticationType: API_KEY
+      LogConfig:
+        CloudWatchLogsRoleArn:
+          Fn::GetAtt:
+          - AppSyncLogsRole
+          - Arn
+        FieldLogLevel: ERROR
+    Metadata:
+      SamResourceId: GraphQLApi
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/66a9191982d493f6fd4dfd083f9d7fde
+    Metadata:
+      SamResourceId: GraphQLSchema
+  GraphQLApiKey:
+    Type: AWS::AppSync::ApiKey
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Description: Public API key for theme configuration
+      Expires: 1795791181
+    Metadata:
+      SamResourceId: GraphQLApiKey
+  AppSyncLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: appsync.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+    Metadata:
+      SamResourceId: AppSyncLogsRole
+  AppSyncResolverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-appsync
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5fcfd3e95e5c339a5be9179443647fff
+      Handler: index.lambda_handler
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          STATE_MACHINE_ARN:
+            Fn::GetAtt:
+            - ProcessingStateMachine
+            - Arn
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+          SCRAPE_URLS_TABLE:
+            Ref: ScrapeUrlsTable
+          SCRAPE_START_FUNCTION_ARN:
+            Fn::GetAtt:
+            - ScrapeStartFunction
+            - Arn
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - Statement:
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Fn::GetAtt:
+            - ProcessingStateMachine
+            - Arn
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ScrapeUrlsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - ScrapeStartFunction
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
+          - states:StopExecution
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+    Metadata:
+      SamResourceId: AppSyncResolverFunction
+  StartUICodeBuild:
+    Type: AWS::Serverless::Function
+    Condition: BuildAnyUI
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-ui-builder
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/d1ffdee8b4deb6acf06debadaaee341c
+      Handler: index.lambda_handler
+      Description: Custom resource to trigger UI CodeBuild project
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - codebuild:StartBuild
+          - codebuild:BatchGetBuilds
+          Resource:
+          - Fn::If:
+            - BuildUI
+            - Fn::GetAtt:
+              - UICodeBuildProject
+              - Arn
+            - Ref: AWS::NoValue
+          - Fn::If:
+            - BuildWC
+            - Fn::GetAtt:
+              - WebComponentBuildProject
+              - Arn
+            - Ref: AWS::NoValue
+      - Statement:
+        - Effect: Allow
+          Action:
+          - events:PutRule
+          - events:DeleteRule
+          - events:PutTargets
+          - events:RemoveTargets
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - lambda:AddPermission
+          - lambda:RemovePermission
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ui-builder
+      - Statement:
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*
+    Metadata:
+      SamResourceId: StartUICodeBuild
+  CodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Condition: BuildUI
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - StartUICodeBuild
+        - Arn
+      BuildProjectName:
+        Ref: UICodeBuildProject
+      SourceLocationOverride:
+        Fn::Sub: ${UISourceBucket}/${UISourceKey}
+      SuccessUrl:
+        Fn::Sub: https://${CloudFrontDistribution.DomainName}
+    Metadata:
+      SamResourceId: CodeBuildRun
+  WCCodeBuildRun:
+    Type: Custom::CodeBuildRun
+    Condition: BuildWC
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - StartUICodeBuild
+        - Arn
+      BuildProjectName:
+        Ref: WebComponentBuildProject
+      SourceLocationOverride:
+        Fn::Sub: ${UISourceBucket}/${WebComponentSourceKey}
+      SuccessUrl:
+        Fn::Sub: https://${WebComponentDistribution.DomainName}/ragstack-chat.js
+    Metadata:
+      SamResourceId: WCCodeBuildRun
+  AppSyncLambdaDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: LambdaDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncLambdaRole
+        - Arn
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - AppSyncResolverFunction
+          - Arn
+    Metadata:
+      SamResourceId: AppSyncLambdaDataSource
+  AppSyncLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: appsync.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambda
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::GetAtt:
+              - AppSyncResolverFunction
+              - Arn
+            - Fn::GetAtt:
+              - QueryKBFunction
+              - Arn
+            - Fn::GetAtt:
+              - SearchKBFunction
+              - Arn
+            - Fn::GetAtt:
+              - ConfigurationResolverFunction
+              - Arn
+            - Fn::GetAtt:
+              - ApiKeyResolverFunction
+              - Arn
+    Metadata:
+      SamResourceId: AppSyncLambdaRole
+  KBQueryDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: KBQueryDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncLambdaRole
+        - Arn
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - QueryKBFunction
+          - Arn
+    Metadata:
+      SamResourceId: KBQueryDataSource
+  KBSearchDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: KBSearchDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncLambdaRole
+        - Arn
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - SearchKBFunction
+          - Arn
+    Metadata:
+      SamResourceId: KBSearchDataSource
+  ConfigurationResolverDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: ConfigurationResolverDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncLambdaRole
+        - Arn
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - ConfigurationResolverFunction
+          - Arn
+    Metadata:
+      SamResourceId: ConfigurationResolverDataSource
+  ApiKeyResolverDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: ApiKeyResolverDataSource
+      Type: AWS_LAMBDA
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncLambdaRole
+        - Arn
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - ApiKeyResolverFunction
+          - Arn
+    Metadata:
+      SamResourceId: ApiKeyResolverDataSource
+  GetDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getDocument
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetDocumentResolver
+  ListDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: listDocuments
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ListDocumentsResolver
+  CreateUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: createUploadUrl
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CreateUploadUrlResolver
+  ProcessDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: processDocument
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ProcessDocumentResolver
+  QueryKBResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: queryKnowledgeBase
+      DataSourceName:
+        Fn::GetAtt:
+        - KBQueryDataSource
+        - Name
+    Metadata:
+      SamResourceId: QueryKBResolver
+  SearchKBResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: searchKnowledgeBase
+      DataSourceName:
+        Fn::GetAtt:
+        - KBSearchDataSource
+        - Name
+    Metadata:
+      SamResourceId: SearchKBResolver
+  GetConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getConfiguration
+      DataSourceName:
+        Fn::GetAtt:
+        - ConfigurationResolverDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetConfigurationResolver
+  UpdateConfigurationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: updateConfiguration
+      DataSourceName:
+        Fn::GetAtt:
+        - ConfigurationResolverDataSource
+        - Name
+    Metadata:
+      SamResourceId: UpdateConfigurationResolver
+  GetApiKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getApiKey
+      DataSourceName:
+        Fn::GetAtt:
+        - ApiKeyResolverDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetApiKeyResolver
+  RegenerateApiKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: regenerateApiKey
+      DataSourceName:
+        Fn::GetAtt:
+        - ApiKeyResolverDataSource
+        - Name
+    Metadata:
+      SamResourceId: RegenerateApiKeyResolver
+  GetScrapeJobResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getScrapeJob
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetScrapeJobResolver
+  ListScrapeJobsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: listScrapeJobs
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ListScrapeJobsResolver
+  CheckScrapeUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: checkScrapeUrl
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CheckScrapeUrlResolver
+  StartScrapeResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: startScrape
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: StartScrapeResolver
+  CancelScrapeResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: cancelScrape
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CancelScrapeResolver
+  CreateImageUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: createImageUploadUrl
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CreateImageUploadUrlResolver
+  GenerateCaptionResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: generateCaption
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GenerateCaptionResolver
+  SubmitImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: submitImage
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: SubmitImageResolver
+  GetImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getImage
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetImageResolver
+  ListImagesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: listImages
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ListImagesResolver
+  DeleteImageResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: deleteImage
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: DeleteImageResolver
+  DeleteDocumentsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: deleteDocuments
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: DeleteDocumentsResolver
+  CreateZipUploadUrlResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: createZipUploadUrl
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CreateZipUploadUrlResolver
+  ProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-Processing-DLQ
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: 300
+      SqsManagedSseEnabled: true
+    Metadata:
+      SamResourceId: ProcessingDLQ
+  DocumentProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-doc-processing
+      VisibilityTimeout: 1800
+      MessageRetentionPeriod: 86400
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - ProcessingDLQ
+          - Arn
+        maxReceiveCount: 3
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: DocumentProcessingQueue
+  DocumentProcessingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+      - Ref: DocumentProcessingQueue
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: sqs:SendMessage
+          Resource:
+            Fn::GetAtt:
+            - DocumentProcessingQueue
+            - Arn
+          Condition:
+            ArnEquals:
+              aws:SourceArn:
+                Fn::GetAtt:
+                - S3UploadRule
+                - Arn
+    Metadata:
+      SamResourceId: DocumentProcessingQueuePolicy
+  BatchProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-batch-processing-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: BatchProcessingDLQ
+  BatchProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-batch-processing
+      VisibilityTimeout: 960
+      MessageRetentionPeriod: 86400
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - BatchProcessingDLQ
+          - Arn
+        maxReceiveCount: 3
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: BatchProcessingQueue
+  ScrapeDiscoveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-scrape-discovery-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeDiscoveryDLQ
+  ScrapeDiscoveryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-scrape-discovery
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 86400
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - ScrapeDiscoveryDLQ
+          - Arn
+        maxReceiveCount: 3
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeDiscoveryQueue
+  ScrapeProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-scrape-processing-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeProcessingDLQ
+  ScrapeProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-scrape-processing
+      VisibilityTimeout: 900
+      MessageRetentionPeriod: 86400
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - ScrapeProcessingDLQ
+          - Arn
+        maxReceiveCount: 3
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeProcessingQueue
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: ${AWS::StackName}-Alarms
+      DisplayName:
+        Fn::Sub: ${AWS::StackName} CloudWatch Alarms
+      KmsMasterKeyId: alias/aws/sns
+      Subscription:
+      - Endpoint:
+          Ref: AdminEmail
+        Protocol: email
+    Metadata:
+      SamResourceId: AlarmTopic
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName:
+        Fn::Sub: ${AWS::StackName}-Monitor
+      DashboardBody:
+        Fn::Sub: "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"\
+          x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n \
+          \     \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\"\
+          , \"Invocations\", {\"stat\": \"Sum\", \"label\": \"ProcessDocument\", \"\
+          color\": \"#1f77b4\"}],\n          [\"...\", {\"stat\": \"Sum\", \"label\"\
+          : \"QueryKB\", \"color\": \"#2ca02c\"}]\n        ],\n        \"period\"\
+          : 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\"\
+          ,\n        \"title\": \"Lambda Invocations\",\n        \"yAxis\": {\n  \
+          \        \"left\": {\n            \"min\": 0\n          }\n        }\n \
+          \     }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n\
+          \      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\"\
+          : {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Errors\", {\"\
+          stat\": \"Sum\", \"label\": \"ProcessDocument Errors\", \"color\": \"#d62728\"\
+          }],\n          [\"...\", {\"stat\": \"Sum\", \"label\": \"QueryKB Errors\"\
+          , \"color\": \"#e377c2\"}]\n        ],\n        \"period\": 300,\n     \
+          \   \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n      \
+          \  \"title\": \"Lambda Errors\",\n        \"yAxis\": {\n          \"left\"\
+          : {\n            \"min\": 0\n          }\n        }\n      }\n    },\n \
+          \   {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n \
+          \     \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n  \
+          \      \"metrics\": [\n          [\"AWS/States\", \"ExecutionsFailed\",\
+          \ {\"stat\": \"Sum\", \"color\": \"#d62728\"}],\n          [\".\", \"ExecutionsSucceeded\"\
+          , {\"stat\": \"Sum\", \"color\": \"#2ca02c\"}],\n          [\".\", \"ExecutionsTimedOut\"\
+          , {\"stat\": \"Sum\", \"color\": \"#ff7f0e\"}]\n        ],\n        \"period\"\
+          : 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\"\
+          ,\n        \"title\": \"Step Functions Executions\"\n      }\n    },\n \
+          \   {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n\
+          \      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n \
+          \       \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , {\"label\": \"DLQ Messages\", \"color\": \"#d62728\"}]\n        ],\n \
+          \       \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\"\
+          : \"${AWS::Region}\",\n        \"title\": \"Dead Letter Queue\",\n     \
+          \   \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n      \
+          \    }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n\
+          \      \"x\": 0,\n      \"y\": 12,\n      \"width\": 12,\n      \"height\"\
+          : 6,\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\"\
+          , \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\", \"color\": \"#1f77b4\"\
+          }],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"\
+          , \"color\": \"#ff7f0e\"}]\n        ],\n        \"period\": 300,\n     \
+          \   \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n      \
+          \  \"title\": \"DynamoDB Capacity\"\n      }\n    },\n    {\n      \"type\"\
+          : \"metric\",\n      \"x\": 12,\n      \"y\": 12,\n      \"width\": 12,\n\
+          \      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n\
+          \          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\", \"label\"\
+          : \"ProcessDocument\", \"color\": \"#1f77b4\"}],\n          [\"...\", {\"\
+          stat\": \"Average\", \"label\": \"QueryKB\", \"color\": \"#2ca02c\"}]\n\
+          \        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration\
+          \ (ms)\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\"\
+          : 0\n          }\n        }\n      }\n    }\n  ]\n}\n"
+    Metadata:
+      SamResourceId: MonitoringDashboard
+  ProcessDocumentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: ${AWS::StackName}-ProcessDocument-Errors
+      AlarmDescription: Alert when ProcessDocument Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: FunctionName
+        Value:
+          Ref: ProcessDocumentFunction
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+    Metadata:
+      SamResourceId: ProcessDocumentErrorAlarm
+  DLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: ${AWS::StackName}-DLQ-Messages
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - ProcessingDLQ
+          - QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+    Metadata:
+      SamResourceId: DLQMessagesAlarm
+  StepFunctionsFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: ${AWS::StackName}-StepFunctions-Failures
+      AlarmDescription: Alert when Step Functions executions fail
+      MetricName: ExecutionsFailed
+      Namespace: AWS/States
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: StateMachineArn
+        Value:
+          Ref: ProcessingStateMachine
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+    Metadata:
+      SamResourceId: StepFunctionsFailureAlarm
+  ProcessDocumentThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: ${AWS::StackName}-ProcessDocument-Throttles
+      AlarmDescription: Alert when ProcessDocument Lambda is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: FunctionName
+        Value:
+          Ref: ProcessDocumentFunction
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+    Metadata:
+      SamResourceId: ProcessDocumentThrottleAlarm
+  BudgetSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-budget-sync
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/d3966e140dd3917dd2e571bc16575752
+      Handler: index.lambda_handler
+      Description: Sync budget configuration changes to AWS Budgets
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          BUDGET_NAME:
+            Fn::Sub: ${AWS::StackName}-Monthly-Budget
+          ADMIN_EMAIL:
+            Ref: AdminEmail
+          PROJECT_NAME:
+            Ref: AWS::StackName
+      Events:
+        ConfigStream:
+          Type: DynamoDB
+          Properties:
+            Stream:
+              Fn::GetAtt:
+              - ConfigurationTable
+              - StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 1
+            FilterCriteria:
+              Filters:
+              - Pattern: '{"dynamodb":{"Keys":{"Configuration":{"S":["Custom"]}}}}'
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - budgets:CreateBudget
+          - budgets:ModifyBudget
+          - budgets:DescribeBudget
+          - budgets:ViewBudget
+          - budgets:UpdateBudget
+          Resource: '*'
+    Metadata:
+      SamResourceId: BudgetSyncFunction
+  BudgetInitTrigger:
+    Type: Custom::BudgetInit
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - BudgetSyncFunction
+        - Arn
+      ServiceTimeout: 120
+      Version: '1'
+      Records:
+      - eventName: INSERT
+        dynamodb:
+          Keys:
+            Configuration:
+              S: Custom
+          NewImage:
+            Configuration:
+              S: Custom
+            budget_alert_threshold:
+              N: '100'
+            budget_alert_enabled:
+              BOOL: true
+    Metadata:
+      SamResourceId: BudgetInitTrigger
+  AdminUserProvisionerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-admin-provisioner
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/32fe04c46e3c2cf2fefa1d70465aea74
+      Handler: index.lambda_handler
+      Description: Creates admin user in Cognito idempotently (skips if exists)
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminGetUser
+          - cognito-idp:AdminCreateUser
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+    Metadata:
+      SamResourceId: AdminUserProvisionerFunction
+  AdminUser:
+    Type: Custom::AdminUser
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - AdminUserProvisionerFunction
+        - Arn
+      ServiceTimeout: 120
+      UserPoolId:
+        Ref: UserPool
+      Email:
+        Ref: AdminEmail
+    Metadata:
+      SamResourceId: AdminUser
+Outputs:
+  DataBucketName:
+    Description: S3 bucket for data (input/, output/, working/ prefixes)
+    Value:
+      Ref: DataBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DataBucket
+  VectorBucketName:
+    Description: S3 bucket for embeddings and vectors
+    Value:
+      Ref: VectorBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-VectorBucket
+  UIBucketName:
+    Description: S3 bucket for WebUI hosting
+    Value:
+      Ref: UIBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UIBucket
+  ArtifactBucketName:
+    Condition: BuildUI
+    Description: S3 bucket for deployment artifacts (UI source, web component source)
+    Value:
+      Ref: UISourceBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ArtifactBucket
+  TrackingTableName:
+    Description: DynamoDB table for document tracking
+    Value:
+      Ref: TrackingTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-TrackingTable
+  MeteringTableName:
+    Description: DynamoDB table for usage metering
+    Value:
+      Ref: MeteringTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-MeteringTable
+  ConfigurationTableName:
+    Description: Configuration DynamoDB Table Name
+    Value:
+      Ref: ConfigurationTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ConfigurationTable
+  ConfigurationTableArn:
+    Description: Configuration DynamoDB Table ARN
+    Value:
+      Fn::GetAtt:
+      - ConfigurationTable
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ConfigurationTableArn
+  ConversationHistoryTableName:
+    Description: DynamoDB table for conversation history
+    Value:
+      Ref: ConversationHistoryTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ConversationHistoryTable
+  ConversationHistoryTableArn:
+    Description: DynamoDB table ARN for conversation history
+    Value:
+      Fn::GetAtt:
+      - ConversationHistoryTable
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ConversationHistoryTableArn
+  ScrapeJobsTableName:
+    Description: DynamoDB table for scrape job tracking
+    Value:
+      Ref: ScrapeJobsTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeJobsTable
+  ScrapeJobsTableArn:
+    Description: DynamoDB table ARN for scrape job tracking
+    Value:
+      Fn::GetAtt:
+      - ScrapeJobsTable
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeJobsTableArn
+  ScrapeUrlsTableName:
+    Description: DynamoDB table for scrape URL tracking
+    Value:
+      Ref: ScrapeUrlsTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeUrlsTable
+  ScrapeUrlsTableArn:
+    Description: DynamoDB table ARN for scrape URL tracking
+    Value:
+      Fn::GetAtt:
+      - ScrapeUrlsTable
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeUrlsTableArn
+  ScrapeDiscoveryQueueUrl:
+    Description: SQS queue URL for scrape URL discovery
+    Value:
+      Ref: ScrapeDiscoveryQueue
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeDiscoveryQueueUrl
+  ScrapeDiscoveryQueueArn:
+    Description: SQS queue ARN for scrape URL discovery
+    Value:
+      Fn::GetAtt:
+      - ScrapeDiscoveryQueue
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeDiscoveryQueueArn
+  ScrapeProcessingQueueUrl:
+    Description: SQS queue URL for scrape page processing
+    Value:
+      Ref: ScrapeProcessingQueue
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeProcessingQueueUrl
+  ScrapeProcessingQueueArn:
+    Description: SQS queue ARN for scrape page processing
+    Value:
+      Fn::GetAtt:
+      - ScrapeProcessingQueue
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeProcessingQueueArn
+  ProcessDocumentFunctionArn:
+    Description: Process document Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - ProcessDocumentFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ProcessDocumentFunction
+  QueryKBFunctionArn:
+    Description: Query Knowledge Base Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - QueryKBFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-QueryKBFunction
+  SearchKBFunctionArn:
+    Description: Search Knowledge Base Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - SearchKBFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-SearchKBFunction
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value:
+      Fn::GetAtt:
+      - ProcessingStateMachine
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-StateMachine
+  ScrapeStateMachineArn:
+    Description: Scrape workflow Step Functions state machine ARN
+    Value:
+      Fn::GetAtt:
+      - ScrapeStateMachine
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeStateMachine
+  ScrapeStartFunctionArn:
+    Description: Scrape start Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - ScrapeStartFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeStartFunction
+  ScrapeStatusFunctionArn:
+    Description: Scrape status Lambda ARN
+    Value:
+      Fn::GetAtt:
+      - ScrapeStatusFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ScrapeStatusFunction
+  KnowledgeBaseId:
+    Description: Bedrock Knowledge Base ID
+    Value:
+      Fn::GetAtt:
+      - KnowledgeBase
+      - KnowledgeBaseId
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KnowledgeBaseId
+  KnowledgeBaseArn:
+    Description: Bedrock Knowledge Base ARN
+    Value:
+      Fn::GetAtt:
+      - KnowledgeBase
+      - KnowledgeBaseArn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KnowledgeBaseArn
+  DataSourceId:
+    Description: Bedrock Knowledge Base Data Source ID (text documents - backwards
+      compatible)
+    Value:
+      Fn::GetAtt:
+      - KnowledgeBase
+      - DataSourceId
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DataSourceId
+  TextDataSourceId:
+    Description: Data Source ID for text documents (output/ prefix)
+    Value:
+      Fn::GetAtt:
+      - KnowledgeBase
+      - TextDataSourceId
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-TextDataSourceId
+  ImageDataSourceId:
+    Description: Data Source ID for images (images/ prefix)
+    Value:
+      Fn::GetAtt:
+      - KnowledgeBase
+      - ImageDataSourceId
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ImageDataSourceId
+  GraphQLApiUrl:
+    Description: GraphQL API URL
+    Value:
+      Fn::GetAtt:
+      - GraphQLApi
+      - GraphQLUrl
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-GraphQLApiUrl
+  GraphQLApiId:
+    Description: GraphQL API ID
+    Value:
+      Fn::GetAtt:
+      - GraphQLApi
+      - ApiId
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-GraphQLApiId
+  GraphQLApiKey:
+    Description: GraphQL API Key for public theme config access
+    Value:
+      Fn::GetAtt:
+      - GraphQLApiKey
+      - ApiKey
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-GraphQLApiKey
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value:
+      Ref: UserPool
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UserPoolId
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value:
+      Ref: UserPoolClient
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UserPoolClientId
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value:
+      Ref: IdentityPool
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-IdentityPoolId
+  Region:
+    Description: AWS Region
+    Value:
+      Ref: AWS::Region
+  StackName:
+    Description: CloudFormation Stack Name
+    Value:
+      Ref: AWS::StackName
+  CloudFrontDomain:
+    Description: CloudFront distribution domain
+    Value:
+      Fn::GetAtt:
+      - CloudFrontDistribution
+      - DomainName
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID
+    Value:
+      Ref: CloudFrontDistribution
+  UIUrl:
+    Description: UI URL (HTTPS via CloudFront)
+    Value:
+      Fn::Sub: https://${CloudFrontDistribution.DomainName}
+  WebComponentCDNUrl:
+    Description: CDN URL for embeddable chat web component
+    Value:
+      Fn::Sub: https://${WebComponentDistribution.DomainName}/ragstack-chat.js
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-WebComponentCDNUrl
+  WebComponentDistributionId:
+    Description: CloudFront distribution ID for web component
+    Value:
+      Ref: WebComponentDistribution
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-WebComponentDistributionId
+  WebComponentBuildProjectName:
+    Description: CodeBuild project name for web component deployment
+    Value:
+      Ref: WebComponentBuildProject
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-WebComponentBuildProject
+  WebComponentAssetsBucketName:
+    Description: S3 bucket for web component assets
+    Value:
+      Ref: WebComponentAssetsBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-WebComponentAssetsBucket

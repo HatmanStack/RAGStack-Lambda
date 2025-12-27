@@ -40,6 +40,10 @@ from ragstack_common.storage import update_item
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# Module-level AWS clients (reused across warm invocations)
+s3_client = boto3.client("s3")
+dynamodb = boto3.resource("dynamodb")
+
 # Module-level initialization (lazy-initialized to avoid import-time failures)
 _config_manager = None
 
@@ -70,13 +74,11 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     """
     logger.info(f"Processing scraped markdown: {input_s3_uri}")
 
-    s3 = boto3.client("s3")
-
     # Parse input S3 URI
     input_bucket, input_key = _parse_s3_uri(input_s3_uri)
 
     # Read content from input bucket
-    response = s3.get_object(Bucket=input_bucket, Key=input_key)
+    response = s3_client.get_object(Bucket=input_bucket, Key=input_key)
     content = response["Body"].read().decode("utf-8")
 
     # Extract metadata from S3 object (set by scrape_process Lambda)
@@ -92,7 +94,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
 
     # Write to output bucket as full_text.txt
     output_key = f"{output_prefix}full_text.txt".replace("//", "/")
-    s3.put_object(
+    s3_client.put_object(
         Bucket=output_bucket,
         Key=output_key,
         Body=content.encode("utf-8"),
@@ -106,7 +108,6 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     # For scraped documents, the tracking record may not exist yet
     # so we include all required fields (created_at, filename, input_s3_uri)
     now = datetime.now(UTC).isoformat()
-    dynamodb = boto3.resource("dynamodb")
     table = dynamodb.Table(tracking_table)
 
     # Use DynamoDB update with if_not_exists for fields that should only be set once
@@ -282,7 +283,6 @@ def lambda_handler(event, context):
                 f"input_s3_uri={input_s3_uri}, filename={filename}, "
                 f"output_s3_uri={processed_document.output_s3_uri}"
             )
-            dynamodb = boto3.resource("dynamodb")
             table = dynamodb.Table(tracking_table)
             table.update_item(
                 Key={"document_id": document_id},

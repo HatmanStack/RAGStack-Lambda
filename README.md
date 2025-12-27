@@ -29,16 +29,31 @@ Serverless document processing with AI chat. Upload documents, extract text with
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: One-Click Deploy (AWS Marketplace)
+
+Deploy directly from the AWS Console - no local setup required:
+
+1. [Subscribe to RAGStack on AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-5afdiw2zrht6o) (free)
+2. [Click here to deploy](https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml&stackName=my-docs)
+3. Enter a stack name (**lowercase only**, e.g., "my-docs") and your admin email
+4. Click **Create Stack** (deployment takes ~10 minutes)
+
+**After deployment:**
+- Check your email for the temporary password (from Cognito)
+- Go to CloudFormation → your stack → **Outputs** tab to find the Dashboard URL (`UIUrl`)
+
+### Option 2: Deploy from Source
+
+For customization or development:
+
+**Prerequisites:**
 - AWS Account with admin access
 - Python 3.13+, Node.js 24+
-- AWS CLI, SAM CLI (configured and running)
-- **Docker** (required for Lambda layer builds)
-
-### Deploy
+- AWS CLI, SAM CLI (configured)
+- Docker (for Lambda layer builds)
 
 ```bash
-git clone https://github.com/your-org/RAGStack-Lambda.git
+git clone https://github.com/HatmanStack/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
 # Create virtual environment and install dependencies
@@ -46,13 +61,11 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Deploys to us-east-1 by default (Nova Multimodal Embeddings)
+# Deploy (defaults to us-east-1 for Nova Multimodal Embeddings)
 python publish.py \
   --project-name my-docs \
   --admin-email admin@example.com
 ```
-
-**Outputs:** Web UI URL, Chat CDN URL, GraphQL API, KB ID
 
 ## Web Component Integration
 
@@ -154,6 +167,8 @@ npm run check  # Lint + test all (backend + frontend)
 
 ## Deployment Options
 
+### Direct Deployment
+
 ```bash
 # Full deployment (defaults to us-east-1)
 python publish.py --project-name myapp --admin-email admin@example.com
@@ -165,4 +180,21 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
 ```
 
+### Publish to AWS Marketplace (Maintainers)
+
+To update the one-click deploy template:
+
+```bash
+python publish.py --publish-marketplace
+```
+
+This packages the application and uploads to S3 for one-click deployment.
+
 > **Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available in other regions, use `--region <region>`.
+
+## Acknowledgments
+
+This project was inspired by:
+
+- [Accelerated Intelligent Document Processing on AWS](https://github.com/aws-solutions-library-samples/accelerated-intelligent-document-processing-on-aws) - AWS Solutions Library reference architecture
+- [docs-mcp-server](https://github.com/arabold/docs-mcp-server) - MCP server for documentation search
