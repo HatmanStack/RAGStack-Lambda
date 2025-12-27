@@ -6,15 +6,16 @@
 """
 RAGStack-Lambda Deployment Script
 
-Project-based deployment automation for RAGStack-Lambda stack.
+Deployment automation for RAGStack-Lambda stack.
 
 Usage:
-    python publish.py --project-name customer-docs --admin-email admin@example.com
-    python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
-    python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
+    python publish.py --stack-name customer-docs --admin-email admin@example.com
+    python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui
+    python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui-all
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -71,7 +72,7 @@ def validate_email(email):
     return re.match(pattern, email) is not None
 
 
-def validate_project_name(project_name):
+def validate_stack_name(stack_name):
     """
     Validate project name follows naming rules.
 
@@ -81,7 +82,7 @@ def validate_project_name(project_name):
     - Must start with a letter
 
     Args:
-        project_name: String to validate
+        stack_name: String to validate
 
     Returns:
         bool: True if valid
@@ -89,26 +90,26 @@ def validate_project_name(project_name):
     Raises:
         ValueError: If project name is invalid with descriptive message
     """
-    if not project_name:
-        raise ValueError("Project name cannot be empty")
+    if not stack_name:
+        raise ValueError("Stack name cannot be empty")
 
-    if len(project_name) < 2:
-        raise ValueError("Project name must be at least 2 characters long")
+    if len(stack_name) < 2:
+        raise ValueError("Stack name must be at least 2 characters long")
 
-    if len(project_name) > 32:
-        raise ValueError("Project name must be at most 32 characters long")
+    if len(stack_name) > 32:
+        raise ValueError("Stack name must be at most 32 characters long")
 
-    if not project_name[0].isalpha():
-        raise ValueError("Project name must start with a letter")
+    if not stack_name[0].isalpha():
+        raise ValueError("Stack name must start with a letter")
 
-    if not project_name[0].islower():
-        raise ValueError("Project name must start with a lowercase letter")
+    if not stack_name[0].islower():
+        raise ValueError("Stack name must start with a lowercase letter")
 
     # Check all characters are lowercase alphanumeric or hyphen
-    for char in project_name:
+    for char in stack_name:
         if not (char.islower() or char.isdigit() or char == '-'):
             raise ValueError(
-                f"Project name contains invalid character '{char}'. "
+                f"Stack name contains invalid character '{char}'. "
                 "Only lowercase letters, numbers, and hyphens are allowed"
             )
 
@@ -420,7 +421,7 @@ def handle_failed_stack(stack_name, region):
         raise OSError(f"Failed to check stack status: {e}") from e
 
 
-def create_sam_artifact_bucket(project_name, region):
+def create_sam_artifact_bucket(stack_name, region):
     """
     Create S3 bucket for deployment artifacts if it doesn't exist.
 
@@ -429,7 +430,7 @@ def create_sam_artifact_bucket(project_name, region):
     CodeBuild uses it to fetch UI source for building and deploying.
 
     Args:
-        project_name: Project name for bucket naming
+        stack_name: Stack name for bucket naming
         region: AWS region
 
     Returns:
@@ -448,7 +449,7 @@ def create_sam_artifact_bucket(project_name, region):
         raise OSError(f"Failed to get AWS account ID: {e}") from e
 
     # Use project-specific bucket for all deployment artifacts
-    bucket_name = f'{project_name}-artifacts-{account_id}'
+    bucket_name = f'{stack_name}-artifacts-{account_id}'
 
     # Create bucket if it doesn't exist
     try:
@@ -483,12 +484,12 @@ def create_sam_artifact_bucket(project_name, region):
     return bucket_name
 
 
-def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
+def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
     """
     Deploy SAM application with project-based naming.
 
     Args:
-        project_name: Project name for resource naming
+        stack_name: Stack name for resource naming
         admin_email: Admin email for Cognito and alerts
         region: AWS region
         artifact_bucket: S3 bucket for SAM artifacts and UI source
@@ -499,41 +500,10 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     Returns:
         str: CloudFormation stack name
     """
-    log_info(f"Deploying project '{project_name}' to {region}...")
-
-    # Stack name follows pattern: RAGStack-{project-name}
-    stack_name = f"RAGStack-{project_name}"
-
-    # Check if stack exists and get existing DeploymentSuffix
-    cf_client = boto3.client('cloudformation', region_name=region)
-    deployment_suffix = None
-
-    try:
-        response = cf_client.describe_stacks(StackName=stack_name)
-        # Stack exists - retrieve existing DeploymentSuffix parameter
-        parameters = response['Stacks'][0].get('Parameters', [])
-        for param in parameters:
-            if param['ParameterKey'] == 'DeploymentSuffix':
-                deployment_suffix = param['ParameterValue']
-                log_info(f"Reusing existing deployment suffix: {deployment_suffix}")
-                break
-    except cf_client.exceptions.ClientError as e:
-        if 'does not exist' in str(e):
-            log_info("Stack does not exist - will create new stack")
-        else:
-            raise
-
-    # Generate new suffix only if stack doesn't exist or suffix not found
-    if not deployment_suffix:
-        import random
-        import string
-        deployment_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
-        log_info(f"Generated new deployment suffix: {deployment_suffix}")
+    log_info(f"Deploying stack '{stack_name}' to {region}...")
 
     # Base parameter overrides
     param_overrides = [
-        f"DeploymentSuffix={deployment_suffix}",
-        f"ProjectName={project_name}",
         f"AdminEmail={admin_email}",
         "BedrockOcrModelId=meta.llama3-2-90b-instruct-v1:0",
     ]
@@ -572,7 +542,7 @@ def sam_deploy(project_name, admin_email, region, artifact_bucket, ui_source_key
     except Exception as e:
         log_error(f"Warning: Failed to enable termination protection: {e}")
 
-    log_success(f"Deployment of project '{project_name}' complete")
+    log_success(f"Deployment of project '{stack_name}' complete")
     return stack_name
 
 
@@ -846,10 +816,10 @@ REACT_APP_DATA_BUCKET={outputs.get('DataBucketName', '')}
     return outputs
 
 
-def print_outputs(outputs, project_name, region):
+def print_outputs(outputs, stack_name, region):
     """Print stack outputs in a nice format."""
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
-    print(f"{Colors.HEADER}Deployment Complete! (Project: {project_name}){Colors.ENDC}")
+    print(f"{Colors.HEADER}Deployment Complete! (Project: {stack_name}){Colors.ENDC}")
     print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}Stack Outputs:{Colors.ENDC}\n")
@@ -1145,12 +1115,129 @@ def seed_configuration_table(stack_name, region, chat_cdn_url=''):
         log_warning(f"Error seeding configuration table: {e}\n")
 
 
+def publish_to_marketplace(region="us-east-1"):
+    """
+    Package and publish template for AWS Marketplace one-click deployment.
+
+    Updates the template at:
+    https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml
+
+    Args:
+        region: AWS region (default: us-east-1)
+    """
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
+    print(f"{Colors.HEADER}RAGStack-Lambda Marketplace Publishing{Colors.ENDC}")
+    print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
+
+    marketplace_bucket = "ragstack-quicklaunch-public-631094035453"
+    template_key = "ragstack-template.yaml"
+
+    try:
+        # Check prerequisites
+        log_info("Checking prerequisites...")
+        check_aws_cli()
+        check_sam_cli()
+        log_success("All prerequisites met")
+
+        # Step 1: SAM build
+        log_info("Step 1: Building SAM application...")
+        run_command(["sam", "build", "--parallel"])
+        log_success("SAM build complete")
+
+        # Step 2: Package and upload UI source
+        log_info("Step 2: Packaging UI source code...")
+        import zipfile
+        import tempfile
+
+        # Create UI source zip (files stored as ui/* to match buildspec 'cd ui')
+        ui_zip_path = Path(tempfile.gettempdir()) / "ui-source.zip"
+        with zipfile.ZipFile(ui_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            ui_dir = Path("src/ui")
+            for file in ui_dir.rglob("*"):
+                if file.is_file() and "node_modules" not in str(file):
+                    # Store as ui/file.js (include parent dir name)
+                    zf.write(file, Path("ui") / file.relative_to(ui_dir))
+        log_success(f"UI source packaged: {ui_zip_path}")
+
+        # Create ragstack-chat source zip (files stored as src/ragstack-chat/* to match buildspec)
+        wc_zip_path = Path(tempfile.gettempdir()) / "ragstack-chat-source.zip"
+        with zipfile.ZipFile(wc_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            wc_dir = Path("src/ragstack-chat")
+            for file in wc_dir.rglob("*"):
+                if file.is_file() and "node_modules" not in str(file):
+                    # Store as src/ragstack-chat/file.js (include full path)
+                    zf.write(file, Path("src/ragstack-chat") / file.relative_to(wc_dir))
+        log_success(f"Web component source packaged: {wc_zip_path}")
+
+        # Upload source zips
+        log_info("Uploading UI source to S3...")
+        run_command([
+            "aws", "s3", "cp", str(ui_zip_path),
+            f"s3://{marketplace_bucket}/source/ui.zip",
+            "--region", region
+        ])
+        run_command([
+            "aws", "s3", "cp", str(wc_zip_path),
+            f"s3://{marketplace_bucket}/source/ragstack-chat.zip",
+            "--region", region
+        ])
+        log_success("UI source uploaded")
+
+        # Step 3: SAM package
+        log_info("Step 3: Packaging SAM application...")
+        run_command([
+            "sam", "package",
+            "--template-file", ".aws-sam/build/template.yaml",
+            "--output-template-file", "ragstack-packaged.yaml",
+            "--s3-bucket", marketplace_bucket,
+            "--s3-prefix", "ragstack-quicklaunch",
+            "--region", region
+        ])
+        log_success("SAM package complete")
+
+        # Step 4: Upload packaged template
+        log_info("Step 4: Uploading packaged template...")
+        run_command([
+            "aws", "s3", "cp",
+            "ragstack-packaged.yaml",
+            f"s3://{marketplace_bucket}/{template_key}",
+            "--region", region
+        ])
+        log_success("Template uploaded")
+
+        print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
+        print(f"{Colors.OKGREEN}Marketplace Publishing Complete!{Colors.ENDC}")
+        print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
+
+        template_url = f"https://{marketplace_bucket}.s3.{region}.amazonaws.com/{template_key}"
+        deploy_url = (
+            f"https://{region}.console.aws.amazon.com/cloudformation/home?region={region}"
+            f"#/stacks/create/review?templateURL={template_url}"
+        )
+
+        print(f"{Colors.OKGREEN}Template URL:{Colors.ENDC} {template_url}")
+        print(f"{Colors.OKGREEN}One-Click Deploy:{Colors.ENDC} {deploy_url}")
+        print()
+
+    except subprocess.CalledProcessError as e:
+        log_error(f"Command failed: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        log_warning("\nPublishing cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        log_error(f"Marketplace publishing failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def main():
     """
     Main execution function.
 
     Integration Tests Verified:
-    - Missing required arguments (--project-name, --admin-email, --region) fail appropriately
+    - Missing required arguments (--stack-name, --admin-email, --region) fail appropriately
     - Invalid project name validation (uppercase, special chars, too short/long)
     - Invalid email validation
     - Invalid region validation (format check with regex)
@@ -1163,20 +1250,28 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python publish.py --project-name customer-docs --admin-email admin@example.com
-  python publish.py --project-name legal-archive --admin-email admin@example.com --skip-ui
+  # Direct deployment
+  python publish.py --stack-name customer-docs --admin-email admin@example.com
+  python publish.py --stack-name legal-archive --admin-email admin@example.com --skip-ui
+
+  # Publish to AWS Marketplace (updates one-click deploy template)
+  python publish.py --publish-marketplace
         """
     )
 
     parser.add_argument(
-        "--project-name",
-        required=True,
-        help="Project name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)"
+        "--publish-marketplace",
+        action="store_true",
+        help="Publish to AWS Marketplace (updates one-click deploy template)"
+    )
+
+    parser.add_argument(
+        "--stack-name",
+        help="Stack name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)"
     )
 
     parser.add_argument(
         "--admin-email",
-        required=True,
         help="Admin email for Cognito user and CloudWatch alerts"
     )
 
@@ -1200,6 +1295,19 @@ Examples:
 
     args = parser.parse_args()
 
+    # Handle Marketplace publishing mode
+    if args.publish_marketplace:
+        publish_to_marketplace(args.region)
+        return
+
+    # Validate required arguments for direct deployment
+    if not args.stack_name:
+        log_error("--stack-name is required for direct deployment")
+        sys.exit(1)
+    if not args.admin_email:
+        log_error("--admin-email is required for direct deployment")
+        sys.exit(1)
+
     try:
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
         print(f"{Colors.HEADER}RAGStack-Lambda Deployment{Colors.ENDC}")
@@ -1208,7 +1316,7 @@ Examples:
         # Validate inputs
         log_info("Validating inputs...")
         try:
-            validate_project_name(args.project_name)
+            validate_stack_name(args.stack_name)
             validate_region(args.region)
             if not validate_email(args.admin_email):
                 log_error(f"Invalid email format: {args.admin_email}")
@@ -1228,7 +1336,7 @@ Examples:
 
         log_success("All inputs validated")
 
-        log_info(f"Project Name: {args.project_name}")
+        log_info(f"Project Name: {args.stack_name}")
         log_info(f"Admin Email: {args.admin_email}")
         log_info(f"Region: {args.region}")
 
@@ -1248,7 +1356,7 @@ Examples:
 
         # Create artifact bucket first
         try:
-            artifact_bucket = create_sam_artifact_bucket(args.project_name, args.region)
+            artifact_bucket = create_sam_artifact_bucket(args.stack_name, args.region)
         except OSError as e:
             log_error(f"Failed to create artifact bucket: {e}")
             sys.exit(1)
@@ -1281,16 +1389,15 @@ Examples:
         sam_build()
 
         # Check for failed stack and clean up if needed
-        stack_name = f"RAGStack-{args.project_name}"
         try:
-            handle_failed_stack(stack_name, args.region)
+            handle_failed_stack(args.stack_name, args.region)
         except OSError as e:
             log_error(f"Failed to handle existing stack: {e}")
             sys.exit(1)
 
         # SAM deploy with UI and web component parameters
         stack_name = sam_deploy(
-            args.project_name,
+            args.stack_name,
             args.admin_email,
             args.region,
             artifact_bucket,
@@ -1325,7 +1432,7 @@ Examples:
             configure_ui(stack_name, args.region)
 
         # Print outputs
-        print_outputs(outputs, args.project_name, args.region)
+        print_outputs(outputs, args.stack_name, args.region)
 
         log_success("Deployment complete!")
 
