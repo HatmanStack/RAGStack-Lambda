@@ -245,8 +245,6 @@ def store_conversation_turn(
 
 def _extract_id_pattern(query: str) -> str | None:
     """Extract numeric ID pattern from query if present."""
-    import re
-
     # Look for 10+ digit numbers (typical person/document IDs)
     match = re.search(r"\b(\d{10,})\b", query)
     if match:
@@ -385,8 +383,6 @@ def build_retrieval_query(current_query, history):
     Returns:
         str: Query optimized for KB retrieval
     """
-    import re
-
     if not history:
         return current_query
 
