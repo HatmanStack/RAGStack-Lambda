@@ -27,6 +27,17 @@ Serverless document processing with AI chat. Upload documents, extract text with
 - 🚀 One-click deploy
 - 💰 $7-18/month (1000 docs)
 
+## Live Demo
+
+| Environment | URL | Credentials |
+|-------------|-----|-------------|
+| **Base Pipeline** | [dhrmkxyt1t9pb.cloudfront.net](https://dhrmkxyt1t9pb.cloudfront.net/) | `guest@hatstack.fun` / `Guest@123` |
+| **Project Showcase** | [showcase-htt.hatstack.fun](https://showcase-htt.hatstack.fun) | Login as guest |
+
+> **Base Pipeline**: The core document processing tool - upload, OCR, and query documents.
+>
+> **Project Showcase**: See RAGStack powering a real application.
+
 ## Quick Start
 
 ### Option 1: One-Click Deploy (AWS Marketplace)
