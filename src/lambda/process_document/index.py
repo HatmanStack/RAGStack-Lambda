@@ -110,10 +110,14 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     now = datetime.now(UTC).isoformat()
     table = dynamodb.Table(tracking_table)
 
+    # Determine document type: only .scraped.md files are "scraped", regular .md are "document"
+    is_scraped = input_s3_uri.endswith(".scraped.md")
+    doc_type = "scraped" if is_scraped else "document"
+
     # Use DynamoDB update with if_not_exists for fields that should only be set once
     # Include source_url for scraped content so query_kb can return the original web URL
     logger.info(
-        f"[TRACKING] Updating scraped doc={document_id}: "
+        f"[TRACKING] Updating {doc_type} doc={document_id}: "
         f"source_url={source_url}, filename={filename}"
     )
     table.update_item(
@@ -134,7 +138,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
         ExpressionAttributeNames={"#status": "status", "#type": "type"},
         ExpressionAttributeValues={
             ":status": Status.OCR_COMPLETE.value,
-            ":type": "scraped",
+            ":type": doc_type,
             ":total_pages": 1,
             ":is_text_native": True,
             ":output_s3_uri": output_s3_uri,
