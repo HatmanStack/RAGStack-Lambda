@@ -118,9 +118,10 @@ export const useDocuments = () => {
         }
 
         const { data } = response;
-        const items = data?.listImages?.items || [];
+        const listResult = data?.listImages as { items?: unknown[]; nextToken?: string } | undefined;
+        const items = listResult?.items || [];
         allItems = [...allItems, ...items];
-        nextToken = data?.listImages?.nextToken;
+        nextToken = listResult?.nextToken;
       } while (nextToken);
 
       // Transform images to match document structure for unified display
@@ -158,9 +159,10 @@ export const useDocuments = () => {
         }
 
         const { data } = response;
-        const items = data?.listScrapeJobs?.items || [];
+        const listResult = data?.listScrapeJobs as { items?: unknown[]; nextToken?: string } | undefined;
+        const items = listResult?.items || [];
         allItems = [...allItems, ...items];
-        nextToken = data?.listScrapeJobs?.nextToken;
+        nextToken = listResult?.nextToken;
       } while (nextToken);
 
       // Transform scrape jobs to match document structure for unified display
@@ -196,8 +198,9 @@ export const useDocuments = () => {
       }
 
       const { data } = response;
-      const newDocs = (data?.listDocuments?.items || []).map(doc => ({
-        ...doc,
+      const listResult = data?.listDocuments as { items?: unknown[] } | undefined;
+      const newDocs = (listResult?.items || []).map(doc => ({
+        ...(doc as Record<string, unknown>),
         type: 'document'
       }));
 

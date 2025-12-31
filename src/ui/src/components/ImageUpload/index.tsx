@@ -75,7 +75,7 @@ export const ImageUpload = () => {
   const [imageId, setImageId] = useState(null);
   const [imageS3Uri, setImageS3Uri] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, uploaded, submitting, complete, error
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'submitting' | 'complete' | 'error'>('idle');
   const [userCaption, setUserCaption] = useState('');
   const [aiCaption, setAiCaption] = useState('');
   const [localError, setLocalError] = useState(null);
@@ -289,7 +289,7 @@ export const ImageUpload = () => {
               </Box>
             )}
 
-            {uploadStatus === 'uploaded' && (
+            {(uploadStatus === 'uploaded' || uploadStatus === 'submitting') && (
               <>
                 <StatusIndicator type="success">Image uploaded</StatusIndicator>
 

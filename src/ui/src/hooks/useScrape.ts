@@ -90,7 +90,8 @@ export const useScrape = () => {
         query: listScrapeJobsQuery,
         variables: { limit }
       }) as GqlResponse;
-      setJobs(response.data?.listScrapeJobs?.items || []);
+      const listResult = response.data?.listScrapeJobs as { items?: unknown[] } | undefined;
+      setJobs(listResult?.items || []);
     } catch (err) {
       setError(err.message || 'Failed to fetch jobs');
     } finally {

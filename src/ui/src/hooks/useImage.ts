@@ -37,7 +37,7 @@ export const useImage = () => {
         throw new Error('Failed to create upload URL');
       }
 
-      return response.data.createImageUploadUrl;
+      return response.data.createImageUploadUrl as { imageId: string; s3Uri: string };
     } catch (err) {
       console.error('Failed to create upload URL:', err);
       setError(err.message || 'Failed to create upload URL');
@@ -45,7 +45,7 @@ export const useImage = () => {
     }
   }, []);
 
-  const uploadImage = useCallback(async (file, onProgress) => {
+  const uploadImage = useCallback(async (file: File, onProgress?: (progress: number) => void) => {
     setUploading(true);
     setError(null);
 
@@ -113,11 +113,12 @@ export const useImage = () => {
         variables: { imageS3Uri }
       }) as GqlResponse;
 
-      if (response.data?.generateCaption?.error) {
-        throw new Error(response.data.generateCaption.error);
+      const captionResult = response.data?.generateCaption as { error?: string; caption?: string } | undefined;
+      if (captionResult?.error) {
+        throw new Error(captionResult.error);
       }
 
-      return response.data?.generateCaption?.caption || '';
+      return captionResult?.caption || '';
     } catch (err) {
       console.error('Caption generation failed:', err);
       setError(err.message || 'Failed to generate caption');
@@ -143,18 +144,19 @@ export const useImage = () => {
         }
       }) as GqlResponse;
 
-      if (!response.data?.submitImage) {
+      const submitResult = response.data?.submitImage as Record<string, unknown> | undefined;
+      if (!submitResult) {
         throw new Error('Failed to submit image');
       }
 
       // Update image in state
       setImages(prev => prev.map(img =>
         img.imageId === imageId
-          ? { ...img, status: 'submitted', ...response.data.submitImage }
+          ? { ...img, status: 'submitted', ...submitResult }
           : img
       ));
 
-      return response.data.submitImage;
+      return submitResult;
     } catch (err) {
       console.error('Submit failed:', err);
       setError(err.message || 'Failed to submit image');
@@ -222,7 +224,7 @@ export const useImage = () => {
         throw new Error('Failed to create ZIP upload URL');
       }
 
-      return response.data.createZipUploadUrl;
+      return response.data.createZipUploadUrl as { uploadId: string };
     } catch (err) {
       console.error('Failed to create ZIP upload URL:', err);
       setError(err.message || 'Failed to create ZIP upload URL');

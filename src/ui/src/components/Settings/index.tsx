@@ -290,7 +290,7 @@ export function Settings() {
           errorText={validationError}
         >
           <Select
-            selectedOption={{ label: value || '', value: value || '' }}
+            selectedOption={{ label: String(value || ''), value: String(value || '') }}
             onChange={({ detail }) => {
               setFormValues({ ...formValues, [key]: detail.selectedOption.value });
               // Clear validation error on change
@@ -374,7 +374,7 @@ export function Settings() {
 
     // Render nested inputs for object fields
     if (property.type === 'object' && property.properties) {
-      return renderObjectField(key, property, value || {});
+      return renderObjectField(key, property, (value as Record<string, unknown>) || {});
     }
 
     return null;

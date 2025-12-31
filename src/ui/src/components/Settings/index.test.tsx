@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Settings } from './index';
@@ -8,6 +8,8 @@ import { generateClient } from 'aws-amplify/api';
 vi.mock('aws-amplify/api', () => ({
   generateClient: vi.fn()
 }));
+
+const mockedGenerateClient = generateClient as Mock;
 
 const sampleSchema = {
   properties: {
@@ -69,7 +71,7 @@ describe('Settings Component', () => {
     mockClient = {
       graphql: vi.fn()
     };
-    generateClient.mockReturnValue(mockClient);
+    mockedGenerateClient.mockReturnValue(mockClient);
   });
 
   // Helper to set up mock that handles both getConfiguration and getApiKey
