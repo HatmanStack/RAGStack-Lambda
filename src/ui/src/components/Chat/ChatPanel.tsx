@@ -10,8 +10,16 @@ import {
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { queryKnowledgeBase } from '../../graphql/queries/queryKnowledgeBase';
+import type { GqlResponse } from '../../types/graphql';
 import { MessageBubble } from './MessageBubble';
 import './ChatPanel.css';
+
+interface ChatResponse {
+  answer: string;
+  sources?: unknown[];
+  sessionId?: string;
+  error?: string;
+}
 
 export function ChatPanel() {
   // State management
@@ -62,12 +70,12 @@ export function ChatPanel() {
           query: userMessage,
           sessionId: sessionId  // null for first message
         }
-      });
+      }) as GqlResponse;
 
-      const data = response.data.queryKnowledgeBase;
+      const data = response.data?.queryKnowledgeBase as ChatResponse | undefined;
 
       // Check for backend error
-      if (data.error) {
+      if (data?.error) {
         setError(data.error);
         setSessionId(null);  // Reset session on error
         return;
@@ -76,14 +84,14 @@ export function ChatPanel() {
       // Create AI message object
       const aiMessageObj = {
         type: 'assistant',
-        content: data.answer,
-        sources: data.sources || [],
+        content: data?.answer || '',
+        sources: data?.sources || [],
         timestamp: new Date().toISOString()
       };
 
       // Add AI message and update session
       setMessages(prev => [...prev, aiMessageObj]);
-      setSessionId(data.sessionId);
+      setSessionId(data?.sessionId || null);
 
     } catch (err) {
       console.error('[ChatPanel] Chat error:', err);

@@ -27,7 +27,7 @@ export const ImageSource = ({ source }) => {
                 />
               </Box>
             ) : (
-              <Box
+              <div
                 style={{
                   width: '80px',
                   height: '80px',
@@ -40,7 +40,7 @@ export const ImageSource = ({ source }) => {
                 }}
               >
                 <Box fontSize="heading-l">🖼️</Box>
-              </Box>
+              </div>
             )}
 
             <Box>
@@ -98,16 +98,16 @@ export const ImageSource = ({ source }) => {
                 }}
               />
             ) : (
-              <Box
-                padding="xxl"
+              <div
                 style={{
                   backgroundColor: '#f3f4f6',
-                  borderRadius: '8px'
+                  borderRadius: '8px',
+                  padding: '40px'
                 }}
               >
                 <Box fontSize="display-l">🖼️</Box>
                 <Box color="text-body-secondary">No image preview available</Box>
-              </Box>
+              </div>
             )}
           </Box>
 

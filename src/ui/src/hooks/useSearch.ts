@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
+import type { GqlResponse } from '../types/graphql';
 
 const SEARCH_KB = gql`
   query SearchKnowledgeBase($query: String!, $maxResults: Int) {
@@ -36,19 +37,20 @@ export const useSearch = () => {
     setQuery(searchQuery);
 
     try {
-      const { data } = await client.graphql({
-        query: SEARCH_KB,
+      const response = await client.graphql({
+        query: SEARCH_KB as any,
         variables: {
           query: searchQuery,
           maxResults
         }
-      });
+      }) as GqlResponse;
 
-      if (data.searchKnowledgeBase.error) {
-        setError(data.searchKnowledgeBase.error);
+      const searchResult = response.data?.searchKnowledgeBase as { error?: string; results?: unknown[] } | undefined;
+      if (searchResult?.error) {
+        setError(searchResult.error);
         setResults([]);
       } else {
-        setResults(data.searchKnowledgeBase.results || []);
+        setResults(searchResult?.results || []);
       }
 
     } catch (err) {

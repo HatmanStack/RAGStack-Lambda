@@ -26,7 +26,6 @@ import {
   Container,
   Header,
   SpaceBetween,
-  Form,
   FormField,
   Select,
   Button,
@@ -47,6 +46,28 @@ import {
   validateQuota,
   validateBudgetThreshold,
 } from '../../utils/validation';
+import type { GqlResponse } from '../../types/graphql';
+
+interface ConfigResponse {
+  Schema: string;
+  Default: string;
+  Custom: string;
+}
+
+interface ApiKeyResponse {
+  apiKey: string;
+  expires: string;
+  error?: string;
+}
+
+interface SchemaProperty {
+  type?: string;
+  enum?: string[];
+  description?: string;
+  order?: number;
+  dependsOn?: { field: string; value: unknown };
+  properties?: Record<string, SchemaProperty>;
+}
 
 export function Settings() {
   // State for loading and errors
@@ -56,16 +77,16 @@ export function Settings() {
   const [success, setSuccess] = useState(false);
 
   // State for configuration data
-  const [schema, setSchema] = useState({});
-  const [defaultConfig, setDefaultConfig] = useState({});
-  const [customConfig, setCustomConfig] = useState({});
-  const [formValues, setFormValues] = useState({});
+  const [schema, setSchema] = useState<Record<string, unknown>>({});
+  const [defaultConfig, setDefaultConfig] = useState<Record<string, unknown>>({});
+  const [customConfig, setCustomConfig] = useState<Record<string, unknown>>({});
+  const [formValues, setFormValues] = useState<Record<string, unknown>>({});
 
   // State for validation errors
-  const [validationErrors, setValidationErrors] = useState({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // State for API key management
-  const [apiKeyData, setApiKeyData] = useState(null);
+  const [apiKeyData, setApiKeyData] = useState<{ apiKey: string; expires: string } | null>(null);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [apiKeyError, setApiKeyError] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
@@ -79,8 +100,8 @@ export function Settings() {
       setLoading(true);
       setError(null);
 
-      const response = await client.graphql({ query: getConfiguration });
-      const config = response.data.getConfiguration;
+      const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
+      const config = response.data?.getConfiguration as ConfigResponse;
 
       // Parse JSON strings
       const parsedSchema = JSON.parse(config.Schema);
@@ -108,12 +129,12 @@ export function Settings() {
       setApiKeyLoading(true);
       setApiKeyError(null);
 
-      const response = await client.graphql({ query: getApiKey });
-      const data = response.data.getApiKey;
+      const response = await client.graphql({ query: getApiKey }) as GqlResponse;
+      const data = response.data?.getApiKey as ApiKeyResponse | undefined;
 
-      if (data.error) {
+      if (data?.error) {
         setApiKeyError(data.error);
-      } else {
+      } else if (data) {
         setApiKeyData(data);
       }
     } catch (err) {
@@ -133,12 +154,12 @@ export function Settings() {
       setRegenerating(true);
       setApiKeyError(null);
 
-      const response = await client.graphql({ query: regenerateApiKey });
-      const data = response.data.regenerateApiKey;
+      const response = await client.graphql({ query: regenerateApiKey }) as GqlResponse;
+      const data = response.data?.regenerateApiKey as ApiKeyResponse | undefined;
 
-      if (data.error) {
+      if (data?.error) {
         setApiKeyError(data.error);
-      } else {
+      } else if (data) {
         setApiKeyData(data);
         setShowApiKey(true); // Show the new key
       }
@@ -222,7 +243,7 @@ export function Settings() {
     setError(null);
   };
 
-  const renderField = (key, property) => {
+  const renderField = (key: string, property: SchemaProperty) => {
     if (!property) return null;
 
     const value = formValues[key];
@@ -359,8 +380,8 @@ export function Settings() {
     return null;
   };
 
-  const renderObjectField = (parentKey, property, value) => {
-    const handleNestedChange = (nestedKey, nestedValue) => {
+  const renderObjectField = (parentKey: string, property: SchemaProperty, value: Record<string, unknown>) => {
+    const handleNestedChange = (nestedKey: string, nestedValue: unknown) => {
       const updatedObject = { ...value, [nestedKey]: nestedValue };
       setFormValues({ ...formValues, [parentKey]: updatedObject });
     };
@@ -374,8 +395,8 @@ export function Settings() {
           </Alert>
         )}
 
-        {Object.entries(property.properties).map(([nestedKey, nestedProp]) => {
-          const nestedValue = value[nestedKey] || '';
+        {Object.entries(property.properties || {}).map(([nestedKey, nestedProp]) => {
+          const nestedValue = (value[nestedKey] as string) || '';
 
           // Render nested enum as dropdown
           if (nestedProp.enum) {
@@ -464,7 +485,7 @@ export function Settings() {
                     readOnly
                   />
                   <Button
-                    iconName={showApiKey ? 'view-hidden' : 'view-visible'}
+                    iconName={showApiKey ? 'lock-private' : 'unlocked'}
                     variant="icon"
                     onClick={() => setShowApiKey(!showApiKey)}
                     ariaLabel={showApiKey ? 'Hide API key' : 'Show API key'}

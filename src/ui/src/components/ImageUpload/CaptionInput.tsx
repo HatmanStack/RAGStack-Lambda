@@ -51,35 +51,33 @@ export const CaptionInput = ({
 
       {aiCaption && (
         <FormField label="AI-generated caption">
-          <Box
-            padding="s"
-            variant="div"
+          <div
             style={{
               backgroundColor: '#f0f9ff',
               borderRadius: '4px',
-              border: '1px solid #bae6fd'
+              border: '1px solid #bae6fd',
+              padding: '8px'
             }}
           >
             <Box variant="small" color="text-body-secondary">
               {aiCaption}
             </Box>
-          </Box>
+          </div>
         </FormField>
       )}
 
       {combinedCaption && (
         <FormField label="Final caption (user + AI)">
-          <Box
-            padding="s"
-            variant="div"
+          <div
             style={{
               backgroundColor: '#f5f5f5',
               borderRadius: '4px',
-              border: '1px solid #d1d5db'
+              border: '1px solid #d1d5db',
+              padding: '8px'
             }}
           >
             {combinedCaption}
-          </Box>
+          </div>
         </FormField>
       )}
     </SpaceBetween>
