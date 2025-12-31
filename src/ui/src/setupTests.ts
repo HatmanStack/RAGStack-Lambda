@@ -32,10 +32,10 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly thresholds: ReadonlyArray<number> = [];
   constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
   disconnect() {}
-  observe() {}
+  observe(_target: Element) {}
   takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  unobserve() {}
+  unobserve(_target: Element) {}
 }
 globalThis.IntersectionObserver = MockIntersectionObserver;

@@ -101,7 +101,11 @@ export function Settings() {
       setError(null);
 
       const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
-      const config = response.data?.getConfiguration as ConfigResponse;
+      const config = response.data?.getConfiguration as ConfigResponse | undefined;
+
+      if (!config) {
+        throw new Error('Configuration not found');
+      }
 
       // Parse JSON strings
       const parsedSchema = JSON.parse(config.Schema);
@@ -485,7 +489,7 @@ export function Settings() {
                     readOnly
                   />
                   <Button
-                    iconName={showApiKey ? 'lock-private' : 'unlocked'}
+                    iconName={showApiKey ? 'unlocked' : 'lock-private'}
                     variant="icon"
                     onClick={() => setShowApiKey(!showApiKey)}
                     ariaLabel={showApiKey ? 'Hide API key' : 'Show API key'}
