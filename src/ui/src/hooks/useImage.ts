@@ -7,6 +7,7 @@ import { generateCaption as generateCaptionMutation } from '../graphql/mutations
 import { submitImage as submitImageMutation } from '../graphql/mutations/submitImage';
 import { deleteImage as deleteImageMutation } from '../graphql/mutations/deleteImage';
 import { getImage as getImageQuery } from '../graphql/queries/getImage';
+import type { GqlResponse } from '../types/graphql';
 
 const client = generateClient();
 
@@ -24,19 +25,19 @@ export const useImage = () => {
     setError(null);
   }, []);
 
-  const createUploadUrl = useCallback(async (filename) => {
+  const createUploadUrl = useCallback(async (filename: string) => {
     setError(null);
     try {
-      const { data } = await client.graphql({
-        query: createImageUploadUrl,
+      const response = await client.graphql({
+        query: createImageUploadUrl as any,
         variables: { filename }
-      });
+      }) as GqlResponse;
 
-      if (!data?.createImageUploadUrl) {
+      if (!response.data?.createImageUploadUrl) {
         throw new Error('Failed to create upload URL');
       }
 
-      return data.createImageUploadUrl;
+      return response.data.createImageUploadUrl as { imageId: string; s3Uri: string };
     } catch (err) {
       console.error('Failed to create upload URL:', err);
       setError(err.message || 'Failed to create upload URL');
@@ -44,7 +45,7 @@ export const useImage = () => {
     }
   }, []);
 
-  const uploadImage = useCallback(async (file, onProgress) => {
+  const uploadImage = useCallback(async (file: File, onProgress?: (progress: number) => void) => {
     setUploading(true);
     setError(null);
 
@@ -102,21 +103,22 @@ export const useImage = () => {
     }
   }, [createUploadUrl]);
 
-  const generateCaptionForImage = useCallback(async (imageS3Uri) => {
+  const generateCaptionForImage = useCallback(async (imageS3Uri: string) => {
     setGenerating(true);
     setError(null);
 
     try {
-      const { data } = await client.graphql({
-        query: generateCaptionMutation,
+      const response = await client.graphql({
+        query: generateCaptionMutation as any,
         variables: { imageS3Uri }
-      });
+      }) as GqlResponse;
 
-      if (data?.generateCaption?.error) {
-        throw new Error(data.generateCaption.error);
+      const captionResult = response.data?.generateCaption as { error?: string; caption?: string } | undefined;
+      if (captionResult?.error) {
+        throw new Error(captionResult.error);
       }
 
-      return data?.generateCaption?.caption || '';
+      return captionResult?.caption || '';
     } catch (err) {
       console.error('Caption generation failed:', err);
       setError(err.message || 'Failed to generate caption');
@@ -126,12 +128,12 @@ export const useImage = () => {
     }
   }, []);
 
-  const submitImageWithCaption = useCallback(async (imageId, caption, userCaption, aiCaption) => {
+  const submitImageWithCaption = useCallback(async (imageId: string, caption: string, userCaption?: string, aiCaption?: string) => {
     setError(null);
 
     try {
-      const { data } = await client.graphql({
-        query: submitImageMutation,
+      const response = await client.graphql({
+        query: submitImageMutation as any,
         variables: {
           input: {
             imageId,
@@ -140,20 +142,21 @@ export const useImage = () => {
             aiCaption
           }
         }
-      });
+      }) as GqlResponse;
 
-      if (!data?.submitImage) {
+      const submitResult = response.data?.submitImage as Record<string, unknown> | undefined;
+      if (!submitResult) {
         throw new Error('Failed to submit image');
       }
 
       // Update image in state
       setImages(prev => prev.map(img =>
         img.imageId === imageId
-          ? { ...img, status: 'submitted', ...data.submitImage }
+          ? { ...img, status: 'submitted', ...submitResult }
           : img
       ));
 
-      return data.submitImage;
+      return submitResult;
     } catch (err) {
       console.error('Submit failed:', err);
       setError(err.message || 'Failed to submit image');
@@ -161,16 +164,16 @@ export const useImage = () => {
     }
   }, []);
 
-  const deleteImageById = useCallback(async (imageId) => {
+  const deleteImageById = useCallback(async (imageId: string) => {
     setError(null);
 
     try {
-      const { data } = await client.graphql({
-        query: deleteImageMutation,
+      const response = await client.graphql({
+        query: deleteImageMutation as any,
         variables: { imageId }
-      });
+      }) as GqlResponse;
 
-      if (data?.deleteImage) {
+      if (response.data?.deleteImage) {
         // Remove from state
         setImages(prev => prev.filter(img => img.imageId !== imageId));
         return true;
@@ -184,16 +187,16 @@ export const useImage = () => {
     }
   }, []);
 
-  const getImageById = useCallback(async (imageId) => {
+  const getImageById = useCallback(async (imageId: string) => {
     setError(null);
 
     try {
-      const { data } = await client.graphql({
-        query: getImageQuery,
+      const response = await client.graphql({
+        query: getImageQuery as any,
         variables: { imageId }
-      });
+      }) as GqlResponse;
 
-      return data?.getImage;
+      return response.data?.getImage;
     } catch (err) {
       console.error('Failed to get image:', err);
       setError(err.message || 'Failed to get image');
@@ -212,16 +215,16 @@ export const useImage = () => {
   const createZipUploadUrl = useCallback(async (generateCaptions = false) => {
     setError(null);
     try {
-      const { data } = await client.graphql({
-        query: createZipUploadUrlMutation,
+      const response = await client.graphql({
+        query: createZipUploadUrlMutation as any,
         variables: { generateCaptions }
-      });
+      }) as GqlResponse;
 
-      if (!data?.createZipUploadUrl) {
+      if (!response.data?.createZipUploadUrl) {
         throw new Error('Failed to create ZIP upload URL');
       }
 
-      return data.createZipUploadUrl;
+      return response.data.createZipUploadUrl as { uploadId: string };
     } catch (err) {
       console.error('Failed to create ZIP upload URL:', err);
       setError(err.message || 'Failed to create ZIP upload URL');

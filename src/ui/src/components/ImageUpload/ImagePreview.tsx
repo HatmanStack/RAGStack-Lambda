@@ -25,20 +25,20 @@ export const ImagePreview = ({ file, previewUrl, onRemove }) => {
               }}
             />
           ) : (
-            <Box
-              padding="xxl"
-              textAlign="center"
+            <div
               style={{
                 backgroundColor: '#f3f4f6',
                 borderRadius: '8px',
                 minHeight: '100px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                padding: '40px',
+                textAlign: 'center'
               }}
             >
               <Box fontSize="display-l">🖼️</Box>
-            </Box>
+            </div>
           )}
         </Box>
 

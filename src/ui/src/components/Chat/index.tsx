@@ -11,7 +11,13 @@ import {
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import type { GqlResponse } from '../../types/graphql';
 import { ChatPanel } from './ChatPanel';
+
+interface ConfigData {
+  Default: string;
+  Custom: string;
+}
 
 export function Chat() {
   const [cdnUrl, setCdnUrl] = useState(null);
@@ -22,10 +28,10 @@ export function Chat() {
   useEffect(() => {
     async function loadConfig() {
       try {
-        const response = await client.graphql({ query: getConfiguration });
-        const config = response.data.getConfiguration;
-        const parsedDefault = JSON.parse(config.Default);
-        const parsedCustom = JSON.parse(config.Custom || '{}');
+        const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
+        const config = response.data?.getConfiguration as ConfigData | undefined;
+        const parsedDefault = JSON.parse(config?.Default || '{}');
+        const parsedCustom = JSON.parse(config?.Custom || '{}');
         const merged = { ...parsedDefault, ...parsedCustom };
         setCdnUrl(merged.chat_cdn_url || null);
         setRequireAuth(merged.chat_require_auth || false);

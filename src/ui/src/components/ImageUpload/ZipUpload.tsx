@@ -191,12 +191,12 @@ export const ZipUpload = () => {
         ) : (
           <SpaceBetween size="l">
             {/* File preview */}
-            <Box
-              padding="m"
+            <div
               style={{
                 backgroundColor: '#f5f5f5',
                 borderRadius: '8px',
-                border: '1px solid #d1d5db'
+                border: '1px solid #d1d5db',
+                padding: '16px'
               }}
             >
               <SpaceBetween direction="horizontal" size="m">
@@ -215,7 +215,7 @@ export const ZipUpload = () => {
                   </Box>
                 )}
               </SpaceBetween>
-            </Box>
+            </div>
 
             {/* Generate captions checkbox */}
             {uploadStatus === 'idle' && (
@@ -283,15 +283,15 @@ export const ZipUpload = () => {
               for your images. The file should be a JSON object mapping filenames to caption strings.
             </Box>
 
-            <Box variant="code" padding="s" style={{ backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+            <div style={{ backgroundColor: '#f5f5f5', borderRadius: '4px', padding: '8px' }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
 {`{
   "sunset.jpg": "A beautiful sunset over the mountains",
   "beach.png": "Sandy beach with crystal blue water",
   "city.jpeg": "Downtown skyline at night"
 }`}
               </pre>
-            </Box>
+            </div>
 
             <Box variant="p">
               Images not listed in the manifest will either have no caption, or will have an

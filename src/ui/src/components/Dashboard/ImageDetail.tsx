@@ -132,17 +132,17 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
                   }}
                 />
               ) : (
-                <Box
-                  padding="xxl"
+                <div
                   style={{
                     backgroundColor: '#f3f4f6',
                     borderRadius: '8px',
-                    display: 'inline-block'
+                    display: 'inline-block',
+                    padding: '40px'
                   }}
                 >
                   <Box fontSize="display-l">🖼️</Box>
                   <Box color="text-body-secondary">No preview available</Box>
-                </Box>
+                </div>
               )}
             </Box>
           </Container>

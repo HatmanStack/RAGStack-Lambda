@@ -3,10 +3,16 @@ import {
   AppLayout as CloudscapeAppLayout,
   TopNavigation
 } from '@cloudscape-design/components';
+import type { AppLayoutProps } from '@cloudscape-design/components';
 import { Navigation } from './Navigation';
 import { useAuth } from '../Auth/AuthProvider';
 
-export const AppLayout = ({ children, contentType = 'default' }) => {
+interface LayoutProps {
+  children: React.ReactNode;
+  contentType?: AppLayoutProps['contentType'];
+}
+
+export const AppLayout = ({ children, contentType = 'default' }: LayoutProps) => {
   const [navigationOpen, setNavigationOpen] = useState(true);
   const { user, logout } = useAuth();
 

@@ -5,6 +5,17 @@ import { useScrape } from '../../hooks/useScrape';
 import { useNavigate } from 'react-router-dom';
 import { ApiDocs } from '../common/ApiDocs';
 
+interface DuplicateCheck {
+  exists: boolean;
+  lastScrapedAt?: string;
+  jobId?: string;
+  title?: string;
+}
+
+interface ScrapeJob {
+  jobId: string;
+}
+
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
 const graphqlExample = `# Start a scrape job
@@ -63,10 +74,10 @@ export const Scrape = () => {
 
   const handleSubmit = async (config) => {
     if (!config.force) {
-      const duplicate = await checkDuplicate(config.url);
+      const duplicate = await checkDuplicate(config.url) as DuplicateCheck | null;
       if (duplicate?.exists) {
         setDuplicateWarning({
-          date: new Date(duplicate.lastScrapedAt).toLocaleDateString(),
+          date: new Date(duplicate.lastScrapedAt!).toLocaleDateString(),
           jobId: duplicate.jobId,
           title: duplicate.title
         });
@@ -89,7 +100,7 @@ export const Scrape = () => {
         scrapeMode: config.scrapeMode,
         cookies: config.cookies,
         forceRescrape: config.forceRescrape
-      });
+      }) as ScrapeJob | null;
 
       if (job?.jobId) {
         navigate('/');

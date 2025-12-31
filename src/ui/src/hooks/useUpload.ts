@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import gql from 'graphql-tag';
+import type { GqlResponse } from '../types/graphql';
 
 const CREATE_UPLOAD_URL = gql`
   mutation CreateUploadUrl($filename: String!) {
@@ -39,12 +40,13 @@ export const useUpload = () => {
 
     try {
       // Get presigned URL
-      const { data } = await client.graphql({
-        query: CREATE_UPLOAD_URL,
+      const response = await client.graphql({
+        query: CREATE_UPLOAD_URL as any,
         variables: { filename: file.name }
-      });
+      }) as GqlResponse;
 
-      const { documentId } = data.createUploadUrl;
+      const uploadResult = response.data?.createUploadUrl as { documentId?: string } | undefined;
+      const { documentId } = uploadResult || {};
 
       // Upload to S3 using Amplify Storage (input/ prefix for DataBucket)
       const operation = uploadData({

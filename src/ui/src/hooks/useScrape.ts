@@ -5,6 +5,7 @@ import { cancelScrape as cancelScrapeMutation } from '../graphql/mutations/cance
 import { getScrapeJob as getScrapeJobQuery } from '../graphql/queries/getScrapeJob';
 import { listScrapeJobs as listScrapeJobsQuery } from '../graphql/queries/listScrapeJobs';
 import { checkScrapeUrl as checkScrapeUrlQuery } from '../graphql/queries/checkScrapeUrl';
+import type { GqlResponse } from '../types/graphql';
 
 const client = generateClient();
 
@@ -14,14 +15,14 @@ export const useScrape = () => {
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
 
-  const startScrape = useCallback(async (input) => {
+  const startScrape = useCallback(async (input: Record<string, unknown>) => {
     setLoading(true);
     setError(null);
     try {
       const response = await client.graphql({
         query: startScrapeMutation,
         variables: { input }
-      });
+      }) as GqlResponse;
 
       // Check for GraphQL errors in the response
       if (response.errors && response.errors.length > 0) {
@@ -88,8 +89,9 @@ export const useScrape = () => {
       const response = await client.graphql({
         query: listScrapeJobsQuery,
         variables: { limit }
-      });
-      setJobs(response.data.listScrapeJobs.items);
+      }) as GqlResponse;
+      const listResult = response.data?.listScrapeJobs as { items?: unknown[] } | undefined;
+      setJobs(listResult?.items || []);
     } catch (err) {
       setError(err.message || 'Failed to fetch jobs');
     } finally {
@@ -97,16 +99,16 @@ export const useScrape = () => {
     }
   }, []);
 
-  const fetchJobDetail = useCallback(async (jobId) => {
+  const fetchJobDetail = useCallback(async (jobId: string) => {
     setLoading(true);
     setError(null);
     try {
       const response = await client.graphql({
         query: getScrapeJobQuery,
         variables: { jobId }
-      });
-      setSelectedJob(response.data.getScrapeJob);
-      return response.data.getScrapeJob;
+      }) as GqlResponse;
+      setSelectedJob(response.data?.getScrapeJob);
+      return response.data?.getScrapeJob;
     } catch (err) {
       setError(err.message || 'Failed to fetch job detail');
     } finally {
@@ -114,13 +116,13 @@ export const useScrape = () => {
     }
   }, []);
 
-  const checkDuplicate = useCallback(async (url) => {
+  const checkDuplicate = useCallback(async (url: string) => {
     try {
       const response = await client.graphql({
         query: checkScrapeUrlQuery,
         variables: { url }
-      });
-      return response.data.checkScrapeUrl;
+      }) as GqlResponse;
+      return response.data?.checkScrapeUrl;
     } catch {
       return null; // Ignore errors, proceed with scrape
     }

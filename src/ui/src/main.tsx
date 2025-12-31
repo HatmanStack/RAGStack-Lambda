@@ -7,7 +7,8 @@ import App from './App.jsx'
 import awsConfig from './config.js'
 
 // Configure Amplify
-Amplify.configure(awsConfig)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+Amplify.configure(awsConfig as any)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -8,35 +8,35 @@ export const Navigation = () => {
 
   const navItems = [
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Dashboard',
       href: '/'
     },
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Upload',
       href: '/upload'
     },
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Scrape',
       href: '/scrape'
     },
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Search',
       href: '/search'
     },
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Chat',
       href: '/chat'
     },
     {
-      type: 'divider'
+      type: 'divider' as const
     },
     {
-      type: 'link',
+      type: 'link' as const,
       text: 'Settings',
       href: '/settings'
     }

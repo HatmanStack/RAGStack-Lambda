@@ -11,16 +11,17 @@ import {
   Alert,
   Checkbox
 } from '@cloudscape-design/components';
+import type { SelectProps } from '@cloudscape-design/components';
 import { CookieHelp } from './CookieHelp';
 
 export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarning, onDismissWarning }) => {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState('100');
   const [maxDepth, setMaxDepth] = useState('3');
-  const [scope, setScope] = useState({ value: 'SUBPAGES', label: 'Subpages only' });
+  const [scope, setScope] = useState<SelectProps.Option>({ value: 'SUBPAGES', label: 'Subpages only' });
   const [includePatterns, setIncludePatterns] = useState('');
   const [excludePatterns, setExcludePatterns] = useState('');
-  const [scrapeMode, setScrapeMode] = useState({ value: 'AUTO', label: 'Auto-detect' });
+  const [scrapeMode, setScrapeMode] = useState<SelectProps.Option>({ value: 'AUTO', label: 'Auto-detect' });
   const [cookies, setCookies] = useState('');
   const [forceRescrape, setForceRescrape] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);

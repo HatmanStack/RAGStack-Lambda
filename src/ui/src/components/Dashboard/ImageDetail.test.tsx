@@ -36,7 +36,7 @@ describe('ImageDetail', () => {
 
   it('renders nothing when not visible', () => {
     const { container } = render(
-      <ImageDetail imageId="img-123" visible={false} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={false} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     expect(container).toBeEmptyDOMElement();
@@ -49,7 +49,7 @@ describe('ImageDetail', () => {
     }));
 
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     // Modal should be visible with loading state
@@ -61,7 +61,7 @@ describe('ImageDetail', () => {
 
   it('displays image details when loaded', async () => {
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -74,7 +74,7 @@ describe('ImageDetail', () => {
 
   it('displays caption sections when available', async () => {
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -88,7 +88,7 @@ describe('ImageDetail', () => {
 
   it('displays status indicator', async () => {
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -99,7 +99,7 @@ describe('ImageDetail', () => {
   it('calls onDismiss when close button clicked', async () => {
     const onDismiss = vi.fn();
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={onDismiss} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={onDismiss} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -114,7 +114,7 @@ describe('ImageDetail', () => {
 
   it('displays delete button', async () => {
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -167,7 +167,7 @@ describe('ImageDetail', () => {
     window.confirm = vi.fn().mockReturnValue(false);
 
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -186,7 +186,7 @@ describe('ImageDetail', () => {
     mockGetImage.mockRejectedValue(new Error('Failed to load'));
 
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -196,7 +196,7 @@ describe('ImageDetail', () => {
 
   it('formats file size correctly', async () => {
     render(
-      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} />
+      <ImageDetail imageId="img-123" visible={true} onDismiss={vi.fn()} onDelete={vi.fn()} />
     );
 
     await waitFor(() => {

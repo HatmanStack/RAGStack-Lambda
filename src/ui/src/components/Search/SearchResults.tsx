@@ -64,9 +64,9 @@ export const SearchResults = ({ results, query }) => {
                   <Box fontSize="body-s" color="text-body-secondary">
                     Document: {getDocumentIdFromSource(result.source)}
                   </Box>
-                  <Box fontFamily="monospace" fontSize="body-s" color="text-body-secondary" style={{ wordBreak: 'break-all' }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#5f6b7a', wordBreak: 'break-all' }}>
                     {result.source}
-                  </Box>
+                  </div>
                 </Box>
               )}
             </SpaceBetween>
