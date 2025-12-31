@@ -51,13 +51,15 @@ export interface TransformedImage extends Omit<Document, 'documentId'> {
   type: 'image';
 }
 
-// Scrape job types
+// Scrape job types (matches GraphQL ScrapeStatus enum)
 export type ScrapeStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  | 'PENDING'
+  | 'DISCOVERING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'COMPLETED_WITH_ERRORS'
+  | 'FAILED'
+  | 'CANCELLED';
 
 export interface ScrapeJob {
   jobId: string;

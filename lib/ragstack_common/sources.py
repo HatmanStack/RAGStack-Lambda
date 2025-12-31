@@ -11,6 +11,7 @@ including:
 
 import logging
 import re
+from dataclasses import dataclass
 from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,8 @@ def extract_source_url_from_content(content_text: str) -> str | None:
         stripped = line.strip()
         if stripped.startswith("source_url:"):
             url = stripped.split(":", 1)[1].strip()
-            # Remove quotes if present
-            if url.startswith(("'", '"')) and url.endswith(("'", '"')):
+            # Remove matching quotes if present
+            if len(url) >= 2 and url[0] in ("'", '"') and url[0] == url[-1]:
                 url = url[1:-1]
             return url
     return None
@@ -170,24 +171,16 @@ def construct_image_uri_from_content_uri(
 # ============================================================================
 
 
+@dataclass
 class ParsedURI:
     """Result of parsing an S3 URI from a KB citation."""
 
-    def __init__(
-        self,
-        bucket: str,
-        document_id: str,
-        original_filename: str | None = None,
-        input_prefix: str | None = None,
-        is_scraped: bool = False,
-        is_image: bool = False,
-    ):
-        self.bucket = bucket
-        self.document_id = document_id
-        self.original_filename = original_filename
-        self.input_prefix = input_prefix
-        self.is_scraped = is_scraped
-        self.is_image = is_image
+    bucket: str
+    document_id: str
+    original_filename: str | None = None
+    input_prefix: str | None = None
+    is_scraped: bool = False
+    is_image: bool = False
 
 
 def parse_citation_uri(uri: str) -> ParsedURI | None:
