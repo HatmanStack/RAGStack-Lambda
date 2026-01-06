@@ -14,7 +14,7 @@ keeping the highest score for duplicates.
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import boto3
@@ -374,21 +374,21 @@ class MultiSliceRetriever:
                 for op, op_value in value.items():
                     if op == "$eq":
                         return {"equals": {"key": key, "value": op_value}}
-                    elif op == "$ne":
+                    if op == "$ne":
                         return {"notEquals": {"key": key, "value": op_value}}
-                    elif op == "$gt":
+                    if op == "$gt":
                         return {"greaterThan": {"key": key, "value": op_value}}
-                    elif op == "$gte":
+                    if op == "$gte":
                         return {"greaterThanOrEquals": {"key": key, "value": op_value}}
-                    elif op == "$lt":
+                    if op == "$lt":
                         return {"lessThan": {"key": key, "value": op_value}}
-                    elif op == "$lte":
+                    if op == "$lte":
                         return {"lessThanOrEquals": {"key": key, "value": op_value}}
-                    elif op == "$in":
+                    if op == "$in":
                         return {"in": {"key": key, "value": op_value}}
-                    elif op == "$nin":
+                    if op == "$nin":
                         return {"notIn": {"key": key, "value": op_value}}
-                    elif op == "$exists":
+                    if op == "$exists":
                         # Bedrock KB doesn't have direct exists filter
                         # Skip for now
                         logger.debug(f"Skipping $exists filter for key: {key}")
