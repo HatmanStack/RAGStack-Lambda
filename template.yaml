@@ -1202,6 +1202,7 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1212,6 +1213,8 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
         - Statement:
