@@ -17,8 +17,7 @@ from ragstack_common.filter_generator import S3_VECTORS_FILTER_SYNTAX, FilterGen
 @pytest.fixture
 def mock_bedrock_client():
     """Create a mock BedrockClient."""
-    mock_client = MagicMock()
-    return mock_client
+    return MagicMock()
 
 
 @pytest.fixture

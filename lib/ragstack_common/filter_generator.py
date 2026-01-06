@@ -34,7 +34,8 @@ S3 Vectors Filter Syntax:
 
 Example filters:
 1. Simple equality: {"topic": {"$eq": "genealogy"}}
-2. Multiple conditions: {"$and": [{"topic": {"$eq": "genealogy"}}, {"document_type": {"$eq": "pdf"}}]}
+2. Multiple conditions: {"$and": [{"topic": {"$eq": "genealogy"}},
+   {"document_type": {"$eq": "pdf"}}]}
 3. In list: {"topic": {"$in": ["genealogy", "immigration"]}}
 4. Existence check: {"location": {"$exists": true}}
 """
@@ -97,7 +98,8 @@ class FilterGenerator:
             bedrock_client: Bedrock client for LLM calls. Creates one if not provided.
             key_library: Key library for available metadata keys. Creates one if not provided.
             model_id: Bedrock model ID for generation. Uses Claude Haiku by default.
-            enabled: Whether filter generation is enabled. If False, generate_filter always returns None.
+            enabled: Whether filter generation is enabled. If False, generate_filter
+                returns None.
         """
         self.bedrock_client = bedrock_client or BedrockClient()
         self.key_library = key_library or KeyLibrary()
@@ -234,14 +236,13 @@ class FilterGenerator:
                 example_lines.append("")
             examples_section = "\n\nEXAMPLES:\n" + "\n".join(example_lines)
 
-        prompt = f"""Available metadata keys:
+        return f"""Available metadata keys:
 {keys_section}
 {examples_section}
 USER QUERY: {query}
 
-Generate a filter for this query using only the available keys above, or return null if no filter applies."""
-
-        return prompt
+Generate a filter for this query using only the available keys above.
+Return null if no filter applies."""
 
     def _parse_response(self, response_text: str) -> dict | None:
         """

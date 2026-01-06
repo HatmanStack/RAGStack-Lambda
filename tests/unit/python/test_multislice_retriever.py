@@ -244,6 +244,7 @@ def test_retrieve_handles_timeout(retriever, mock_bedrock_agent, sample_kb_resul
     # Make the mock take a long time
     def slow_retrieve(*args, **kwargs):
         import time
+
         time.sleep(1)
         return {"retrievalResults": sample_kb_results}
 
