@@ -1153,6 +1153,8 @@ Resources:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1172,6 +1174,11 @@ Resources:
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:us-*::foundation-model/*'
 
   ProcessImageFunction:
     Type: AWS::Serverless::Function
