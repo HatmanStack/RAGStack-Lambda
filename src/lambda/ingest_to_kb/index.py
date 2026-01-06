@@ -65,10 +65,27 @@ def get_key_library() -> KeyLibrary:
 
 
 def get_metadata_extractor() -> MetadataExtractor:
-    """Get or create MetadataExtractor singleton."""
+    """
+    Get or create MetadataExtractor singleton.
+
+    Uses configuration options for model ID and max keys.
+    """
     global _metadata_extractor
     if _metadata_extractor is None:
-        _metadata_extractor = MetadataExtractor(key_library=get_key_library())
+        # Get configuration options
+        config = get_config_manager()
+        model_id = None
+        max_keys = None
+
+        if config:
+            model_id = config.get_parameter("metadata_extraction_model")
+            max_keys = config.get_parameter("metadata_max_keys")
+
+        _metadata_extractor = MetadataExtractor(
+            key_library=get_key_library(),
+            model_id=model_id,
+            max_keys=max_keys if max_keys else 8,
+        )
     return _metadata_extractor
 
 

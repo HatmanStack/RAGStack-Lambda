@@ -105,6 +105,25 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `ocr_backend` | textract, bedrock | textract | Textract is faster and cheaper |
 | `bedrock_ocr_model_id` | Claude model ID | haiku | Only used when ocr_backend=bedrock |
 
+## Metadata Extraction
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
+| `metadata_extraction_model` | Model ARN | claude-3-5-haiku | Model for metadata extraction |
+| `metadata_max_keys` | number | 8 | Maximum metadata fields to extract per document |
+
+**How it works:**
+1. Documents are analyzed by an LLM to extract structured metadata
+2. Extracted fields like `topic`, `document_type`, `date_range`, `location` are stored
+3. Base metadata (document_id, filename, file_type) is always included
+4. Metadata enables filtered searches and better organization
+
+**Cost considerations:**
+- Each document incurs one additional LLM call (~100 tokens input, ~50 tokens output)
+- Using Haiku: ~$0.0001 per document
+- Disable if not needed to reduce costs
+
 ## Chat Settings
 
 | Setting | Values | Default | Notes |
