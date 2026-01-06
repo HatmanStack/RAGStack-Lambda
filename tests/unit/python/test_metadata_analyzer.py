@@ -15,39 +15,56 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add Lambda source directory to path
-sys.path.insert(0, str(Path(__file__).parents[3] / "src" / "lambda" / "metadata_analyzer"))
+# Path to metadata_analyzer Lambda
+METADATA_ANALYZER_PATH = str(Path(__file__).parents[3] / "src" / "lambda" / "metadata_analyzer")
 
 
-class TestAnalyzeMetadataFields:
-    """Tests for metadata field analysis logic."""
+@pytest.fixture
+def metadata_analyzer_module():
+    """Import metadata_analyzer index module with proper path setup and cleanup."""
+    # Add path temporarily
+    sys.path.insert(0, METADATA_ANALYZER_PATH)
 
-    @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
-        """Mock boto3 clients to avoid AWS initialization."""
-        mock_boto3 = MagicMock()
+    # Remove cached index if it exists from another Lambda
+    if "index" in sys.modules:
+        del sys.modules["index"]
 
-        with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "boto3": mock_boto3,
-                    "boto3.dynamodb": MagicMock(),
-                    "boto3.dynamodb.conditions": MagicMock(),
-                },
-            ),
-            patch("ragstack_common.config.ConfigurationManager"),
-            patch("ragstack_common.key_library.KeyLibrary"),
-        ):
-            yield
+    # Mock boto3 clients to avoid AWS initialization
+    mock_boto3 = MagicMock()
+    mock_dynamodb = MagicMock()
 
-    def test_count_field_occurrences(self):
-        """Test counting occurrences of each metadata field."""
+    with (
+        patch.dict(
+            "sys.modules",
+            {
+                "boto3": mock_boto3,
+                "boto3.dynamodb": mock_dynamodb,
+                "boto3.dynamodb.conditions": MagicMock(),
+            },
+        ),
+        patch("ragstack_common.config.ConfigurationManager"),
+        patch("ragstack_common.key_library.KeyLibrary"),
+    ):
         import importlib
 
         import index
 
         importlib.reload(index)
+        yield index
+
+    # Cleanup
+    if "index" in sys.modules:
+        del sys.modules["index"]
+    if METADATA_ANALYZER_PATH in sys.path:
+        sys.path.remove(METADATA_ANALYZER_PATH)
+
+
+class TestAnalyzeMetadataFields:
+    """Tests for metadata field analysis logic."""
+
+    def test_count_field_occurrences(self, metadata_analyzer_module):
+        """Test counting occurrences of each metadata field."""
+        index = metadata_analyzer_module
 
         sample_metadata = [
             {"topic": "genealogy", "document_type": "pdf"},
@@ -61,13 +78,9 @@ class TestAnalyzeMetadataFields:
         assert result["document_type"]["count"] == 2
         assert result["location"]["count"] == 1
 
-    def test_calculate_occurrence_rate(self):
+    def test_calculate_occurrence_rate(self, metadata_analyzer_module):
         """Test occurrence rate calculation."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         sample_metadata = [
             {"topic": "genealogy"},
@@ -82,58 +95,38 @@ class TestAnalyzeMetadataFields:
         # Rate is calculated as count / total_vectors
         assert result["topic"]["occurrence_rate"] == pytest.approx(2 / 3, rel=0.01)
 
-    def test_identify_data_type_string(self):
+    def test_identify_data_type_string(self, metadata_analyzer_module):
         """Test data type identification for string values."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         assert index.infer_data_type("genealogy") == "string"
         assert index.infer_data_type("New York, NY") == "string"
 
-    def test_identify_data_type_number(self):
+    def test_identify_data_type_number(self, metadata_analyzer_module):
         """Test data type identification for numeric values."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         assert index.infer_data_type(1940) == "number"
         assert index.infer_data_type(3.14) == "number"
         assert index.infer_data_type("1940") == "string"  # String that looks like number
 
-    def test_identify_data_type_boolean(self):
+    def test_identify_data_type_boolean(self, metadata_analyzer_module):
         """Test data type identification for boolean values."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         assert index.infer_data_type(True) == "boolean"
         assert index.infer_data_type(False) == "boolean"
 
-    def test_identify_data_type_list(self):
+    def test_identify_data_type_list(self, metadata_analyzer_module):
         """Test data type identification for list values."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         assert index.infer_data_type(["a", "b"]) == "list"
         assert index.infer_data_type([1, 2, 3]) == "list"
 
-    def test_collect_sample_values(self):
+    def test_collect_sample_values(self, metadata_analyzer_module):
         """Test sample value collection."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         sample_metadata = [
             {"topic": "genealogy"},
@@ -150,13 +143,9 @@ class TestAnalyzeMetadataFields:
         assert "census" in result["topic"]["sample_values"]
         assert len(result["topic"]["sample_values"]) == 3  # Deduplicated
 
-    def test_max_sample_values(self):
+    def test_max_sample_values(self, metadata_analyzer_module):
         """Test that sample values are limited to 10."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         sample_metadata = [{"topic": f"value_{i}"} for i in range(20)]
 
@@ -164,13 +153,9 @@ class TestAnalyzeMetadataFields:
 
         assert len(result["topic"]["sample_values"]) <= 10
 
-    def test_skips_internal_keys(self):
+    def test_skips_internal_keys(self, metadata_analyzer_module):
         """Test that internal AWS keys are skipped."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         sample_metadata = [
             {
@@ -186,13 +171,9 @@ class TestAnalyzeMetadataFields:
         assert "x-amz-bedrock-kb-data-source-id" not in result
         assert "AMAZON_BEDROCK_TEXT" not in result
 
-    def test_empty_metadata_list(self):
+    def test_empty_metadata_list(self, metadata_analyzer_module):
         """Test handling of empty metadata list."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         result = index.analyze_metadata_fields([])
 
@@ -201,25 +182,6 @@ class TestAnalyzeMetadataFields:
 
 class TestFilterExampleGeneration:
     """Tests for LLM-based filter example generation."""
-
-    @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
-        """Mock boto3 clients to avoid AWS initialization."""
-        mock_boto3 = MagicMock()
-
-        with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "boto3": mock_boto3,
-                    "boto3.dynamodb": MagicMock(),
-                    "boto3.dynamodb.conditions": MagicMock(),
-                },
-            ),
-            patch("ragstack_common.config.ConfigurationManager"),
-            patch("ragstack_common.key_library.KeyLibrary"),
-        ):
-            yield
 
     @pytest.fixture
     def mock_bedrock_response(self):
@@ -251,13 +213,9 @@ class TestFilterExampleGeneration:
             }
         }
 
-    def test_generate_filter_examples(self, mock_bedrock_response):
+    def test_generate_filter_examples(self, metadata_analyzer_module, mock_bedrock_response):
         """Test filter example generation from LLM."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         field_analysis = {
             "topic": {
@@ -283,13 +241,9 @@ class TestFilterExampleGeneration:
         assert examples[0]["name"] == "Genealogy Documents"
         assert "filter" in examples[0]
 
-    def test_filter_example_structure(self, mock_bedrock_response):
+    def test_filter_example_structure(self, metadata_analyzer_module, mock_bedrock_response):
         """Test that generated examples have required fields."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         field_analysis = {
             "topic": {
@@ -311,13 +265,9 @@ class TestFilterExampleGeneration:
             assert "filter" in example
             assert isinstance(example["filter"], dict)
 
-    def test_empty_field_analysis(self):
+    def test_empty_field_analysis(self, metadata_analyzer_module):
         """Test handling of empty field analysis."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         examples = index.generate_filter_examples({})
 
@@ -327,32 +277,9 @@ class TestFilterExampleGeneration:
 class TestResultsStorage:
     """Tests for storing analysis results."""
 
-    @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
-        """Mock boto3 clients to avoid AWS initialization."""
-        mock_boto3 = MagicMock()
-
-        with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "boto3": mock_boto3,
-                    "boto3.dynamodb": MagicMock(),
-                    "boto3.dynamodb.conditions": MagicMock(),
-                },
-            ),
-            patch("ragstack_common.config.ConfigurationManager"),
-            patch("ragstack_common.key_library.KeyLibrary"),
-        ):
-            yield
-
-    def test_store_examples_to_s3(self):
+    def test_store_examples_to_s3(self, metadata_analyzer_module):
         """Test storing filter examples to S3."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         examples = [
             {"name": "Test", "filter": {"topic": {"$eq": "test"}}},
@@ -368,13 +295,9 @@ class TestResultsStorage:
         assert index.s3.put_object.call_count >= 2
         assert result == "s3://test-bucket/metadata-filters/test-index/filter-examples-latest.json"
 
-    def test_update_key_library_counts(self):
+    def test_update_key_library_counts(self, metadata_analyzer_module):
         """Test updating key library with occurrence counts."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         field_analysis = {
             "topic": {"count": 50, "data_type": "string", "sample_values": ["a", "b"]},
@@ -397,32 +320,9 @@ class TestResultsStorage:
 class TestVectorSampling:
     """Tests for vector sampling from Knowledge Base."""
 
-    @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
-        """Mock boto3 clients to avoid AWS initialization."""
-        mock_boto3 = MagicMock()
-
-        with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "boto3": mock_boto3,
-                    "boto3.dynamodb": MagicMock(),
-                    "boto3.dynamodb.conditions": MagicMock(),
-                },
-            ),
-            patch("ragstack_common.config.ConfigurationManager"),
-            patch("ragstack_common.key_library.KeyLibrary"),
-        ):
-            yield
-
-    def test_sample_vectors_uses_retrieve_api(self):
+    def test_sample_vectors_uses_retrieve_api(self, metadata_analyzer_module):
         """Test that vector sampling uses the retrieve API."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         index.bedrock_agent.retrieve.return_value = {
             "retrievalResults": [
@@ -443,13 +343,9 @@ class TestVectorSampling:
         assert len(results) == 1
         assert index.bedrock_agent.retrieve.call_count >= 1
 
-    def test_sample_vectors_respects_max_samples(self):
+    def test_sample_vectors_respects_max_samples(self, metadata_analyzer_module):
         """Test that sampling respects max_samples limit."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         # Return many results
         index.bedrock_agent.retrieve.return_value = {
@@ -471,13 +367,9 @@ class TestVectorSampling:
 
         assert len(results) <= 50
 
-    def test_sample_vectors_deduplicates(self):
+    def test_sample_vectors_deduplicates(self, metadata_analyzer_module):
         """Test that sampling deduplicates by S3 URI."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         # Return duplicates
         index.bedrock_agent.retrieve.return_value = {
@@ -518,32 +410,9 @@ class TestLambdaHandler:
         monkeypatch.setenv("AWS_REGION", "us-east-1")
         monkeypatch.setenv("TEXT_DATA_SOURCE_ID", "ds-text-123")
 
-    @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
-        """Mock boto3 clients to avoid AWS initialization."""
-        mock_boto3 = MagicMock()
-
-        with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "boto3": mock_boto3,
-                    "boto3.dynamodb": MagicMock(),
-                    "boto3.dynamodb.conditions": MagicMock(),
-                },
-            ),
-            patch("ragstack_common.config.ConfigurationManager"),
-            patch("ragstack_common.key_library.KeyLibrary"),
-        ):
-            yield
-
-    def test_handler_returns_success(self):
+    def test_handler_returns_success(self, metadata_analyzer_module):
         """Test handler returns success response."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         # Mock the functions
         index.bedrock_agent.retrieve.return_value = {
@@ -567,13 +436,9 @@ class TestLambdaHandler:
         assert "keysAnalyzed" in result
         assert "examplesGenerated" in result
 
-    def test_handler_handles_empty_vectors(self):
+    def test_handler_handles_empty_vectors(self, metadata_analyzer_module):
         """Test handler handles case with no vectors."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         index.bedrock_agent.retrieve.return_value = {"retrievalResults": []}
 
@@ -583,13 +448,9 @@ class TestLambdaHandler:
         assert result["vectorsSampled"] == 0
         assert result["keysAnalyzed"] == 0
 
-    def test_handler_returns_execution_time(self):
+    def test_handler_returns_execution_time(self, metadata_analyzer_module):
         """Test handler returns execution time in milliseconds."""
-        import importlib
-
-        import index
-
-        importlib.reload(index)
+        index = metadata_analyzer_module
 
         index.bedrock_agent.retrieve.return_value = {"retrievalResults": []}
 
@@ -599,13 +460,16 @@ class TestLambdaHandler:
         assert isinstance(result["executionTimeMs"], int)
         assert result["executionTimeMs"] >= 0
 
-    def test_handler_missing_kb_id(self, monkeypatch):
+    def test_handler_missing_kb_id(self, metadata_analyzer_module, monkeypatch):
         """Test handler returns error when KNOWLEDGE_BASE_ID not set."""
+        index = metadata_analyzer_module
+
+        # Manually override the module's environment variable access
+        monkeypatch.delenv("KNOWLEDGE_BASE_ID", raising=False)
+
+        # Reload to pick up env change
         import importlib
 
-        import index
-
-        monkeypatch.delenv("KNOWLEDGE_BASE_ID", raising=False)
         importlib.reload(index)
 
         result = index.lambda_handler({}, None)
