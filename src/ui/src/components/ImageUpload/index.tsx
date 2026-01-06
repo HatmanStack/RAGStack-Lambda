@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -7,14 +7,28 @@ import {
   SpaceBetween,
   Alert,
   ProgressBar,
-  StatusIndicator
+  StatusIndicator,
+  Textarea,
+  FormField,
+  ExpandableSection,
 } from '@cloudscape-design/components';
+import { generateClient } from 'aws-amplify/api';
 import { ImagePreview } from './ImagePreview';
 import { CaptionInput } from './CaptionInput';
 import { useImage } from '../../hooks/useImage';
 import { ApiDocs } from '../common/ApiDocs';
+import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import type { GqlResponse } from '../../types/graphql';
 
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
+
+const DEFAULT_IMAGE_CAPTION_PROMPT = 'You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.';
+
+interface ConfigData {
+  Default: string;
+  Custom: string;
+}
 
 // API Examples for autoProcess (single-step upload)
 const autoProcessQuery = `mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean!, $userCaption: String) {
@@ -80,6 +94,53 @@ export const ImageUpload = () => {
   const [aiCaption, setAiCaption] = useState('');
   const [localError, setLocalError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+
+  // Caption prompt configuration state
+  const [captionPrompt, setCaptionPrompt] = useState(DEFAULT_IMAGE_CAPTION_PROMPT);
+  const [originalCaptionPrompt, setOriginalCaptionPrompt] = useState(DEFAULT_IMAGE_CAPTION_PROMPT);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [promptSaveStatus, setPromptSaveStatus] = useState<'success' | 'error' | null>(null);
+  const client = useMemo(() => generateClient(), []);
+
+  // Load caption prompt from config
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
+        const config = response.data?.getConfiguration as ConfigData | undefined;
+        const parsedDefault = JSON.parse(config?.Default || '{}');
+        const parsedCustom = JSON.parse(config?.Custom || '{}');
+        const merged = { ...parsedDefault, ...parsedCustom };
+        const prompt = merged.image_caption_prompt || DEFAULT_IMAGE_CAPTION_PROMPT;
+        setCaptionPrompt(prompt);
+        setOriginalCaptionPrompt(prompt);
+      } catch (err) {
+        console.error('Error loading config:', err);
+      }
+    }
+    loadConfig();
+  }, [client]);
+
+  const handleSaveCaptionPrompt = async () => {
+    setIsSavingPrompt(true);
+    setPromptSaveStatus(null);
+    try {
+      await client.graphql({
+        query: updateConfiguration,
+        variables: { customConfig: JSON.stringify({ image_caption_prompt: captionPrompt }) }
+      });
+      setOriginalCaptionPrompt(captionPrompt);
+      setPromptSaveStatus('success');
+      setTimeout(() => setPromptSaveStatus(null), 3000);
+    } catch (err) {
+      console.error('Error saving config:', err);
+      setPromptSaveStatus('error');
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
+
+  const hasCaptionPromptChanged = captionPrompt !== originalCaptionPrompt;
 
   // Create preview URL when file is selected
   useEffect(() => {
@@ -328,6 +389,49 @@ export const ImageUpload = () => {
             )}
           </SpaceBetween>
         )}
+
+        <ExpandableSection headerText="Caption Generation Prompt" variant="footer">
+          <SpaceBetween size="m">
+            <FormField
+              label="AI Caption System Prompt"
+              description="This prompt defines how the AI generates captions for uploaded images. Changes take effect immediately for new uploads."
+            >
+              <Textarea
+                value={captionPrompt}
+                onChange={({ detail }) => setCaptionPrompt(detail.value)}
+                rows={4}
+                placeholder="Enter the system prompt for image caption generation..."
+              />
+            </FormField>
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button
+                variant="primary"
+                onClick={handleSaveCaptionPrompt}
+                loading={isSavingPrompt}
+                disabled={!hasCaptionPromptChanged}
+              >
+                Save
+              </Button>
+              <Button
+                variant="link"
+                onClick={() => setCaptionPrompt(originalCaptionPrompt)}
+                disabled={!hasCaptionPromptChanged || isSavingPrompt}
+              >
+                Cancel
+              </Button>
+            </SpaceBetween>
+            {promptSaveStatus === 'success' && (
+              <Alert type="success" dismissible onDismiss={() => setPromptSaveStatus(null)}>
+                Caption prompt saved successfully.
+              </Alert>
+            )}
+            {promptSaveStatus === 'error' && (
+              <Alert type="error" dismissible onDismiss={() => setPromptSaveStatus(null)}>
+                Failed to save caption prompt. Please try again.
+              </Alert>
+            )}
+          </SpaceBetween>
+        </ExpandableSection>
 
         {graphqlEndpoint && (
           <ApiDocs

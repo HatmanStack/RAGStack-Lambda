@@ -1205,14 +1205,15 @@ def lambda_handler(event, context):
         # Build messages with conversation history and retrieved context
         messages = build_conversation_messages(query, history, retrieved_context)
 
-        # System prompt for the assistant
-        system_prompt = (
+        # System prompt for the assistant (configurable via DynamoDB)
+        default_prompt = (
             "You are a helpful assistant that answers questions based on information "
             "from a knowledge base. Always base your answers on the provided knowledge "
             "base information. If the provided information doesn't contain the answer, "
             "clearly state that and provide what relevant information you can. "
             "Be concise but thorough."
         )
+        system_prompt = config_manager.get_parameter("chat_system_prompt", default=default_prompt)
 
         # Call Converse API
         converse_response = bedrock_runtime.converse(

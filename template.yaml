@@ -3160,6 +3160,12 @@ Resources:
                     ],
                     'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}
                 },
+                'chat_system_prompt': {
+                    'type': 'string',
+                    'order': 2.5,
+                    'description': 'System prompt for chat responses',
+                    'default': 'You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn\'t contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.'
+                },
                 'chat_primary_model': {
                     'type': 'string',
                     'order': 3,
@@ -3230,6 +3236,12 @@ Resources:
                     'order': 12,
                     'description': 'Allow unauthenticated image uploads',
                     'default': False
+                },
+                'image_caption_prompt': {
+                    'type': 'string',
+                    'order': 12.5,
+                    'description': 'System prompt for image caption generation',
+                    'default': 'You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.'
                 },
                 'public_access_scrape': {
                     'type': 'boolean',

@@ -1049,11 +1049,22 @@ def generate_caption(args):
             }
         ]
 
-        system_prompt = (
+        # System prompt for image captioning (configurable via DynamoDB)
+        default_caption_prompt = (
             "You are an image captioning assistant. Generate concise, descriptive captions "
             "that are suitable for use as search keywords. Focus on the main subject, "
             "setting, and any notable visual elements. Keep captions under 200 characters."
         )
+        if CONFIGURATION_TABLE_NAME:
+            try:
+                system_prompt = config_manager.get_parameter(
+                    "image_caption_prompt", default=default_caption_prompt
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get caption prompt config: {e}")
+                system_prompt = default_caption_prompt
+        else:
+            system_prompt = default_caption_prompt
 
         # Call Bedrock Converse API
         logger.info("Calling Bedrock Converse API for caption generation")
