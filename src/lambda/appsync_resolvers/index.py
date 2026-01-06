@@ -68,7 +68,10 @@ SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 # Metadata analyzer function (optional)
 METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN")
 
-# Configuration table (optional, for caption generation)
+# Metadata key library table (optional)
+METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
+
+# Configuration table (optional, for caption generation and filter examples)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 # Initialize Bedrock runtime client for caption generation (use Lambda's region)
@@ -131,6 +134,8 @@ def lambda_handler(event, context):
         "deleteDocuments": delete_documents,
         # Metadata analysis
         "analyzeMetadata": analyze_metadata,
+        "getMetadataStats": get_metadata_stats,
+        "getFilterExamples": get_filter_examples,
     }
 
     resolver = resolvers.get(field_name)
@@ -1637,4 +1642,160 @@ def analyze_metadata(args):
             "keysAnalyzed": 0,
             "examplesGenerated": 0,
             "executionTimeMs": 0,
+        }
+
+
+def get_metadata_stats(args):
+    """
+    Get metadata key statistics from the key library.
+
+    Returns all keys with their occurrence counts and sample values.
+
+    Returns:
+        MetadataStatsResponse with keys array and stats
+    """
+    logger.info("Getting metadata statistics")
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        logger.warning("METADATA_KEY_LIBRARY_TABLE not configured")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": "Metadata key library not configured",
+        }
+
+    try:
+        table = dynamodb.Table(METADATA_KEY_LIBRARY_TABLE)
+
+        # Scan all keys from the library
+        all_items = []
+        scan_kwargs: dict = {}
+
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
+
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        # Format keys for GraphQL response
+        keys = []
+        last_analyzed = None
+
+        for item in all_items:
+            key_analyzed = item.get("last_analyzed")
+            if key_analyzed and (not last_analyzed or key_analyzed > last_analyzed):
+                last_analyzed = key_analyzed
+
+            keys.append(
+                {
+                    "keyName": item.get("key_name", ""),
+                    "dataType": item.get("data_type", "string"),
+                    "occurrenceCount": int(item.get("occurrence_count", 0)),
+                    "sampleValues": item.get("sample_values", [])[:10],
+                    "lastAnalyzed": key_analyzed,
+                    "status": item.get("status", "active"),
+                }
+            )
+
+        # Sort by occurrence count descending
+        keys.sort(key=lambda x: x["occurrenceCount"], reverse=True)
+
+        logger.info(f"Retrieved {len(keys)} metadata keys")
+
+        return {
+            "keys": keys,
+            "totalKeys": len(keys),
+            "lastAnalyzed": last_analyzed,
+            "error": None,
+        }
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error getting metadata stats: {e}")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": f"Failed to get metadata stats: {e}",
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in get_metadata_stats: {e}")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": str(e),
+        }
+
+
+def get_filter_examples(args):
+    """
+    Get filter examples from configuration.
+
+    Returns generated filter examples for use in the UI filter builder.
+
+    Returns:
+        FilterExamplesResponse with examples array
+    """
+    logger.info("Getting filter examples")
+
+    if not CONFIGURATION_TABLE_NAME:
+        logger.warning("CONFIGURATION_TABLE_NAME not configured")
+        return {
+            "examples": [],
+            "totalExamples": 0,
+            "lastGenerated": None,
+            "error": "Configuration not available",
+        }
+
+    try:
+        # Get examples from config manager
+        config_manager = get_config_manager()
+        examples_data = config_manager.get_parameter("metadata_filter_examples", default=[])
+
+        if not examples_data or not isinstance(examples_data, list):
+            logger.info("No filter examples found in configuration")
+            return {
+                "examples": [],
+                "totalExamples": 0,
+                "lastGenerated": None,
+                "error": None,
+            }
+
+        # Format examples for GraphQL response
+        examples = []
+        for ex in examples_data:
+            if isinstance(ex, dict) and "name" in ex and "filter" in ex:
+                examples.append(
+                    {
+                        "name": ex.get("name", ""),
+                        "description": ex.get("description", ""),
+                        "useCase": ex.get("use_case", ""),
+                        "filter": json.dumps(ex.get("filter", {})),
+                    }
+                )
+
+        # Get last generated timestamp from config
+        last_generated = config_manager.get_parameter(
+            "metadata_filter_examples_updated_at", default=None
+        )
+
+        logger.info(f"Retrieved {len(examples)} filter examples")
+
+        return {
+            "examples": examples,
+            "totalExamples": len(examples),
+            "lastGenerated": last_generated,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting filter examples: {e}")
+        return {
+            "examples": [],
+            "totalExamples": 0,
+            "lastGenerated": None,
+            "error": str(e),
         }

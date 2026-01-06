@@ -39,6 +39,12 @@ type Query {
 
   # Get current API key (admin only)
   getApiKey: ApiKeyResponse @aws_cognito_user_pools
+
+  # Get metadata key statistics from key library (admin only)
+  getMetadataStats: MetadataStatsResponse @aws_cognito_user_pools
+
+  # Get filter examples for metadata filtering (admin and chat)
+  getFilterExamples: FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools
 }
 
 type Mutation {
@@ -472,4 +478,38 @@ type MetadataAnalysisResult @aws_cognito_user_pools {
   examplesGenerated: Int!
   executionTimeMs: Int!
   error: String
+}
+
+# Metadata statistics response
+type MetadataStatsResponse @aws_cognito_user_pools {
+  keys: [MetadataKeyStats!]!
+  totalKeys: Int!
+  lastAnalyzed: String
+  error: String
+}
+
+# Individual metadata key statistics
+type MetadataKeyStats @aws_cognito_user_pools {
+  keyName: String!
+  dataType: String!
+  occurrenceCount: Int!
+  sampleValues: [String!]
+  lastAnalyzed: String
+  status: String
+}
+
+# Filter examples response
+type FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
+  examples: [FilterExample!]!
+  totalExamples: Int!
+  lastGenerated: String
+  error: String
+}
+
+# Individual filter example
+type FilterExample @aws_iam @aws_api_key @aws_cognito_user_pools {
+  name: String!
+  description: String!
+  useCase: String!
+  filter: AWSJSON!
 }
