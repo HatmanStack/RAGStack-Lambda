@@ -9,7 +9,6 @@ import {
   StatusIndicator,
   Button,
   Modal,
-  CodeView,
   ExpandableSection,
 } from '@cloudscape-design/components';
 import type { FilterExample } from '../../hooks/useMetadata';
@@ -188,10 +187,20 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
             </Box>
             <Box>
               <Box variant="awsui-key-label">Filter JSON</Box>
-              <CodeView
-                content={JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}
-                lineNumbers
-              />
+              <pre
+                style={{
+                  backgroundColor: '#1d1f21',
+                  color: '#c5c8c6',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  overflow: 'auto',
+                  fontSize: '13px',
+                  fontFamily: 'monospace',
+                  margin: '8px 0 0 0',
+                }}
+              >
+                <code>{JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}</code>
+              </pre>
             </Box>
           </SpaceBetween>
         </Modal>

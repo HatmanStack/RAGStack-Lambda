@@ -23,6 +23,7 @@ Serverless document processing with AI chat. Upload documents, extract text with
 - 📄 Document processing & vectorization (PDF, images, Office docs) → stored in managed knowledge base
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
+- 🔍 **NEW** Metadata filtering - auto-discover document metadata and filter search results
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
 - 💰 $7-18/month (1000 docs)
@@ -164,6 +165,7 @@ Ask questions about your content. Sources show where answers came from.
 
 - [Configuration](docs/CONFIGURATION.md) - Settings, quotas & API keys
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
+- [Metadata Filtering](docs/METADATA_FILTERING.md) - Auto-discover metadata and filter results
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
 - [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
