@@ -19,6 +19,7 @@ from ragstack_common.image import (
 )
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
+from ragstack_common.multislice_retriever import MultiSliceRetriever
 from ragstack_common.logging_utils import log_summary, safe_log_event
 from ragstack_common.metadata_extractor import MetadataExtractor
 
@@ -28,6 +29,7 @@ __all__ = [
     "ImageStatus",
     "KeyLibrary",
     "MetadataExtractor",
+    "MultiSliceRetriever",
     "check_public_access",
     "constants",
     "is_supported_image",
