@@ -124,6 +124,42 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 - Using Haiku: ~$0.0001 per document
 - Disable if not needed to reduce costs
 
+## Query-Time Filtering
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `filter_generation_enabled` | boolean | true | Enable LLM-based filter generation from queries |
+| `filter_generation_model` | Model ARN | claude-3-5-haiku | Model for filter generation |
+| `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
+| `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
+| `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
+| `metadata_filter_examples` | array | [] | Filter examples for few-shot learning |
+
+**How it works:**
+1. User query is analyzed by LLM to detect filter intent
+2. If filter intent detected, generates S3 Vectors compatible filter
+3. Multi-slice retrieval runs filtered + unfiltered queries in parallel
+4. Results are deduplicated and merged by relevance score
+
+**Filter examples format:**
+```json
+[
+  {
+    "query": "show me PDFs about genealogy",
+    "filter": {"$and": [{"document_type": {"$eq": "pdf"}}, {"topic": {"$eq": "genealogy"}}]}
+  },
+  {
+    "query": "documents from the 1900s",
+    "filter": {"date_range": {"$eq": "1900-1950"}}
+  }
+]
+```
+
+**Performance notes:**
+- Filter generation adds ~100-200ms latency
+- Multi-slice retrieval runs in parallel, not sequential
+- Disable for latency-sensitive applications
+
 ## Chat Settings
 
 | Setting | Values | Default | Notes |

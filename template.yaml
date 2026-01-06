@@ -3301,6 +3301,46 @@ Resources:
                     'order': 15,
                     'description': 'Enable budget alerts',
                     'default': True
+                },
+                'filter_generation_enabled': {
+                    'type': 'boolean',
+                    'order': 16,
+                    'description': 'Enable LLM-based metadata filter generation for queries',
+                    'default': True
+                },
+                'filter_generation_model': {
+                    'type': 'string',
+                    'order': 17,
+                    'description': 'Model for filter generation',
+                    'enum': [
+                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    ],
+                    'default': 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+                },
+                'multislice_enabled': {
+                    'type': 'boolean',
+                    'order': 18,
+                    'description': 'Enable multi-slice retrieval (parallel filtered/unfiltered queries)',
+                    'default': True
+                },
+                'multislice_count': {
+                    'type': 'number',
+                    'order': 19,
+                    'description': 'Number of parallel retrieval slices (2-4)',
+                    'default': 2
+                },
+                'multislice_timeout_ms': {
+                    'type': 'number',
+                    'order': 20,
+                    'description': 'Timeout per slice in milliseconds',
+                    'default': 5000
+                },
+                'metadata_filter_examples': {
+                    'type': 'array',
+                    'order': 21,
+                    'description': 'Filter examples for few-shot learning (JSON array)',
+                    'default': []
                 }
             }
         }
