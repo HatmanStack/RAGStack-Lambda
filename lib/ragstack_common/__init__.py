@@ -17,11 +17,13 @@ from ragstack_common.image import (
     validate_image_size,
     validate_image_type,
 )
+from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
 
 __all__ = [
     "ConfigurationManager",
     "ImageStatus",
+    "KeyLibrary",
     "check_public_access",
     "constants",
     "is_supported_image",

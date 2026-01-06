@@ -775,6 +775,31 @@ Resources:
           Value: Conversation History Storage
 
   ##########################################################################
+  # Metadata Key Library Table - Tracks discovered metadata fields
+  ##########################################################################
+
+  MetadataKeyLibraryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-metadata-keys'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: key_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: key_name
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+        - Key: Purpose
+          Value: Metadata Key Library
+
+  ##########################################################################
   # Scrape Jobs Table - Tracks web scraping job state
   ##########################################################################
 
@@ -1114,6 +1139,8 @@ Resources:
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # Text documents (output/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Layers:
         - !Ref RagstackCommonLayer
       Tags:
@@ -1122,6 +1149,10 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
         - Statement:
             - Effect: Allow
               Action:

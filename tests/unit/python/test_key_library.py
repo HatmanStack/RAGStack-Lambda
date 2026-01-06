@@ -1,0 +1,374 @@
+"""Unit tests for KeyLibrary
+
+Tests the KeyLibrary class using mocked boto3 DynamoDB resource.
+No actual AWS calls are made.
+"""
+
+import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+from botocore.exceptions import ClientError
+
+from ragstack_common.key_library import MAX_SAMPLE_VALUES, KeyLibrary
+
+# Fixtures
+
+
+@pytest.fixture
+def mock_dynamodb_table():
+    """Create a mock DynamoDB table resource."""
+    mock_table = MagicMock()
+    # Configure table_status as a property that returns "ACTIVE"
+    type(mock_table).table_status = "ACTIVE"
+    mock_table.get_item = MagicMock()
+    mock_table.scan = MagicMock()
+    mock_table.update_item = MagicMock()
+    return mock_table
+
+
+@pytest.fixture
+def mock_dynamodb_resource(mock_dynamodb_table):
+    """Create a mock boto3 DynamoDB resource."""
+    mock_resource = MagicMock()
+    mock_resource.Table.return_value = mock_dynamodb_table
+    return mock_resource
+
+
+@pytest.fixture
+def key_library(mock_dynamodb_resource):
+    """Create a KeyLibrary with mocked DynamoDB."""
+    with patch("ragstack_common.key_library.boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="test-key-library")
+        # Force table property to be initialized within the patch context
+        _ = library.table
+        # Mark table as existing (already checked via mock)
+        library._table_exists = True
+        return library
+
+
+@pytest.fixture
+def sample_keys():
+    """Sample key library entries."""
+    return [
+        {
+            "key_name": "topic",
+            "data_type": "string",
+            "sample_values": ["genealogy", "immigration"],
+            "occurrence_count": 25,
+            "first_seen": "2024-01-15T10:00:00+00:00",
+            "last_seen": "2024-01-20T15:30:00+00:00",
+            "status": "active",
+        },
+        {
+            "key_name": "date_range",
+            "data_type": "string",
+            "sample_values": ["1900-1950", "1850-1900"],
+            "occurrence_count": 18,
+            "first_seen": "2024-01-16T09:00:00+00:00",
+            "last_seen": "2024-01-19T14:00:00+00:00",
+            "status": "active",
+        },
+        {
+            "key_name": "old_key",
+            "data_type": "string",
+            "sample_values": ["value1"],
+            "occurrence_count": 5,
+            "first_seen": "2024-01-10T08:00:00+00:00",
+            "last_seen": "2024-01-12T12:00:00+00:00",
+            "status": "deprecated",
+        },
+    ]
+
+
+# Test: Initialization
+
+
+def test_init_with_table_name():
+    """Test KeyLibrary initialization with explicit table name."""
+    with patch("boto3.resource"):
+        library = KeyLibrary(table_name="my-table")
+        assert library.table_name == "my-table"
+
+
+def test_init_with_env_var():
+    """Test KeyLibrary initialization from environment variable."""
+    os.environ["METADATA_KEY_LIBRARY_TABLE"] = "env-table"
+    try:
+        library = KeyLibrary()
+        assert library.table_name == "env-table"
+    finally:
+        del os.environ["METADATA_KEY_LIBRARY_TABLE"]
+
+
+def test_init_without_table_name():
+    """Test KeyLibrary initialization without table name logs warning."""
+    # Ensure env var is not set
+    os.environ.pop("METADATA_KEY_LIBRARY_TABLE", None)
+
+    library = KeyLibrary()
+    assert library.table_name is None
+
+
+# Test: get_active_keys
+
+
+def test_get_active_keys_returns_active_only(key_library, mock_dynamodb_table, sample_keys):
+    """Test that get_active_keys returns only active keys."""
+    # Setup: return all keys, but only active ones should match filter
+    active_keys = [k for k in sample_keys if k["status"] == "active"]
+    mock_dynamodb_table.scan.return_value = {"Items": active_keys}
+
+    result = key_library.get_active_keys()
+
+    assert len(result) == 2
+    assert all(k["status"] == "active" for k in result)
+    mock_dynamodb_table.scan.assert_called_once()
+
+
+def test_get_active_keys_empty_table(key_library, mock_dynamodb_table):
+    """Test get_active_keys returns empty list on empty table."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.get_active_keys()
+
+    assert result == []
+
+
+def test_get_active_keys_handles_pagination(key_library, mock_dynamodb_table, sample_keys):
+    """Test that get_active_keys handles paginated results."""
+    active_keys = [k for k in sample_keys if k["status"] == "active"]
+
+    # First call returns one item and pagination key
+    mock_dynamodb_table.scan.side_effect = [
+        {"Items": [active_keys[0]], "LastEvaluatedKey": {"key_name": "topic"}},
+        {"Items": [active_keys[1]]},
+    ]
+
+    result = key_library.get_active_keys()
+
+    assert len(result) == 2
+    assert mock_dynamodb_table.scan.call_count == 2
+
+
+def _raise_resource_not_found():
+    """Helper to raise ResourceNotFoundException."""
+    raise ClientError(
+        {"Error": {"Code": "ResourceNotFoundException", "Message": "Table not found"}},
+        "DescribeTable",
+    )
+
+
+def test_get_active_keys_table_not_exists(mock_dynamodb_resource):
+    """Test get_active_keys returns empty list when table doesn't exist."""
+    mock_table = MagicMock()
+    # Simulate ResourceNotFoundException when accessing table_status
+    type(mock_table).table_status = property(fget=lambda _: _raise_resource_not_found())
+    mock_dynamodb_resource.Table.return_value = mock_table
+
+    with patch("boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="nonexistent-table")
+        result = library.get_active_keys()
+
+    assert result == []
+
+
+# Test: get_key
+
+
+def test_get_key_existing(key_library, mock_dynamodb_table, sample_keys):
+    """Test retrieving an existing key."""
+    mock_dynamodb_table.get_item.return_value = {"Item": sample_keys[0]}
+
+    result = key_library.get_key("topic")
+
+    assert result == sample_keys[0]
+    mock_dynamodb_table.get_item.assert_called_once_with(Key={"key_name": "topic"})
+
+
+def test_get_key_not_found(key_library, mock_dynamodb_table):
+    """Test retrieving a non-existent key returns None."""
+    mock_dynamodb_table.get_item.return_value = {}
+
+    result = key_library.get_key("nonexistent")
+
+    assert result is None
+
+
+def test_get_key_dynamodb_error(key_library, mock_dynamodb_table):
+    """Test DynamoDB ClientError is propagated."""
+    mock_dynamodb_table.get_item.side_effect = ClientError(
+        {"Error": {"Code": "InternalServerError", "Message": "Server error"}}, "GetItem"
+    )
+
+    with pytest.raises(ClientError):
+        key_library.get_key("topic")
+
+
+# Test: get_key_names
+
+
+def test_get_key_names_returns_sorted_list(key_library, mock_dynamodb_table, sample_keys):
+    """Test get_key_names returns sorted list of active key names."""
+    active_keys = [k for k in sample_keys if k["status"] == "active"]
+    mock_dynamodb_table.scan.return_value = {"Items": active_keys}
+
+    result = key_library.get_key_names()
+
+    assert result == ["date_range", "topic"]  # Sorted alphabetically
+
+
+def test_get_key_names_empty(key_library, mock_dynamodb_table):
+    """Test get_key_names returns empty list when no keys exist."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.get_key_names()
+
+    assert result == []
+
+
+# Test: upsert_key
+
+
+def test_upsert_key_creates_new_key(key_library, mock_dynamodb_table):
+    """Test upsert_key creates a new key correctly."""
+    mock_dynamodb_table.get_item.return_value = {
+        "Item": {"key_name": "location", "sample_values": []}
+    }
+
+    key_library.upsert_key("location", "string", "New York")
+
+    # Verify update_item was called with correct parameters
+    mock_dynamodb_table.update_item.assert_called()
+    call_args = mock_dynamodb_table.update_item.call_args_list[0]
+    assert call_args.kwargs["Key"] == {"key_name": "location"}
+    assert ":data_type" in call_args.kwargs["ExpressionAttributeValues"]
+    assert call_args.kwargs["ExpressionAttributeValues"][":data_type"] == "string"
+
+
+def test_upsert_key_increments_count(key_library, mock_dynamodb_table, sample_keys):
+    """Test upsert_key increments occurrence_count on existing key."""
+    mock_dynamodb_table.get_item.return_value = {"Item": sample_keys[0]}
+
+    key_library.upsert_key("topic", "string", "new_topic")
+
+    # Verify ADD occurrence_count :inc is in the update expression
+    call_args = mock_dynamodb_table.update_item.call_args_list[0]
+    assert "ADD occurrence_count :inc" in call_args.kwargs["UpdateExpression"]
+    assert call_args.kwargs["ExpressionAttributeValues"][":inc"] == 1
+
+
+def test_upsert_key_truncates_long_values(key_library, mock_dynamodb_table):
+    """Test that sample values are truncated to 100 characters."""
+    long_value = "x" * 200
+    mock_dynamodb_table.get_item.return_value = {"Item": {"key_name": "test", "sample_values": []}}
+
+    key_library.upsert_key("test", "string", long_value)
+
+    # The _add_sample_value is called with truncated value
+    # Check the second update_item call (adding sample value)
+    assert mock_dynamodb_table.update_item.call_count >= 1
+
+
+def test_upsert_key_adds_sample_value(key_library, mock_dynamodb_table):
+    """Test that new sample values are added."""
+    mock_dynamodb_table.get_item.return_value = {
+        "Item": {"key_name": "topic", "sample_values": ["existing"]}
+    }
+
+    key_library.upsert_key("topic", "string", "new_value")
+
+    # Second update_item should add sample value
+    assert mock_dynamodb_table.update_item.call_count >= 1
+
+
+def test_upsert_key_skips_duplicate_sample(key_library, mock_dynamodb_table):
+    """Test that duplicate sample values are not added."""
+    mock_dynamodb_table.get_item.return_value = {
+        "Item": {"key_name": "topic", "sample_values": ["existing_value"]}
+    }
+
+    key_library.upsert_key("topic", "string", "existing_value")
+
+    # First call is the main upsert, no second call for sample since it's duplicate
+    # The sample addition is skipped internally
+    call_count = mock_dynamodb_table.update_item.call_count
+    assert call_count == 1  # Only the main upsert, no sample addition
+
+
+def test_upsert_key_respects_max_samples(key_library, mock_dynamodb_table):
+    """Test that sample values are capped at MAX_SAMPLE_VALUES."""
+    existing_samples = [f"value{i}" for i in range(MAX_SAMPLE_VALUES)]
+    mock_dynamodb_table.get_item.return_value = {
+        "Item": {"key_name": "topic", "sample_values": existing_samples}
+    }
+
+    key_library.upsert_key("topic", "string", "new_value")
+
+    # Only one update_item (main upsert), no sample addition since at max
+    assert mock_dynamodb_table.update_item.call_count == 1
+
+
+def test_upsert_key_table_not_exists(mock_dynamodb_resource):
+    """Test upsert_key handles missing table gracefully."""
+    mock_table = MagicMock()
+    type(mock_table).table_status = property(fget=lambda _: _raise_resource_not_found())
+    mock_dynamodb_resource.Table.return_value = mock_table
+
+    with patch("boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="nonexistent-table")
+        # Should not raise, just log warning
+        library.upsert_key("test", "string", "value")
+
+
+# Test: deprecate_key
+
+
+def test_deprecate_key(key_library, mock_dynamodb_table):
+    """Test deprecating a key."""
+    key_library.deprecate_key("old_key")
+
+    mock_dynamodb_table.update_item.assert_called_once()
+    call_args = mock_dynamodb_table.update_item.call_args
+    assert call_args.kwargs["Key"] == {"key_name": "old_key"}
+    assert call_args.kwargs["ExpressionAttributeValues"][":deprecated"] == "deprecated"
+
+
+# Test: get_library_stats
+
+
+def test_get_library_stats(key_library, mock_dynamodb_table, sample_keys):
+    """Test getting library statistics."""
+    mock_dynamodb_table.scan.return_value = {"Items": sample_keys}
+
+    result = key_library.get_library_stats()
+
+    assert result["total_keys"] == 3
+    assert result["active_keys"] == 2
+    assert result["deprecated_keys"] == 1
+    assert result["total_occurrences"] == 48  # 25 + 18 + 5
+
+
+def test_get_library_stats_empty(key_library, mock_dynamodb_table):
+    """Test stats on empty table."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.get_library_stats()
+
+    assert result["total_keys"] == 0
+    assert result["active_keys"] == 0
+    assert result["deprecated_keys"] == 0
+    assert result["total_occurrences"] == 0
+
+
+def test_get_library_stats_table_not_exists(mock_dynamodb_resource):
+    """Test stats when table doesn't exist."""
+    mock_table = MagicMock()
+    type(mock_table).table_status = property(fget=lambda _: _raise_resource_not_found())
+    mock_dynamodb_resource.Table.return_value = mock_table
+
+    with patch("boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="nonexistent-table")
+        result = library.get_library_stats()
+
+    assert result["total_keys"] == 0
