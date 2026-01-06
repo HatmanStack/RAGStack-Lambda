@@ -222,6 +222,8 @@ type ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
   conversationId: String
   sources: [Source!]!
   error: String
+  # Filter applied during retrieval (JSON string, null if no filter)
+  filterApplied: String
 }
 
 # Source citation from Knowledge Base retrieval
@@ -244,6 +246,8 @@ type KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools {
   results: [KBResult!]!
   total: Int
   error: String
+  # Filter applied during retrieval (JSON string, null if no filter)
+  filterApplied: String
 }
 
 # Individual KB search result
