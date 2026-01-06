@@ -13,6 +13,7 @@ The generator:
 
 import json
 import logging
+import time
 from typing import Any
 
 from ragstack_common.bedrock import BedrockClient
@@ -131,10 +132,13 @@ class FilterGenerator:
             logger.debug("Empty query, returning None")
             return None
 
+        start_time = time.time()
         try:
             # Get available keys from library
+            keys_start = time.time()
             active_keys = self.key_library.get_active_keys()
             key_names = [k["key_name"] for k in active_keys]
+            keys_duration_ms = (time.time() - keys_start) * 1000
 
             if not key_names:
                 logger.warning("No active keys in library, cannot generate filter")
@@ -144,6 +148,7 @@ class FilterGenerator:
             prompt = self._build_prompt(query, active_keys, filter_examples)
 
             # Call LLM for filter generation
+            llm_start = time.time()
             response = self.bedrock_client.invoke_model(
                 model_id=self.model_id,
                 system_prompt=FILTER_SYSTEM_PROMPT,
@@ -152,27 +157,42 @@ class FilterGenerator:
                 max_tokens=512,
                 context="filter_generation",
             )
+            llm_duration_ms = (time.time() - llm_start) * 1000
 
             # Parse the response
             response_text = self.bedrock_client.extract_text_from_response(response)
             filter_expr = self._parse_response(response_text)
 
             if filter_expr is None:
-                logger.info("No filter intent detected in query")
+                total_duration_ms = (time.time() - start_time) * 1000
+                logger.info(
+                    f"No filter intent detected. "
+                    f"keys={keys_duration_ms:.1f}ms, llm={llm_duration_ms:.1f}ms, "
+                    f"total={total_duration_ms:.1f}ms"
+                )
                 return None
 
             # Validate and clean the filter
             validated_filter = self._validate_filter(filter_expr, key_names)
 
+            total_duration_ms = (time.time() - start_time) * 1000
             if validated_filter:
-                logger.info(f"Generated filter: {json.dumps(validated_filter)}")
+                logger.info(
+                    f"Generated filter: {json.dumps(validated_filter)}. "
+                    f"keys={keys_duration_ms:.1f}ms, llm={llm_duration_ms:.1f}ms, "
+                    f"total={total_duration_ms:.1f}ms"
+                )
             else:
-                logger.info("Filter validation removed all keys, returning None")
+                logger.info(
+                    f"Filter validation removed all keys, returning None. "
+                    f"total={total_duration_ms:.1f}ms"
+                )
 
             return validated_filter
 
         except Exception as e:
-            logger.warning(f"Filter generation failed: {e}")
+            total_duration_ms = (time.time() - start_time) * 1000
+            logger.warning(f"Filter generation failed after {total_duration_ms:.1f}ms: {e}")
             return None
 
     def _build_prompt(

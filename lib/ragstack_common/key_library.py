@@ -18,6 +18,7 @@ Key library schema:
 
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,6 +28,7 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 MAX_SAMPLE_VALUES = 10
+DEFAULT_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 class KeyLibrary:
@@ -44,17 +46,25 @@ class KeyLibrary:
         key_library.upsert_key("location", "string", "New York")
     """
 
-    def __init__(self, table_name: str | None = None):
+    def __init__(
+        self,
+        table_name: str | None = None,
+        cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+    ):
         """
         Initialize the key library.
 
         Args:
             table_name: DynamoDB table name. If not provided, reads from
                        METADATA_KEY_LIBRARY_TABLE environment variable.
+            cache_ttl_seconds: TTL for cached active keys (default 5 minutes).
         """
         self.table_name = table_name or os.environ.get("METADATA_KEY_LIBRARY_TABLE")
         self._table = None
         self._table_exists = None
+        self._cache_ttl = cache_ttl_seconds
+        self._active_keys_cache = None
+        self._active_keys_cache_time = None
 
         if self.table_name:
             logger.info(f"Initialized KeyLibrary with table: {self.table_name}")
@@ -93,18 +103,33 @@ class KeyLibrary:
                 return False
             raise
 
-    def get_active_keys(self) -> list[dict[str, Any]]:
+    def get_active_keys(self, use_cache: bool = True) -> list[dict[str, Any]]:
         """
         Return all metadata keys with status=active.
+
+        Args:
+            use_cache: If True, returns cached results if available and fresh.
+                      Set to False to force a fresh query.
 
         Returns:
             List of key dictionaries, each containing key_name, data_type,
             sample_values, occurrence_count, first_seen, last_seen, status.
             Returns empty list if table doesn't exist or is empty.
         """
+        # Check cache first
+        if use_cache and self._active_keys_cache is not None:
+            now = time.time()
+            if (
+                self._active_keys_cache_time is not None
+                and (now - self._active_keys_cache_time) < self._cache_ttl
+            ):
+                logger.debug(f"Returning {len(self._active_keys_cache)} cached active keys")
+                return self._active_keys_cache
+
         if not self._check_table_exists():
             return []
 
+        start_time = time.time()
         try:
             response = self.table.scan(
                 FilterExpression="#status = :active",
@@ -123,12 +148,23 @@ class KeyLibrary:
                 )
                 items.extend(response.get("Items", []))
 
-            logger.debug(f"Retrieved {len(items)} active keys from library")
+            # Update cache
+            self._active_keys_cache = items
+            self._active_keys_cache_time = time.time()
+
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(f"Retrieved {len(items)} active keys from library in {duration_ms:.1f}ms")
             return items
 
         except ClientError:
             logger.exception("Error scanning key library table")
             raise
+
+    def invalidate_cache(self) -> None:
+        """Invalidate the active keys cache, forcing a fresh query on next access."""
+        self._active_keys_cache = None
+        self._active_keys_cache_time = None
+        logger.debug("Key library cache invalidated")
 
     def get_key(self, key_name: str) -> dict[str, Any] | None:
         """
