@@ -4,8 +4,6 @@ Tests the MultiSliceRetriever class using mocked Bedrock Agent Runtime client.
 No actual AWS calls are made.
 """
 
-import json
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +13,6 @@ from ragstack_common.multislice_retriever import (
     SliceConfig,
     deduplicate_results,
 )
-
 
 # Fixtures
 
@@ -77,7 +74,7 @@ def test_multislice_retriever_init_creates_client():
     """Test MultiSliceRetriever creates client if not provided."""
     with patch("ragstack_common.multislice_retriever.boto3.client") as mock_boto:
         mock_boto.return_value = MagicMock()
-        retriever = MultiSliceRetriever()
+        MultiSliceRetriever()
         mock_boto.assert_called_once_with("bedrock-agent-runtime")
 
 
@@ -102,7 +99,9 @@ def test_retrieve_executes_multiple_slices(retriever, mock_bedrock_agent, sample
     assert len(result) > 0
 
 
-def test_retrieve_without_filter_uses_single_slice(retriever, mock_bedrock_agent, sample_kb_results):
+def test_retrieve_without_filter_uses_single_slice(
+    retriever, mock_bedrock_agent, sample_kb_results
+):
     """Test that without filter, only unfiltered slice is used."""
     mock_bedrock_agent.retrieve.return_value = {"retrievalResults": sample_kb_results}
 
@@ -276,7 +275,7 @@ def test_retrieve_configurable_slice_count(mock_bedrock_agent, sample_kb_results
         max_slices=2,
     )
 
-    result = retriever.retrieve(
+    retriever.retrieve(
         query="test query",
         knowledge_base_id="kb-123",
         data_source_id="ds-456",
@@ -406,7 +405,7 @@ def test_retrieve_respects_enabled_flag(mock_bedrock_agent, sample_kb_results):
         enabled=False,
     )
 
-    result = retriever.retrieve(
+    retriever.retrieve(
         query="test query",
         knowledge_base_id="kb-123",
         data_source_id="ds-456",

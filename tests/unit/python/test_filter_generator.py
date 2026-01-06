@@ -9,8 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ragstack_common.filter_generator import FilterGenerator, S3_VECTORS_FILTER_SYNTAX
-
+from ragstack_common.filter_generator import S3_VECTORS_FILTER_SYNTAX, FilterGenerator
 
 # Fixtures
 
@@ -68,7 +67,12 @@ def sample_filter_examples():
     return [
         {
             "query": "show me all PDFs about genealogy",
-            "filter": {"$and": [{"document_type": {"$eq": "pdf"}}, {"topic": {"$eq": "genealogy"}}]},
+            "filter": {
+                "$and": [
+                    {"document_type": {"$eq": "pdf"}},
+                    {"topic": {"$eq": "genealogy"}},
+                ]
+            },
         },
         {
             "query": "find documents from the 1900s",
@@ -93,11 +97,13 @@ def test_filter_generator_init():
 
 def test_filter_generator_init_defaults():
     """Test FilterGenerator creates default dependencies."""
-    with patch("ragstack_common.filter_generator.BedrockClient") as mock_bc:
-        with patch("ragstack_common.filter_generator.KeyLibrary") as mock_kl:
-            generator = FilterGenerator()
-            mock_bc.assert_called_once()
-            mock_kl.assert_called_once()
+    with (
+        patch("ragstack_common.filter_generator.BedrockClient") as mock_bc,
+        patch("ragstack_common.filter_generator.KeyLibrary") as mock_kl,
+    ):
+        FilterGenerator()
+        mock_bc.assert_called_once()
+        mock_kl.assert_called_once()
 
 
 # Test: Prompt includes available keys
@@ -210,7 +216,9 @@ def test_filter_validation_returns_none_if_all_keys_invalid(filter_generator, mo
 # Test: Filter examples improve output
 
 
-def test_generate_filter_with_examples(filter_generator, mock_bedrock_client, sample_filter_examples):
+def test_generate_filter_with_examples(
+    filter_generator, mock_bedrock_client, sample_filter_examples
+):
     """Test that filter examples are included in the prompt."""
     mock_filter = {"document_type": {"$eq": "pdf"}}
     mock_bedrock_client.invoke_model.return_value = {
@@ -284,7 +292,9 @@ def test_validate_filter_valid_structure(filter_generator):
     result = filter_generator._validate_filter(valid_filter)
     assert result is not None
 
-    valid_and_filter = {"$and": [{"topic": {"$eq": "genealogy"}}, {"document_type": {"$eq": "pdf"}}]}
+    valid_and_filter = {
+        "$and": [{"topic": {"$eq": "genealogy"}}, {"document_type": {"$eq": "pdf"}}]
+    }
     result = filter_generator._validate_filter(valid_and_filter)
     assert result is not None
 

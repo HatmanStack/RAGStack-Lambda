@@ -14,7 +14,6 @@ The generator:
 import json
 import logging
 import time
-from typing import Any
 
 from ragstack_common.bedrock import BedrockClient
 from ragstack_common.key_library import KeyLibrary
@@ -233,7 +232,7 @@ class FilterGenerator:
                 example_lines.append(f'Query: "{ex_query}"')
                 example_lines.append(f"Filter: {json.dumps(ex_filter)}")
                 example_lines.append("")
-            examples_section = f"\n\nEXAMPLES:\n" + "\n".join(example_lines)
+            examples_section = "\n\nEXAMPLES:\n" + "\n".join(example_lines)
 
         prompt = f"""Available metadata keys:
 {keys_section}
