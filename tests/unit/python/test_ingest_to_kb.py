@@ -64,6 +64,74 @@ def sample_event():
     }
 
 
+class TestGetFileTypeFromFilename:
+    """Tests for get_file_type_from_filename function."""
+
+    def test_extracts_pdf(self, set_env_vars):
+        """Test extracting PDF file type."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+            assert module.get_file_type_from_filename("document.pdf") == "pdf"
+
+    def test_extracts_jpg(self, set_env_vars):
+        """Test extracting JPG file type."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+            assert module.get_file_type_from_filename("photo.JPG") == "jpg"
+
+    def test_handles_multiple_dots(self, set_env_vars):
+        """Test handling filenames with multiple dots."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+            assert module.get_file_type_from_filename("file.name.txt") == "txt"
+
+    def test_handles_no_extension(self, set_env_vars):
+        """Test handling filenames without extension."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+            assert module.get_file_type_from_filename("noextension") == "unknown"
+
+    def test_handles_empty_filename(self, set_env_vars):
+        """Test handling empty filename."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+            assert module.get_file_type_from_filename("") == "unknown"
+
+
+class TestGetBaseMetadata:
+    """Tests for get_base_metadata function."""
+
+    def test_returns_required_fields(self, set_env_vars):
+        """Test that base metadata includes required fields."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+
+            doc_item = {"filename": "test.pdf", "total_pages": 5}
+            result = module.get_base_metadata("doc-123", "s3://bucket/output/doc.txt", doc_item)
+
+            assert result["document_id"] == "doc-123"
+            assert result["filename"] == "test.pdf"
+            assert result["file_type"] == "pdf"
+            assert result["s3_uri"] == "s3://bucket/output/doc.txt"
+
+    def test_includes_optional_fields(self, set_env_vars):
+        """Test that optional fields are included when present."""
+        with patch("boto3.client"), patch("boto3.resource"):
+            module = load_ingest_module()
+
+            doc_item = {
+                "filename": "test.pdf",
+                "total_pages": 10,
+                "upload_date": "2024-01-15",
+                "created_at": "2024-01-15T10:00:00Z",
+            }
+            result = module.get_base_metadata("doc-123", "s3://bucket/output/doc.txt", doc_item)
+
+            assert result["page_count"] == "10"
+            assert result["upload_date"] == "2024-01-15"
+            assert result["created_at"] == "2024-01-15T10:00:00Z"
+
+
 class TestBuildInlineAttributes:
     """Tests for build_inline_attributes function."""
 
@@ -214,8 +282,13 @@ class TestLambdaHandler:
 
             assert result["status"] == "indexed"
             assert result["document_id"] == "test-doc-123"
-            # Metadata extraction should have been attempted
-            assert "metadata_extracted" in result
+            # Base metadata should always be present
+            assert "base_metadata_keys" in result
+            assert "document_id" in result["base_metadata_keys"]
+            assert "filename" in result["base_metadata_keys"]
+            assert "file_type" in result["base_metadata_keys"]
+            # LLM metadata status should be reported
+            assert "llm_metadata_extracted" in result
 
     def test_ingestion_continues_on_metadata_extraction_failure(
         self,
@@ -263,9 +336,12 @@ class TestLambdaHandler:
 
             result = module.lambda_handler(sample_event, lambda_context)
 
-            # Should still succeed, just without metadata
+            # Should still succeed with base metadata, just without LLM metadata
             assert result["status"] == "indexed"
-            assert result["metadata_extracted"] is False
+            assert result["llm_metadata_extracted"] is False
+            # Base metadata should still be present
+            assert "base_metadata_keys" in result
+            assert len(result["base_metadata_keys"]) > 0
 
     def test_missing_required_params(self, set_env_vars, lambda_context):
         """Test that missing required params raise ValueError."""

@@ -127,6 +127,63 @@ def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     return attributes
 
 
+def get_file_type_from_filename(filename: str) -> str:
+    """
+    Extract file type from filename.
+
+    Args:
+        filename: Original filename.
+
+    Returns:
+        File extension without dot, lowercase (e.g., "pdf", "jpg").
+    """
+    if not filename or "." not in filename:
+        return "unknown"
+    return filename.rsplit(".", 1)[-1].lower()
+
+
+def get_base_metadata(
+    document_id: str,
+    output_s3_uri: str,
+    doc_item: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Create base metadata fields that are always included.
+
+    These are deterministic fields derived from document properties,
+    not from LLM extraction.
+
+    Args:
+        document_id: Document identifier.
+        output_s3_uri: S3 URI of the output text file.
+        doc_item: Document record from tracking DynamoDB table.
+
+    Returns:
+        Dictionary of base metadata fields.
+    """
+    filename = doc_item.get("filename", "unknown")
+    file_type = get_file_type_from_filename(filename)
+
+    base_metadata = {
+        "document_id": document_id,
+        "filename": filename,
+        "file_type": file_type,
+        "s3_uri": output_s3_uri,
+    }
+
+    # Add optional fields if present
+    if doc_item.get("upload_date"):
+        base_metadata["upload_date"] = doc_item["upload_date"]
+
+    if doc_item.get("created_at"):
+        base_metadata["created_at"] = doc_item["created_at"]
+
+    if doc_item.get("total_pages"):
+        base_metadata["page_count"] = str(doc_item["total_pages"])
+
+    return base_metadata
+
+
 def extract_document_metadata(
     output_s3_uri: str,
     document_id: str,
@@ -186,13 +243,26 @@ def lambda_handler(event, context):
     # Get DynamoDB table
     tracking_table = dynamodb.Table(tracking_table_name)
 
-    # Extract metadata if enabled
-    metadata_extracted = False
-    extracted_metadata = {}
+    # Fetch document details first (needed for base metadata and publishing)
+    doc_response = tracking_table.get_item(Key={"document_id": document_id})
+    doc_item = doc_response.get("Item", {})
+    filename = doc_item.get("filename", "unknown")
+    total_pages = doc_item.get("total_pages", 0)
+
+    # Build base metadata (always included)
+    base_metadata = get_base_metadata(document_id, output_s3_uri, doc_item)
+
+    # Extract LLM-based metadata if enabled
+    llm_metadata_extracted = False
+    llm_metadata = {}
 
     if is_metadata_extraction_enabled():
-        extracted_metadata = extract_document_metadata(output_s3_uri, document_id)
-        metadata_extracted = bool(extracted_metadata)
+        llm_metadata = extract_document_metadata(output_s3_uri, document_id)
+        llm_metadata_extracted = bool(llm_metadata)
+
+    # Merge metadata: base fields + LLM-extracted fields
+    # LLM metadata takes precedence if there are conflicts
+    combined_metadata = {**base_metadata, **llm_metadata}
 
     try:
         # Build the document object for ingestion
@@ -203,15 +273,14 @@ def lambda_handler(event, context):
             }
         }
 
-        # Add inline metadata attributes if we have any
-        if extracted_metadata:
-            inline_attributes = build_inline_attributes(extracted_metadata)
-            if inline_attributes:
-                document["metadata"] = {
-                    "type": "IN_LINE_ATTRIBUTE",
-                    "inlineAttributes": inline_attributes,
-                }
-                logger.info(f"Adding {len(inline_attributes)} metadata attributes to ingestion")
+        # Add inline metadata attributes (always include base metadata)
+        inline_attributes = build_inline_attributes(combined_metadata)
+        if inline_attributes:
+            document["metadata"] = {
+                "type": "IN_LINE_ATTRIBUTE",
+                "inlineAttributes": inline_attributes,
+            }
+            logger.info(f"Adding {len(inline_attributes)} metadata attributes to ingestion")
 
         # Call Bedrock Agent to ingest the document
         # Bedrock will:
@@ -233,14 +302,8 @@ def lambda_handler(event, context):
         if doc_details:
             ingestion_status = doc_details[0].get("status", "UNKNOWN")
 
-        # Get document details for publishing update
-        doc_response = tracking_table.get_item(Key={"document_id": document_id})
-        doc_item = doc_response.get("Item", {})
-        filename = doc_item.get("filename", "unknown")
-        total_pages = doc_item.get("total_pages", 0)
-
         # Update document status in DynamoDB to 'indexed'
-        # Also store extracted metadata for reference
+        # Store combined metadata for reference
         try:
             update_expression = "SET #status = :status, updated_at = :updated_at"
             expression_names = {"#status": "status"}
@@ -249,9 +312,10 @@ def lambda_handler(event, context):
                 ":updated_at": datetime.now(UTC).isoformat(),
             }
 
-            if extracted_metadata:
+            # Store combined metadata (base + LLM) for reference
+            if combined_metadata:
                 update_expression += ", extracted_metadata = :metadata"
-                expression_values[":metadata"] = extracted_metadata
+                expression_values[":metadata"] = combined_metadata
 
             tracking_table.update_item(
                 Key={"document_id": document_id},
@@ -280,8 +344,10 @@ def lambda_handler(event, context):
             "status": "indexed",
             "ingestion_status": ingestion_status,
             "knowledge_base_id": kb_id,
-            "metadata_extracted": metadata_extracted,
-            "metadata_keys": list(extracted_metadata.keys()) if extracted_metadata else [],
+            "llm_metadata_extracted": llm_metadata_extracted,
+            "base_metadata_keys": list(base_metadata.keys()),
+            "llm_metadata_keys": list(llm_metadata.keys()) if llm_metadata else [],
+            "total_metadata_keys": list(combined_metadata.keys()),
         }
 
     except ClientError as e:
