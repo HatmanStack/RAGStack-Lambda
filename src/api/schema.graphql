@@ -119,6 +119,10 @@ type Mutation {
     errorMessage: String
     updatedAt: String!
   ): ImageUpdate @aws_iam
+
+  # Analyze metadata in Knowledge Base vectors (admin only)
+  # Samples vectors, analyzes field occurrences, and generates filter examples
+  analyzeMetadata: MetadataAnalysisResult @aws_cognito_user_pools
 }
 
 type Subscription {
@@ -454,4 +458,18 @@ type ScrapeUrlCheck @aws_api_key @aws_cognito_user_pools {
   lastScrapedAt: AWSDateTime
   jobId: ID
   title: String
+}
+
+# =========================================================================
+# Metadata Analysis Types
+# =========================================================================
+
+# Metadata analysis result
+type MetadataAnalysisResult @aws_cognito_user_pools {
+  success: Boolean!
+  vectorsSampled: Int!
+  keysAnalyzed: Int!
+  examplesGenerated: Int!
+  executionTimeMs: Int!
+  error: String
 }

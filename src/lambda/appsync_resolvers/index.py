@@ -1,5 +1,5 @@
 """
-AppSync Lambda resolvers for document, scrape, and image operations.
+AppSync Lambda resolvers for document, scrape, image, and metadata operations.
 
 Handles:
 - getDocument
@@ -18,6 +18,7 @@ Handles:
 - listImages
 - deleteImage
 - deleteDocuments
+- analyzeMetadata
 """
 
 import json
@@ -63,6 +64,9 @@ STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 SCRAPE_JOBS_TABLE = os.environ.get("SCRAPE_JOBS_TABLE")
 SCRAPE_URLS_TABLE = os.environ.get("SCRAPE_URLS_TABLE")
 SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
+
+# Metadata analyzer function (optional)
+METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN")
 
 # Configuration table (optional, for caption generation)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
@@ -125,6 +129,8 @@ def lambda_handler(event, context):
         "createZipUploadUrl": create_zip_upload_url,
         # Document management
         "deleteDocuments": delete_documents,
+        # Metadata analysis
+        "analyzeMetadata": analyze_metadata,
     }
 
     resolver = resolvers.get(field_name)
@@ -1541,3 +1547,94 @@ def create_zip_upload_url(args):
     except Exception as e:
         logger.error(f"Unexpected error in create_zip_upload_url: {e}")
         raise
+
+
+# =========================================================================
+# Metadata Analysis Resolvers
+# =========================================================================
+
+
+def analyze_metadata(args):
+    """
+    Trigger metadata analysis of Knowledge Base vectors.
+
+    Invokes the metadata analyzer Lambda which:
+    - Samples vectors from Knowledge Base
+    - Analyzes metadata field occurrences
+    - Generates filter examples using LLM
+    - Stores results in S3 and DynamoDB
+
+    Returns:
+        MetadataAnalysisResult with success status and stats
+    """
+    logger.info("Starting metadata analysis")
+
+    if not METADATA_ANALYZER_FUNCTION_ARN:
+        logger.error("METADATA_ANALYZER_FUNCTION_ARN not configured")
+        return {
+            "success": False,
+            "error": "Metadata analyzer not configured",
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
+
+    try:
+        # Invoke metadata analyzer Lambda synchronously
+        lambda_client = boto3.client("lambda")
+
+        logger.info(f"Invoking metadata analyzer: {METADATA_ANALYZER_FUNCTION_ARN}")
+        response = lambda_client.invoke(
+            FunctionName=METADATA_ANALYZER_FUNCTION_ARN,
+            InvocationType="RequestResponse",
+            Payload=json.dumps({}),
+        )
+
+        # Parse response
+        payload = json.loads(response["Payload"].read())
+
+        # Check for Lambda execution error
+        if response.get("FunctionError"):
+            error_msg = payload.get("errorMessage", "Lambda execution failed")
+            logger.error(f"Metadata analyzer failed: {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "vectorsSampled": 0,
+                "keysAnalyzed": 0,
+                "examplesGenerated": 0,
+                "executionTimeMs": 0,
+            }
+
+        logger.info(f"Metadata analysis complete: {payload}")
+
+        return {
+            "success": payload.get("success", False),
+            "vectorsSampled": payload.get("vectorsSampled", 0),
+            "keysAnalyzed": payload.get("keysAnalyzed", 0),
+            "examplesGenerated": payload.get("examplesGenerated", 0),
+            "executionTimeMs": payload.get("executionTimeMs", 0),
+            "error": payload.get("error"),
+        }
+
+    except ClientError as e:
+        logger.error(f"Error invoking metadata analyzer: {e}")
+        return {
+            "success": False,
+            "error": f"Failed to invoke metadata analyzer: {e}",
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in analyze_metadata: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
