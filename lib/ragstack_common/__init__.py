@@ -19,11 +19,13 @@ from ragstack_common.image import (
 )
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
+from ragstack_common.metadata_extractor import MetadataExtractor
 
 __all__ = [
     "ConfigurationManager",
     "ImageStatus",
     "KeyLibrary",
+    "MetadataExtractor",
     "check_public_access",
     "constants",
     "is_supported_image",
