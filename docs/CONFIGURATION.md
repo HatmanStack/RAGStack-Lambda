@@ -105,6 +105,61 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `ocr_backend` | textract, bedrock | textract | Textract is faster and cheaper |
 | `bedrock_ocr_model_id` | Claude model ID | haiku | Only used when ocr_backend=bedrock |
 
+## Metadata Extraction
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
+| `metadata_extraction_model` | Model ARN | claude-3-5-haiku | Model for metadata extraction |
+| `metadata_max_keys` | number | 8 | Maximum metadata fields to extract per document |
+
+**How it works:**
+1. Documents are analyzed by an LLM to extract structured metadata
+2. Extracted fields like `topic`, `document_type`, `date_range`, `location` are stored
+3. Base metadata (document_id, filename, file_type) is always included
+4. Metadata enables filtered searches and better organization
+
+**Cost considerations:**
+- Each document incurs one additional LLM call (~100 tokens input, ~50 tokens output)
+- Using Haiku: ~$0.0001 per document
+- Disable if not needed to reduce costs
+
+## Query-Time Filtering
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `filter_generation_enabled` | boolean | true | Enable LLM-based filter generation from queries |
+| `filter_generation_model` | Model ARN | claude-3-5-haiku | Model for filter generation |
+| `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
+| `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
+| `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
+| `metadata_filter_examples` | array | [] | Filter examples for few-shot learning |
+
+**How it works:**
+1. User query is analyzed by LLM to detect filter intent
+2. If filter intent detected, generates S3 Vectors compatible filter
+3. Multi-slice retrieval runs filtered + unfiltered queries in parallel
+4. Results are deduplicated and merged by relevance score
+
+**Filter examples format:**
+```json
+[
+  {
+    "query": "show me PDFs about genealogy",
+    "filter": {"$and": [{"document_type": {"$eq": "pdf"}}, {"topic": {"$eq": "genealogy"}}]}
+  },
+  {
+    "query": "documents from the 1900s",
+    "filter": {"date_range": {"$eq": "1900-1950"}}
+  }
+]
+```
+
+**Performance notes:**
+- Filter generation adds ~100-200ms latency
+- Multi-slice retrieval runs in parallel, not sequential
+- Disable for latency-sensitive applications
+
 ## Chat Settings
 
 | Setting | Values | Default | Notes |

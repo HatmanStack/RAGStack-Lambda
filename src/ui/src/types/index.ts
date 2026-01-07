@@ -146,6 +146,8 @@ export interface AppConfiguration {
   chat_global_quota_daily?: number;
   chat_per_user_quota_daily?: number;
   chat_allow_document_access?: boolean;
+  chat_system_prompt?: string;
+  image_caption_prompt?: string;
 }
 
 // Auth types

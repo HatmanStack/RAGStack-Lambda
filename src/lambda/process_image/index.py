@@ -32,6 +32,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -39,6 +40,8 @@ from botocore.exceptions import ClientError
 from ragstack_common.appsync import publish_image_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus
+from ragstack_common.key_library import KeyLibrary
+from ragstack_common.metadata_extractor import MetadataExtractor
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -52,6 +55,161 @@ s3 = boto3.client("s3")
 
 # Configuration table name (optional, for getting chat model)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
+
+# Lazy-initialized singletons
+_key_library = None
+_metadata_extractor = None
+
+
+def get_key_library() -> KeyLibrary:
+    """Get or create KeyLibrary singleton."""
+    global _key_library
+    if _key_library is None:
+        table_name = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
+        _key_library = KeyLibrary(table_name=table_name) if table_name else KeyLibrary()
+    return _key_library
+
+
+def get_metadata_extractor() -> MetadataExtractor:
+    """
+    Get or create MetadataExtractor singleton.
+
+    Uses configuration options for model ID and max keys.
+    """
+    global _metadata_extractor
+    if _metadata_extractor is None:
+        # Get configuration options
+        model_id = None
+        max_keys = None
+
+        if CONFIGURATION_TABLE_NAME:
+            try:
+                config = ConfigurationManager(CONFIGURATION_TABLE_NAME)
+                model_id = config.get_parameter("metadata_extraction_model")
+                max_keys = config.get_parameter("metadata_max_keys")
+            except Exception as e:
+                logger.warning(f"Failed to get metadata extraction config: {e}")
+
+        _metadata_extractor = MetadataExtractor(
+            key_library=get_key_library(),
+            model_id=model_id,
+            max_keys=max_keys if max_keys else 8,
+        )
+    return _metadata_extractor
+
+
+def get_file_type_from_filename(filename: str) -> str:
+    """Extract file type from filename."""
+    if not filename or "." not in filename:
+        return "unknown"
+    return filename.rsplit(".", 1)[-1].lower()
+
+
+def get_base_image_metadata(
+    image_id: str,
+    filename: str,
+    input_s3_uri: str,
+    item: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Create base metadata fields for images.
+
+    Args:
+        image_id: Image identifier.
+        filename: Original filename.
+        input_s3_uri: S3 URI of the image file.
+        item: DynamoDB tracking record.
+
+    Returns:
+        Dictionary of base metadata fields.
+    """
+    file_type = get_file_type_from_filename(filename)
+
+    base_metadata = {
+        "document_id": image_id,
+        "filename": filename,
+        "file_type": file_type,
+        "s3_uri": input_s3_uri,
+        "content_type": "image",
+    }
+
+    if item.get("created_at"):
+        base_metadata["created_at"] = item["created_at"]
+
+    if item.get("user_caption"):
+        base_metadata["has_user_caption"] = "true"
+
+    if item.get("ai_caption"):
+        base_metadata["has_ai_caption"] = "true"
+
+    return base_metadata
+
+
+def extract_image_metadata(
+    caption: str,
+    image_id: str,
+    filename: str,
+) -> dict[str, Any]:
+    """
+    Extract metadata from image caption using LLM.
+
+    Args:
+        caption: Combined caption text.
+        image_id: Image identifier.
+        filename: Original filename.
+
+    Returns:
+        Dictionary of extracted metadata, or empty dict on failure.
+    """
+    if not caption or not caption.strip():
+        return {}
+
+    try:
+        extractor = get_metadata_extractor()
+        metadata = extractor.extract_from_caption(
+            caption=caption,
+            document_id=image_id,
+            filename=filename,
+        )
+        if metadata:
+            logger.info(f"Extracted metadata for image {image_id}: {list(metadata.keys())}")
+        return metadata
+    except Exception as e:
+        logger.warning(f"Failed to extract metadata for image {image_id}: {e}")
+        return {}
+
+
+def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Convert metadata dictionary to Bedrock KB inline attributes format.
+
+    Args:
+        metadata: Dictionary of metadata key-value pairs.
+
+    Returns:
+        List of inline attribute objects for Bedrock KB API.
+    """
+    attributes = []
+
+    for key, value in metadata.items():
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+
+        if isinstance(value, bool):
+            str_value = str(value).lower()
+        elif isinstance(value, (int, float)):
+            str_value = str(value)
+        elif isinstance(value, list):
+            str_value = ", ".join(str(v) for v in value[:5])
+        else:
+            str_value = str(value)
+            if len(str_value) > 100:
+                logger.debug(f"Truncating metadata key '{key}' from {len(str_value)} to 100 chars")
+                str_value = str_value[:100]
+
+        attributes.append({"key": key, "value": {"stringValue": str_value}})
+
+    return attributes
 
 
 def is_valid_uuid(value: str) -> bool:
@@ -242,17 +400,42 @@ def lambda_handler(event, context):
         )
         logger.info(f"Created caption file: {text_s3_uri}")
 
+        # Build metadata for KB inline attributes
+        # Base metadata (always included)
+        base_metadata = get_base_image_metadata(image_id, filename, input_s3_uri, item)
+
+        # LLM-extracted metadata from caption
+        llm_metadata = extract_image_metadata(caption, image_id, filename)
+
+        # Merge metadata: base fields + LLM-extracted fields
+        combined_metadata = {**base_metadata, **llm_metadata}
+
+        # Build inline attributes for KB ingestion
+        inline_attributes = build_inline_attributes(combined_metadata)
+
         # Ingest BOTH the image and caption into KB
         # Nova Multimodal Embeddings will:
         # 1. Generate visual embedding from the image file
         # 2. Generate text embedding from the caption
         # Both vectors are in the same semantic space for cross-modal search
-        documents_to_ingest = [
-            # Image file - for visual similarity search
-            {"content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": input_s3_uri}}}},
-            # Caption text - for semantic text search
-            {"content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}},
-        ]
+        image_document = {
+            "content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": input_s3_uri}}}
+        }
+        caption_document = {
+            "content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}
+        }
+
+        # Add metadata to both documents
+        if inline_attributes:
+            metadata_config = {
+                "type": "IN_LINE_ATTRIBUTE",
+                "inlineAttributes": inline_attributes,
+            }
+            image_document["metadata"] = metadata_config
+            caption_document["metadata"] = metadata_config
+            logger.info(f"Adding {len(inline_attributes)} metadata attributes to image ingestion")
+
+        documents_to_ingest = [image_document, caption_document]
 
         ingest_response = bedrock_agent.ingest_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -279,10 +462,11 @@ def lambda_handler(event, context):
             logger.warning(f"Caption ingestion status unexpected: {caption_ingestion_status}")
 
         # Update image status in DynamoDB
-        # Store both URIs - image for display, caption for reference
+        # Store both URIs and extracted metadata
         update_expr = (
             "SET #status = :status, updated_at = :updated_at, "
-            "output_s3_uri = :output_uri, caption_s3_uri = :caption_uri"
+            "output_s3_uri = :output_uri, caption_s3_uri = :caption_uri, "
+            "extracted_metadata = :metadata"
         )
         tracking_table.update_item(
             Key={"document_id": image_id},
@@ -293,6 +477,7 @@ def lambda_handler(event, context):
                 ":updated_at": datetime.now(UTC).isoformat(),
                 ":output_uri": input_s3_uri,  # Original image
                 ":caption_uri": text_s3_uri,  # Caption text file
+                ":metadata": combined_metadata,
             },
         )
         logger.info(f"Updated image {image_id} status to INDEXED")
@@ -316,6 +501,8 @@ def lambda_handler(event, context):
             "image_ingestion_status": image_ingestion_status,
             "caption_ingestion_status": caption_ingestion_status,
             "knowledge_base_id": kb_id,
+            "llm_metadata_extracted": bool(llm_metadata),
+            "metadata_keys": list(combined_metadata.keys()),
         }
 
     except ClientError as e:

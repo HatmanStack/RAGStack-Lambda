@@ -39,6 +39,12 @@ type Query {
 
   # Get current API key (admin only)
   getApiKey: ApiKeyResponse @aws_cognito_user_pools
+
+  # Get metadata key statistics from key library (admin only)
+  getMetadataStats: MetadataStatsResponse @aws_cognito_user_pools
+
+  # Get filter examples for metadata filtering (admin and chat)
+  getFilterExamples: FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools
 }
 
 type Mutation {
@@ -119,6 +125,10 @@ type Mutation {
     errorMessage: String
     updatedAt: String!
   ): ImageUpdate @aws_iam
+
+  # Analyze metadata in Knowledge Base vectors (admin only)
+  # Samples vectors, analyzes field occurrences, and generates filter examples
+  analyzeMetadata: MetadataAnalysisResult @aws_cognito_user_pools
 }
 
 type Subscription {
@@ -222,6 +232,8 @@ type ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
   conversationId: String
   sources: [Source!]!
   error: String
+  # Filter applied during retrieval (JSON string, null if no filter)
+  filterApplied: String
 }
 
 # Source citation from Knowledge Base retrieval
@@ -244,6 +256,8 @@ type KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools {
   results: [KBResult!]!
   total: Int
   error: String
+  # Filter applied during retrieval (JSON string, null if no filter)
+  filterApplied: String
 }
 
 # Individual KB search result
@@ -450,4 +464,52 @@ type ScrapeUrlCheck @aws_api_key @aws_cognito_user_pools {
   lastScrapedAt: AWSDateTime
   jobId: ID
   title: String
+}
+
+# =========================================================================
+# Metadata Analysis Types
+# =========================================================================
+
+# Metadata analysis result
+type MetadataAnalysisResult @aws_cognito_user_pools {
+  success: Boolean!
+  vectorsSampled: Int!
+  keysAnalyzed: Int!
+  examplesGenerated: Int!
+  executionTimeMs: Int!
+  error: String
+}
+
+# Metadata statistics response
+type MetadataStatsResponse @aws_cognito_user_pools {
+  keys: [MetadataKeyStats!]!
+  totalKeys: Int!
+  lastAnalyzed: String
+  error: String
+}
+
+# Individual metadata key statistics
+type MetadataKeyStats @aws_cognito_user_pools {
+  keyName: String!
+  dataType: String!
+  occurrenceCount: Int!
+  sampleValues: [String!]
+  lastAnalyzed: String
+  status: String
+}
+
+# Filter examples response
+type FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
+  examples: [FilterExample!]!
+  totalExamples: Int!
+  lastGenerated: String
+  error: String
+}
+
+# Individual filter example
+type FilterExample @aws_iam @aws_api_key @aws_cognito_user_pools {
+  name: String!
+  description: String!
+  useCase: String!
+  filter: AWSJSON!
 }

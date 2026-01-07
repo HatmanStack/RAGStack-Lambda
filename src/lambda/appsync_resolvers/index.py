@@ -1,5 +1,5 @@
 """
-AppSync Lambda resolvers for document, scrape, and image operations.
+AppSync Lambda resolvers for document, scrape, image, and metadata operations.
 
 Handles:
 - getDocument
@@ -18,6 +18,7 @@ Handles:
 - listImages
 - deleteImage
 - deleteDocuments
+- analyzeMetadata
 """
 
 import json
@@ -42,6 +43,7 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 sfn = boto3.client("stepfunctions")
+lambda_client = boto3.client("lambda")
 
 # Module-level configuration manager (lazy init for resolvers that need access control)
 _config_manager = None
@@ -64,7 +66,13 @@ SCRAPE_JOBS_TABLE = os.environ.get("SCRAPE_JOBS_TABLE")
 SCRAPE_URLS_TABLE = os.environ.get("SCRAPE_URLS_TABLE")
 SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 
-# Configuration table (optional, for caption generation)
+# Metadata analyzer function (optional)
+METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN")
+
+# Metadata key library table (optional)
+METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
+
+# Configuration table (optional, for caption generation and filter examples)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 # Initialize Bedrock runtime client for caption generation (use Lambda's region)
@@ -125,6 +133,10 @@ def lambda_handler(event, context):
         "createZipUploadUrl": create_zip_upload_url,
         # Document management
         "deleteDocuments": delete_documents,
+        # Metadata analysis
+        "analyzeMetadata": analyze_metadata,
+        "getMetadataStats": get_metadata_stats,
+        "getFilterExamples": get_filter_examples,
     }
 
     resolver = resolvers.get(field_name)
@@ -670,7 +682,6 @@ def start_scrape(args):
         logger.info(f"Starting scrape for URL: {url}")
 
         # Invoke scrape start Lambda
-        lambda_client = boto3.client("lambda")
         event = {
             "base_url": url,
             "config": {
@@ -1049,11 +1060,22 @@ def generate_caption(args):
             }
         ]
 
-        system_prompt = (
+        # System prompt for image captioning (configurable via DynamoDB)
+        default_caption_prompt = (
             "You are an image captioning assistant. Generate concise, descriptive captions "
             "that are suitable for use as search keywords. Focus on the main subject, "
             "setting, and any notable visual elements. Keep captions under 200 characters."
         )
+        if CONFIGURATION_TABLE_NAME:
+            try:
+                system_prompt = config_manager.get_parameter(
+                    "image_caption_prompt", default=default_caption_prompt
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get caption prompt config: {e}")
+                system_prompt = default_caption_prompt
+        else:
+            system_prompt = default_caption_prompt
 
         # Call Bedrock Converse API
         logger.info("Calling Bedrock Converse API for caption generation")
@@ -1530,3 +1552,248 @@ def create_zip_upload_url(args):
     except Exception as e:
         logger.error(f"Unexpected error in create_zip_upload_url: {e}")
         raise
+
+
+# =========================================================================
+# Metadata Analysis Resolvers
+# =========================================================================
+
+
+def analyze_metadata(args):
+    """
+    Trigger metadata analysis of Knowledge Base vectors.
+
+    Invokes the metadata analyzer Lambda which:
+    - Samples vectors from Knowledge Base
+    - Analyzes metadata field occurrences
+    - Generates filter examples using LLM
+    - Stores results in S3 and DynamoDB
+
+    Returns:
+        MetadataAnalysisResult with success status and stats
+    """
+    logger.info("Starting metadata analysis")
+
+    if not METADATA_ANALYZER_FUNCTION_ARN:
+        logger.error("METADATA_ANALYZER_FUNCTION_ARN not configured")
+        return {
+            "success": False,
+            "error": "Metadata analyzer not configured",
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
+
+    try:
+        # Invoke metadata analyzer Lambda synchronously
+        logger.info(f"Invoking metadata analyzer: {METADATA_ANALYZER_FUNCTION_ARN}")
+        response = lambda_client.invoke(
+            FunctionName=METADATA_ANALYZER_FUNCTION_ARN,
+            InvocationType="RequestResponse",
+            Payload=json.dumps({}),
+        )
+
+        # Parse response
+        payload = json.loads(response["Payload"].read())
+
+        # Check for Lambda execution error
+        if response.get("FunctionError"):
+            error_msg = payload.get("errorMessage", "Lambda execution failed")
+            logger.error(f"Metadata analyzer failed: {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "vectorsSampled": 0,
+                "keysAnalyzed": 0,
+                "examplesGenerated": 0,
+                "executionTimeMs": 0,
+            }
+
+        logger.info(f"Metadata analysis complete: {payload}")
+
+        return {
+            "success": payload.get("success", False),
+            "vectorsSampled": payload.get("vectorsSampled", 0),
+            "keysAnalyzed": payload.get("keysAnalyzed", 0),
+            "examplesGenerated": payload.get("examplesGenerated", 0),
+            "executionTimeMs": payload.get("executionTimeMs", 0),
+            "error": payload.get("error"),
+        }
+
+    except ClientError as e:
+        logger.error(f"Error invoking metadata analyzer: {e}")
+        return {
+            "success": False,
+            "error": f"Failed to invoke metadata analyzer: {e}",
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in analyze_metadata: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "vectorsSampled": 0,
+            "keysAnalyzed": 0,
+            "examplesGenerated": 0,
+            "executionTimeMs": 0,
+        }
+
+
+def get_metadata_stats(args):
+    """
+    Get metadata key statistics from the key library.
+
+    Returns all keys with their occurrence counts and sample values.
+
+    Returns:
+        MetadataStatsResponse with keys array and stats
+    """
+    logger.info("Getting metadata statistics")
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        logger.warning("METADATA_KEY_LIBRARY_TABLE not configured")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": "Metadata key library not configured",
+        }
+
+    try:
+        table = dynamodb.Table(METADATA_KEY_LIBRARY_TABLE)
+
+        # Scan all keys from the library
+        all_items = []
+        scan_kwargs: dict = {}
+
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
+
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        # Format keys for GraphQL response
+        keys = []
+        last_analyzed = None
+
+        for item in all_items:
+            key_analyzed = item.get("last_analyzed")
+            if key_analyzed and (not last_analyzed or key_analyzed > last_analyzed):
+                last_analyzed = key_analyzed
+
+            keys.append(
+                {
+                    "keyName": item.get("key_name", ""),
+                    "dataType": item.get("data_type", "string"),
+                    "occurrenceCount": int(item.get("occurrence_count", 0)),
+                    "sampleValues": item.get("sample_values", [])[:10],
+                    "lastAnalyzed": key_analyzed,
+                    "status": item.get("status", "active"),
+                }
+            )
+
+        # Sort by occurrence count descending
+        keys.sort(key=lambda x: x["occurrenceCount"], reverse=True)
+
+        logger.info(f"Retrieved {len(keys)} metadata keys")
+
+        return {
+            "keys": keys,
+            "totalKeys": len(keys),
+            "lastAnalyzed": last_analyzed,
+            "error": None,
+        }
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error getting metadata stats: {e}")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": f"Failed to get metadata stats: {e}",
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in get_metadata_stats: {e}")
+        return {
+            "keys": [],
+            "totalKeys": 0,
+            "lastAnalyzed": None,
+            "error": str(e),
+        }
+
+
+def get_filter_examples(args):
+    """
+    Get filter examples from configuration.
+
+    Returns generated filter examples for use in the UI filter builder.
+
+    Returns:
+        FilterExamplesResponse with examples array
+    """
+    logger.info("Getting filter examples")
+
+    if not CONFIGURATION_TABLE_NAME:
+        logger.warning("CONFIGURATION_TABLE_NAME not configured")
+        return {
+            "examples": [],
+            "totalExamples": 0,
+            "lastGenerated": None,
+            "error": "Configuration not available",
+        }
+
+    try:
+        # Get examples from config manager
+        config_manager = get_config_manager()
+        examples_data = config_manager.get_parameter("metadata_filter_examples", default=[])
+
+        if not examples_data or not isinstance(examples_data, list):
+            logger.info("No filter examples found in configuration")
+            return {
+                "examples": [],
+                "totalExamples": 0,
+                "lastGenerated": None,
+                "error": None,
+            }
+
+        # Format examples for GraphQL response
+        examples = []
+        for ex in examples_data:
+            if isinstance(ex, dict) and "name" in ex and "filter" in ex:
+                examples.append(
+                    {
+                        "name": ex.get("name", ""),
+                        "description": ex.get("description", ""),
+                        "useCase": ex.get("use_case", ""),
+                        "filter": json.dumps(ex.get("filter", {})),
+                    }
+                )
+
+        # Get last generated timestamp from config
+        last_generated = config_manager.get_parameter(
+            "metadata_filter_examples_updated_at", default=None
+        )
+
+        logger.info(f"Retrieved {len(examples)} filter examples")
+
+        return {
+            "examples": examples,
+            "totalExamples": len(examples),
+            "lastGenerated": last_generated,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting filter examples: {e}")
+        return {
+            "examples": [],
+            "totalExamples": 0,
+            "lastGenerated": None,
+            "error": str(e),
+        }

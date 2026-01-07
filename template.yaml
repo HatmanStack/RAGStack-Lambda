@@ -775,6 +775,31 @@ Resources:
           Value: Conversation History Storage
 
   ##########################################################################
+  # Metadata Key Library Table - Tracks discovered metadata fields
+  ##########################################################################
+
+  MetadataKeyLibraryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-metadata-keys'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: key_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: key_name
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+        - Key: Purpose
+          Value: Metadata Key Library
+
+  ##########################################################################
   # Scrape Jobs Table - Tracks web scraping job state
   ##########################################################################
 
@@ -1114,6 +1139,8 @@ Resources:
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # Text documents (output/ prefix)
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Layers:
         - !Ref RagstackCommonLayer
       Tags:
@@ -1122,6 +1149,12 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1141,6 +1174,11 @@ Resources:
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:us-*::foundation-model/*'
 
   ProcessImageFunction:
     Type: AWS::Serverless::Function
@@ -1164,6 +1202,7 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1174,6 +1213,8 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
         - Statement:
@@ -3160,6 +3201,12 @@ Resources:
                     ],
                     'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}
                 },
+                'chat_system_prompt': {
+                    'type': 'string',
+                    'order': 2.5,
+                    'description': 'System prompt for chat responses',
+                    'default': 'You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn\'t contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.'
+                },
                 'chat_primary_model': {
                     'type': 'string',
                     'order': 3,
@@ -3231,6 +3278,12 @@ Resources:
                     'description': 'Allow unauthenticated image uploads',
                     'default': False
                 },
+                'image_caption_prompt': {
+                    'type': 'string',
+                    'order': 12.5,
+                    'description': 'System prompt for image caption generation',
+                    'default': 'You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.'
+                },
                 'public_access_scrape': {
                     'type': 'boolean',
                     'order': 13,
@@ -3248,6 +3301,46 @@ Resources:
                     'order': 15,
                     'description': 'Enable budget alerts',
                     'default': True
+                },
+                'filter_generation_enabled': {
+                    'type': 'boolean',
+                    'order': 16,
+                    'description': 'Enable LLM-based metadata filter generation for queries',
+                    'default': True
+                },
+                'filter_generation_model': {
+                    'type': 'string',
+                    'order': 17,
+                    'description': 'Model for filter generation',
+                    'enum': [
+                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    ],
+                    'default': 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+                },
+                'multislice_enabled': {
+                    'type': 'boolean',
+                    'order': 18,
+                    'description': 'Enable multi-slice retrieval (parallel filtered/unfiltered queries)',
+                    'default': True
+                },
+                'multislice_count': {
+                    'type': 'number',
+                    'order': 19,
+                    'description': 'Number of parallel retrieval slices (2-4)',
+                    'default': 2
+                },
+                'multislice_timeout_ms': {
+                    'type': 'number',
+                    'order': 20,
+                    'description': 'Timeout per slice in milliseconds',
+                    'default': 5000
+                },
+                'metadata_filter_examples': {
+                    'type': 'array',
+                    'order': 21,
+                    'description': 'Filter examples for few-shot learning (JSON array)',
+                    'default': []
                 }
             }
         }

@@ -8,9 +8,14 @@ import {
   CopyToClipboard,
   ExpandableSection,
   Tabs,
+  Textarea,
+  Button,
+  FormField,
+  Alert,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import type { GqlResponse } from '../../types/graphql';
 import { ChatPanel } from './ChatPanel';
 
@@ -19,10 +24,16 @@ interface ConfigData {
   Custom: string;
 }
 
+const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn\'t contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.';
+
 export function Chat() {
   const [cdnUrl, setCdnUrl] = useState(null);
   const [requireAuth, setRequireAuth] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [originalPrompt, setOriginalPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const client = useMemo(() => generateClient(), []);
 
   useEffect(() => {
@@ -35,12 +46,36 @@ export function Chat() {
         const merged = { ...parsedDefault, ...parsedCustom };
         setCdnUrl(merged.chat_cdn_url || null);
         setRequireAuth(merged.chat_require_auth || false);
+        const prompt = merged.chat_system_prompt || DEFAULT_SYSTEM_PROMPT;
+        setSystemPrompt(prompt);
+        setOriginalPrompt(prompt);
       } catch (err) {
         console.error('Error loading config:', err);
       }
     }
     loadConfig();
   }, [client]);
+
+  const handleSavePrompt = async () => {
+    setIsSaving(true);
+    setSaveStatus(null);
+    try {
+      await client.graphql({
+        query: updateConfiguration,
+        variables: { customConfig: JSON.stringify({ chat_system_prompt: systemPrompt }) }
+      });
+      setOriginalPrompt(systemPrompt);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err) {
+      console.error('Error saving config:', err);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const hasPromptChanged = systemPrompt !== originalPrompt;
 
   const cdnPlaceholder = cdnUrl || 'https://your-cdn-url/ragstack-chat.js';
 
@@ -80,6 +115,51 @@ initChat();
     >
       <SpaceBetween size="l">
         <ChatPanel />
+
+        <Container>
+          <ExpandableSection headerText="System Prompt" variant="footer">
+            <SpaceBetween size="m">
+              <FormField
+                label="Chat System Prompt"
+                description="This prompt defines how the AI assistant responds to questions. Changes take effect immediately for new conversations."
+              >
+                <Textarea
+                  value={systemPrompt}
+                  onChange={({ detail }) => setSystemPrompt(detail.value)}
+                  rows={5}
+                  placeholder="Enter the system prompt for the chat assistant..."
+                />
+              </FormField>
+              <SpaceBetween direction="horizontal" size="xs">
+                <Button
+                  variant="primary"
+                  onClick={handleSavePrompt}
+                  loading={isSaving}
+                  disabled={!hasPromptChanged}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="link"
+                  onClick={() => setSystemPrompt(originalPrompt)}
+                  disabled={!hasPromptChanged || isSaving}
+                >
+                  Cancel
+                </Button>
+              </SpaceBetween>
+              {saveStatus === 'success' && (
+                <Alert type="success" dismissible onDismiss={() => setSaveStatus(null)}>
+                  System prompt saved successfully.
+                </Alert>
+              )}
+              {saveStatus === 'error' && (
+                <Alert type="error" dismissible onDismiss={() => setSaveStatus(null)}>
+                  Failed to save system prompt. Please try again.
+                </Alert>
+              )}
+            </SpaceBetween>
+          </ExpandableSection>
+        </Container>
 
         <Container>
           <ExpandableSection headerText="Embed Chat Widget" variant="footer">

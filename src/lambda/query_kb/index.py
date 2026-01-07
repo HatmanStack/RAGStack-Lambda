@@ -40,6 +40,9 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
+from ragstack_common.filter_generator import FilterGenerator
+from ragstack_common.key_library import KeyLibrary
+from ragstack_common.multislice_retriever import MultiSliceRetriever
 
 # Initialize AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
@@ -53,6 +56,56 @@ logger.setLevel(logging.INFO)
 
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
+
+# Filter generation components (lazy-loaded to avoid init overhead if disabled)
+_key_library = None
+_filter_generator = None
+_multislice_retriever = None
+_filter_examples_cache = None
+_filter_examples_cache_time = None
+FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
+
+
+def _get_filter_components():
+    """Lazy-load filter generation components."""
+    global _key_library, _filter_generator, _multislice_retriever
+
+    if _key_library is None:
+        _key_library = KeyLibrary()
+
+    if _filter_generator is None:
+        _filter_generator = FilterGenerator(key_library=_key_library)
+
+    if _multislice_retriever is None:
+        _multislice_retriever = MultiSliceRetriever(bedrock_agent_client=bedrock_agent)
+
+    return _key_library, _filter_generator, _multislice_retriever
+
+
+def _get_filter_examples():
+    """Get filter examples from config with caching."""
+    import time
+
+    global _filter_examples_cache, _filter_examples_cache_time
+
+    now = time.time()
+
+    # Return cached examples if fresh
+    if (
+        _filter_examples_cache is not None
+        and _filter_examples_cache_time is not None
+        and (now - _filter_examples_cache_time) < FILTER_EXAMPLES_CACHE_TTL
+    ):
+        return _filter_examples_cache
+
+    # Load from config
+    examples = config_manager.get_parameter("metadata_filter_examples", default=[])
+    _filter_examples_cache = examples if isinstance(examples, list) else []
+    _filter_examples_cache_time = now
+
+    logger.debug(f"Loaded {len(_filter_examples_cache)} filter examples from config")
+    return _filter_examples_cache
+
 
 # Conversation history settings
 MAX_HISTORY_TURNS = 5
@@ -1102,26 +1155,59 @@ def lambda_handler(event, context):
         image_data_source_id = os.environ.get("IMAGE_DATA_SOURCE_ID")
 
         retrieval_results = []
+        generated_filter = None
+
+        # Check if filter generation is enabled
+        filter_enabled = config_manager.get_parameter("filter_generation_enabled", default=True)
+        multislice_enabled = config_manager.get_parameter("multislice_enabled", default=True)
+
+        # Generate metadata filter if enabled
+        if filter_enabled:
+            try:
+                _, filter_generator, _ = _get_filter_components()
+                filter_examples = _get_filter_examples()
+                generated_filter = filter_generator.generate_filter(
+                    retrieval_query,
+                    filter_examples=filter_examples,
+                )
+                if generated_filter:
+                    logger.info(f"Generated filter: {json.dumps(generated_filter)}")
+                else:
+                    logger.info("No filter intent detected in query")
+            except Exception as e:
+                logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
         # Query text data source if configured
         if text_data_source_id:
             try:
-                text_response = bedrock_agent.retrieve(
-                    knowledgeBaseId=knowledge_base_id,
-                    retrievalQuery={"text": retrieval_query},
-                    retrievalConfiguration={
-                        "vectorSearchConfiguration": {
-                            "numberOfResults": 5,
-                            "filter": {
-                                "equals": {
-                                    "key": "x-amz-bedrock-kb-data-source-id",
-                                    "value": text_data_source_id,
-                                }
-                            },
-                        }
-                    },
-                )
-                text_results = text_response.get("retrievalResults", [])
+                if multislice_enabled and generated_filter:
+                    # Use multi-slice retrieval with filter
+                    _, _, multislice_retriever = _get_filter_components()
+                    text_results = multislice_retriever.retrieve(
+                        query=retrieval_query,
+                        knowledge_base_id=knowledge_base_id,
+                        data_source_id=text_data_source_id,
+                        metadata_filter=generated_filter,
+                        num_results=5,
+                    )
+                else:
+                    # Standard single-query retrieval
+                    text_response = bedrock_agent.retrieve(
+                        knowledgeBaseId=knowledge_base_id,
+                        retrievalQuery={"text": retrieval_query},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": 5,
+                                "filter": {
+                                    "equals": {
+                                        "key": "x-amz-bedrock-kb-data-source-id",
+                                        "value": text_data_source_id,
+                                    }
+                                },
+                            }
+                        },
+                    )
+                    text_results = text_response.get("retrievalResults", [])
                 logger.info(f"Retrieved {len(text_results)} text results")
                 retrieval_results.extend(text_results)
             except Exception as e:
@@ -1130,22 +1216,34 @@ def lambda_handler(event, context):
         # Query image data source if configured
         if image_data_source_id:
             try:
-                image_response = bedrock_agent.retrieve(
-                    knowledgeBaseId=knowledge_base_id,
-                    retrievalQuery={"text": retrieval_query},
-                    retrievalConfiguration={
-                        "vectorSearchConfiguration": {
-                            "numberOfResults": 5,
-                            "filter": {
-                                "equals": {
-                                    "key": "x-amz-bedrock-kb-data-source-id",
-                                    "value": image_data_source_id,
-                                }
-                            },
-                        }
-                    },
-                )
-                image_results = image_response.get("retrievalResults", [])
+                if multislice_enabled and generated_filter:
+                    # Use multi-slice retrieval with filter
+                    _, _, multislice_retriever = _get_filter_components()
+                    image_results = multislice_retriever.retrieve(
+                        query=retrieval_query,
+                        knowledge_base_id=knowledge_base_id,
+                        data_source_id=image_data_source_id,
+                        metadata_filter=generated_filter,
+                        num_results=5,
+                    )
+                else:
+                    # Standard single-query retrieval
+                    image_response = bedrock_agent.retrieve(
+                        knowledgeBaseId=knowledge_base_id,
+                        retrievalQuery={"text": retrieval_query},
+                        retrievalConfiguration={
+                            "vectorSearchConfiguration": {
+                                "numberOfResults": 5,
+                                "filter": {
+                                    "equals": {
+                                        "key": "x-amz-bedrock-kb-data-source-id",
+                                        "value": image_data_source_id,
+                                    }
+                                },
+                            }
+                        },
+                    )
+                    image_results = image_response.get("retrievalResults", [])
                 logger.info(f"Retrieved {len(image_results)} image results")
                 retrieval_results.extend(image_results)
             except Exception as e:
@@ -1205,14 +1303,15 @@ def lambda_handler(event, context):
         # Build messages with conversation history and retrieved context
         messages = build_conversation_messages(query, history, retrieved_context)
 
-        # System prompt for the assistant
-        system_prompt = (
+        # System prompt for the assistant (configurable via DynamoDB)
+        default_prompt = (
             "You are a helpful assistant that answers questions based on information "
             "from a knowledge base. Always base your answers on the provided knowledge "
             "base information. If the provided information doesn't contain the answer, "
             "clearly state that and provide what relevant information you can. "
             "Be concise but thorough."
         )
+        system_prompt = config_manager.get_parameter("chat_system_prompt", default=default_prompt)
 
         # Call Converse API
         converse_response = bedrock_runtime.converse(
@@ -1250,7 +1349,16 @@ def lambda_handler(event, context):
                 sources=sources,
             )
 
-        return {"answer": answer, "conversationId": conversation_id, "sources": sources}
+        # Include filter info in response if a filter was generated
+        response = {
+            "answer": answer,
+            "conversationId": conversation_id,
+            "sources": sources,
+        }
+        if generated_filter:
+            response["filterApplied"] = json.dumps(generated_filter)
+
+        return response
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
