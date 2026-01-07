@@ -970,6 +970,59 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
 
+  DetectFileTypeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
+      CodeUri: src/lambda/detect_file_type/
+      Handler: index.lambda_handler
+      Description: Detect file type for routing (ocr/text/passthrough)
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+
+  ProcessTextFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-process-text'
+      CodeUri: src/lambda/process_text/
+      Handler: index.lambda_handler
+      Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX)
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1665,6 +1718,8 @@ Resources:
                   - !GetAtt IngestToKBFunction.Arn
                   - !GetAtt GetPageInfoFunction.Arn
                   - !GetAtt EnqueueBatchesFunction.Arn
+                  - !GetAtt DetectFileTypeFunction.Arn
+                  - !GetAtt ProcessTextFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -1692,6 +1747,8 @@ Resources:
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
         GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
         EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
+        DetectFileTypeFunctionArn: !GetAtt DetectFileTypeFunction.Arn
+        ProcessTextFunctionArn: !GetAtt ProcessTextFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
