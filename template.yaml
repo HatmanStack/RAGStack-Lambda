@@ -3398,6 +3398,44 @@ Resources:
                     'order': 21,
                     'description': 'Filter examples for few-shot learning (JSON array)',
                     'default': []
+                },
+                'metadata_extraction_enabled': {
+                    'type': 'boolean',
+                    'order': 22,
+                    'description': 'Enable LLM metadata extraction during ingestion',
+                    'default': True
+                },
+                'metadata_extraction_model': {
+                    'type': 'string',
+                    'order': 23,
+                    'description': 'Model for metadata extraction',
+                    'enum': [
+                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-micro-v1:0',
+                        'us.amazon.nova-lite-v1:0'
+                    ],
+                    'default': 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+                },
+                'metadata_max_keys': {
+                    'type': 'number',
+                    'order': 24,
+                    'description': 'Maximum metadata fields to extract per document',
+                    'default': 8
+                },
+                'metadata_extraction_mode': {
+                    'type': 'string',
+                    'order': 25,
+                    'description': 'Extraction mode: auto (LLM decides) or manual (admin specifies)',
+                    'enum': ['auto', 'manual'],
+                    'default': 'auto'
+                },
+                'metadata_manual_keys': {
+                    'type': 'array',
+                    'order': 26,
+                    'description': 'Keys to extract in manual mode',
+                    'default': [],
+                    'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}
                 }
             }
         }
