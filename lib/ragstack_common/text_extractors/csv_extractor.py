@@ -126,11 +126,11 @@ class CsvExtractor(BaseExtractor):
             if counts and min(counts) > 0:
                 # All lines have at least one occurrence
                 avg_count = sum(counts) / len(counts)
-                # Check consistency
-                if max(counts) - min(counts) <= 1:  # Allow slight variation
-                    if avg_count > best_count:
-                        best_count = avg_count
-                        best_delimiter = delim
+                # Check consistency - allow slight variation
+                is_consistent = max(counts) - min(counts) <= 1
+                if is_consistent and avg_count > best_count:
+                    best_count = avg_count
+                    best_delimiter = delim
 
         return best_delimiter
 
@@ -197,7 +197,9 @@ class CsvExtractor(BaseExtractor):
             return "date"
         return "text"
 
-    def _get_sample_values(self, data_rows: list[list[str]], headers: list[str]) -> dict[str, list[str]]:
+    def _get_sample_values(
+        self, data_rows: list[list[str]], headers: list[str]
+    ) -> dict[str, list[str]]:
         """Get sample values for each column."""
         samples: dict[str, list[str]] = {}
         for i, header in enumerate(headers):
@@ -237,7 +239,10 @@ class CsvExtractor(BaseExtractor):
             col_type = column_types.get(header, "text")
             samples = sample_values.get(header, [])
             sample_str = ", ".join(f'"{s}"' for s in samples[:3]) if samples else ""
-            lines.append(f"- **{header}**: {col_type.capitalize()} values{' (e.g., ' + sample_str + ')' if sample_str else ''}")
+            if sample_str:
+                lines.append(f"- **{header}**: {col_type.capitalize()} (e.g., {sample_str})")
+            else:
+                lines.append(f"- **{header}**: {col_type.capitalize()} values")
         lines.append("")
 
         # Sample data table
@@ -252,7 +257,9 @@ class CsvExtractor(BaseExtractor):
         for row in data_rows[:5]:
             # Pad row if needed
             padded_row = row + [""] * (len(headers) - len(row))
-            cells = [cell[:50] + "..." if len(cell) > 50 else cell for cell in padded_row[:len(headers)]]
+            cells = []
+            for cell in padded_row[: len(headers)]:
+                cells.append(cell[:50] + "..." if len(cell) > 50 else cell)
             lines.append("| " + " | ".join(cells) + " |")
 
         return "\n".join(lines)
@@ -277,7 +284,9 @@ class CsvExtractor(BaseExtractor):
             parse_warning="Empty file",
         )
 
-    def _create_fallback_result(self, text: str, filename: str, title: str, error: str) -> ExtractionResult:
+    def _create_fallback_result(
+        self, text: str, filename: str, title: str, error: str
+    ) -> ExtractionResult:
         """Create fallback result when CSV parsing fails."""
         word_count = self._count_words(text)
         frontmatter_metadata = {

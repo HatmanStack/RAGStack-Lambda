@@ -198,7 +198,9 @@ class XmlExtractor(BaseExtractor):
 
         return "\n".join(lines)
 
-    def _create_fallback_result(self, text: str, filename: str, title: str, error: str) -> ExtractionResult:
+    def _create_fallback_result(
+        self, text: str, filename: str, title: str, error: str
+    ) -> ExtractionResult:
         """Create fallback result when XML parsing fails."""
         word_count = self._count_words(text)
         frontmatter_metadata = {

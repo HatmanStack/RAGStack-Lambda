@@ -115,7 +115,8 @@ class JsonExtractor(BaseExtractor):
             key_count = len(data)
             lines.append(f"# Data: {filename}")
             lines.append("")
-            lines.append(f"JSON object with {key_count} top-level {'key' if key_count == 1 else 'keys'}.")
+            key_word = "key" if key_count == 1 else "keys"
+            lines.append(f"JSON object with {key_count} top-level {key_word}.")
         else:
             item_count = len(data) if isinstance(data, list) else 0
             lines.append(f"# Data: {filename}")
@@ -159,7 +160,8 @@ class JsonExtractor(BaseExtractor):
             elif isinstance(value, list):
                 if value:
                     item_type = self._get_type_description(value[0])
-                    lines.append(f"{indent}- **{key}** (array): {len(value)} items of type {item_type}")
+                    count = len(value)
+                    lines.append(f"{indent}- **{key}** (array): {count} items of {item_type}")
                 else:
                     lines.append(f"{indent}- **{key}** (array): Empty array")
             else:
@@ -190,7 +192,8 @@ class JsonExtractor(BaseExtractor):
                         common_keys &= set(item.keys())
 
                 if common_keys:
-                    lines.append(f"Array of {len(arr)} objects with common keys: {', '.join(sorted(common_keys)[:10])}")
+                    keys_str = ", ".join(sorted(common_keys)[:10])
+                    lines.append(f"Array of {len(arr)} objects with common keys: {keys_str}")
                 else:
                     lines.append(f"Array of {len(arr)} objects with varying structure")
             else:
@@ -235,7 +238,9 @@ class JsonExtractor(BaseExtractor):
             return str(value)
         return str(type(value).__name__)
 
-    def _create_fallback_result(self, text: str, filename: str, title: str, error: str) -> ExtractionResult:
+    def _create_fallback_result(
+        self, text: str, filename: str, title: str, error: str
+    ) -> ExtractionResult:
         """Create fallback result when JSON parsing fails."""
         word_count = self._count_words(text)
         frontmatter_metadata = {

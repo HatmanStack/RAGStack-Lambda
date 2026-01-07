@@ -160,7 +160,9 @@ class ContentSniffer:
                             return ("xlsx", 0.95)
 
                         # DOCX: references wordprocessingml
-                        if "wordprocessingml" in content_types or "word/document.xml" in content_types:
+                        is_docx = "wordprocessingml" in content_types
+                        is_docx = is_docx or "word/document.xml" in content_types
+                        if is_docx:
                             return ("docx", 0.95)
                     except (KeyError, UnicodeDecodeError):
                         pass
@@ -199,7 +201,23 @@ class ContentSniffer:
             return 0.7
 
         # Check for HTML-specific elements (with closing tags for higher confidence)
-        html_tags = ["div", "p", "span", "h1", "h2", "h3", "h4", "h5", "h6", "table", "ul", "ol", "li", "a", "img"]
+        html_tags = [
+            "div",
+            "p",
+            "span",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "table",
+            "ul",
+            "ol",
+            "li",
+            "a",
+            "img",
+        ]
         opening_tags = sum(1 for tag in html_tags if f"<{tag}" in text_lower)
         closing_tags = sum(1 for tag in html_tags if f"</{tag}>" in text_lower)
 
@@ -293,10 +311,24 @@ class ContentSniffer:
                 break  # Empty line marks end of headers
 
             # Check for header patterns
-            if re.match(r"^From:\s*", line_stripped, re.IGNORECASE) or re.match(r"^To:\s*", line_stripped, re.IGNORECASE) or re.match(r"^Subject:\s*", line_stripped, re.IGNORECASE):
+            is_required = (
+                re.match(r"^From:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^To:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Subject:\s*", line_stripped, re.IGNORECASE)
+            )
+            is_other = (
+                re.match(r"^Date:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Cc:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Bcc:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Reply-To:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Message-ID:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^MIME-Version:\s*", line_stripped, re.IGNORECASE)
+                or re.match(r"^Content-Type:\s*", line_stripped, re.IGNORECASE)
+            )
+            if is_required:
                 header_count += 1
                 required_headers += 1
-            elif re.match(r"^Date:\s*", line_stripped, re.IGNORECASE) or re.match(r"^(Cc|Bcc|Reply-To|Message-ID|MIME-Version|Content-Type):\s*", line_stripped, re.IGNORECASE):
+            elif is_other:
                 header_count += 1
 
         # Need at least From + To or From + Subject
@@ -317,7 +349,7 @@ class ContentSniffer:
         - Consistent column count across 3+ lines
         - Header row should have shorter, space-free values
         """
-        lines = [l for l in text.strip().split("\n") if l.strip()]
+        lines = [line for line in text.strip().split("\n") if line.strip()]
 
         if len(lines) < 2:
             return 0.0
@@ -361,9 +393,7 @@ class ContentSniffer:
         # Check if first row looks like a header (shorter values, no spaces typically)
         if rows[0]:
             header_looks_good = all(
-                len(cell) < 50 and not cell.startswith(" ")
-                for cell in rows[0]
-                if cell
+                len(cell) < 50 and not cell.startswith(" ") for cell in rows[0] if cell
             )
             if header_looks_good:
                 return 0.85
@@ -382,11 +412,9 @@ class ContentSniffer:
 
         for delim in delimiters:
             counts = [line.count(delim) for line in lines if line.strip()]
-            if counts and min(counts) > 0:
-                # All lines have at least one occurrence
-                if max(counts) == min(counts):
-                    # Consistent count across lines
-                    delimiter_counts[delim] = min(counts)
+            # All lines have at least one occurrence and consistent count
+            if counts and min(counts) > 0 and max(counts) == min(counts):
+                delimiter_counts[delim] = min(counts)
 
         if not delimiter_counts:
             return None

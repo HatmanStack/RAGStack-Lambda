@@ -115,5 +115,4 @@ class BaseExtractor(ABC):
         """
         # Get just the filename without path
         path = Path(filename)
-        name = path.stem  # Filename without extension
-        return name
+        return path.stem  # Filename without extension

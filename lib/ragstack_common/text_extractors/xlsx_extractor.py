@@ -79,9 +79,13 @@ class XlsxExtractor(BaseExtractor):
             "total_rows": total_rows,
         }
         if created:
-            structural_metadata["created"] = created.isoformat() if isinstance(created, datetime) else str(created)
+            structural_metadata["created"] = (
+                created.isoformat() if isinstance(created, datetime) else str(created)
+            )
         if modified:
-            structural_metadata["modified"] = modified.isoformat() if isinstance(modified, datetime) else str(modified)
+            structural_metadata["modified"] = (
+                modified.isoformat() if isinstance(modified, datetime) else str(modified)
+            )
 
         # Generate markdown
         markdown_body = self._generate_markdown(filename, sheet_data)
@@ -187,7 +191,10 @@ class XlsxExtractor(BaseExtractor):
             for row in data_rows[: self.MAX_SAMPLE_ROWS]:
                 # Pad row if needed
                 padded_row = list(row) + [""] * (len(headers) - len(row))
-                cells = [str(cell)[:50] + "..." if len(str(cell)) > 50 else str(cell) for cell in padded_row[: len(headers)]]
+                cells = [
+                    str(cell)[:50] + "..." if len(str(cell)) > 50 else str(cell)
+                    for cell in padded_row[: len(headers)]
+                ]
                 lines.append("| " + " | ".join(cells) + " |")
 
             if len(data_rows) > self.MAX_SAMPLE_ROWS:
@@ -198,7 +205,7 @@ class XlsxExtractor(BaseExtractor):
         return "\n".join(lines)
 
     def _create_fallback_result(
-        self, content: bytes, filename: str, title: str, error: str
+        self, _content: bytes, filename: str, title: str, error: str
     ) -> ExtractionResult:
         """Create fallback result when XLSX parsing fails."""
         word_count = 0

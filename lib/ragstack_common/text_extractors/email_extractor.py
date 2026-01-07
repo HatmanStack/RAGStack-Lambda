@@ -222,9 +222,7 @@ class EmailExtractor(BaseExtractor):
 
         # Clean up whitespace
         lines = [line.strip() for line in text.split("\n")]
-        text = "\n".join(line for line in lines if line)
-
-        return text
+        return "\n".join(line for line in lines if line)
 
     def _get_attachments(self, msg: Message) -> list[str]:
         """Get list of attachment filenames."""
