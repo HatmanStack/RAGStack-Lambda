@@ -42,7 +42,7 @@ DEFAULT_MAX_KEYS = 8
 # Maximum length for metadata values
 MAX_VALUE_LENGTH = 100
 
-# System prompt for metadata extraction
+# System prompt for metadata extraction (auto mode)
 EXTRACTION_SYSTEM_PROMPT = """You are a metadata extraction assistant. Analyze document content \
 and extract structured metadata useful for searching and filtering.
 
@@ -66,6 +66,25 @@ SUGGESTED METADATA TYPES:
 OUTPUT FORMAT:
 Return a JSON object with key-value pairs. Example:
 {"topic": "immigration", "document_type": "ship_manifest", "date_range": "1890-1910"}
+
+DO NOT include any text outside the JSON object."""
+
+# System prompt for manual mode extraction
+MANUAL_MODE_SYSTEM_PROMPT = """You are a metadata extraction assistant. Extract ONLY the specified \
+metadata fields from the document.
+
+FIELDS TO EXTRACT: {manual_keys}
+
+RULES:
+1. Return ONLY valid JSON - no explanations or markdown
+2. Only include fields from the list above
+3. If a field is not applicable to this document, omit it
+4. Keep values concise (under 100 characters)
+5. Use snake_case for all key names (lowercase with underscores)
+
+OUTPUT FORMAT:
+Return a JSON object with only the specified fields that are present in the document.
+Example: {{"topic": "immigration", "document_type": "letter"}}
 
 DO NOT include any text outside the JSON object."""
 
@@ -112,6 +131,8 @@ class MetadataExtractor:
         key_library: KeyLibrary | None = None,
         model_id: str | None = None,
         max_keys: int = DEFAULT_MAX_KEYS,
+        extraction_mode: str = "auto",
+        manual_keys: list[str] | None = None,
     ):
         """
         Initialize the metadata extractor.
@@ -121,13 +142,20 @@ class MetadataExtractor:
             key_library: Key library for tracking discovered keys. Creates one if not provided.
             model_id: Bedrock model ID for extraction. Uses Claude Haiku by default.
             max_keys: Maximum number of metadata fields to extract.
+            extraction_mode: Either "auto" (LLM decides keys) or "manual" (use manual_keys only).
+            manual_keys: List of keys to extract when in manual mode.
         """
         self.bedrock_client = bedrock_client or BedrockClient()
         self.key_library = key_library or KeyLibrary()
         self.model_id = model_id or DEFAULT_EXTRACTION_MODEL
         self.max_keys = max_keys
+        self.extraction_mode = extraction_mode
+        self.manual_keys = manual_keys
 
-        logger.info(f"Initialized MetadataExtractor with model: {self.model_id}")
+        logger.info(
+            f"Initialized MetadataExtractor with model: {self.model_id}, "
+            f"mode: {self.extraction_mode}"
+        )
 
     def extract_metadata(
         self,
@@ -151,17 +179,32 @@ class MetadataExtractor:
             logger.warning(f"Empty text provided for document {document_id}")
             return {}
 
+        # In manual mode with empty keys, return empty result
+        if self.extraction_mode == "manual" and not self.manual_keys:
+            logger.info(f"Manual mode with empty keys for {document_id}, returning empty metadata")
+            return {}
+
         try:
-            # Get existing keys for prompt context
-            existing_keys = self.key_library.get_key_names()
+            # Get existing keys for prompt context (only in auto mode)
+            existing_keys = []
+            if self.extraction_mode == "auto":
+                existing_keys = self.key_library.get_key_names()
 
             # Build the extraction prompt
             prompt = self._build_extraction_prompt(text, existing_keys)
 
+            # Select appropriate system prompt based on mode
+            if self.extraction_mode == "manual" and self.manual_keys:
+                system_prompt = MANUAL_MODE_SYSTEM_PROMPT.format(
+                    manual_keys=", ".join(self.manual_keys)
+                )
+            else:
+                system_prompt = EXTRACTION_SYSTEM_PROMPT
+
             # Call LLM for extraction
             response = self.bedrock_client.invoke_model(
                 model_id=self.model_id,
-                system_prompt=EXTRACTION_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 content=[{"text": prompt}],
                 temperature=0.1,  # Low temperature for deterministic output
                 max_tokens=1024,
@@ -271,6 +314,7 @@ class MetadataExtractor:
         - Truncates long values
         - Enforces max_keys limit
         - Normalizes key names
+        - In manual mode, only keeps keys from manual_keys list
 
         Args:
             metadata: Raw extracted metadata.
@@ -280,6 +324,11 @@ class MetadataExtractor:
         """
         filtered = {}
         count = 0
+
+        # In manual mode, normalize manual_keys for comparison
+        allowed_keys = None
+        if self.extraction_mode == "manual" and self.manual_keys:
+            allowed_keys = {k.lower().replace(" ", "_").replace("-", "_") for k in self.manual_keys}
 
         for key, value in metadata.items():
             # Stop at max_keys
@@ -293,6 +342,11 @@ class MetadataExtractor:
 
             # Normalize key name (lowercase, snake_case)
             normalized_key = key.lower().replace(" ", "_").replace("-", "_")
+
+            # In manual mode, skip keys not in allowed_keys
+            if allowed_keys is not None and normalized_key not in allowed_keys:
+                logger.debug(f"Skipping key not in manual_keys: {normalized_key}")
+                continue
 
             # Truncate long values
             if isinstance(value, str) and len(value) > MAX_VALUE_LENGTH:
