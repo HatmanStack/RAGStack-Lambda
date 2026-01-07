@@ -374,7 +374,6 @@ def test_get_library_stats_table_not_exists(mock_dynamodb_resource):
     assert result["total_keys"] == 0
 
 
-
 # Test: check_key_similarity
 
 
@@ -453,12 +452,10 @@ def test_check_key_similarity_returns_top_5(key_library, mock_dynamodb_table):
     """Test that only top 5 matches are returned."""
     # Create 10 similar keys
     items = [
-        {"key_name": f"topic{i}", "status": "active", "occurrence_count": i * 10}
-        for i in range(10)
+        {"key_name": f"topic{i}", "status": "active", "occurrence_count": i * 10} for i in range(10)
     ]
     mock_dynamodb_table.scan.return_value = {"Items": items}
 
     result = key_library.check_key_similarity("topic", threshold=0.5)
 
     assert len(result) <= 5
-

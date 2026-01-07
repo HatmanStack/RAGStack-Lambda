@@ -925,7 +925,6 @@ class TestDeleteImage:
             module.lambda_handler(event, None)
 
 
-
 # =============================================================================
 # Get Key Library Resolver Tests
 # =============================================================================
@@ -1035,8 +1034,6 @@ class TestGetKeyLibrary:
         assert result == []
 
 
-
-
 class TestCheckKeySimilarity:
     """Tests for checkKeySimilarity resolver."""
 
@@ -1134,4 +1131,3 @@ class TestCheckKeySimilarity:
         assert result["proposedKey"] == "topic"
         assert result["hasSimilar"] is False
         assert len(result["similarKeys"]) == 0
-

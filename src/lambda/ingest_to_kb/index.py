@@ -87,8 +87,7 @@ def get_metadata_extractor() -> MetadataExtractor:
 
         # Log the extraction mode configuration
         logger.info(
-            f"Creating MetadataExtractor with mode: {extraction_mode}, "
-            f"manual_keys: {manual_keys}"
+            f"Creating MetadataExtractor with mode: {extraction_mode}, manual_keys: {manual_keys}"
         )
 
         _metadata_extractor = MetadataExtractor(

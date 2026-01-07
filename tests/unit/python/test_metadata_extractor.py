@@ -581,9 +581,7 @@ def test_manual_mode_uses_different_prompt(
     """Test that manual mode uses a different system prompt."""
     import json
 
-    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
-        {"topic": "test"}
-    )
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({"topic": "test"})
 
     manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
 
@@ -617,9 +615,7 @@ def test_manual_mode_prompt_includes_specified_keys(
     """Test that manual mode system prompt includes the specified keys."""
     import json
 
-    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
-        {"topic": "test"}
-    )
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({"topic": "test"})
 
     manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
 

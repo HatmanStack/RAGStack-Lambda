@@ -415,8 +415,7 @@ class KeyLibrary:
         similar_keys.sort(key=lambda x: x["similarity"], reverse=True)
 
         logger.debug(
-            f"Found {len(similar_keys)} keys similar to '{proposed_key}' "
-            f"(threshold: {threshold})"
+            f"Found {len(similar_keys)} keys similar to '{proposed_key}' (threshold: {threshold})"
         )
         return similar_keys[:5]  # Return top 5 matches
 

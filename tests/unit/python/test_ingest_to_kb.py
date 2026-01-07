@@ -389,9 +389,7 @@ class TestGetMetadataExtractor:
         """Test that extractor uses auto mode when configured."""
         mock_dynamodb = MagicMock()
         mock_table = MagicMock()
-        mock_table.get_item.return_value = {
-            "Item": {"metadata_extraction_mode": "auto"}
-        }
+        mock_table.get_item.return_value = {"Item": {"metadata_extraction_mode": "auto"}}
         mock_dynamodb.Table.return_value = mock_table
 
         with (
