@@ -17,7 +17,9 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 
 | Component | Purpose |
 |-----------|---------|
-| ProcessDocument Lambda | OCR extraction (Textract/Bedrock) |
+| DetectFileType Lambda | Detect file type and route to appropriate processor |
+| ProcessDocument Lambda | OCR extraction (Textract/Bedrock) for PDF/images |
+| ProcessText Lambda | Text extraction for HTML, CSV, JSON, XML, EML, EPUB, DOCX, XLSX |
 | GetPageInfo Lambda | Count pages, determine batching strategy |
 | EnqueueBatches Lambda | Queue batch jobs to SQS |
 | BatchProcessor Lambda | Process 10-page batches (max 10 concurrent) |
@@ -38,12 +40,32 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 
 ### Document Processing
 
-**Small documents (≤20 pages or text-native):**
-1. **Upload:** User → S3 input/ → EventBridge → Step Functions
-2. **OCR:** ProcessDocument extracts text → S3 output/
-3. **Indexing:** IngestToKB → Bedrock KB
+Documents are automatically routed to the appropriate processor based on file type detection:
 
-**Large documents (>20 pages, requires OCR):**
+```
+Upload → DetectFileType → Route by Type:
+         │
+         ├── Text files (HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX)
+         │   └── ProcessText → IngestToKB → Bedrock KB
+         │
+         ├── OCR files (PDF, images)
+         │   └── GetPageInfo → ProcessDocument → IngestToKB → Bedrock KB
+         │
+         └── Passthrough (Markdown)
+             └── ProcessDocument → IngestToKB → Bedrock KB
+```
+
+**Supported File Types:**
+
+| Category | Types | Processing |
+|----------|-------|------------|
+| **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct text extraction with smart analysis |
+| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP | Textract or Bedrock vision OCR |
+| **Passthrough** | Markdown (.md) | Copy directly to output |
+
+**Text Processing:** Content sniffing detects actual file type regardless of extension. Structured formats (CSV, JSON, XML) get smart extraction with schema analysis.
+
+**Large PDFs (>20 pages):**
 1. **Upload:** User → S3 input/ → EventBridge → Step Functions
 2. **Page Info:** GetPageInfo counts pages, creates 10-page batches
 3. **Queue:** EnqueueBatches → SQS batch queue
