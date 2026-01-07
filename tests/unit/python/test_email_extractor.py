@@ -2,16 +2,16 @@
 
 import pytest
 
-from ragstack_common.text_extractors.email_extractor import EmailExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.email_extractor import EmailExtractor
 from tests.fixtures.text_extractor_samples import (
-    EMAIL_SIMPLE,
-    EMAIL_WITH_CC,
-    EMAIL_MULTIPART,
     EMAIL_HTML_ONLY,
-    EMAIL_WITH_ATTACHMENT,
-    EMAIL_MINIMAL,
     EMAIL_MALFORMED,
+    EMAIL_MINIMAL,
+    EMAIL_MULTIPART,
+    EMAIL_SIMPLE,
+    EMAIL_WITH_ATTACHMENT,
+    EMAIL_WITH_CC,
 )
 
 

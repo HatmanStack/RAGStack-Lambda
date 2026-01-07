@@ -1,7 +1,6 @@
 """Integration tests for text extractor registry and public API."""
 
 import io
-import zipfile
 
 import pytest
 

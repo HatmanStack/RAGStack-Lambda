@@ -137,7 +137,7 @@ class TestBaseExtractorHelpers:
 
     def test_decode_content_utf8(self):
         """Test decoding valid UTF-8 content."""
-        content = "Hello, World! 你好".encode("utf-8")
+        content = "Hello, World! 你好".encode()
         decoded = BaseExtractor._decode_content(content)
         assert decoded == "Hello, World! 你好"
 
@@ -194,6 +194,7 @@ class TestBaseExtractorAbstract:
 
     def test_extract_method_is_abstract(self):
         """Test that extract method must be implemented by subclasses."""
+
         # Create a minimal subclass that doesn't implement extract
         class IncompleteExtractor(BaseExtractor):
             pass

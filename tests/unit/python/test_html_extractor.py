@@ -2,14 +2,14 @@
 
 import pytest
 
-from ragstack_common.text_extractors.html_extractor import HtmlExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.html_extractor import HtmlExtractor
 from tests.fixtures.text_extractor_samples import (
     FULL_HTML_PAGE,
-    HTML_FRAGMENT,
-    HTML_WITH_CODE,
     HTML_EMPTY,
+    HTML_FRAGMENT,
     HTML_SCRIPTS_ONLY,
+    HTML_WITH_CODE,
 )
 
 

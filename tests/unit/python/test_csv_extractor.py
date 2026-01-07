@@ -2,18 +2,18 @@
 
 import pytest
 
-from ragstack_common.text_extractors.csv_extractor import CsvExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.csv_extractor import CsvExtractor
 from tests.fixtures.text_extractor_samples import (
+    CSV_EMPTY,
+    CSV_MALFORMED,
+    CSV_NO_HEADER,
+    CSV_NUMERIC,
+    CSV_QUOTED_FIELDS,
+    CSV_SEMICOLON,
+    CSV_SINGLE_COLUMN,
     CSV_STANDARD,
     CSV_TAB_SEPARATED,
-    CSV_SEMICOLON,
-    CSV_NO_HEADER,
-    CSV_QUOTED_FIELDS,
-    CSV_NUMERIC,
-    CSV_MALFORMED,
-    CSV_SINGLE_COLUMN,
-    CSV_EMPTY,
 )
 
 
@@ -70,7 +70,9 @@ class TestCsvExtractor:
         result = extractor.extract(CSV_NUMERIC.encode(), "data.csv")
 
         # Structural metadata should indicate column types
-        assert "columns" in result.structural_metadata or "column_count" in result.structural_metadata
+        has_columns = "columns" in result.structural_metadata
+        has_column_count = "column_count" in result.structural_metadata
+        assert has_columns or has_column_count
 
     def test_generates_frontmatter(self):
         """Test that frontmatter is generated correctly."""

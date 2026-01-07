@@ -6,12 +6,11 @@ import pytest
 
 try:
     from docx import Document
-    from docx.shared import Pt
 except ImportError:
     Document = None
 
-from ragstack_common.text_extractors.docx_extractor import DocxExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.docx_extractor import DocxExtractor
 
 
 def create_minimal_docx(

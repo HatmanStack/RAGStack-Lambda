@@ -2,16 +2,16 @@
 
 import pytest
 
-from ragstack_common.text_extractors.xml_extractor import XmlExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.xml_extractor import XmlExtractor
 from tests.fixtures.text_extractor_samples import (
-    XML_SIMPLE,
-    XML_NO_DECLARATION,
-    XML_WITH_ATTRIBUTES,
-    XML_WITH_NAMESPACE,
     XML_COMPLEX,
     XML_EMPTY_ROOT,
     XML_MALFORMED,
+    XML_NO_DECLARATION,
+    XML_SIMPLE,
+    XML_WITH_ATTRIBUTES,
+    XML_WITH_NAMESPACE,
 )
 
 
@@ -50,7 +50,9 @@ class TestXmlExtractor:
 
         assert result.file_type == "xml"
         # Should include namespace info
-        assert "namespace" in result.markdown.lower() or "xmlns" in result.structural_metadata.get("namespaces", [])
+        has_ns_in_markdown = "namespace" in result.markdown.lower()
+        has_ns_in_metadata = "xmlns" in result.structural_metadata.get("namespaces", [])
+        assert has_ns_in_markdown or has_ns_in_metadata
 
     def test_extracts_complex_xml(self):
         """Test extraction of complex XML structure."""

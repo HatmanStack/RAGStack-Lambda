@@ -7,7 +7,6 @@ import pytest
 
 from ragstack_common.text_extractors.sniffer import ContentSniffer
 from tests.fixtures.text_extractor_samples import (
-    CSV_MALFORMED,
     CSV_NO_HEADER,
     CSV_SEMICOLON,
     CSV_STANDARD,
@@ -224,15 +223,16 @@ class TestContentSnifferBinaryFormats:
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             # EPUB requires these specific files
             zf.writestr("mimetype", "application/epub+zip")
-            zf.writestr(
-                "META-INF/container.xml",
-                """<?xml version="1.0"?>
-                <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-                    <rootfiles>
-                        <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
-                    </rootfiles>
-                </container>""",
+            container_xml = (
+                '<?xml version="1.0"?>'
+                '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                "<rootfiles>"
+                '<rootfile full-path="content.opf" '
+                'media-type="application/oebps-package+xml"/>'
+                "</rootfiles>"
+                "</container>"
             )
+            zf.writestr("META-INF/container.xml", container_xml)
         return buffer.getvalue()
 
     def _create_minimal_docx(self) -> bytes:

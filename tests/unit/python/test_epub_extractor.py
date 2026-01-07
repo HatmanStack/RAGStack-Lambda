@@ -1,7 +1,6 @@
 """Unit tests for EPUB extractor."""
 
 import io
-import zipfile
 
 import pytest
 
@@ -10,8 +9,8 @@ try:
 except ImportError:
     epub = None
 
-from ragstack_common.text_extractors.epub_extractor import EpubExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.epub_extractor import EpubExtractor
 
 
 def create_minimal_epub(
@@ -43,7 +42,10 @@ def create_minimal_epub(
         spine.append(chapter)
 
     # Add navigation
-    book.toc = [epub.Link(f"chap_{i + 1}.xhtml", title, f"chap{i + 1}") for i, (title, _) in enumerate(chapters)]
+    book.toc = [
+        epub.Link(f"chap_{i + 1}.xhtml", title, f"chap{i + 1}")
+        for i, (title, _) in enumerate(chapters)
+    ]
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
     book.spine = spine

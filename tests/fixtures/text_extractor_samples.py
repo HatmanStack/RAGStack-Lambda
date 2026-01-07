@@ -123,9 +123,9 @@ CSV_NO_HEADER = """John,30,New York
 Jane,25,Los Angeles
 Bob,45,Chicago"""
 
-CSV_QUOTED_FIELDS = '''name,description,value
+CSV_QUOTED_FIELDS = """name,description,value
 "Smith, John","A person named John, who lives in NYC",100
-"Doe, Jane","Another person",200'''
+"Doe, Jane","Another person",200"""
 
 CSV_NUMERIC = """id,value,percentage
 1,100,0.5

@@ -10,8 +10,8 @@ try:
 except ImportError:
     Workbook = None
 
-from ragstack_common.text_extractors.xlsx_extractor import XlsxExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.xlsx_extractor import XlsxExtractor
 
 
 def create_minimal_xlsx(
@@ -82,8 +82,9 @@ def xlsx_with_types() -> bytes:
         sheets={
             "Data": [
                 ["String", "Number", "Date", "Boolean"],
-                ["Hello", 42, datetime(2024, 1, 15), True],
-                ["World", 3.14, datetime(2024, 6, 30), False],
+                # Excel doesn't support timezone-aware datetimes
+                ["Hello", 42, datetime(2024, 1, 15), True],  # noqa: DTZ001
+                ["World", 3.14, datetime(2024, 6, 30), False],  # noqa: DTZ001
             ],
         }
     )

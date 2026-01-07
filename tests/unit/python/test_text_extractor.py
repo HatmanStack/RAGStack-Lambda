@@ -2,14 +2,14 @@
 
 import pytest
 
-from ragstack_common.text_extractors.text_extractor import TextExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.text_extractor import TextExtractor
 from tests.fixtures.text_extractor_samples import (
-    SIMPLE_TEXT,
-    UNICODE_TEXT,
     EMPTY_TEXT,
-    WHITESPACE_ONLY_TEXT,
+    SIMPLE_TEXT,
     SINGLE_LINE_TEXT,
+    UNICODE_TEXT,
+    WHITESPACE_ONLY_TEXT,
 )
 
 

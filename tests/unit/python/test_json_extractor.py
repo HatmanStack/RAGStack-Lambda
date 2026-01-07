@@ -2,18 +2,18 @@
 
 import pytest
 
-from ragstack_common.text_extractors.json_extractor import JsonExtractor
 from ragstack_common.text_extractors.base import ExtractionResult
+from ragstack_common.text_extractors.json_extractor import JsonExtractor
 from tests.fixtures.text_extractor_samples import (
-    JSON_SIMPLE_OBJECT,
-    JSON_SIMPLE_ARRAY,
-    JSON_ARRAY_OF_OBJECTS,
-    JSON_NESTED,
-    JSON_DEEPLY_NESTED,
     JSON_ALL_TYPES,
-    JSON_EMPTY_OBJECT,
+    JSON_ARRAY_OF_OBJECTS,
+    JSON_DEEPLY_NESTED,
     JSON_EMPTY_ARRAY,
+    JSON_EMPTY_OBJECT,
     JSON_MALFORMED,
+    JSON_NESTED,
+    JSON_SIMPLE_ARRAY,
+    JSON_SIMPLE_OBJECT,
 )
 
 
