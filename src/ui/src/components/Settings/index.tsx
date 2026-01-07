@@ -36,6 +36,8 @@ import {
   ExpandableSection,
   CopyToClipboard,
   ColumnLayout,
+  Popover,
+  Icon,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
@@ -47,6 +49,7 @@ import {
   validateBudgetThreshold,
 } from '../../utils/validation';
 import type { GqlResponse } from '../../types/graphql';
+import { MetadataKeyInput } from './MetadataKeyInput';
 
 interface ConfigResponse {
   Schema: string;
@@ -209,7 +212,10 @@ export function Settings() {
       Object.keys(values).forEach(key => {
         const currentValue = currentMergedValues[key];
         const newValue = values[key];
-        const isDifferent = newValue !== currentValue;
+        // Use JSON.stringify for array/object comparison
+        const isDifferent = Array.isArray(newValue) || typeof newValue === 'object'
+          ? JSON.stringify(newValue) !== JSON.stringify(currentValue)
+          : newValue !== currentValue;
         if (isDifferent) {
           changedValues[key] = newValue;
         }
@@ -271,6 +277,11 @@ export function Settings() {
 
     // Skip public_access_* fields - rendered separately in Public Access section
     if (key.startsWith('public_access_')) {
+      return null;
+    }
+
+    // Skip metadata_* fields - rendered separately in Metadata Extraction section
+    if (key.startsWith('metadata_')) {
       return null;
     }
 
@@ -642,6 +653,119 @@ export function Settings() {
             Web Scraping
           </Toggle>
         </ColumnLayout>
+      </Container>
+
+      <Container
+        header={
+          <Header
+            variant="h2"
+            info={
+              <Popover
+                header="About Metadata Extraction"
+                content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
+                dismissButton={false}
+                position="right"
+                size="medium"
+              >
+                <Box color="text-status-info" display="inline">
+                  <Icon name="status-info" />
+                </Box>
+              </Popover>
+            }
+          >
+            Metadata Extraction
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <FormField
+            label="Enable Metadata Extraction"
+            description="Extract searchable metadata from documents during ingestion"
+          >
+            <Toggle
+              checked={formValues.metadata_extraction_enabled === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, metadata_extraction_enabled: detail.checked });
+              }}
+            >
+              {formValues.metadata_extraction_enabled ? 'Enabled' : 'Disabled'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Extraction Model"
+            description="Lightweight model for cost-efficient extraction"
+          >
+            <Select
+              selectedOption={{
+                label: String(formValues.metadata_extraction_model || ''),
+                value: String(formValues.metadata_extraction_model || ''),
+              }}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, metadata_extraction_model: detail.selectedOption.value });
+              }}
+              options={[
+                { label: 'us.anthropic.claude-3-5-haiku-20241022-v1:0', value: 'us.anthropic.claude-3-5-haiku-20241022-v1:0' },
+                { label: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', value: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' },
+                { label: 'us.amazon.nova-micro-v1:0', value: 'us.amazon.nova-micro-v1:0' },
+                { label: 'us.amazon.nova-lite-v1:0', value: 'us.amazon.nova-lite-v1:0' },
+              ]}
+              disabled={formValues.metadata_extraction_enabled !== true}
+            />
+          </FormField>
+
+          <FormField
+            label="Maximum Keys"
+            description="Maximum metadata fields to extract per document"
+          >
+            <Input
+              type="number"
+              value={String(formValues.metadata_max_keys || 8)}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, metadata_max_keys: parseInt(detail.value, 10) || 8 });
+              }}
+              disabled={formValues.metadata_extraction_enabled !== true}
+            />
+          </FormField>
+
+          <FormField
+            label="Extraction Mode"
+            description="Auto lets LLM decide keys, Manual uses your specified list"
+          >
+            <Select
+              selectedOption={{
+                label: formValues.metadata_extraction_mode === 'manual' ? 'Manual' : 'Auto',
+                value: String(formValues.metadata_extraction_mode || 'auto'),
+              }}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, metadata_extraction_mode: detail.selectedOption.value });
+              }}
+              options={[
+                { label: 'Auto', value: 'auto', description: 'LLM decides which keys to extract' },
+                { label: 'Manual', value: 'manual', description: 'Use your specified key list' },
+              ]}
+              disabled={formValues.metadata_extraction_enabled !== true}
+            />
+          </FormField>
+
+          {formValues.metadata_extraction_mode === 'manual' && (
+            <FormField
+              label="Keys to Extract"
+              description="Metadata keys to extract when in Manual mode"
+            >
+              <MetadataKeyInput
+                value={(formValues.metadata_manual_keys as string[]) || []}
+                onChange={(keys) => setFormValues({ ...formValues, metadata_manual_keys: keys })}
+                disabled={formValues.metadata_extraction_enabled !== true}
+              />
+            </FormField>
+          )}
+
+          <Alert type="info">
+            Changes apply to newly uploaded documents only. Previously indexed documents retain their
+            existing metadata.
+          </Alert>
+        </SpaceBetween>
       </Container>
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
