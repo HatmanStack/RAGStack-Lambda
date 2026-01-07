@@ -380,3 +380,84 @@ class TestLambdaHandler:
             }
             with pytest.raises(ValueError, match="KNOWLEDGE_BASE_ID"):
                 module.lambda_handler(event, lambda_context)
+
+
+class TestGetMetadataExtractor:
+    """Tests for get_metadata_extractor function with extraction mode configuration."""
+
+    def test_extractor_uses_config_mode_auto(self, set_env_vars):
+        """Test that extractor uses auto mode when configured."""
+        mock_dynamodb = MagicMock()
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {
+            "Item": {"metadata_extraction_mode": "auto"}
+        }
+        mock_dynamodb.Table.return_value = mock_table
+
+        with (
+            patch("boto3.client"),
+            patch("boto3.resource", return_value=mock_dynamodb),
+            patch("ragstack_common.key_library.boto3.resource", return_value=mock_dynamodb),
+        ):
+            if "ingest_to_kb_index" in sys.modules:
+                del sys.modules["ingest_to_kb_index"]
+
+            module = load_ingest_module()
+            module._key_library = None
+            module._metadata_extractor = None
+            module._config_manager = None
+
+            extractor = module.get_metadata_extractor()
+            assert extractor.extraction_mode == "auto"
+
+    def test_extractor_uses_config_mode_manual(self, set_env_vars):
+        """Test that extractor uses manual mode with keys when configured."""
+        mock_dynamodb = MagicMock()
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {
+            "Item": {
+                "metadata_extraction_mode": "manual",
+                "metadata_manual_keys": ["topic", "document_type"],
+            }
+        }
+        mock_dynamodb.Table.return_value = mock_table
+
+        with (
+            patch("boto3.client"),
+            patch("boto3.resource", return_value=mock_dynamodb),
+            patch("ragstack_common.key_library.boto3.resource", return_value=mock_dynamodb),
+        ):
+            if "ingest_to_kb_index" in sys.modules:
+                del sys.modules["ingest_to_kb_index"]
+
+            module = load_ingest_module()
+            module._key_library = None
+            module._metadata_extractor = None
+            module._config_manager = None
+
+            extractor = module.get_metadata_extractor()
+            assert extractor.extraction_mode == "manual"
+            assert extractor.manual_keys == ["topic", "document_type"]
+
+    def test_extractor_fallback_on_missing_mode(self, set_env_vars):
+        """Test that extractor defaults to auto mode when mode not configured."""
+        mock_dynamodb = MagicMock()
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {"Item": {}}  # No mode configured
+        mock_dynamodb.Table.return_value = mock_table
+
+        with (
+            patch("boto3.client"),
+            patch("boto3.resource", return_value=mock_dynamodb),
+            patch("ragstack_common.key_library.boto3.resource", return_value=mock_dynamodb),
+        ):
+            if "ingest_to_kb_index" in sys.modules:
+                del sys.modules["ingest_to_kb_index"]
+
+            module = load_ingest_module()
+            module._key_library = None
+            module._metadata_extractor = None
+            module._config_manager = None
+
+            extractor = module.get_metadata_extractor()
+            assert extractor.extraction_mode == "auto"
