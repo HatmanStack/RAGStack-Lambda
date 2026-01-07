@@ -45,6 +45,9 @@ type Query {
 
   # Get filter examples for metadata filtering (admin and chat)
   getFilterExamples: FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools
+
+  # Get key library for metadata key suggestions (admin only)
+  getKeyLibrary: [MetadataKey] @aws_cognito_user_pools
 }
 
 type Mutation {
@@ -512,4 +515,13 @@ type FilterExample @aws_iam @aws_api_key @aws_cognito_user_pools {
   description: String!
   useCase: String!
   filter: AWSJSON!
+}
+
+# Metadata key from key library (for suggestions)
+type MetadataKey @aws_cognito_user_pools {
+  keyName: String!
+  dataType: String!
+  occurrenceCount: Int!
+  sampleValues: [String!]
+  status: String
 }

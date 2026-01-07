@@ -923,3 +923,114 @@ class TestDeleteImage:
 
         with pytest.raises(ValueError, match="required"):
             module.lambda_handler(event, None)
+
+
+
+# =============================================================================
+# Get Key Library Resolver Tests
+# =============================================================================
+
+
+class TestGetKeyLibrary:
+    """Tests for getKeyLibrary resolver."""
+
+    @pytest.fixture
+    def mock_env_with_key_library(self, monkeypatch):
+        """Set up environment variables including key library table."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
+        monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
+        monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+        monkeypatch.setenv("METADATA_KEY_LIBRARY_TABLE", "test-key-library-table")
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            yield
+
+    def test_get_key_library_success(self, mock_env_with_key_library, mock_boto3):
+        """Test successful retrieval of key library."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].scan.return_value = {
+            "Items": [
+                {
+                    "key_name": "topic",
+                    "data_type": "string",
+                    "occurrence_count": 100,
+                    "sample_values": ["immigration", "genealogy"],
+                    "status": "active",
+                },
+                {
+                    "key_name": "location",
+                    "data_type": "string",
+                    "occurrence_count": 50,
+                    "sample_values": ["NYC", "Boston"],
+                    "status": "active",
+                },
+            ]
+        }
+
+        event = {
+            "info": {"fieldName": "getKeyLibrary"},
+            "arguments": {},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert len(result) == 2
+        assert result[0]["keyName"] == "topic"
+        assert result[0]["occurrenceCount"] == 100
+        assert result[1]["keyName"] == "location"
+
+    def test_get_key_library_filters_inactive(self, mock_env_with_key_library, mock_boto3):
+        """Test that inactive keys are filtered out."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].scan.return_value = {
+            "Items": [
+                {"key_name": "active_key", "status": "active", "occurrence_count": 10},
+                {"key_name": "inactive_key", "status": "inactive", "occurrence_count": 5},
+            ]
+        }
+
+        event = {
+            "info": {"fieldName": "getKeyLibrary"},
+            "arguments": {},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert len(result) == 1
+        assert result[0]["keyName"] == "active_key"
+
+    def test_get_key_library_empty(self, mock_env_with_key_library, mock_boto3):
+        """Test empty key library returns empty list."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_boto3["table"].scan.return_value = {"Items": []}
+
+        event = {
+            "info": {"fieldName": "getKeyLibrary"},
+            "arguments": {},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result == []
+
+    def test_get_key_library_no_table_configured(self, mock_env, mock_boto3):
+        """Test returns empty list when table not configured."""
+        module = _load_appsync_resolvers_module()
+        module.METADATA_KEY_LIBRARY_TABLE = None
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "getKeyLibrary"},
+            "arguments": {},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result == []
+

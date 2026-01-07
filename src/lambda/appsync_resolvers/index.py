@@ -19,6 +19,9 @@ Handles:
 - deleteImage
 - deleteDocuments
 - analyzeMetadata
+- getMetadataStats
+- getFilterExamples
+- getKeyLibrary
 """
 
 import json
@@ -137,6 +140,7 @@ def lambda_handler(event, context):
         "analyzeMetadata": analyze_metadata,
         "getMetadataStats": get_metadata_stats,
         "getFilterExamples": get_filter_examples,
+        "getKeyLibrary": get_key_library,
     }
 
     resolver = resolvers.get(field_name)
@@ -1797,3 +1801,64 @@ def get_filter_examples(args):
             "lastGenerated": None,
             "error": str(e),
         }
+
+
+def get_key_library(args):
+    """
+    Get active metadata keys from the key library.
+
+    Returns list of keys for use in manual mode key selection.
+
+    Returns:
+        List of MetadataKey objects with key names and metadata
+    """
+    logger.info("Getting key library")
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        logger.warning("METADATA_KEY_LIBRARY_TABLE not configured")
+        return []
+
+    try:
+        table = dynamodb.Table(METADATA_KEY_LIBRARY_TABLE)
+
+        # Scan all keys from the library
+        all_items = []
+        scan_kwargs: dict = {}
+
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
+
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        # Filter to only active keys and format for GraphQL
+        keys = []
+        for item in all_items:
+            status = item.get("status", "active")
+            if status != "active":
+                continue
+
+            keys.append(
+                {
+                    "keyName": item.get("key_name", ""),
+                    "dataType": item.get("data_type", "string"),
+                    "occurrenceCount": int(item.get("occurrence_count", 0)),
+                    "sampleValues": item.get("sample_values", [])[:5],
+                    "status": status,
+                }
+            )
+
+        # Sort by occurrence count descending
+        keys.sort(key=lambda x: x["occurrenceCount"], reverse=True)
+
+        logger.info(f"Retrieved {len(keys)} active keys from library")
+        return keys
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error getting key library: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error in get_key_library: {e}")
+        return []
