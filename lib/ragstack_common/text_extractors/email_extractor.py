@@ -176,28 +176,27 @@ class EmailExtractor(BaseExtractor):
                         return self._html_to_text(html)
 
             return ""
-        else:
-            # Single part message
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                content_type = msg.get_content_type()
+        # Single part message
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            content_type = msg.get_content_type()
 
-                try:
-                    text = payload.decode(charset)
-                except (UnicodeDecodeError, LookupError):
-                    text = payload.decode("utf-8", errors="replace")
+            try:
+                text = payload.decode(charset)
+            except (UnicodeDecodeError, LookupError):
+                text = payload.decode("utf-8", errors="replace")
 
-                if content_type == "text/html":
-                    return self._html_to_text(text)
-                return text
+            if content_type == "text/html":
+                return self._html_to_text(text)
+            return text
 
-            # If payload is not bytes (already decoded)
-            payload = msg.get_payload()
-            if isinstance(payload, str):
-                return payload
+        # If payload is not bytes (already decoded)
+        payload = msg.get_payload()
+        if isinstance(payload, str):
+            return payload
 
-            return ""
+        return ""
 
     def _html_to_text(self, html: str) -> str:
         """Convert HTML to plain text (simple extraction)."""

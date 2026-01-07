@@ -293,18 +293,10 @@ class ContentSniffer:
                 break  # Empty line marks end of headers
 
             # Check for header patterns
-            if re.match(r"^From:\s*", line_stripped, re.IGNORECASE):
+            if re.match(r"^From:\s*", line_stripped, re.IGNORECASE) or re.match(r"^To:\s*", line_stripped, re.IGNORECASE) or re.match(r"^Subject:\s*", line_stripped, re.IGNORECASE):
                 header_count += 1
                 required_headers += 1
-            elif re.match(r"^To:\s*", line_stripped, re.IGNORECASE):
-                header_count += 1
-                required_headers += 1
-            elif re.match(r"^Subject:\s*", line_stripped, re.IGNORECASE):
-                header_count += 1
-                required_headers += 1
-            elif re.match(r"^Date:\s*", line_stripped, re.IGNORECASE):
-                header_count += 1
-            elif re.match(r"^(Cc|Bcc|Reply-To|Message-ID|MIME-Version|Content-Type):\s*", line_stripped, re.IGNORECASE):
+            elif re.match(r"^Date:\s*", line_stripped, re.IGNORECASE) or re.match(r"^(Cc|Bcc|Reply-To|Message-ID|MIME-Version|Content-Type):\s*", line_stripped, re.IGNORECASE):
                 header_count += 1
 
         # Need at least From + To or From + Subject

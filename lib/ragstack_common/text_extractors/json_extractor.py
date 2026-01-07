@@ -100,12 +100,11 @@ class JsonExtractor(BaseExtractor):
             if not data:
                 return current_depth + 1
             return max(self._calculate_depth(v, current_depth + 1) for v in data.values())
-        elif isinstance(data, list):
+        if isinstance(data, list):
             if not data:
                 return current_depth + 1
             return max(self._calculate_depth(item, current_depth + 1) for item in data)
-        else:
-            return current_depth
+        return current_depth
 
     def _generate_markdown(self, filename: str, data: Any, structure_type: str) -> str:
         """Generate descriptive markdown from JSON data."""

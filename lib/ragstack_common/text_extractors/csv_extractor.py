@@ -8,7 +8,6 @@ markdown with schema summaries and sample data.
 import csv
 import io
 import re
-from typing import Any
 
 from .base import BaseExtractor, ExtractionResult
 

@@ -7,7 +7,6 @@ with hierarchy summaries and element counts.
 
 import xml.etree.ElementTree as ET
 from collections import Counter
-from typing import Any
 
 from .base import BaseExtractor, ExtractionResult
 
