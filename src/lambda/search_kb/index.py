@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import re
+import time
 
 import boto3
 from botocore.exceptions import ClientError
@@ -74,8 +75,6 @@ def _get_filter_components():
 
 def _get_filter_examples():
     """Get filter examples from config with caching."""
-    import time
-
     global _filter_examples_cache, _filter_examples_cache_time
 
     now = time.time()

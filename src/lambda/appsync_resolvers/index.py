@@ -43,6 +43,7 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 sfn = boto3.client("stepfunctions")
+lambda_client = boto3.client("lambda")
 
 # Module-level configuration manager (lazy init for resolvers that need access control)
 _config_manager = None
@@ -681,7 +682,6 @@ def start_scrape(args):
         logger.info(f"Starting scrape for URL: {url}")
 
         # Invoke scrape start Lambda
-        lambda_client = boto3.client("lambda")
         event = {
             "base_url": url,
             "config": {
@@ -1587,8 +1587,6 @@ def analyze_metadata(args):
 
     try:
         # Invoke metadata analyzer Lambda synchronously
-        lambda_client = boto3.client("lambda")
-
         logger.info(f"Invoking metadata analyzer: {METADATA_ANALYZER_FUNCTION_ARN}")
         response = lambda_client.invoke(
             FunctionName=METADATA_ANALYZER_FUNCTION_ARN,

@@ -299,13 +299,16 @@ def test_validate_filter_valid_structure(filter_generator):
 
 
 def test_validate_filter_invalid_operator(filter_generator):
-    """Test that filters with invalid operators return None."""
+    """Test that filters with invalid operators are removed during validation.
+
+    The implementation removes invalid operators to prevent S3 Vectors errors.
+    When all operators in a field condition are invalid, the entire filter
+    becomes empty and returns None.
+    """
     invalid_filter = {"topic": {"$invalid_op": "value"}}
-    # Invalid operators should be caught during validation
     result = filter_generator._validate_filter(invalid_filter)
-    # The filter may be returned but with warning, or None
-    # Implementation decides - for now we allow unknown operators
-    assert result is not None or result is None  # Either behavior is acceptable
+    # Implementation removes invalid operators, resulting in None when filter is empty
+    assert result is None
 
 
 # Test: Empty query handling

@@ -8,6 +8,8 @@ import json
 from typing import Any
 from unittest.mock import MagicMock
 
+from botocore.exceptions import ClientError
+
 
 def create_converse_response(
     text: str,
@@ -63,10 +65,8 @@ def create_metadata_extraction_response(metadata: dict[str, Any]) -> dict[str, A
     return create_converse_response(json.dumps(metadata))
 
 
-def create_throttling_error_response() -> dict[str, Any]:
+def create_throttling_error_response() -> ClientError:
     """Create a mock throttling error response."""
-    from botocore.exceptions import ClientError
-
     return ClientError(
         {
             "Error": {
@@ -78,10 +78,8 @@ def create_throttling_error_response() -> dict[str, Any]:
     )
 
 
-def create_model_error_response() -> dict[str, Any]:
+def create_model_error_response() -> ClientError:
     """Create a mock model error response."""
-    from botocore.exceptions import ClientError
-
     return ClientError(
         {
             "Error": {
@@ -93,10 +91,8 @@ def create_model_error_response() -> dict[str, Any]:
     )
 
 
-def create_validation_error_response() -> dict[str, Any]:
+def create_validation_error_response() -> ClientError:
     """Create a mock validation error response."""
-    from botocore.exceptions import ClientError
-
     return ClientError(
         {
             "Error": {

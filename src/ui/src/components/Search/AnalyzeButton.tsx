@@ -45,7 +45,7 @@ export const AnalyzeButton: React.FC<AnalyzeButtonProps> = ({ onComplete }) => {
       </Button>
 
       {error && !showResult && (
-        <Alert type="error" dismissible onDismiss={() => {}}>
+        <Alert type="error">
           {error}
         </Alert>
       )}

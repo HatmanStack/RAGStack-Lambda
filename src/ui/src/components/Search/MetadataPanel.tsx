@@ -4,7 +4,6 @@ import {
   Header,
   SpaceBetween,
   Box,
-  Link,
   Alert,
 } from '@cloudscape-design/components';
 import { useMetadataStats, useFilterExamples } from '../../hooks/useMetadata';
@@ -56,11 +55,6 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) =
           variant="h2"
           description="Discover metadata fields and filter patterns in your documents"
           actions={<AnalyzeButton onComplete={handleAnalysisComplete} />}
-          info={
-            <Link external href="#" variant="info">
-              Learn more
-            </Link>
-          }
         >
           Metadata Analysis
         </Header>

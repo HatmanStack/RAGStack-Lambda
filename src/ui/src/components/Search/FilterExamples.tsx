@@ -27,7 +27,8 @@ const formatDate = (isoString: string | null): string => {
   try {
     const date = new Date(isoString);
     return date.toLocaleString();
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse date:', isoString, error);
     return isoString;
   }
 };
@@ -78,7 +79,8 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
   const parseFilter = (filterJson: string): object => {
     try {
       return JSON.parse(filterJson);
-    } catch {
+    } catch (error) {
+      console.error('Failed to parse filter JSON:', filterJson, error);
       return {};
     }
   };

@@ -95,7 +95,6 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               id: 'keyName',
               header: 'Key Name',
               cell: (item) => <Box fontWeight="bold">{item.keyName}</Box>,
-              sortingField: 'keyName',
               width: 150,
             },
             {
@@ -108,7 +107,6 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               id: 'occurrenceCount',
               header: 'Occurrences',
               cell: (item) => item.occurrenceCount.toLocaleString(),
-              sortingField: 'occurrenceCount',
               width: 100,
             },
             {
@@ -143,7 +141,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           }
           variant="embedded"
           stripedRows
-          sortingDisabled={false}
+          sortingDisabled
         />
       </SpaceBetween>
     </ExpandableSection>

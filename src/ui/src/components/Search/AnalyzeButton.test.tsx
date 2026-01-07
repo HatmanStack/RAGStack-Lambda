@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AnalyzeButton } from './AnalyzeButton';
 import * as useMetadataModule from '../../hooks/useMetadata';
@@ -9,7 +9,7 @@ const mockResult = {
   keysAnalyzed: 8,
   examplesGenerated: 5,
   executionTimeMs: 15000,
-  error: null,
+  error: undefined,
 };
 
 const errorResult = {

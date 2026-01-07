@@ -202,7 +202,10 @@ def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
         elif isinstance(value, list):
             str_value = ", ".join(str(v) for v in value[:5])
         else:
-            str_value = str(value)[:100]
+            str_value = str(value)
+            if len(str_value) > 100:
+                logger.debug(f"Truncating metadata key '{key}' from {len(str_value)} to 100 chars")
+                str_value = str_value[:100]
 
         attributes.append({"key": key, "value": {"stringValue": str_value}})
 
