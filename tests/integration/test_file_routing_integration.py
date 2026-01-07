@@ -12,9 +12,7 @@ from moto import mock_aws
 
 def _load_detect_file_type_module():
     """Load detect_file_type module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent / "src/lambda/detect_file_type/index.py"
-    )
+    module_path = Path(__file__).parent.parent.parent / "src/lambda/detect_file_type/index.py"
     spec = importlib.util.spec_from_file_location("detect_file_type_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["detect_file_type_index"] = module
@@ -24,9 +22,7 @@ def _load_detect_file_type_module():
 
 def _load_process_text_module():
     """Load process_text module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent / "src/lambda/process_text/index.py"
-    )
+    module_path = Path(__file__).parent.parent.parent / "src/lambda/process_text/index.py"
     spec = importlib.util.spec_from_file_location("process_text_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["process_text_index"] = module

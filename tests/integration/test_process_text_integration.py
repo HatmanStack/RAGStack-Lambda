@@ -13,9 +13,7 @@ from moto import mock_aws
 
 def _load_process_text_module():
     """Load process_text module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent / "src/lambda/process_text/index.py"
-    )
+    module_path = Path(__file__).parent.parent.parent / "src/lambda/process_text/index.py"
     spec = importlib.util.spec_from_file_location("process_text_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["process_text_index"] = module
@@ -328,7 +326,7 @@ The Test Team"""
 
         with patch("ragstack_common.appsync.publish_document_update"):
             module = _load_process_text_module()
-            with pytest.raises(Exception):
+            with pytest.raises(module.s3_client.exceptions.NoSuchKey):
                 module.lambda_handler(event, lambda_context)
 
         # Verify tracking table shows failed status

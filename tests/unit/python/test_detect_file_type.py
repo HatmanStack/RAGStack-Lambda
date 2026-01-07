@@ -28,9 +28,7 @@ def lambda_context():
     context = MagicMock()
     context.function_name = "DetectFileType"
     context.memory_limit_in_mb = 256
-    context.invoked_function_arn = (
-        "arn:aws:lambda:us-east-1:123456789:function:DetectFileType"
-    )
+    context.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789:function:DetectFileType"
     return context
 
 
@@ -378,7 +376,7 @@ This is the email body."""
 
         module = _load_detect_file_type_module()
 
-        with pytest.raises(Exception):
+        with pytest.raises(module.s3_client.exceptions.NoSuchKey):
             module.lambda_handler(base_event, lambda_context)
 
 

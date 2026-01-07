@@ -88,7 +88,7 @@ def _get_routing_category(file_type: str) -> str:
 def _is_markdown_file(filename: str) -> bool:
     """Check if file is a markdown file (passthrough)."""
     lower_name = filename.lower()
-    return lower_name.endswith(".md") or lower_name.endswith(".markdown")
+    return lower_name.endswith((".md", ".markdown"))
 
 
 def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
@@ -115,18 +115,15 @@ def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
         return True
 
     # GIF: GIF87a or GIF89a
-    if content_first_bytes.startswith(b"GIF87a") or content_first_bytes.startswith(b"GIF89a"):
+    if content_first_bytes.startswith((b"GIF87a", b"GIF89a")):
         return True
 
     # TIFF: 49 49 2A 00 or 4D 4D 00 2A
-    if content_first_bytes.startswith(b"II*\x00") or content_first_bytes.startswith(b"MM\x00*"):
+    if content_first_bytes.startswith((b"II*\x00", b"MM\x00*")):
         return True
 
     # BMP: BM
-    if content_first_bytes.startswith(b"BM"):
-        return True
-
-    return False
+    return content_first_bytes.startswith(b"BM")
 
 
 def lambda_handler(event, context):

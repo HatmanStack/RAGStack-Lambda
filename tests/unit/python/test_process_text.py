@@ -13,9 +13,7 @@ from moto import mock_aws
 
 def _load_process_text_module():
     """Load process_text module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent.parent / "src/lambda/process_text/index.py"
-    )
+    module_path = Path(__file__).parent.parent.parent.parent / "src/lambda/process_text/index.py"
     spec = importlib.util.spec_from_file_location("process_text_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["process_text_index"] = module
@@ -79,9 +77,7 @@ class TestProcessTextLambda:
     """Test ProcessText Lambda handler."""
 
     @mock_aws
-    def test_process_text_html_success(
-        self, mock_env, lambda_context, sample_event, html_content
-    ):
+    def test_process_text_html_success(self, mock_env, lambda_context, sample_event, html_content):
         """Test successful HTML extraction."""
         # Set up S3
         s3 = boto3.client("s3", region_name="us-east-1")
@@ -102,7 +98,7 @@ class TestProcessTextLambda:
         )
 
         # Mock AppSync publish
-        with patch("ragstack_common.appsync.publish_document_update") as mock_publish:
+        with patch("ragstack_common.appsync.publish_document_update"):
             module = _load_process_text_module()
             result = module.lambda_handler(sample_event, lambda_context)
 
@@ -270,7 +266,7 @@ class TestProcessTextLambda:
 
         with patch("ragstack_common.appsync.publish_document_update"):
             module = _load_process_text_module()
-            with pytest.raises(Exception):
+            with pytest.raises(module.s3_client.exceptions.NoSuchKey):
                 module.lambda_handler(sample_event, lambda_context)
 
         # Verify status updated to failed
@@ -322,9 +318,7 @@ class TestProcessTextLambda:
         assert "OCR_COMPLETE" in statuses
 
     @mock_aws
-    def test_process_text_output_format(
-        self, mock_env, lambda_context, sample_event, html_content
-    ):
+    def test_process_text_output_format(self, mock_env, lambda_context, sample_event, html_content):
         """Test that output format matches process_document format."""
         # Set up S3
         s3 = boto3.client("s3", region_name="us-east-1")
