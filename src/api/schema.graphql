@@ -48,6 +48,9 @@ type Query {
 
   # Get key library for metadata key suggestions (admin only)
   getKeyLibrary: [MetadataKey] @aws_cognito_user_pools
+
+  # Check if a proposed key is similar to existing keys (admin only)
+  checkKeySimilarity(keyName: String!, threshold: Float): KeySimilarityResult @aws_cognito_user_pools
 }
 
 type Mutation {
@@ -524,4 +527,18 @@ type MetadataKey @aws_cognito_user_pools {
   occurrenceCount: Int!
   sampleValues: [String!]
   status: String
+}
+
+# Key similarity check result
+type KeySimilarityResult @aws_cognito_user_pools {
+  proposedKey: String!
+  similarKeys: [SimilarKey!]!
+  hasSimilar: Boolean!
+}
+
+# Similar key with similarity score
+type SimilarKey @aws_cognito_user_pools {
+  keyName: String!
+  similarity: Float!
+  occurrenceCount: Int!
 }

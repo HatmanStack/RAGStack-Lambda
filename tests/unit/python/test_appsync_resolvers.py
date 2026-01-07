@@ -1034,3 +1034,104 @@ class TestGetKeyLibrary:
 
         assert result == []
 
+
+
+
+class TestCheckKeySimilarity:
+    """Tests for checkKeySimilarity resolver."""
+
+    @pytest.fixture
+    def mock_env_with_key_library(self, monkeypatch):
+        """Set up environment variables including key library table."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
+        monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
+        monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+        monkeypatch.setenv("METADATA_KEY_LIBRARY_TABLE", "test-key-library-table")
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            yield
+
+    def test_check_key_similarity_success(self, mock_env_with_key_library, mock_boto3):
+        """Test successful key similarity check."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        # Mock KeyLibrary.check_key_similarity
+        with patch("ragstack_common.key_library.KeyLibrary.check_key_similarity") as mock_check:
+            mock_check.return_value = [
+                {"keyName": "topic", "similarity": 0.95, "occurrenceCount": 100}
+            ]
+
+            event = {
+                "info": {"fieldName": "checkKeySimilarity"},
+                "arguments": {"keyName": "topics"},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["proposedKey"] == "topics"
+            assert result["hasSimilar"] is True
+            assert len(result["similarKeys"]) == 1
+
+    def test_check_key_similarity_no_matches(self, mock_env_with_key_library, mock_boto3):
+        """Test similarity check with no matches."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        with patch("ragstack_common.key_library.KeyLibrary.check_key_similarity") as mock_check:
+            mock_check.return_value = []
+
+            event = {
+                "info": {"fieldName": "checkKeySimilarity"},
+                "arguments": {"keyName": "unique_key"},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["proposedKey"] == "unique_key"
+            assert result["hasSimilar"] is False
+            assert len(result["similarKeys"]) == 0
+
+    def test_check_key_similarity_missing_key_name(self, mock_env_with_key_library, mock_boto3):
+        """Test error when keyName is missing."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "checkKeySimilarity"},
+            "arguments": {},
+        }
+
+        with pytest.raises(ValueError, match="required"):
+            module.lambda_handler(event, None)
+
+    def test_check_key_similarity_invalid_threshold(self, mock_env_with_key_library, mock_boto3):
+        """Test error when threshold is out of range."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "checkKeySimilarity"},
+            "arguments": {"keyName": "topic", "threshold": 1.5},
+        }
+
+        with pytest.raises(ValueError, match="between 0 and 1"):
+            module.lambda_handler(event, None)
+
+    def test_check_key_similarity_no_table_configured(self, mock_env, mock_boto3):
+        """Test returns empty when table not configured."""
+        module = _load_appsync_resolvers_module()
+        module.METADATA_KEY_LIBRARY_TABLE = None
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "checkKeySimilarity"},
+            "arguments": {"keyName": "topic"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["proposedKey"] == "topic"
+        assert result["hasSimilar"] is False
+        assert len(result["similarKeys"]) == 0
+
