@@ -54,6 +54,7 @@ def setup_mocked_aws():
     return s3, dynamodb
 
 
+@pytest.mark.integration
 class TestProcessTextIntegration:
     """Full integration tests for ProcessText Lambda."""
 

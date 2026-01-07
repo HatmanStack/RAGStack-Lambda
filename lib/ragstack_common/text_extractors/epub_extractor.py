@@ -12,7 +12,6 @@ import ebooklib
 from ebooklib import epub
 
 from .base import BaseExtractor, ExtractionResult
-from .html_extractor import HtmlExtractor
 
 
 class EpubExtractor(BaseExtractor):
@@ -23,10 +22,6 @@ class EpubExtractor(BaseExtractor):
     - Extract chapters in reading order
     - Convert chapter HTML to markdown
     """
-
-    def __init__(self) -> None:
-        """Initialize extractor with HTML converter."""
-        self._html_extractor = HtmlExtractor()
 
     def extract(self, content: bytes, filename: str) -> ExtractionResult:
         """Extract text content from EPUB file bytes.

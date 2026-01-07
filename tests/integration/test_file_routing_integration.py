@@ -63,6 +63,7 @@ def setup_mocked_aws():
     return s3, dynamodb
 
 
+@pytest.mark.integration
 class TestFileRoutingIntegration:
     """Integration tests for file type routing logic."""
 
@@ -224,6 +225,7 @@ Bob,25,LA"""
         assert result["detectedType"] == "image"
 
 
+@pytest.mark.integration
 class TestEndToEndTextProcessing:
     """End-to-end tests simulating full Step Functions flow."""
 

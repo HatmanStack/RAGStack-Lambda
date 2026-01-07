@@ -48,8 +48,10 @@ def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     if not s3_uri.startswith("s3://"):
         raise ValueError(f"Invalid S3 URI: {s3_uri}")
     path = s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-    return bucket, key
+    parts = path.split("/", 1)
+    if len(parts) < 2 or not parts[1]:
+        raise ValueError(f"S3 URI must include a key/path: {s3_uri}")
+    return parts[0], parts[1]
 
 
 def _extract_filename(input_s3_uri: str) -> str:

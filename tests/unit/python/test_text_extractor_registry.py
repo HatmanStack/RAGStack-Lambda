@@ -18,6 +18,31 @@ from tests.fixtures.text_extractor_samples import (
     XML_SIMPLE,
 )
 
+# Guard optional imports for binary format tests
+try:
+    from docx import Document
+
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+    Document = None
+
+try:
+    from openpyxl import Workbook
+
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+    Workbook = None
+
+try:
+    from ebooklib import epub
+
+    HAS_EBOOKLIB = True
+except ImportError:
+    HAS_EBOOKLIB = False
+    epub = None
+
 
 class TestExtractTextFunction:
     """Tests for the main extract_text() function."""
@@ -93,8 +118,8 @@ class TestExtractTextBinaryFormats:
 
     def _create_minimal_docx(self) -> bytes:
         """Create minimal DOCX for testing."""
-        from docx import Document
-
+        if not HAS_DOCX:
+            pytest.skip("python-docx not installed")
         doc = Document()
         doc.add_paragraph("Test content")
         buffer = io.BytesIO()
@@ -103,8 +128,8 @@ class TestExtractTextBinaryFormats:
 
     def _create_minimal_xlsx(self) -> bytes:
         """Create minimal XLSX for testing."""
-        from openpyxl import Workbook
-
+        if not HAS_OPENPYXL:
+            pytest.skip("openpyxl not installed")
         wb = Workbook()
         ws = wb.active
         ws.append(["Header"])
@@ -115,8 +140,8 @@ class TestExtractTextBinaryFormats:
 
     def _create_minimal_epub(self) -> bytes:
         """Create minimal EPUB for testing."""
-        from ebooklib import epub
-
+        if not HAS_EBOOKLIB:
+            pytest.skip("ebooklib not installed")
         book = epub.EpubBook()
         book.set_identifier("test-id")
         book.set_title("Test Book")
@@ -131,6 +156,7 @@ class TestExtractTextBinaryFormats:
         epub.write_epub(buffer, book)
         return buffer.getvalue()
 
+    @pytest.mark.skipif(not HAS_DOCX, reason="python-docx not installed")
     def test_extracts_docx(self):
         """Test extraction of DOCX via extract_text."""
         docx_bytes = self._create_minimal_docx()
@@ -138,6 +164,7 @@ class TestExtractTextBinaryFormats:
 
         assert result.file_type == "docx"
 
+    @pytest.mark.skipif(not HAS_OPENPYXL, reason="openpyxl not installed")
     def test_extracts_xlsx(self):
         """Test extraction of XLSX via extract_text."""
         xlsx_bytes = self._create_minimal_xlsx()
@@ -145,6 +172,7 @@ class TestExtractTextBinaryFormats:
 
         assert result.file_type == "xlsx"
 
+    @pytest.mark.skipif(not HAS_EBOOKLIB, reason="ebooklib not installed")
     def test_extracts_epub(self):
         """Test extraction of EPUB via extract_text."""
         epub_bytes = self._create_minimal_epub()
