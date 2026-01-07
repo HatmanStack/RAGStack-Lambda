@@ -1,0 +1,1 @@
+# DetectFileType Lambda package

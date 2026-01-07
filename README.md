@@ -20,7 +20,7 @@ Serverless document processing with AI chat. Upload documents, extract text with
 
 - ☁️ Fully serverless architecture (Lambda, Step Functions, S3, DynamoDB)
 - 🧠 **NEW** Amazon Nova multimodal embeddings for text and image vectorization
-- 📄 Document processing & vectorization (PDF, images, Office docs) → stored in managed knowledge base
+- 📄 Document processing & vectorization (PDF, images, Office docs, HTML, CSV, JSON, XML, EML, EPUB) → stored in managed knowledge base
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
 - 🔍 **NEW** Metadata filtering - auto-discover document metadata and filter search results
@@ -150,7 +150,15 @@ Upload → OCR → Embeddings → Bedrock KB
 ## Usage
 
 ### Documents
-Upload PDF, DOCX, XLSX, TXT, MD. Processing: UPLOADED → PROCESSING → INDEXED (2-15 min)
+Upload documents in various formats. Auto-detection routes to optimal processor:
+
+| Type | Formats | Processing |
+|------|---------|------------|
+| **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct extraction with smart analysis |
+| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP | Textract or Bedrock vision OCR |
+| **Passthrough** | Markdown (.md) | Direct copy |
+
+Processing time: UPLOADED → PROCESSING → INDEXED (typically 1-5 min for text, 2-15 min for OCR)
 
 ### Images
 Upload JPG, PNG, GIF, WebP with captions. Both visual content and caption text are searchable.

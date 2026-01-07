@@ -29,3 +29,8 @@ moto[s3,dynamodb,stepfunctions]>=5.0.0
 
 # Code quality
 ruff==0.14.2  # Pinned for consistent linting behavior across team/CI
+
+# Text extraction (for ragstack_common.text_extractors)
+ebooklib>=0.18      # EPUB extraction
+python-docx>=1.1    # DOCX extraction
+openpyxl>=3.1       # XLSX extraction
