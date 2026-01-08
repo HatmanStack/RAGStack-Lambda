@@ -19,6 +19,10 @@ Handles:
 - deleteImage
 - deleteDocuments
 - analyzeMetadata
+- getMetadataStats
+- getFilterExamples
+- getKeyLibrary
+- checkKeySimilarity
 """
 
 import json
@@ -35,6 +39,7 @@ from botocore.exceptions import ClientError
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
+from ragstack_common.key_library import KeyLibrary
 from ragstack_common.scraper import ScrapeStatus
 
 logger = logging.getLogger()
@@ -137,6 +142,8 @@ def lambda_handler(event, context):
         "analyzeMetadata": analyze_metadata,
         "getMetadataStats": get_metadata_stats,
         "getFilterExamples": get_filter_examples,
+        "getKeyLibrary": get_key_library,
+        "checkKeySimilarity": check_key_similarity,
     }
 
     resolver = resolvers.get(field_name)
@@ -1796,4 +1803,128 @@ def get_filter_examples(args):
             "totalExamples": 0,
             "lastGenerated": None,
             "error": str(e),
+        }
+
+
+def get_key_library(args):
+    """
+    Get active metadata keys from the key library.
+
+    Returns list of keys for use in manual mode key selection.
+
+    Returns:
+        List of MetadataKey objects with key names and metadata
+    """
+    logger.info("Getting key library")
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        logger.warning("METADATA_KEY_LIBRARY_TABLE not configured")
+        return []
+
+    try:
+        table = dynamodb.Table(METADATA_KEY_LIBRARY_TABLE)
+
+        # Scan all keys from the library
+        all_items = []
+        scan_kwargs: dict = {}
+
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get("Items", []))
+
+            if "LastEvaluatedKey" not in response:
+                break
+            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        # Filter to only active keys and format for GraphQL
+        keys = []
+        for item in all_items:
+            status = item.get("status", "active")
+            if status != "active":
+                continue
+
+            keys.append(
+                {
+                    "keyName": item.get("key_name", ""),
+                    "dataType": item.get("data_type", "string"),
+                    "occurrenceCount": int(item.get("occurrence_count", 0)),
+                    "sampleValues": item.get("sample_values", [])[:5],
+                    "status": status,
+                }
+            )
+
+        # Sort by occurrence count descending
+        keys.sort(key=lambda x: x["occurrenceCount"], reverse=True)
+
+        logger.info(f"Retrieved {len(keys)} active keys from library")
+        return keys
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error getting key library: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error in get_key_library: {e}")
+        return []
+
+
+def check_key_similarity(args):
+    """
+    Check if a proposed key is similar to existing keys.
+
+    Helps prevent duplicate or inconsistent key names by suggesting
+    existing keys that are similar to what the user is proposing.
+
+    Args:
+        args: Dictionary containing:
+            - keyName: The proposed key name to check
+            - threshold: Optional similarity threshold (0-1, default 0.8)
+
+    Returns:
+        KeySimilarityResult with proposedKey, similarKeys, and hasSimilar
+    """
+    key_name = args.get("keyName", "")
+    threshold = args.get("threshold", 0.8)
+
+    logger.info(f"Checking similarity for key: {key_name}")
+
+    if not key_name:
+        raise ValueError("keyName is required")
+
+    # Validate threshold
+    if threshold < 0 or threshold > 1:
+        raise ValueError("threshold must be between 0 and 1")
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        logger.warning("METADATA_KEY_LIBRARY_TABLE not configured")
+        return {
+            "proposedKey": key_name,
+            "similarKeys": [],
+            "hasSimilar": False,
+        }
+
+    try:
+        key_library = KeyLibrary(table_name=METADATA_KEY_LIBRARY_TABLE)
+        similar_keys = key_library.check_key_similarity(key_name, threshold=threshold)
+
+        logger.info(f"Found {len(similar_keys)} similar keys for '{key_name}'")
+
+        return {
+            "proposedKey": key_name,
+            "similarKeys": similar_keys,
+            "hasSimilar": len(similar_keys) > 0,
+        }
+
+    except ClientError as e:
+        logger.error(f"DynamoDB error checking key similarity: {e}")
+        return {
+            "proposedKey": key_name,
+            "similarKeys": [],
+            "hasSimilar": False,
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in check_key_similarity: {e}")
+        return {
+            "proposedKey": key_name,
+            "similarKeys": [],
+            "hasSimilar": False,
         }

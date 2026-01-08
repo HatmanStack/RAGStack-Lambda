@@ -68,7 +68,7 @@ def get_metadata_extractor() -> MetadataExtractor:
     """
     Get or create MetadataExtractor singleton.
 
-    Uses configuration options for model ID and max keys.
+    Uses configuration options for model ID, max keys, extraction mode, and manual keys.
     """
     global _metadata_extractor
     if _metadata_extractor is None:
@@ -76,15 +76,26 @@ def get_metadata_extractor() -> MetadataExtractor:
         config = get_config_manager()
         model_id = None
         max_keys = None
+        extraction_mode = "auto"
+        manual_keys = None
 
         if config:
             model_id = config.get_parameter("metadata_extraction_model")
             max_keys = config.get_parameter("metadata_max_keys")
+            extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+            manual_keys = config.get_parameter("metadata_manual_keys")
+
+        # Log the extraction mode configuration
+        logger.info(
+            f"Creating MetadataExtractor with mode: {extraction_mode}, manual_keys: {manual_keys}"
+        )
 
         _metadata_extractor = MetadataExtractor(
             key_library=get_key_library(),
             model_id=model_id,
             max_keys=max_keys if max_keys else 8,
+            extraction_mode=extraction_mode,
+            manual_keys=manual_keys,
         )
     return _metadata_extractor
 

@@ -372,3 +372,90 @@ def test_get_library_stats_table_not_exists(mock_dynamodb_resource):
         result = library.get_library_stats()
 
     assert result["total_keys"] == 0
+
+
+# Test: check_key_similarity
+
+
+def test_check_key_similarity_exact_match(key_library, mock_dynamodb_table):
+    """Test similarity check with exact match."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "topic", "status": "active", "occurrence_count": 100},
+            {"key_name": "location", "status": "active", "occurrence_count": 50},
+        ]
+    }
+
+    result = key_library.check_key_similarity("topic")
+
+    assert len(result) == 1
+    assert result[0]["keyName"] == "topic"
+    assert result[0]["similarity"] == 1.0
+
+
+def test_check_key_similarity_partial_match(key_library, mock_dynamodb_table):
+    """Test similarity check with partial match."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "document_type", "status": "active", "occurrence_count": 100},
+            {"key_name": "doc_type", "status": "active", "occurrence_count": 50},
+        ]
+    }
+
+    # "doc_type" should match "doc_type" exactly and be similar to "document_type"
+    result = key_library.check_key_similarity("doc_type", threshold=0.6)
+
+    assert len(result) >= 1
+    assert any(k["keyName"] == "doc_type" for k in result)
+
+
+def test_check_key_similarity_no_matches(key_library, mock_dynamodb_table):
+    """Test similarity check with no matches."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "topic", "status": "active", "occurrence_count": 100},
+            {"key_name": "location", "status": "active", "occurrence_count": 50},
+        ]
+    }
+
+    # Very different key should have no matches at high threshold
+    result = key_library.check_key_similarity("xyzabc", threshold=0.8)
+
+    assert len(result) == 0
+
+
+def test_check_key_similarity_empty_library(key_library, mock_dynamodb_table):
+    """Test similarity check with empty library."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.check_key_similarity("topic")
+
+    assert result == []
+
+
+def test_check_key_similarity_normalizes_input(key_library, mock_dynamodb_table):
+    """Test that input key is normalized before comparison."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "document_type", "status": "active", "occurrence_count": 100},
+        ]
+    }
+
+    # Hyphenated and spaced input should match underscore version
+    result = key_library.check_key_similarity("document-type", threshold=0.9)
+
+    assert len(result) == 1
+    assert result[0]["keyName"] == "document_type"
+
+
+def test_check_key_similarity_returns_top_5(key_library, mock_dynamodb_table):
+    """Test that only top 5 matches are returned."""
+    # Create 10 similar keys
+    items = [
+        {"key_name": f"topic{i}", "status": "active", "occurrence_count": i * 10} for i in range(10)
+    ]
+    mock_dynamodb_table.scan.return_value = {"Items": items}
+
+    result = key_library.check_key_similarity("topic", threshold=0.5)
+
+    assert len(result) <= 5

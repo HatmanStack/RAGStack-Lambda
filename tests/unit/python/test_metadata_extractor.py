@@ -476,3 +476,152 @@ def test_extract_from_caption_empty(extractor, mock_bedrock_client):
 
     assert result == {}
     mock_bedrock_client.invoke_model.assert_not_called()
+
+
+# Test: Manual Mode Support
+
+
+@pytest.fixture
+def manual_mode_extractor(mock_bedrock_client, mock_key_library):
+    """Create a MetadataExtractor in manual mode."""
+    return MetadataExtractor(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+        extraction_mode="manual",
+        manual_keys=["topic", "document_type"],
+    )
+
+
+def test_init_with_manual_mode(mock_bedrock_client, mock_key_library):
+    """Test MetadataExtractor initialization with manual mode."""
+    extractor = MetadataExtractor(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+        extraction_mode="manual",
+        manual_keys=["topic", "location"],
+    )
+    assert extractor.extraction_mode == "manual"
+    assert extractor.manual_keys == ["topic", "location"]
+
+
+def test_init_defaults_to_auto_mode(mock_bedrock_client, mock_key_library):
+    """Test MetadataExtractor defaults to auto mode."""
+    extractor = MetadataExtractor(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+    )
+    assert extractor.extraction_mode == "auto"
+    assert extractor.manual_keys is None
+
+
+def test_manual_mode_extracts_only_specified_keys(
+    manual_mode_extractor, mock_bedrock_client, sample_document_text
+):
+    """Test that manual mode filters out keys not in manual_keys list."""
+    import json
+
+    # LLM returns extra keys that should be filtered out
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {
+            "topic": "immigration",
+            "document_type": "ship_manifest",
+            "extra_key": "should_be_filtered",
+            "location": "should_also_be_filtered",
+        }
+    )
+
+    result = manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
+
+    assert "topic" in result
+    assert "document_type" in result
+    assert "extra_key" not in result
+    assert "location" not in result
+
+
+def test_manual_mode_skips_non_applicable_keys(
+    manual_mode_extractor, mock_bedrock_client, sample_document_text
+):
+    """Test that manual mode accepts subset of keys when LLM returns fewer."""
+    import json
+
+    # LLM only returns one of the requested keys
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {"topic": "immigration"}
+    )
+
+    result = manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
+
+    assert result == {"topic": "immigration"}
+
+
+def test_manual_mode_empty_keys_returns_empty(
+    mock_bedrock_client, mock_key_library, sample_document_text
+):
+    """Test that empty manual_keys list results in empty metadata."""
+    import json
+
+    extractor = MetadataExtractor(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+        extraction_mode="manual",
+        manual_keys=[],
+    )
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {"topic": "immigration", "location": "NYC"}
+    )
+
+    result = extractor.extract_metadata(sample_document_text, "doc-123")
+
+    assert result == {}
+
+
+def test_manual_mode_uses_different_prompt(
+    manual_mode_extractor, mock_bedrock_client, sample_document_text
+):
+    """Test that manual mode uses a different system prompt."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({"topic": "test"})
+
+    manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
+
+    call_args = mock_bedrock_client.invoke_model.call_args
+    system_prompt = call_args.kwargs["system_prompt"]
+
+    # Manual mode should have specific instructions about extracting only specified keys
+    assert "ONLY" in system_prompt or "only" in system_prompt
+    assert "topic" in system_prompt or "FIELDS TO EXTRACT" in system_prompt
+
+
+def test_auto_mode_unchanged(extractor, mock_bedrock_client, sample_document_text):
+    """Test that auto mode behavior is unchanged."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {"topic": "immigration", "location": "NYC", "date_range": "1900-1910"}
+    )
+
+    result = extractor.extract_metadata(sample_document_text, "doc-123")
+
+    # All keys should be present in auto mode
+    assert "topic" in result
+    assert "location" in result
+    assert "date_range" in result
+
+
+def test_manual_mode_prompt_includes_specified_keys(
+    manual_mode_extractor, mock_bedrock_client, sample_document_text
+):
+    """Test that manual mode system prompt includes the specified keys."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({"topic": "test"})
+
+    manual_mode_extractor.extract_metadata(sample_document_text, "doc-123")
+
+    call_args = mock_bedrock_client.invoke_model.call_args
+    system_prompt = call_args.kwargs["system_prompt"]
+
+    # The system prompt should mention the keys to extract
+    assert "topic" in system_prompt.lower()
+    assert "document_type" in system_prompt.lower()

@@ -361,3 +361,86 @@ class KeyLibrary:
         except ClientError:
             logger.exception("Error getting library stats")
             raise
+
+    def check_key_similarity(
+        self,
+        proposed_key: str,
+        threshold: float = 0.8,
+    ) -> list[dict[str, Any]]:
+        """
+        Check if a proposed key is similar to existing keys.
+
+        Uses string similarity to suggest existing keys that the user
+        might want to use instead of creating a new one.
+
+        Args:
+            proposed_key: The key name being proposed.
+            threshold: Minimum similarity score (0-1) to include in results.
+                      Default 0.8 means 80% similar or higher.
+
+        Returns:
+            List of similar keys with format:
+            [
+                {
+                    "keyName": "existing_key",
+                    "similarity": 0.92,
+                    "occurrenceCount": 47
+                }
+            ]
+        """
+        active_keys = self.get_active_keys()
+        if not active_keys:
+            return []
+
+        similar_keys = []
+        proposed_lower = proposed_key.lower().replace("-", "_").replace(" ", "_")
+
+        for key in active_keys:
+            existing_name = key.get("key_name", "")
+            existing_lower = existing_name.lower()
+
+            # Calculate similarity using sequence matching
+            similarity = _calculate_similarity(proposed_lower, existing_lower)
+
+            if similarity >= threshold:
+                similar_keys.append(
+                    {
+                        "keyName": existing_name,
+                        "similarity": round(similarity, 2),
+                        "occurrenceCount": int(key.get("occurrence_count", 0)),
+                    }
+                )
+
+        # Sort by similarity descending
+        similar_keys.sort(key=lambda x: x["similarity"], reverse=True)
+
+        logger.debug(
+            f"Found {len(similar_keys)} keys similar to '{proposed_key}' (threshold: {threshold})"
+        )
+        return similar_keys[:5]  # Return top 5 matches
+
+
+def _calculate_similarity(s1: str, s2: str) -> float:
+    """
+    Calculate string similarity using Levenshtein-like ratio.
+
+    Uses difflib's SequenceMatcher which computes a ratio of matching
+    characters to total characters.
+
+    Args:
+        s1: First string.
+        s2: Second string.
+
+    Returns:
+        Similarity ratio between 0 and 1.
+    """
+    from difflib import SequenceMatcher
+
+    if not s1 or not s2:
+        return 0.0
+
+    # Exact match check first
+    if s1 == s2:
+        return 1.0
+
+    return SequenceMatcher(None, s1, s2).ratio()
