@@ -130,7 +130,7 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}
       >
-        <div style={{ overflowX: 'auto', minWidth: 0 }}>
+        <div style={{ overflowX: 'scroll', minWidth: 0, paddingBottom: 8 }}>
         <Table
           loading={loading}
           loadingText="Loading filter examples..."
