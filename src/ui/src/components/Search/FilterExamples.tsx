@@ -45,9 +45,8 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<FilterExample | null>(null);
 
-  // If no enabledExamples provided, default all to enabled
-  const isEnabled = (name: string) =>
-    enabledExamples.length === 0 || enabledExamples.includes(name);
+  // Check if example is enabled (in the enabled list)
+  const isEnabled = (name: string) => enabledExamples.includes(name);
 
   const enabledCount = examples.filter(e => isEnabled(e.name)).length;
 
@@ -131,7 +130,7 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}
       >
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', minWidth: 0 }}>
         <Table
           loading={loading}
           loadingText="Loading filter examples..."

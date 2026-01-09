@@ -90,7 +90,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', minWidth: 0 }}>
         <Table
           loading={loading}
           loadingText="Loading metadata keys..."
@@ -107,7 +107,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               id: 'dataType',
               header: 'Type',
               cell: (item) => getDataTypeBadge(item.dataType),
-              width: 140,
+              minWidth: 100,
             },
             {
               id: 'occurrenceCount',
