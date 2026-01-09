@@ -168,7 +168,7 @@ def resize_image(
         img_byte_array = io.BytesIO()
         save_format = (
             original_format
-            if original_format in ["JPEG", "PNG", "GIF", "BMP", "TIFF", "WEBP"]
+            if original_format in ["JPEG", "PNG", "GIF", "BMP", "TIFF", "WEBP", "AVIF"]
             else "JPEG"
         )
 
@@ -199,7 +199,15 @@ def prepare_bedrock_image_attachment(image_data: bytes) -> dict[str, Any]:
     image = Image.open(io.BytesIO(image_data))
     format_mapping = {"JPEG": "jpeg", "PNG": "png", "GIF": "gif", "WEBP": "webp"}
     detected_format = format_mapping.get(image.format)
-    if not detected_format:
+
+    # AVIF not supported by Bedrock - convert to PNG
+    if image.format == "AVIF":
+        logger.info("Converting AVIF to PNG for Bedrock API")
+        img_byte_array = io.BytesIO()
+        image.save(img_byte_array, format="PNG")
+        image_data = img_byte_array.getvalue()
+        detected_format = "png"
+    elif not detected_format:
         raise ValueError(f"Unsupported image format: {image.format}")
 
     logger.info(f"Detected image format: {detected_format}")

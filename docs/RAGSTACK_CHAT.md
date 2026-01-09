@@ -26,7 +26,24 @@ Use the chat in Vue, Angular, Svelte, or vanilla JavaScript:
 </script>
 ```
 
-**Get CDN URL:** Deployment outputs this URL after running `publish.py`
+**Get CDN URL:** Dashboard → Chat tab → Embed Chat Widget section
+
+## Dashboard Chat Tab
+
+The Chat tab in the admin dashboard provides:
+
+### System Prompt Editor
+Customize the AI assistant's behavior by editing the system prompt. Changes apply immediately to new conversations.
+
+**Location:** Chat tab → System Prompt (expandable section)
+
+### Embed Code Generator
+Get ready-to-use embed code with your CDN URL pre-filled:
+
+- **Basic (Public):** For unauthenticated access
+- **Authenticated:** Includes user-id and user-token attributes with example JavaScript
+
+**Location:** Chat tab → Embed Chat Widget (expandable section)
 
 ## Quick Start - React Component
 
@@ -57,9 +74,13 @@ export function App() {
 |------|------|---------|-------------|
 | `conversationId` | string | `"default"` | Unique conversation ID |
 | `headerText` | string | `"Document Q&A"` | Header title |
-| `headerSubtitle` | string | `""` | Header subtitle |
+| `headerSubtitle` | string | `"Ask questions about your documents"` | Header subtitle |
+| `inputPlaceholder` | string | `"Ask a question..."` | Input field placeholder |
 | `showSources` | boolean | `true` | Show/hide sources |
 | `maxWidth` | string | `"100%"` | Component width |
+| `userId` | string \| null | `null` | User ID for authenticated mode |
+| `userToken` | string \| null | `null` | Auth token for authenticated mode |
+| `className` | string | - | Additional CSS class |
 | `onSendMessage` | function | - | Callback when user sends message |
 | `onResponseReceived` | function | - | Callback when AI responds |
 

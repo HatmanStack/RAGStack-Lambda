@@ -181,15 +181,130 @@ Get a presigned URL to upload a document.
 |-----------|------|----------|-------------|
 | `filename` | string | Yes | Name of the file (e.g., 'report.pdf') |
 
+### upload_image_url
+
+Get a presigned URL to upload an image (step 1 of image upload workflow).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `filename` | string | Yes | Name of the image file (e.g., 'photo.jpg') |
+
+Supported formats: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF
+
+### generate_image_caption
+
+Generate an AI caption for an uploaded image using a vision model (step 2, optional).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `s3_uri` | string | Yes | S3 URI returned by upload_image_url |
+
+### submit_image
+
+Finalize an image upload and trigger indexing (step 3).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `image_id` | string | Yes | - | Image ID from upload_image_url |
+| `caption` | string | No | null | Primary caption |
+| `user_caption` | string | No | null | User-provided caption |
+| `ai_caption` | string | No | null | AI-generated caption |
+
+---
+
+## Configuration Tools (Read-Only)
+
+### get_configuration
+
+Get all current RAGStack configuration settings organized by category.
+
+Returns settings for:
+- **Chat:** Models, quotas, system prompt, document access
+- **Metadata Extraction:** Enabled, model, mode (auto/manual), max keys
+- **Query-Time Filtering:** Filter generation, multi-slice retrieval settings
+- **Public Access:** Which endpoints allow unauthenticated access
+- **Document Processing:** OCR backend, image caption prompt
+- **Budget:** Alert thresholds
+
+**Note:** Read-only. To modify settings, use the admin dashboard (Cognito auth required).
+
+---
+
+## Metadata Analysis Tools
+
+These tools help understand and optimize metadata extraction and filtering.
+
+### get_metadata_stats
+
+Get statistics about metadata keys extracted from documents.
+
+Returns key names, data types, occurrence counts, sample values, and status.
+
+### get_filter_examples
+
+Get AI-generated filter examples for metadata-based search queries.
+
+Returns filter patterns with name, description, use case, and JSON filter syntax.
+
+**Filter syntax reference:**
+- Basic operators: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists`
+- Logical operators: `$and`, `$or`
+- Example: `{"topic": {"$eq": "genealogy"}}`
+
+### get_key_library
+
+Get the complete metadata key library with all discovered keys.
+
+Returns all keys available for filtering with data types and sample values.
+
+### check_key_similarity
+
+Check if a proposed metadata key is similar to existing keys.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `key_name` | string | Yes | - | Proposed key name to check |
+| `threshold` | float | No | 0.8 | Similarity threshold (0.0-1.0) |
+
+Use this before adding documents with new keys to avoid duplicates.
+
+### analyze_metadata
+
+Trigger metadata analysis to discover keys and generate filter examples.
+
+**Note:** This is a long-running operation (1-2 minutes). It samples up to 1000 vectors and uses LLM analysis.
+
+Run this after ingesting new documents or when filter generation isn't working as expected.
+
+---
+
 ## Usage Examples
 
 Once configured, just ask your AI assistant naturally:
 
+**Search & Chat:**
 - "Search my knowledge base for authentication best practices"
 - "What does our documentation say about API rate limits?"
+
+**Web Scraping:**
 - "Scrape the React docs at react.dev/reference"
 - "Check the status of my scrape job"
+
+**Document & Image Upload:**
 - "Upload a new document called quarterly-report.pdf"
+- "Upload this image and generate a caption for it"
+
+**Metadata Analysis:**
+- "What metadata keys are available for filtering?"
+- "Analyze the metadata in my knowledge base"
+- "Show me the filter examples"
+- "Check if 'author' is similar to any existing keys"
+
+**Configuration:**
+- "What are my current RAGStack settings?"
+- "What model is being used for chat?"
+- "Is multi-slice retrieval enabled?"
+- "What are my quota limits?"
 
 ## Environment Variables
 

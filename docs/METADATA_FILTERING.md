@@ -10,10 +10,12 @@ Metadata filtering allows you to narrow down search results using document attri
 
 ### 1. Metadata Extraction (During Ingestion)
 
-When documents are ingested, the system:
-- Extracts metadata using LLM-based classification
-- Assigns values for keys like `topic`, `document_type`, `date_range`
-- Stores metadata as inline attributes with each vector
+When documents are ingested, an LLM analyzes the content to extract structured metadata:
+
+- **Auto mode** (default): LLM decides which fields to extract based on content
+- **Manual mode**: Only extracts keys you specify in `metadata_manual_keys`
+
+Common extracted fields include `topic`, `document_type`, `date_range`, `location`. Metadata is stored with each document's vectors for filtered retrieval.
 
 ### 2. Metadata Analysis
 
@@ -31,11 +33,11 @@ After analysis, an LLM generates practical filter examples:
 - Uses S3 Vectors-compatible filter syntax
 - Creates 5-8 examples with names, descriptions, and use cases
 
-## Using the Search Tab UI
+## Using the Settings Tab UI
 
 ### Metadata Analysis Panel
 
-The Search tab includes a **Metadata Analysis** panel with:
+The Settings tab includes a **Metadata Analysis** panel with:
 
 1. **Analyze Button** - Triggers metadata analysis
 2. **Metadata Key Statistics** (expandable) - Shows discovered keys
@@ -43,10 +45,11 @@ The Search tab includes a **Metadata Analysis** panel with:
 
 ### Running Analysis
 
-1. Navigate to the **Search** tab
-2. Click **Analyze Metadata** button
-3. Wait for analysis to complete (typically 1-2 minutes)
-4. View results in the expandable sections
+1. Navigate to the **Settings** tab
+2. Scroll to the **Metadata Analysis** section
+3. Click **Analyze Metadata** button
+4. Wait for analysis to complete (typically 1-2 minutes)
+5. View results in the expandable sections
 
 ### Understanding Key Statistics
 
@@ -61,12 +64,19 @@ The Search tab includes a **Metadata Analysis** panel with:
 ### Using Filter Examples
 
 Each filter example includes:
+- **Active**: Toggle to enable/disable this example
 - **Name**: Short descriptive title
 - **Description**: What the filter does
 - **Use Case**: When to use this filter
-- **Filter JSON**: The actual filter expression
+- **Filter JSON**: The actual filter expression (click **View** to see)
 
-Click **View Filter** to see the full JSON, or **Apply** to use it.
+### Enabling/Disabling Filter Examples
+
+Filter examples use **few-shot learning** - enabled examples are fed to the LLM as reference patterns when generating filters from user queries.
+
+- **Toggle Active**: Enable examples that match your use case, disable irrelevant ones
+- **Improve accuracy**: Disabling poor examples helps the LLM generate better filters
+- **Re-analysis**: When you run "Analyze Metadata" again, disabled examples are replaced with new ones while enabled examples are preserved
 
 ## Filter Syntax
 
@@ -122,12 +132,16 @@ The following configuration options control metadata filtering:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `filter_generation_enabled` | `true` | Enable/disable automatic filter generation |
-| `filter_generation_model` | Claude Haiku | Model for filter generation |
-| `filter_generation_max_keys` | `8` | Maximum keys to include in prompts |
 | `metadata_extraction_enabled` | `true` | Enable/disable metadata extraction |
-| `metadata_extraction_model` | Claude Haiku | Model for metadata extraction |
+| `metadata_extraction_model` | `claude-haiku-4-5` | Model for metadata extraction |
+| `metadata_extraction_mode` | `auto` | `auto`: LLM decides keys. `manual`: use specified keys |
+| `metadata_manual_keys` | `[]` | Keys to extract in manual mode |
 | `metadata_max_keys` | `8` | Maximum metadata keys per document |
+| `filter_generation_enabled` | `true` | Enable/disable automatic filter generation |
+| `filter_generation_model` | `claude-haiku-4-5` | Model for filter generation |
+| `multislice_enabled` | `true` | Enable parallel filtered/unfiltered queries |
+| `multislice_count` | `2` | Number of parallel retrieval slices (2-4) |
+| `multislice_timeout_ms` | `5000` | Timeout per slice in milliseconds |
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for details on updating these settings.
 

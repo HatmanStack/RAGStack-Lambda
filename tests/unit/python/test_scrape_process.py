@@ -128,7 +128,8 @@ class TestScrapeProcessHandler:
 
         assert result["processed"] == 1
         assert result["failed"] == 0
-        mock_aws["s3"].put_object.assert_called_once()
+        # Now writes 2 files: content + metadata.json
+        assert mock_aws["s3"].put_object.call_count == 2
 
     def test_processed_count_increment(self, mock_aws, _mock_fetcher, _mock_dedup):
         """Test that processed_count is incremented on success."""
@@ -218,12 +219,21 @@ class TestScrapeProcessHandler:
 
         module.lambda_handler(event, None)
 
-        call_args = mock_aws["s3"].put_object.call_args
-        assert call_args is not None
-        s3_key = call_args.kwargs.get("Key") or call_args[1].get("Key")
+        # Now writes 2 files: first is markdown, second is metadata.json
+        call_args_list = mock_aws["s3"].put_object.call_args_list
+        assert len(call_args_list) == 2
+
+        # First call should be the markdown file
+        md_call = call_args_list[0]
+        s3_key = md_call.kwargs.get("Key") or md_call[1].get("Key")
         assert s3_key.endswith(".scraped.md")
-        content_type = call_args.kwargs.get("ContentType") or call_args[1].get("ContentType")
+        content_type = md_call.kwargs.get("ContentType") or md_call[1].get("ContentType")
         assert content_type == "text/markdown"
+
+        # Second call should be the metadata file
+        meta_call = call_args_list[1]
+        meta_key = meta_call.kwargs.get("Key") or meta_call[1].get("Key")
+        assert meta_key.endswith(".metadata.json")
 
 
 class TestUrlStatusUpdates:

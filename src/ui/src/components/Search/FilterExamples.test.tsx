@@ -135,8 +135,12 @@ describe('FilterExamples', () => {
       />
     );
 
-    // Should have 3 toggle controls
-    const toggles = screen.getAllByRole('switch');
+    // Expand the section first (it's collapsed by default)
+    const expandButton = screen.getByRole('button', { expanded: false });
+    fireEvent.click(expandButton);
+
+    // Should have 3 toggle controls (Cloudscape Toggle uses checkbox role)
+    const toggles = screen.getAllByRole('checkbox');
     expect(toggles.length).toBe(3);
   });
 
@@ -155,7 +159,11 @@ describe('FilterExamples', () => {
       />
     );
 
-    const toggles = screen.getAllByRole('switch');
+    // Expand the section first (it's collapsed by default)
+    const expandButton = screen.getByRole('button', { expanded: false });
+    fireEvent.click(expandButton);
+
+    const toggles = screen.getAllByRole('checkbox');
     fireEvent.click(toggles[0]);
 
     expect(onToggleExample).toHaveBeenCalledWith('Genealogy Documents', false);

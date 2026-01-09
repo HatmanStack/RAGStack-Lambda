@@ -126,7 +126,7 @@ Start URL → Discovery Queue → Process Queue → S3 → Knowledge Base
 
 ## Deduplication
 
-Content is hashed. Re-scraping skips unchanged pages unless "Force Rescrape" is enabled.
+Content is hashed using SHA-256. Re-scraping skips unchanged pages (hash match) unless "Force Rescrape" is enabled.
 
 ## Real-time Updates
 

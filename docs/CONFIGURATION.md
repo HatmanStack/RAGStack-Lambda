@@ -1,6 +1,6 @@
 # Configuration
 
-All settings are stored in DynamoDB and apply immediately without redeployment.
+All settings are stored in DynamoDB. Changes are read on each Lambda request (no caching), so updates apply immediately without redeployment.
 
 ## Settings UI
 
@@ -105,19 +105,34 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `ocr_backend` | textract, bedrock | textract | Textract is faster and cheaper |
 | `bedrock_ocr_model_id` | Claude model ID | haiku | Only used when ocr_backend=bedrock |
 
+## Image Processing
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `image_caption_prompt` | string | (default prompt) | System prompt for image caption generation |
+
 ## Metadata Extraction
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
-| `metadata_extraction_model` | Model ARN | claude-3-5-haiku | Model for metadata extraction |
-| `metadata_max_keys` | number | 8 | Maximum metadata fields to extract per document |
+| `metadata_extraction_model` | See options below | claude-haiku-4-5 | Model for metadata extraction |
+| `metadata_max_keys` | number | 8 | Maximum metadata fields per document |
+| `metadata_extraction_mode` | auto, manual | auto | Auto: LLM decides keys. Manual: use specified keys only |
+| `metadata_manual_keys` | string[] | [] | Keys to extract in manual mode |
+
+**Extraction model options:**
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
+- `us.anthropic.claude-3-5-haiku-20241022-v1:0`
+- `us.amazon.nova-micro-v1:0`
+- `us.amazon.nova-lite-v1:0`
 
 **How it works:**
-1. Documents are analyzed by an LLM to extract structured metadata
-2. Extracted fields like `topic`, `document_type`, `date_range`, `location` are stored
-3. Base metadata (document_id, filename, file_type) is always included
-4. Metadata enables filtered searches and better organization
+1. During document ingestion, content is analyzed by an LLM
+2. LLM extracts structured metadata fields (e.g., `topic`, `document_type`, `date_range`, `location`)
+3. Extracted metadata is stored with the document vectors for filtered retrieval
+4. **Auto mode:** LLM decides which keys to extract based on content
+5. **Manual mode:** Only extracts keys you specify in `metadata_manual_keys`
 
 **Cost considerations:**
 - Each document incurs one additional LLM call (~100 tokens input, ~50 tokens output)
@@ -129,31 +144,22 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `filter_generation_enabled` | boolean | true | Enable LLM-based filter generation from queries |
-| `filter_generation_model` | Model ARN | claude-3-5-haiku | Model for filter generation |
+| `filter_generation_model` | See options below | claude-haiku-4-5 | Model for filter generation |
 | `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
 | `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
 | `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
-| `metadata_filter_examples` | array | [] | Filter examples for few-shot learning |
+
+**Filter generation model options:**
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
+- `us.anthropic.claude-3-5-haiku-20241022-v1:0`
+
+**Filter examples:** Managed via Settings → Metadata Analysis panel. Run "Analyze Metadata" to generate examples, then enable/disable individual examples to control few-shot learning patterns. See [METADATA_FILTERING.md](./METADATA_FILTERING.md) for details.
 
 **How it works:**
 1. User query is analyzed by LLM to detect filter intent
 2. If filter intent detected, generates S3 Vectors compatible filter
 3. Multi-slice retrieval runs filtered + unfiltered queries in parallel
 4. Results are deduplicated and merged by relevance score
-
-**Filter examples format:**
-```json
-[
-  {
-    "query": "show me PDFs about genealogy",
-    "filter": {"$and": [{"document_type": {"$eq": "pdf"}}, {"topic": {"$eq": "genealogy"}}]}
-  },
-  {
-    "query": "documents from the 1900s",
-    "filter": {"date_range": {"$eq": "1900-1950"}}
-  }
-]
-```
 
 **Performance notes:**
 - Filter generation adds ~100-200ms latency
@@ -164,11 +170,23 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
-| `chat_primary_model` | Model ARN | claude-haiku | Model for chat responses |
-| `chat_fallback_model` | Model ARN | nova-micro | Used when quota exceeded |
+| `chat_primary_model` | See options below | claude-haiku-4-5 | Model for chat responses |
+| `chat_fallback_model` | See options below | nova-micro | Used when quota exceeded |
 | `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |
 | `chat_per_user_quota_daily` | number | 100 | Queries/day per authenticated user |
 | `chat_allow_document_access` | boolean | false | Show "View Document" links in sources |
+| `chat_system_prompt` | string | (default prompt) | System prompt for chat responses |
+
+**Primary model options:**
+- `us.anthropic.claude-sonnet-4-20250514-v1:0`
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
+- `us.amazon.nova-pro-v1:0`
+- `us.amazon.nova-lite-v1:0`
+
+**Fallback model options:**
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+- `us.amazon.nova-micro-v1:0` (default)
+- `us.amazon.nova-lite-v1:0`
 
 ## Access Control
 

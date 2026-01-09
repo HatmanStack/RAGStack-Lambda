@@ -182,7 +182,10 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
         metadata = content.get("metadataAttributes", {})
         logger.info(f"Found existing metadata file: {metadata_key} with {len(metadata)} fields")
         return metadata
-    except s3_client.exceptions.NoSuchKey:
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") == "NoSuchKey":
+            return None
+        logger.warning(f"Error checking for existing metadata: {e}")
         return None
     except Exception as e:
         logger.warning(f"Error checking for existing metadata: {e}")

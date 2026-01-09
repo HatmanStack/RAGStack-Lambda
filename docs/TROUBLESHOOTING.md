@@ -18,16 +18,16 @@ Quick reference for common issues and solutions.
 
 | Problem | Symptoms | Solution |
 |---------|----------|----------|
-| Documents stuck in UPLOADED | Not processing | Check EventBridge rule exists. Check Lambda permissions. Check CloudWatch logs: `aws logs tail /aws/lambda/RAGStack-<project>-ProcessDocument` |
+| Documents stuck in UPLOADED | Not processing | Verify EventBridge rule: `aws events list-rules --name-prefix RAGStack-<project>`. Check Lambda logs: `aws logs tail /aws/lambda/RAGStack-<project>-ProcessDocument --follow` |
 | Documents stuck in PROCESSING | Still processing after hours | Lambda timeout (15 min limit). Split document or increase memory. Check Textract concurrency quota. |
-| Documents fail with ERROR | Error in dashboard | Check logs for file format issues. Verify file not corrupted. Some formats need Bedrock OCR. |
+| Documents fail with ERROR | Error in dashboard | Check Lambda logs: `aws logs tail /aws/lambda/RAGStack-<project>-ProcessDocument --follow`. Image-heavy PDFs may need Bedrock OCR (set `ocr_backend` to `bedrock`). |
 | Slow processing | Takes >30 minutes | Text-native PDFs should be faster (~2-5 min). Image-heavy docs slower. Check CloudWatch for bottlenecks. |
 
 ## Knowledge Base Issues
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Chat returns no results | KB not created/synced | Verify KB exists: `aws bedrock-agent list-knowledge-bases`. Check documents are INDEXED status. |
+| Chat returns no results | KB not created/synced | Verify KB: `aws bedrock-agent list-knowledge-bases --query "knowledgeBaseSummaries[?contains(name,'<project>')]"`. Check sync: `aws bedrock-agent list-ingestion-jobs --knowledge-base-id <KB-ID> --data-source-id <DS-ID>`. Verify documents show INDEXED in DynamoDB. |
 | Chat results irrelevant | Query too vague | Try rephrasing query (be more specific). Ensure documents are fully processed. |
 | "Knowledge Base not found" error | KB ID incorrect or missing | Check SAM outputs for Knowledge Base ID. Set in environment variables. Verify KB in Bedrock console. |
 

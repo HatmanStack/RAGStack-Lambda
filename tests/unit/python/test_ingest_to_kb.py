@@ -98,40 +98,6 @@ class TestGetFileTypeFromFilename:
             assert module.get_file_type_from_filename("") == "unknown"
 
 
-class TestGetBaseMetadata:
-    """Tests for get_base_metadata function."""
-
-    def test_returns_required_fields(self, set_env_vars):
-        """Test that base metadata includes required fields."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-
-            doc_item = {"filename": "test.pdf", "total_pages": 5}
-            result = module.get_base_metadata("doc-123", "s3://bucket/output/doc.txt", doc_item)
-
-            assert result["document_id"] == "doc-123"
-            assert result["filename"] == "test.pdf"
-            assert result["file_type"] == "pdf"
-            assert result["s3_uri"] == "s3://bucket/output/doc.txt"
-
-    def test_includes_optional_fields(self, set_env_vars):
-        """Test that optional fields are included when present."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-
-            doc_item = {
-                "filename": "test.pdf",
-                "total_pages": 10,
-                "upload_date": "2024-01-15",
-                "created_at": "2024-01-15T10:00:00Z",
-            }
-            result = module.get_base_metadata("doc-123", "s3://bucket/output/doc.txt", doc_item)
-
-            assert result["page_count"] == "10"
-            assert result["upload_date"] == "2024-01-15"
-            assert result["created_at"] == "2024-01-15T10:00:00Z"
-
-
 class TestBuildInlineAttributes:
     """Tests for build_inline_attributes function."""
 
@@ -147,8 +113,14 @@ class TestBuildInlineAttributes:
             result = module.build_inline_attributes(metadata)
 
             assert len(result) == 2
-            assert {"key": "topic", "value": {"stringValue": "immigration"}} in result
-            assert {"key": "location", "value": {"stringValue": "Ellis Island"}} in result
+            # Check format includes type: STRING
+            topic_attr = {"key": "topic", "value": {"type": "STRING", "stringValue": "immigration"}}
+            location_attr = {
+                "key": "location",
+                "value": {"type": "STRING", "stringValue": "Ellis Island"},
+            }
+            assert topic_attr in result
+            assert location_attr in result
 
     def test_skips_empty_values(self, set_env_vars):
         """Test that empty values are skipped."""
@@ -282,13 +254,10 @@ class TestLambdaHandler:
 
             assert result["status"] == "indexed"
             assert result["document_id"] == "test-doc-123"
-            # Base metadata should always be present
-            assert "base_metadata_keys" in result
-            assert "document_id" in result["base_metadata_keys"]
-            assert "filename" in result["base_metadata_keys"]
-            assert "file_type" in result["base_metadata_keys"]
+            assert result["knowledge_base_id"] == "test-kb-id"
             # LLM metadata status should be reported
             assert "llm_metadata_extracted" in result
+            assert "metadata_keys" in result
 
     def test_ingestion_continues_on_metadata_extraction_failure(
         self,
@@ -336,12 +305,11 @@ class TestLambdaHandler:
 
             result = module.lambda_handler(sample_event, lambda_context)
 
-            # Should still succeed with base metadata, just without LLM metadata
+            # Should still succeed, just without LLM metadata
             assert result["status"] == "indexed"
             assert result["llm_metadata_extracted"] is False
-            # Base metadata should still be present
-            assert "base_metadata_keys" in result
-            assert len(result["base_metadata_keys"]) > 0
+            # metadata_keys should be empty when extraction fails
+            assert result["metadata_keys"] == []
 
     def test_missing_required_params(self, set_env_vars, lambda_context):
         """Test that missing required params raise ValueError."""
