@@ -160,6 +160,14 @@ Added to `vulture_whitelist.py`:
 
 **Total: 18 items removed from lib/**
 
+| File | Function/Class | Line | Reason | Phase |
+|------|---------------|------|--------|-------|
+| `src/lambda/detect_file_type/index.py` | `OCR_TYPES` | 41 | Never used (defaults to "ocr") | 1 |
+| `src/lambda/kb_custom_resource/index.py` | `generate_random_suffix` | 25 | Never called | 1 |
+| `src/lambda/metadata_analyzer/index.py` | `DEFAULT_MIN_OCCURRENCE_RATE` | 53 | Never used | 1 |
+
+**Total: 3 items removed from src/lambda/**
+
 ---
 
 ## TypeScript Dead Code Removed

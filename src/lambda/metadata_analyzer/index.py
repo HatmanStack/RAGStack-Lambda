@@ -50,7 +50,6 @@ _key_library = None
 
 # Configuration
 DEFAULT_MAX_SAMPLES = 1000
-DEFAULT_MIN_OCCURRENCE_RATE = 0.1  # 10% minimum occurrence to include in analysis
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 MAX_SAMPLE_VALUES = 10
 
@@ -391,6 +390,10 @@ def update_key_library_counts(
     """
     Update the key library with analyzed field counts.
 
+    Sets status based on extraction settings:
+    - "active" if extraction mode is auto, or key is in manual selection
+    - "inactive" if extraction mode is manual and key is not selected
+
     Args:
         field_analysis: Dictionary of field analysis results.
         table_name: DynamoDB table name for key library.
@@ -398,7 +401,23 @@ def update_key_library_counts(
     table = dynamodb.Table(table_name)
     now = datetime.now(UTC).isoformat()
 
+    # Get extraction settings to determine status
+    config = get_config_manager()
+    extraction_mode = "auto"
+    manual_keys: set[str] = set()
+    if config:
+        extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+        manual_keys_list = config.get_parameter("metadata_manual_keys", default=[])
+        if manual_keys_list and isinstance(manual_keys_list, list):
+            manual_keys = set(manual_keys_list)
+
     for key_name, stats in field_analysis.items():
+        # Determine status based on extraction settings
+        if extraction_mode == "manual":
+            status = "active" if key_name in manual_keys else "inactive"
+        else:
+            status = "active"
+
         try:
             # Update or create key entry
             table.update_item(
@@ -408,7 +427,7 @@ def update_key_library_counts(
                         data_type = :dtype,
                         sample_values = :samples,
                         last_analyzed = :now,
-                        #status = if_not_exists(#status, :active),
+                        #status = :status,
                         first_seen = if_not_exists(first_seen, :now)
                 """,
                 ExpressionAttributeNames={"#status": "status"},
@@ -417,10 +436,10 @@ def update_key_library_counts(
                     ":dtype": stats["data_type"],
                     ":samples": stats["sample_values"][:MAX_SAMPLE_VALUES],
                     ":now": now,
-                    ":active": "active",
+                    ":status": status,
                 },
             )
-            logger.debug(f"Updated key library entry: {key_name}")
+            logger.debug(f"Updated key library entry: {key_name} (status={status})")
         except ClientError as e:
             logger.warning(f"Failed to update key '{key_name}': {e}")
 

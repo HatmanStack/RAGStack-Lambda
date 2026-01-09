@@ -38,7 +38,6 @@ _sniffer = None
 
 # File type routing categories
 TEXT_TYPES = {"html", "txt", "csv", "json", "xml", "eml", "epub", "docx", "xlsx"}
-OCR_TYPES = {"pdf", "image", "binary"}
 PASSTHROUGH_TYPES = {"markdown"}
 
 # Amount of content to read for sniffing (4KB)

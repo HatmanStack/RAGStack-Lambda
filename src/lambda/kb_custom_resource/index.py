@@ -7,8 +7,6 @@ so we use a custom resource to create and manage the Knowledge Base.
 
 import json
 import logging
-import random
-import string
 import time
 from urllib.request import Request, urlopen
 
@@ -20,11 +18,6 @@ logger.setLevel(logging.INFO)
 
 bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
-
-
-def generate_random_suffix(length=5):
-    """Generate a random alphanumeric suffix for unique resource naming."""
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 def send_response(event, context, status, data=None, reason=None, physical_resource_id=None):
