@@ -305,5 +305,5 @@ Added to `vulture_whitelist.py`:
 - [x] No new runtime errors - Verified via test suite
 - [x] Bundle sizes reduced or unchanged - Minimal reduction (~0.16 kB total)
 - [x] Vulture reports zero issues (with whitelist) - All Python findings whitelisted as false positives
-- [x] Knip reports zero issues (or documented exceptions) - Both workspaces clean
+- [x] Knip reports zero issues (or documented exceptions) - ragstack-chat clean; UI has 1 documented exception (@vitest/coverage-v8 for optional coverage feature)
 - [x] No `console.log` or `print()` in production code - Only console.error retained per ADR-002
