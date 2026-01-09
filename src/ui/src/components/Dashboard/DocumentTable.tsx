@@ -37,8 +37,8 @@ const loadPreferences = () => {
     if (saved) {
       return { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) };
     }
-  } catch (e) {
-    console.warn('Failed to load preferences:', e);
+  } catch {
+    // Silently fall back to defaults on localStorage errors
   }
   return DEFAULT_PREFERENCES;
 };
@@ -47,8 +47,8 @@ const loadPreferences = () => {
 const savePreferences = (prefs) => {
   try {
     localStorage.setItem('documentTablePreferences', JSON.stringify(prefs));
-  } catch (e) {
-    console.warn('Failed to save preferences:', e);
+  } catch {
+    // Silently ignore localStorage save errors
   }
 };
 

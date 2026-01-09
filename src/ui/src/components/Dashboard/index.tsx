@@ -38,9 +38,7 @@ export const Dashboard = () => {
   const handleDelete = async (documentIds) => {
     try {
       const result = await deleteDocuments(documentIds);
-      if (result.failedIds?.length > 0) {
-        console.warn('Some documents failed to delete:', result.failedIds);
-      }
+      // Partial failures are returned in result.failedIds if any
       return result;
     } catch (err) {
       console.error('Failed to delete documents:', err);

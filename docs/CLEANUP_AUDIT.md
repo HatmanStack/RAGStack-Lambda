@@ -225,8 +225,13 @@ Added to `vulture_whitelist.py`:
 | Language | File | Lines Removed | Phase |
 |----------|------|---------------|-------|
 | Python | - | 0 | 1 |
+| TypeScript | src/ui/src/components/Dashboard/index.tsx | 1 console.warn | 2 |
+| TypeScript | src/ui/src/components/Dashboard/DocumentTable.tsx | 2 console.warn | 2 |
+| TypeScript | src/ragstack-chat/src/components/ChatInterface.tsx | 1 console.warn, 1 console.error | 2 |
 
 **Note:** No executable `print()` statements found in production code (`lib/`, `src/lambda/`). Three `print()` calls exist in docstring examples (`text_extractors/__init__.py`) and are preserved per ADR-001.
+
+**console.error Retention:** Per ADR-002, console.error statements are retained in TypeScript for error boundaries and critical runtime errors. The retained console.error statements provide essential debugging information for production issues without a logging infrastructure.
 
 ---
 
