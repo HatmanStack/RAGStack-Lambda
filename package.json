@@ -29,9 +29,7 @@
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@vitest/ui": "^4.0.6",
-    "esbuild": "^0.25.12",
     "happy-dom": "^20.0.10",
-    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.6"
   }
