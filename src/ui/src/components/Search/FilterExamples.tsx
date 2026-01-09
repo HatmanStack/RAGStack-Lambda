@@ -113,8 +113,9 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
                   the disabled examples.
                 </Box>
                 <Box>
-                  <strong>Multi-slice retrieval:</strong> When enabled, each query generates
-                  parallel searches with different metadata filters based on these examples.
+                  <strong>Multi-slice retrieval:</strong> When enabled in the Metadata Query
+                  section above, each query generates parallel searches with different metadata
+                  filters based on these examples.
                 </Box>
               </SpaceBetween>
             }
