@@ -17,6 +17,7 @@ Input event (SQS):
 import json
 import logging
 import os
+import re
 
 import boto3
 
@@ -39,7 +40,7 @@ def lambda_handler(event, context):
 
         # Create execution name from document_id (sanitized) + request ID
         # Step Functions execution names: 1-80 chars, alphanumeric + hyphens + underscores
-        sanitized_id = document_id.replace("/", "-").replace(".", "-")[:60]
+        sanitized_id = re.sub(r"[^a-zA-Z0-9_-]", "_", document_id)[:60]
         execution_name = f"{sanitized_id}-{context.aws_request_id[:8]}"
 
         logger.info(f"Starting execution for document: {document_id}")

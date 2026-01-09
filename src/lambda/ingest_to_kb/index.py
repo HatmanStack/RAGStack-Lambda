@@ -44,6 +44,7 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
 dynamodb = boto3.resource("dynamodb")
+s3_client = boto3.client("s3")
 
 # Lazy-initialized singletons (reused across invocations)
 _key_library = None
@@ -150,9 +151,83 @@ def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             str_value = str(value)[:100]  # Truncate long values
 
-        attributes.append({"key": key, "value": {"stringValue": str_value}})
+        attributes.append({"key": key, "value": {"type": "STRING", "stringValue": str_value}})
 
     return attributes
+
+
+def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
+    """
+    Check if a metadata file already exists for this document.
+
+    Scraped documents have their metadata pre-written by scrape_process.
+    If metadata exists, return it; otherwise return None.
+
+    Args:
+        output_s3_uri: S3 URI of the content file.
+
+    Returns:
+        Metadata dictionary if file exists, None otherwise.
+    """
+    if not output_s3_uri.startswith("s3://"):
+        return None
+
+    path = output_s3_uri[5:]
+    bucket, key = path.split("/", 1)
+    metadata_key = f"{key}.metadata.json"
+
+    try:
+        response = s3_client.get_object(Bucket=bucket, Key=metadata_key)
+        content = json.loads(response["Body"].read().decode("utf-8"))
+        metadata = content.get("metadataAttributes", {})
+        logger.info(f"Found existing metadata file: {metadata_key} with {len(metadata)} fields")
+        return metadata
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        logger.warning(f"Error checking for existing metadata: {e}")
+        return None
+
+
+def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
+    """
+    Write metadata to S3 as a .metadata.json file alongside the content file.
+
+    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
+    provided inline. The metadata file must be in the same location as the
+    content file with .metadata.json suffix.
+
+    Args:
+        output_s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
+        metadata: Dictionary of metadata key-value pairs
+
+    Returns:
+        S3 URI of the metadata file
+    """
+    # Parse S3 URI
+    if not output_s3_uri.startswith("s3://"):
+        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
+
+    path = output_s3_uri[5:]  # Remove 's3://'
+    bucket, key = path.split("/", 1)
+
+    # Create metadata file key (same location with .metadata.json suffix)
+    metadata_key = f"{key}.metadata.json"
+    metadata_uri = f"s3://{bucket}/{metadata_key}"
+
+    # Build metadata JSON in Bedrock KB format
+    metadata_content = {"metadataAttributes": metadata}
+
+    # Write to S3
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=metadata_key,
+        Body=json.dumps(metadata_content),
+        ContentType="application/json",
+    )
+
+    logger.info(f"Wrote metadata to {metadata_uri}")
+    return metadata_uri
 
 
 def get_file_type_from_filename(filename: str) -> str:
@@ -168,48 +243,6 @@ def get_file_type_from_filename(filename: str) -> str:
     if not filename or "." not in filename:
         return "unknown"
     return filename.rsplit(".", 1)[-1].lower()
-
-
-def get_base_metadata(
-    document_id: str,
-    output_s3_uri: str,
-    doc_item: dict[str, Any],
-) -> dict[str, Any]:
-    """
-    Create base metadata fields that are always included.
-
-    These are deterministic fields derived from document properties,
-    not from LLM extraction.
-
-    Args:
-        document_id: Document identifier.
-        output_s3_uri: S3 URI of the output text file.
-        doc_item: Document record from tracking DynamoDB table.
-
-    Returns:
-        Dictionary of base metadata fields.
-    """
-    filename = doc_item.get("filename", "unknown")
-    file_type = get_file_type_from_filename(filename)
-
-    base_metadata = {
-        "document_id": document_id,
-        "filename": filename,
-        "file_type": file_type,
-        "s3_uri": output_s3_uri,
-    }
-
-    # Add optional fields if present
-    if doc_item.get("upload_date"):
-        base_metadata["upload_date"] = doc_item["upload_date"]
-
-    if doc_item.get("created_at"):
-        base_metadata["created_at"] = doc_item["created_at"]
-
-    if doc_item.get("total_pages"):
-        base_metadata["page_count"] = str(doc_item["total_pages"])
-
-    return base_metadata
 
 
 def extract_document_metadata(
@@ -277,20 +310,24 @@ def lambda_handler(event, context):
     filename = doc_item.get("filename", "unknown")
     total_pages = doc_item.get("total_pages", 0)
 
-    # Build base metadata (always included)
-    base_metadata = get_base_metadata(document_id, output_s3_uri, doc_item)
-
-    # Extract LLM-based metadata if enabled
+    # Check for existing metadata (e.g., from scrape_process)
+    # If found, skip LLM extraction and use existing metadata
+    existing_metadata = check_existing_metadata(output_s3_uri)
     llm_metadata_extracted = False
+
+    # LLM-extracted metadata: written to S3 for Bedrock KB filtering AND stored in DynamoDB
+    # Base fields (document_id, filename, etc.) are already columns in tracking table - no duplication
     llm_metadata = {}
 
-    if is_metadata_extraction_enabled():
-        llm_metadata = extract_document_metadata(output_s3_uri, document_id)
-        llm_metadata_extracted = bool(llm_metadata)
-
-    # Merge metadata: base fields + LLM-extracted fields
-    # LLM metadata takes precedence if there are conflicts
-    combined_metadata = {**base_metadata, **llm_metadata}
+    if existing_metadata:
+        # Use pre-existing metadata (scraped documents have metadata from scrape_process)
+        logger.info(f"Using existing metadata for {document_id}, skipping LLM extraction")
+        llm_metadata = existing_metadata
+    else:
+        # Extract LLM-based metadata if enabled
+        if is_metadata_extraction_enabled():
+            llm_metadata = extract_document_metadata(output_s3_uri, document_id)
+            llm_metadata_extracted = bool(llm_metadata)
 
     try:
         # Build the document object for ingestion
@@ -301,14 +338,22 @@ def lambda_handler(event, context):
             }
         }
 
-        # Add inline metadata attributes (always include base metadata)
-        inline_attributes = build_inline_attributes(combined_metadata)
-        if inline_attributes:
+        # Add metadata reference (required for S3 Vectors KB)
+        # Only LLM-extracted metadata - base fields are already in tracking table
+        if llm_metadata:
+            if existing_metadata:
+                # Metadata file already exists (from scrape_process)
+                metadata_uri = f"{output_s3_uri}.metadata.json"
+                logger.info(f"Using existing metadata file: {metadata_uri}")
+            else:
+                # Write LLM metadata to S3 for filtering
+                metadata_uri = write_metadata_to_s3(output_s3_uri, llm_metadata)
+                logger.info(f"Wrote {len(llm_metadata)} metadata fields to: {metadata_uri}")
+
             document["metadata"] = {
-                "type": "IN_LINE_ATTRIBUTE",
-                "inlineAttributes": inline_attributes,
+                "type": "S3_LOCATION",
+                "s3Location": {"uri": metadata_uri},
             }
-            logger.info(f"Adding {len(inline_attributes)} metadata attributes to ingestion")
 
         # Call Bedrock Agent to ingest the document
         # Bedrock will:
@@ -340,10 +385,10 @@ def lambda_handler(event, context):
                 ":updated_at": datetime.now(UTC).isoformat(),
             }
 
-            # Store combined metadata (base + LLM) for reference
-            if combined_metadata:
+            # Store LLM-extracted metadata for UI display
+            if llm_metadata:
                 update_expression += ", extracted_metadata = :metadata"
-                expression_values[":metadata"] = combined_metadata
+                expression_values[":metadata"] = llm_metadata
 
             tracking_table.update_item(
                 Key={"document_id": document_id},
@@ -373,9 +418,7 @@ def lambda_handler(event, context):
             "ingestion_status": ingestion_status,
             "knowledge_base_id": kb_id,
             "llm_metadata_extracted": llm_metadata_extracted,
-            "base_metadata_keys": list(base_metadata.keys()),
-            "llm_metadata_keys": list(llm_metadata.keys()) if llm_metadata else [],
-            "total_metadata_keys": list(combined_metadata.keys()),
+            "metadata_keys": list(llm_metadata.keys()) if llm_metadata else [],
         }
 
     except ClientError as e:

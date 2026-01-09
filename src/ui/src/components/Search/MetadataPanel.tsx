@@ -1,21 +1,25 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Container,
   Header,
   SpaceBetween,
   Box,
   Alert,
+  Popover,
+  Icon,
 } from '@cloudscape-design/components';
+import { generateClient } from 'aws-amplify/api';
 import { useMetadataStats, useFilterExamples } from '../../hooks/useMetadata';
 import { MetadataMetrics } from './MetadataMetrics';
 import { FilterExamples } from './FilterExamples';
 import { AnalyzeButton } from './AnalyzeButton';
+import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import { getConfiguration } from '../../graphql/queries/getConfiguration';
+import type { GqlResponse } from '../../types/graphql';
 
-interface MetadataPanelProps {
-  onApplyFilter?: (filter: string) => void;
-}
+const client = generateClient();
 
-export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) => {
+export const MetadataPanel: React.FC = () => {
   const {
     stats,
     totalKeys,
@@ -33,6 +37,63 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) =
     error: examplesError,
     refetch: refetchExamples,
   } = useFilterExamples();
+
+  // Track which filter examples are enabled
+  const [enabledExamples, setEnabledExamples] = useState<string[]>([]);
+  const [enabledLoaded, setEnabledLoaded] = useState(false);
+
+  // Load enabled examples from configuration
+  useEffect(() => {
+    const loadEnabled = async () => {
+      try {
+        const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
+        const config = response.data?.getConfiguration as { Custom?: string } | undefined;
+        if (config?.Custom) {
+          const custom = JSON.parse(config.Custom);
+          if (Array.isArray(custom.metadata_filter_examples_enabled)) {
+            setEnabledExamples(custom.metadata_filter_examples_enabled);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load enabled examples:', err);
+      } finally {
+        setEnabledLoaded(true);
+      }
+    };
+    loadEnabled();
+  }, []);
+
+  // When examples load, if no enabled list exists, default all to enabled
+  useEffect(() => {
+    if (enabledLoaded && examples.length > 0 && enabledExamples.length === 0) {
+      // No saved preference - all examples are enabled by default
+      setEnabledExamples(examples.map(e => e.name));
+    }
+  }, [enabledLoaded, examples, enabledExamples.length]);
+
+  const handleToggleExample = useCallback(async (name: string, enabled: boolean) => {
+    const newEnabled = enabled
+      ? [...enabledExamples, name]
+      : enabledExamples.filter(n => n !== name);
+
+    setEnabledExamples(newEnabled);
+
+    // Save to configuration immediately
+    try {
+      await client.graphql({
+        query: updateConfiguration,
+        variables: {
+          customConfig: JSON.stringify({
+            metadata_filter_examples_enabled: newEnabled,
+          }),
+        },
+      });
+    } catch (err) {
+      console.error('Failed to save enabled examples:', err);
+      // Revert on failure
+      setEnabledExamples(enabledExamples);
+    }
+  }, [enabledExamples]);
 
   const handleAnalysisComplete = useCallback(() => {
     // Refetch both stats and examples after analysis
@@ -55,6 +116,36 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) =
           variant="h2"
           description="Discover metadata fields and filter patterns in your documents"
           actions={<AnalyzeButton onComplete={handleAnalysisComplete} />}
+          info={
+            <Popover
+              header="About Metadata Analysis"
+              content={
+                <SpaceBetween size="s">
+                  <Box>
+                    <strong>What it does:</strong> Samples vectors from your Knowledge Base to discover
+                    metadata fields and generate filter examples for improved search.
+                  </Box>
+                  <Box>
+                    <strong>Key Statistics:</strong> Shows which metadata keys exist in your documents,
+                    their data types, and how often they appear.
+                  </Box>
+                  <Box>
+                    <strong>Filter Examples:</strong> AI-generated filter patterns based on your actual
+                    metadata. When multi-slice retrieval is enabled, these examples are fed to the LLM
+                    after each user query to generate targeted metadata filters, creating parallel search
+                    vectors that improve recall by searching both filtered and unfiltered results.
+                  </Box>
+                </SpaceBetween>
+              }
+              dismissButton={false}
+              position="right"
+              size="large"
+            >
+              <Box color="text-status-info" display="inline">
+                <Icon name="status-info" />
+              </Box>
+            </Popover>
+          }
         >
           Metadata Analysis
         </Header>
@@ -72,7 +163,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) =
             </Box>
           </Alert>
         ) : (
-          <>
+          <SpaceBetween size="xl">
             <MetadataMetrics
               stats={stats}
               totalKeys={totalKeys}
@@ -86,10 +177,11 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({ onApplyFilter }) =
               totalExamples={totalExamples}
               lastGenerated={lastGenerated}
               loading={examplesLoading}
+              enabledExamples={enabledExamples}
+              onToggleExample={handleToggleExample}
               error={examplesError}
-              onApplyFilter={onApplyFilter}
             />
-          </>
+          </SpaceBetween>
         )}
       </SpaceBetween>
     </Container>

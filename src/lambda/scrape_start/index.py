@@ -35,7 +35,12 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_scrape_update
+from ragstack_common.bedrock import BedrockClient
+from ragstack_common.config import ConfigurationManager
+from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.scraper import ScrapeConfig, ScrapeJob, ScrapeStatus
+from ragstack_common.scraper.extractor import extract_content
+from ragstack_common.scraper.fetcher import fetch_auto
 
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -97,6 +102,75 @@ def validate_url_for_ssrf(url: str) -> None:
             raise ValueError("URL cannot target reserved IP addresses")
 
 
+def extract_job_metadata(url: str, config: ScrapeConfig) -> dict:
+    """
+    Extract job-level metadata from the seed URL.
+
+    Fetches the seed URL content, converts to markdown, and uses LLM
+    to extract semantic metadata that will apply to all pages in the job.
+
+    Args:
+        url: The seed URL to extract metadata from.
+        config: Scrape configuration (for cookies, headers, etc.).
+
+    Returns:
+        Dictionary of extracted metadata, or empty dict on failure.
+    """
+    try:
+        logger.info(f"Extracting job metadata from seed URL: {url}")
+
+        # Fetch seed URL content
+        scrape_mode = config.to_dict().get("scrape_mode", "auto")
+        force_playwright = scrape_mode == "full"
+
+        result = fetch_auto(
+            url,
+            cookies=config.cookies,
+            headers=config.headers,
+            force_playwright=force_playwright,
+            delay_ms=0,  # No delay for metadata extraction
+        )
+
+        if result.error or not result.is_html:
+            logger.warning(f"Failed to fetch seed URL for metadata: {result.error}")
+            return {}
+
+        # Extract content and convert to markdown
+        extracted = extract_content(result.content, url)
+        if not extracted.markdown:
+            logger.warning("No content extracted from seed URL")
+            return {}
+
+        # Get configuration for metadata extraction
+        config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+        config_manager = None
+        model_id = None
+        max_keys = 8
+
+        if config_table:
+            config_manager = ConfigurationManager(config_table)
+            model_id = config_manager.get("metadata_extraction_model")
+            max_keys = config_manager.get("metadata_max_keys", 8)
+
+        # Extract metadata using LLM
+        extractor = MetadataExtractor(
+            bedrock_client=BedrockClient(),
+            model_id=model_id,
+            max_keys=max_keys,
+        )
+
+        # Use markdown content for extraction (truncate if too long)
+        content_for_extraction = extracted.markdown[:8000]
+        metadata = extractor.extract(content_for_extraction)
+
+        logger.info(f"Extracted job metadata: {list(metadata.keys())}")
+        return metadata
+
+    except Exception as e:
+        logger.warning(f"Job metadata extraction failed: {e}")
+        return {}
+
+
 def lambda_handler(event, context):
     """
     Main Lambda handler - initiates scrape job.
@@ -135,6 +209,10 @@ def lambda_handler(event, context):
         # Generate job ID
         job_id = str(uuid.uuid4())
 
+        # Extract job-level metadata from seed URL (1 LLM call per job)
+        # This metadata will be applied to all pages in the job
+        job_metadata = extract_job_metadata(base_url, config)
+
         # Create job record
         job = ScrapeJob(
             job_id=job_id,
@@ -144,12 +222,15 @@ def lambda_handler(event, context):
             title=event.get("title"),  # Optional title override
         )
 
-        # Save to DynamoDB
+        # Save to DynamoDB (include job_metadata)
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(jobs_table)
+        job_dict = job.to_dict()
+        if job_metadata:
+            job_dict["job_metadata"] = job_metadata
 
-        table.put_item(Item=job.to_dict())
-        logger.info(f"Created job record: {job_id}")
+        table.put_item(Item=job_dict)
+        logger.info(f"Created job record: {job_id} with {len(job_metadata)} metadata fields")
 
         # Send initial URL to discovery queue
         sqs = boto3.client("sqs")

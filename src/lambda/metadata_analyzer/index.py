@@ -426,10 +426,15 @@ def update_config_with_examples(examples: list[dict]) -> None:
     Args:
         examples: List of filter example dictionaries.
     """
+    from datetime import datetime, timezone
+
     config_manager = get_config_manager()
     if config_manager:
         try:
-            config_manager.update_custom_config({"metadata_filter_examples": examples})
+            config_manager.update_custom_config({
+                "metadata_filter_examples": examples,
+                "metadata_filter_examples_updated_at": datetime.now(timezone.utc).isoformat(),
+            })
             logger.info(f"Updated config with {len(examples)} filter examples")
         except Exception as e:
             logger.warning(f"Failed to update config with examples: {e}")

@@ -70,7 +70,7 @@ describe('FilterExamples', () => {
     expect(screen.getByText('Filter for PDF document type')).toBeInTheDocument();
   });
 
-  it('displays use case badges', () => {
+  it('displays use case column', () => {
     render(
       <FilterExamples
         examples={mockExamples}
@@ -86,7 +86,7 @@ describe('FilterExamples', () => {
     expect(screen.getByText('Finding recent content')).toBeInTheDocument();
   });
 
-  it('shows View Filter buttons', () => {
+  it('shows View buttons', () => {
     render(
       <FilterExamples
         examples={mockExamples}
@@ -97,11 +97,11 @@ describe('FilterExamples', () => {
       />
     );
 
-    const viewButtons = screen.getAllByText('View Filter');
+    const viewButtons = screen.getAllByText('View');
     expect(viewButtons.length).toBe(3);
   });
 
-  it('opens modal when View Filter is clicked', () => {
+  it('opens modal when View is clicked', () => {
     render(
       <FilterExamples
         examples={mockExamples}
@@ -112,19 +112,17 @@ describe('FilterExamples', () => {
       />
     );
 
-    const viewButtons = screen.getAllByText('View Filter');
+    const viewButtons = screen.getAllByText('View');
     fireEvent.click(viewButtons[0]);
 
     // Modal should be open with the example name as header
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    // The example name appears twice - once in card, once in modal
+    // The example name appears twice - once in table, once in modal
     const genealogyTexts = screen.getAllByText('Genealogy Documents');
     expect(genealogyTexts.length).toBe(2);
   });
 
-  it('shows Apply button when onApplyFilter is provided', () => {
-    const onApplyFilter = vi.fn();
-
+  it('shows toggle controls', () => {
     render(
       <FilterExamples
         examples={mockExamples}
@@ -132,16 +130,18 @@ describe('FilterExamples', () => {
         lastGenerated="2025-01-06T10:00:00Z"
         loading={false}
         error={null}
-        onApplyFilter={onApplyFilter}
+        enabledExamples={['Genealogy Documents', 'PDF Documents', 'Recent Documents']}
+        onToggleExample={vi.fn()}
       />
     );
 
-    const applyButtons = screen.getAllByText('Apply');
-    expect(applyButtons.length).toBe(3);
+    // Should have 3 toggle controls
+    const toggles = screen.getAllByRole('switch');
+    expect(toggles.length).toBe(3);
   });
 
-  it('calls onApplyFilter when Apply is clicked', () => {
-    const onApplyFilter = vi.fn();
+  it('calls onToggleExample when toggle is clicked', () => {
+    const onToggleExample = vi.fn();
 
     render(
       <FilterExamples
@@ -150,14 +150,15 @@ describe('FilterExamples', () => {
         lastGenerated="2025-01-06T10:00:00Z"
         loading={false}
         error={null}
-        onApplyFilter={onApplyFilter}
+        enabledExamples={['Genealogy Documents', 'PDF Documents', 'Recent Documents']}
+        onToggleExample={onToggleExample}
       />
     );
 
-    const applyButtons = screen.getAllByText('Apply');
-    fireEvent.click(applyButtons[0]);
+    const toggles = screen.getAllByRole('switch');
+    fireEvent.click(toggles[0]);
 
-    expect(onApplyFilter).toHaveBeenCalledWith(mockExamples[0].filter);
+    expect(onToggleExample).toHaveBeenCalledWith('Genealogy Documents', false);
   });
 
   it('shows loading state', () => {
@@ -218,7 +219,7 @@ describe('FilterExamples', () => {
       />
     );
 
-    const viewButtons = screen.getAllByText('View Filter');
+    const viewButtons = screen.getAllByText('View');
     fireEvent.click(viewButtons[0]);
 
     // Filter JSON should be displayed in a code block
@@ -240,7 +241,7 @@ describe('FilterExamples', () => {
     );
 
     // Open modal
-    const viewButtons = screen.getAllByText('View Filter');
+    const viewButtons = screen.getAllByText('View');
     fireEvent.click(viewButtons[0]);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
@@ -250,5 +251,21 @@ describe('FilterExamples', () => {
 
     // Modal should be closed
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('displays enabled count in header', () => {
+    render(
+      <FilterExamples
+        examples={mockExamples}
+        totalExamples={3}
+        lastGenerated="2025-01-06T10:00:00Z"
+        loading={false}
+        error={null}
+        enabledExamples={['Genealogy Documents']}
+      />
+    );
+
+    // Should show "1/3 enabled"
+    expect(screen.getByText(/1\/3 enabled/)).toBeInTheDocument();
   });
 });

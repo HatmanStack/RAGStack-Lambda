@@ -37,7 +37,11 @@ const getDataTypeBadge = (dataType: string) => {
     boolean: 'grey',
     list: 'red',
   };
-  return <Badge color={colorMap[dataType] || 'grey'}>{dataType}</Badge>;
+  return (
+    <span style={{ whiteSpace: 'nowrap' }}>
+      <Badge color={colorMap[dataType] || 'grey'}>{dataType}</Badge>
+    </span>
+  );
 };
 
 export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
@@ -86,28 +90,30 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
+        <div style={{ overflowX: 'auto' }}>
         <Table
           loading={loading}
           loadingText="Loading metadata keys..."
           items={stats}
+          wrapLines={false}
           columnDefinitions={[
             {
               id: 'keyName',
               header: 'Key Name',
               cell: (item) => <Box fontWeight="bold">{item.keyName}</Box>,
-              width: 150,
+              minWidth: 140,
             },
             {
               id: 'dataType',
               header: 'Type',
               cell: (item) => getDataTypeBadge(item.dataType),
-              width: 80,
+              width: 140,
             },
             {
               id: 'occurrenceCount',
               header: 'Occurrences',
               cell: (item) => item.occurrenceCount.toLocaleString(),
-              width: 100,
+              width: 110,  // Fixed: number display
             },
             {
               id: 'sampleValues',
@@ -118,7 +124,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                   {item.sampleValues?.length > 3 && ` +${item.sampleValues.length - 3} more`}
                 </Box>
               ),
-              minWidth: 200,
+              minWidth: 200,  // Flex: takes remaining space
             },
             {
               id: 'status',
@@ -128,7 +134,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                   {item.status}
                 </StatusIndicator>
               ),
-              width: 80,
+              width: 100,  // Fixed: "active"/"inactive"
             },
           ]}
           empty={
@@ -143,6 +149,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           stripedRows
           sortingDisabled
         />
+        </div>
       </SpaceBetween>
     </ExpandableSection>
   );

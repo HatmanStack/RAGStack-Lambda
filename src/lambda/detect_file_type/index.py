@@ -98,7 +98,7 @@ def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
     lower_name = filename.lower()
 
     # Check by extension
-    pdf_image_extensions = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".gif", ".bmp"}
+    pdf_image_extensions = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".gif", ".bmp", ".webp", ".avif"}
     for ext in pdf_image_extensions:
         if lower_name.endswith(ext):
             return True
@@ -125,7 +125,19 @@ def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
         return True
 
     # BMP: BM
-    return content_first_bytes.startswith(b"BM")
+    if content_first_bytes.startswith(b"BM"):
+        return True
+
+    # WebP: RIFF....WEBP
+    if content_first_bytes.startswith(b"RIFF") and b"WEBP" in content_first_bytes[:12]:
+        return True
+
+    # AVIF: ....ftypavif (ftyp box at offset 4)
+    if len(content_first_bytes) >= 12 and b"ftyp" in content_first_bytes[:12]:
+        if b"avif" in content_first_bytes[:16] or b"avis" in content_first_bytes[:16]:
+            return True
+
+    return False
 
 
 def lambda_handler(event, context):

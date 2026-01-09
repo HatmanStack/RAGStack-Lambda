@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import {
-  Container,
+  Table,
   Header,
-  Cards,
-  Badge,
   Box,
   SpaceBetween,
   StatusIndicator,
   Button,
   Modal,
+  Toggle,
+  Popover,
+  Icon,
   ExpandableSection,
 } from '@cloudscape-design/components';
 import type { FilterExample } from '../../hooks/useMetadata';
@@ -19,7 +20,8 @@ interface FilterExamplesProps {
   lastGenerated: string | null;
   loading: boolean;
   error: string | null;
-  onApplyFilter?: (filter: string) => void;
+  enabledExamples?: string[]; // Names of enabled examples
+  onToggleExample?: (name: string, enabled: boolean) => void;
 }
 
 const formatDate = (isoString: string | null): string => {
@@ -27,8 +29,7 @@ const formatDate = (isoString: string | null): string => {
   try {
     const date = new Date(isoString);
     return date.toLocaleString();
-  } catch (error) {
-    console.warn('Failed to parse date:', isoString, error);
+  } catch {
     return isoString;
   }
 };
@@ -39,32 +40,36 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
   lastGenerated,
   loading,
   error,
-  onApplyFilter,
+  enabledExamples = [],
+  onToggleExample,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<FilterExample | null>(null);
 
+  // If no enabledExamples provided, default all to enabled
+  const isEnabled = (name: string) =>
+    enabledExamples.length === 0 || enabledExamples.includes(name);
+
+  const enabledCount = examples.filter(e => isEnabled(e.name)).length;
+
   if (error) {
     return (
-      <Container
-        header={
-          <Header variant="h2" description="AI-generated filter examples">
-            Filter Examples
-          </Header>
-        }
+      <ExpandableSection
+        variant="container"
+        headerText="Filter Examples"
+        defaultExpanded={false}
       >
         <StatusIndicator type="error">{error}</StatusIndicator>
-      </Container>
+      </ExpandableSection>
     );
   }
 
   if (examples.length === 0 && !loading) {
     return (
-      <Container
-        header={
-          <Header variant="h2" description="AI-generated filter examples">
-            Filter Examples
-          </Header>
-        }
+      <ExpandableSection
+        variant="container"
+        headerText="Filter Examples"
+        headerDescription="No examples yet"
+        defaultExpanded={false}
       >
         <Box textAlign="center" color="inherit" padding="l">
           <b>No filter examples</b>
@@ -72,15 +77,14 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
             Run the metadata analyzer to generate filter examples based on your documents.
           </Box>
         </Box>
-      </Container>
+      </ExpandableSection>
     );
   }
 
   const parseFilter = (filterJson: string): object => {
     try {
       return JSON.parse(filterJson);
-    } catch (error) {
-      console.error('Failed to parse filter JSON:', filterJson, error);
+    } catch {
       return {};
     }
   };
@@ -89,60 +93,97 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
     <>
       <ExpandableSection
         variant="container"
-        headerText="Filter Examples"
-        headerDescription={`${totalExamples} examples • Last generated: ${formatDate(lastGenerated)}`}
+        headerText={
+          <SpaceBetween direction="horizontal" size="xs">
+            <span>Filter Examples</span>
+            <Popover
+              header="How Filter Examples Work"
+              content={
+                <SpaceBetween size="s">
+                  <Box>
+                    <strong>Few-shot learning:</strong> Enabled examples are fed to the LLM as
+                    reference patterns when generating metadata filters for your queries.
+                  </Box>
+                  <Box>
+                    <strong>Control what the LLM sees:</strong> Toggle examples on/off to control
+                    which patterns guide filter generation. Disable irrelevant examples to improve
+                    filter accuracy for your use case.
+                  </Box>
+                  <Box>
+                    <strong>Multi-slice retrieval:</strong> When enabled, each query generates
+                    parallel searches with different metadata filters based on these examples.
+                  </Box>
+                </SpaceBetween>
+              }
+              dismissButton={false}
+              position="right"
+              size="large"
+            >
+              <Box color="text-status-info" display="inline">
+                <Icon name="status-info" />
+              </Box>
+            </Popover>
+          </SpaceBetween>
+        }
+        headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}
       >
-        <Cards
+        <div style={{ overflowX: 'auto' }}>
+        <Table
           loading={loading}
           loadingText="Loading filter examples..."
           items={examples}
-          cardDefinition={{
-            header: (item) => (
-              <SpaceBetween direction="horizontal" size="xs">
-                <span>{item.name}</span>
-              </SpaceBetween>
-            ),
-            sections: [
-              {
-                id: 'description',
-                content: (item) => (
-                  <Box variant="p" color="text-body-secondary">
-                    {item.description}
-                  </Box>
-                ),
-              },
-              {
-                id: 'useCase',
-                header: 'Use Case',
-                content: (item) => <Badge>{item.useCase}</Badge>,
-              },
-              {
-                id: 'actions',
-                content: (item) => (
-                  <SpaceBetween direction="horizontal" size="xs">
-                    <Button
-                      variant="link"
-                      onClick={() => setSelectedFilter(item)}
-                      iconName="script"
-                    >
-                      View Filter
-                    </Button>
-                    {onApplyFilter && (
-                      <Button
-                        variant="primary"
-                        onClick={() => onApplyFilter(item.filter)}
-                        iconName="check"
-                      >
-                        Apply
-                      </Button>
-                    )}
-                  </SpaceBetween>
-                ),
-              },
-            ],
-          }}
-          cardsPerRow={[{ cards: 1 }, { minWidth: 400, cards: 2 }, { minWidth: 800, cards: 3 }]}
+          wrapLines={false}
+          columnDefinitions={[
+            {
+              id: 'enabled',
+              header: 'Active',
+              cell: (item) => (
+                <Toggle
+                  checked={isEnabled(item.name)}
+                  onChange={({ detail }) => {
+                    onToggleExample?.(item.name, detail.checked);
+                  }}
+                  disabled={!onToggleExample}
+                />
+              ),
+              width: 80,
+            },
+            {
+              id: 'name',
+              header: 'Name',
+              cell: (item) => <Box fontWeight="bold">{item.name}</Box>,
+              minWidth: 150,
+            },
+            {
+              id: 'description',
+              header: 'Description',
+              cell: (item) => (
+                <Box color="text-body-secondary">{item.description}</Box>
+              ),
+              minWidth: 200,
+            },
+            {
+              id: 'useCase',
+              header: 'Use Case',
+              cell: (item) => item.useCase,
+              width: 120,
+            },
+            {
+              id: 'actions',
+              header: 'Filter',
+              cell: (item) => (
+                <Button
+                  variant="inline-link"
+                  onClick={() => setSelectedFilter(item)}
+                  iconName="script"
+                >
+                  View
+                </Button>
+              ),
+              width: 100,
+            },
+          ]}
           empty={
             <Box textAlign="center" color="inherit">
               <b>No filter examples</b>
@@ -151,7 +192,10 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
               </Box>
             </Box>
           }
+          variant="embedded"
+          stripedRows
         />
+        </div>
       </ExpandableSection>
 
       {selectedFilter && (
@@ -160,22 +204,9 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
           onDismiss={() => setSelectedFilter(null)}
           header={selectedFilter.name}
           footer={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setSelectedFilter(null)}>
-                Close
-              </Button>
-              {onApplyFilter && (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    onApplyFilter(selectedFilter.filter);
-                    setSelectedFilter(null);
-                  }}
-                >
-                  Apply Filter
-                </Button>
-              )}
-            </SpaceBetween>
+            <Button variant="primary" onClick={() => setSelectedFilter(null)}>
+              Close
+            </Button>
           }
         >
           <SpaceBetween size="m">

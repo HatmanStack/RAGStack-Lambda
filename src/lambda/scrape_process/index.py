@@ -35,12 +35,87 @@ from ragstack_common.scraper.extractor import extract_content
 from ragstack_common.scraper.fetcher import fetch_auto
 from ragstack_common.scraper.models import ScrapeConfig
 
+# Metadata JSON file for Bedrock KB ingestion
+METADATA_CONTENT_TYPE = "application/json"
+
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 # Module-level AWS clients (reused across warm invocations)
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
+
+
+def build_scrape_metadata(
+    job_metadata: dict,
+    url: str,
+    job_id: str,
+    title: str,
+) -> dict:
+    """
+    Build combined metadata for a scraped page.
+
+    Combines job-level LLM metadata with deterministic fields.
+
+    Args:
+        job_metadata: LLM-extracted metadata from job (seed URL).
+        url: The scraped page URL.
+        job_id: The scrape job ID.
+        title: The page title.
+
+    Returns:
+        Combined metadata dictionary.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+
+    # Start with job metadata (semantic fields from seed URL)
+    metadata = dict(job_metadata) if job_metadata else {}
+
+    # Add/override with deterministic fields
+    metadata.update({
+        "source_url": url,
+        "source_domain": parsed.netloc,
+        "job_id": job_id,
+        "content_type": "web_page",
+        "title": title or "Untitled",
+        "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+    })
+
+    return metadata
+
+
+def write_metadata_file(
+    s3_client,
+    bucket: str,
+    content_key: str,
+    metadata: dict,
+) -> str:
+    """
+    Write metadata JSON file alongside content file.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        bucket: S3 bucket name.
+        content_key: S3 key of the content file.
+        metadata: Metadata dictionary.
+
+    Returns:
+        S3 key of the metadata file.
+    """
+    metadata_key = f"{content_key}.metadata.json"
+    metadata_content = {"metadataAttributes": metadata}
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=metadata_key,
+        Body=json.dumps(metadata_content),
+        ContentType=METADATA_CONTENT_TYPE,
+    )
+
+    logger.info(f"Wrote metadata to s3://{bucket}/{metadata_key}")
+    return metadata_key
 
 
 def sanitize_for_s3_metadata(value: str, max_length: int = 256) -> str:
@@ -113,9 +188,10 @@ def lambda_handler(event, context):
                 skipped += 1
                 continue
 
-            # Get job config
+            # Get job config and metadata
             config_data = job_item.get("config", {})
             config = ScrapeConfig.from_dict(config_data)
+            job_metadata = job_item.get("job_metadata", {})
 
             # Update URL status to processing
             urls_tbl.update_item(
@@ -188,6 +264,16 @@ def lambda_handler(event, context):
             )
 
             logger.info(f"Saved content to s3://{data_bucket}/{s3_key}")
+
+            # Write metadata file for Bedrock KB ingestion
+            # Combines job-level LLM metadata with deterministic fields
+            scrape_metadata = build_scrape_metadata(
+                job_metadata=job_metadata,
+                url=url,
+                job_id=job_id,
+                title=extracted.title,
+            )
+            write_metadata_file(s3, data_bucket, s3_key, scrape_metadata)
 
             # Store hash for future deduplication
             dedup.store_hash(job_id, url, extracted.markdown)

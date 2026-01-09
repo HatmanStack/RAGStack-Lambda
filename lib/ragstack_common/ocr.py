@@ -250,42 +250,111 @@ class OcrService:
     def _process_with_textract(self, document: Document, document_bytes: bytes) -> Document:
         """
         Process document with AWS Textract.
+
+        For multi-page PDFs, uses the async API (StartDocumentTextDetection)
+        which requires the document to be in S3. For single images, uses
+        the sync API (DetectDocumentText).
         """
         try:
             logger.info(f"Processing with Textract: {document.document_id}")
 
-            # Call Textract DetectDocumentText
-            response = self.textract_client.detect_document_text(Document={"Bytes": document_bytes})
-
-            # Extract text and confidence, grouped by page
-            blocks = response.get("Blocks", [])
-            lines = [b for b in blocks if b["BlockType"] == "LINE"]
-
-            # Group lines by page number
-            pages_dict = {}
-            for line in lines:
-                page_num = line.get("Page", 1)
-                if page_num not in pages_dict:
-                    pages_dict[page_num] = {"lines": [], "confidence_sum": 0}
-
-                pages_dict[page_num]["lines"].append(line.get("Text", ""))
-                pages_dict[page_num]["confidence_sum"] += line.get("Confidence", 0)
-
-            # Create Page objects for each page
             document.pages = []
             all_text_parts = []
 
-            for page_num in sorted(pages_dict.keys()):
-                page_data = pages_dict[page_num]
-                text = "\n".join(page_data["lines"])
-                avg_confidence = (
-                    page_data["confidence_sum"] / len(page_data["lines"])
-                    if page_data["lines"]
-                    else 0
+            # Check if this is a PDF
+            is_pdf = document_bytes[:4] == b"%PDF"
+
+            if is_pdf:
+                # Use async API for PDFs - requires S3 location
+                # Parse S3 URI from input
+                bucket, key = parse_s3_uri(document.input_s3_uri)
+                logger.info(f"Starting async Textract job for PDF: s3://{bucket}/{key}")
+
+                # Start async text detection
+                start_response = self.textract_client.start_document_text_detection(
+                    DocumentLocation={"S3Object": {"Bucket": bucket, "Name": key}}
+                )
+                job_id = start_response["JobId"]
+                logger.info(f"Textract job started: {job_id}")
+
+                # Poll for completion
+                import time
+                max_wait_seconds = 300  # 5 minutes max
+                poll_interval = 2
+                elapsed = 0
+
+                while elapsed < max_wait_seconds:
+                    response = self.textract_client.get_document_text_detection(JobId=job_id)
+                    status = response["JobStatus"]
+
+                    if status == "SUCCEEDED":
+                        logger.info(f"Textract job completed: {job_id}")
+                        break
+                    elif status == "FAILED":
+                        error_msg = response.get("StatusMessage", "Unknown error")
+                        raise Exception(f"Textract job failed: {error_msg}")
+                    else:
+                        time.sleep(poll_interval)
+                        elapsed += poll_interval
+
+                if elapsed >= max_wait_seconds:
+                    raise Exception(f"Textract job timed out after {max_wait_seconds}s")
+
+                # Collect all results (may be paginated)
+                all_blocks = response.get("Blocks", [])
+                next_token = response.get("NextToken")
+
+                while next_token:
+                    response = self.textract_client.get_document_text_detection(
+                        JobId=job_id, NextToken=next_token
+                    )
+                    all_blocks.extend(response.get("Blocks", []))
+                    next_token = response.get("NextToken")
+
+                # Group blocks by page
+                pages_dict = {}
+                for block in all_blocks:
+                    if block["BlockType"] == "LINE":
+                        page_num = block.get("Page", 1)
+                        if page_num not in pages_dict:
+                            pages_dict[page_num] = {"lines": [], "confidences": []}
+                        pages_dict[page_num]["lines"].append(block.get("Text", ""))
+                        pages_dict[page_num]["confidences"].append(block.get("Confidence", 0))
+
+                # Create Page objects
+                for page_num in sorted(pages_dict.keys()):
+                    page_data = pages_dict[page_num]
+                    text = "\n".join(page_data["lines"])
+                    avg_confidence = (
+                        sum(page_data["confidences"]) / len(page_data["confidences"])
+                        if page_data["confidences"]
+                        else 0
+                    )
+                    page = Page(
+                        page_number=page_num,
+                        text=text,
+                        ocr_backend=OcrBackend.TEXTRACT.value,
+                        confidence=avg_confidence,
+                    )
+                    document.pages.append(page)
+                    all_text_parts.append(text)
+            else:
+                # Single image - use sync API
+                response = self.textract_client.detect_document_text(
+                    Document={"Bytes": document_bytes}
                 )
 
+                blocks = response.get("Blocks", [])
+                lines = [b.get("Text", "") for b in blocks if b["BlockType"] == "LINE"]
+                confidences = [
+                    b.get("Confidence", 0) for b in blocks if b["BlockType"] == "LINE"
+                ]
+
+                text = "\n".join(lines)
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+
                 page = Page(
-                    page_number=page_num,
+                    page_number=1,
                     text=text,
                     ocr_backend=OcrBackend.TEXTRACT.value,
                     confidence=avg_confidence,

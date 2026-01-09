@@ -152,19 +152,24 @@ def test_extract_metadata_success(
 def test_extract_metadata_includes_existing_keys(
     extractor, mock_bedrock_client, mock_key_library, sample_document_text
 ):
-    """Test that existing keys are included in the prompt."""
+    """Test that existing keys are included in the prompt with sample values."""
     import json
 
-    mock_key_library.get_key_names.return_value = ["topic", "location", "date_range"]
+    mock_key_library.get_active_keys.return_value = [
+        {"key_name": "topic", "sample_values": ["immigration", "genealogy"]},
+        {"key_name": "location", "sample_values": ["New York", "Boston"]},
+        {"key_name": "date_range", "sample_values": ["1900-1920"]},
+    ]
     mock_bedrock_client.extract_text_from_response.return_value = json.dumps({"topic": "test"})
 
     extractor.extract_metadata(sample_document_text, "doc-123")
 
-    # Check that invoke_model was called with content containing existing keys
+    # Check that invoke_model was called with content containing existing keys and samples
     call_args = mock_bedrock_client.invoke_model.call_args
     content = call_args.kwargs["content"][0]["text"]
     assert "topic" in content
     assert "location" in content
+    assert "immigration" in content  # Sample value should be included
 
 
 def test_extract_metadata_empty_text(extractor, mock_bedrock_client):
@@ -243,13 +248,18 @@ def test_build_prompt_includes_text(extractor, sample_document_text):
 
 
 def test_build_prompt_includes_existing_keys(extractor, sample_document_text):
-    """Test that prompt includes existing keys."""
-    existing_keys = ["topic", "location", "date_range"]
+    """Test that prompt includes existing keys with sample values."""
+    existing_keys = [
+        {"key_name": "topic", "sample_values": ["immigration", "genealogy"]},
+        {"key_name": "location", "sample_values": ["New York"]},
+        {"key_name": "date_range", "sample_values": []},
+    ]
     prompt = extractor._build_extraction_prompt(sample_document_text, existing_keys)
 
-    assert "Existing metadata keys" in prompt
+    assert "EXISTING KEYS" in prompt
     assert "topic" in prompt
     assert "location" in prompt
+    assert "immigration" in prompt  # Sample value included
 
 
 def test_build_prompt_truncates_long_text(extractor):
@@ -263,14 +273,14 @@ def test_build_prompt_truncates_long_text(extractor):
 
 def test_build_prompt_limits_existing_keys(extractor, sample_document_text):
     """Test that existing keys are limited in prompt."""
-    many_keys = [f"key_{i}" for i in range(50)]
+    many_keys = [{"key_name": f"key_{i}", "sample_values": []} for i in range(50)]
     prompt = extractor._build_extraction_prompt(sample_document_text, many_keys)
 
-    # Should only include first 20 keys
+    # Should only include first 15 keys (updated limit)
     assert "key_0" in prompt
-    assert "key_19" in prompt
-    # key_20 and beyond should not be in the string
-    # (though we can't guarantee exact word boundary matching)
+    assert "key_14" in prompt
+    # key_15 and beyond should not be in the string
+    assert "key_15" not in prompt
 
 
 # Test: _parse_response

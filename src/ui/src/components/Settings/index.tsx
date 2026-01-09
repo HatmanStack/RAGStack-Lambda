@@ -50,6 +50,7 @@ import {
 } from '../../utils/validation';
 import type { GqlResponse } from '../../types/graphql';
 import { MetadataKeyInput } from './MetadataKeyInput';
+import { MetadataPanel } from '../Search/MetadataPanel';
 
 interface ConfigResponse {
   Schema: string;
@@ -282,6 +283,11 @@ export function Settings() {
 
     // Skip metadata_* fields - rendered separately in Metadata Extraction section
     if (key.startsWith('metadata_')) {
+      return null;
+    }
+
+    // Skip filter_generation_* and multislice_* - rendered separately in Metadata Query section
+    if (key.startsWith('filter_generation_') || key.startsWith('multislice_')) {
       return null;
     }
 
@@ -767,6 +773,115 @@ export function Settings() {
           </Alert>
         </SpaceBetween>
       </Container>
+
+      <Container
+        header={
+          <Header
+            variant="h2"
+            info={
+              <Popover
+                header="About Metadata Query"
+                content="Configure how metadata filters are generated and applied during knowledge base queries. Multi-slice retrieval runs parallel queries with different filters for better recall."
+                dismissButton={false}
+                position="right"
+                size="medium"
+              >
+                <Box color="text-status-info" display="inline">
+                  <Icon name="status-info" />
+                </Box>
+              </Popover>
+            }
+          >
+            Metadata Query
+          </Header>
+        }
+      >
+        <SpaceBetween size="m">
+          <FormField
+            label="Enable Filter Generation"
+            description="Use LLM to generate metadata filters from natural language queries"
+          >
+            <Toggle
+              checked={formValues.filter_generation_enabled === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, filter_generation_enabled: detail.checked });
+              }}
+            >
+              {formValues.filter_generation_enabled ? 'Enabled' : 'Disabled'}
+            </Toggle>
+          </FormField>
+
+          <FormField
+            label="Filter Generation Model"
+            description="Lightweight model for cost-efficient filter generation"
+          >
+            <Select
+              selectedOption={{
+                label: String(formValues.filter_generation_model || ''),
+                value: String(formValues.filter_generation_model || ''),
+              }}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, filter_generation_model: detail.selectedOption.value });
+              }}
+              options={[
+                { label: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', value: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' },
+                { label: 'us.anthropic.claude-3-5-haiku-20241022-v1:0', value: 'us.anthropic.claude-3-5-haiku-20241022-v1:0' },
+              ]}
+              disabled={formValues.filter_generation_enabled !== true}
+            />
+          </FormField>
+
+          <FormField
+            label="Enable Multi-Slice Retrieval"
+            description="Run parallel filtered and unfiltered queries for better recall"
+          >
+            <Toggle
+              checked={formValues.multislice_enabled === true}
+              onChange={({ detail }) => {
+                setFormValues({ ...formValues, multislice_enabled: detail.checked });
+              }}
+              disabled={formValues.filter_generation_enabled !== true}
+            >
+              {formValues.multislice_enabled ? 'Enabled' : 'Disabled'}
+            </Toggle>
+          </FormField>
+
+          {formValues.multislice_enabled && formValues.filter_generation_enabled && (
+            <>
+              <FormField
+                label="Number of Slices"
+                description="Parallel retrieval slices (2-4)"
+              >
+                <Input
+                  type="number"
+                  value={String(formValues.multislice_count || 2)}
+                  onChange={({ detail }) => {
+                    const val = parseInt(detail.value, 10);
+                    if (val >= 2 && val <= 4) {
+                      setFormValues({ ...formValues, multislice_count: val });
+                    }
+                  }}
+                />
+              </FormField>
+
+              <FormField
+                label="Slice Timeout (ms)"
+                description="Timeout per slice in milliseconds"
+              >
+                <Input
+                  type="number"
+                  value={String(formValues.multislice_timeout_ms || 5000)}
+                  onChange={({ detail }) => {
+                    setFormValues({ ...formValues, multislice_timeout_ms: parseInt(detail.value, 10) });
+                  }}
+                />
+              </FormField>
+            </>
+          )}
+        </SpaceBetween>
+      </Container>
+
+      <MetadataPanel />
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
         <SpaceBetween size="l">

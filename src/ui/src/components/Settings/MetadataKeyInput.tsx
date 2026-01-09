@@ -28,14 +28,38 @@ export function MetadataKeyInput({ value, onChange, disabled }: MetadataKeyInput
   const [filteringText, setFilteringText] = useState('');
   const [similarityWarning, setSimilarityWarning] = useState<SimilarityWarning | null>(null);
 
-  // Build options from library keys
+  // Build options from library keys + dynamic "Create" option
   const options = useMemo(() => {
-    return libraryKeys.map((key) => ({
+    const baseOptions = libraryKeys.map((key) => ({
       label: key.keyName,
       value: key.keyName,
       description: `${key.occurrenceCount} occurrences · ${key.dataType}`,
     }));
-  }, [libraryKeys]);
+
+    // Add "Create new key" option if user typed something not in the list
+    const trimmedFilter = filteringText.trim();
+    if (trimmedFilter.length > 0) {
+      const exactMatch = libraryKeys.some(
+        (k) => k.keyName.toLowerCase() === trimmedFilter.toLowerCase()
+      );
+      const alreadySelected = value.some(
+        (v) => v.toLowerCase() === trimmedFilter.toLowerCase()
+      );
+
+      if (!exactMatch && !alreadySelected) {
+        return [
+          {
+            label: `Create: "${trimmedFilter}"`,
+            value: `__create__:${trimmedFilter}`,
+            description: 'Add this as a new custom key',
+          },
+          ...baseOptions,
+        ];
+      }
+    }
+
+    return baseOptions;
+  }, [libraryKeys, filteringText, value]);
 
   // Get existing key names for similarity check
   const existingKeyNames = useMemo(() => {
@@ -84,8 +108,16 @@ export function MetadataKeyInput({ value, onChange, disabled }: MetadataKeyInput
   );
 
   const handleChange: MultiselectProps['onChange'] = ({ detail }) => {
-    const selectedValues = detail.selectedOptions.map((opt) => opt.value || '');
+    const selectedValues = detail.selectedOptions.map((opt) => {
+      const val = opt.value || '';
+      // Handle "Create: ..." option - extract the actual key name
+      if (val.startsWith('__create__:')) {
+        return val.slice('__create__:'.length);
+      }
+      return val;
+    });
     onChange(selectedValues);
+    setFilteringText(''); // Clear filter after selection
     setSimilarityWarning(null);
   };
 
@@ -118,10 +150,9 @@ export function MetadataKeyInput({ value, onChange, disabled }: MetadataKeyInput
         onChange={handleChange}
         options={options}
         placeholder="Select or type keys to extract"
-        filteringType="auto"
+        filteringType="manual"
         filteringPlaceholder="Search keys..."
-        filteringText={filteringText}
-        onFilteringChange={({ detail }) => handleFilteringChange(detail.filteringText)}
+        onLoadItems={({ detail }) => handleFilteringChange(detail.filteringText)}
         disabled={disabled}
         statusType={loading ? 'loading' : 'finished'}
         loadingText="Loading keys..."

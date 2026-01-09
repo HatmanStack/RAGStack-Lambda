@@ -1,7 +1,6 @@
 import React from 'react';
 import { ContentLayout, Header, SpaceBetween } from '@cloudscape-design/components';
 import { SearchInterface } from './SearchInterface';
-import { MetadataPanel } from './MetadataPanel';
 import { ApiDocs } from '../common/ApiDocs';
 
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
@@ -38,8 +37,6 @@ export const Search = () => {
     >
       <SpaceBetween size="l">
         <SearchInterface />
-
-        <MetadataPanel />
 
         {graphqlEndpoint && (
           <ApiDocs

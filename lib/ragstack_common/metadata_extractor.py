@@ -188,7 +188,8 @@ class MetadataExtractor:
             # Get existing keys for prompt context (only in auto mode)
             existing_keys = []
             if self.extraction_mode == "auto":
-                existing_keys = self.key_library.get_key_names()
+                # Get full key objects with sample values for better LLM context
+                existing_keys = self.key_library.get_active_keys()
 
             # Build the extraction prompt
             prompt = self._build_extraction_prompt(text, existing_keys)
@@ -236,13 +237,13 @@ class MetadataExtractor:
             logger.exception(f"Unexpected error extracting metadata for {document_id}: {e}")
             return {}
 
-    def _build_extraction_prompt(self, text: str, existing_keys: list[str]) -> str:
+    def _build_extraction_prompt(self, text: str, existing_keys: list[dict]) -> str:
         """
         Build the user prompt for metadata extraction.
 
         Args:
             text: Document text to analyze.
-            existing_keys: List of existing key names to suggest for reuse.
+            existing_keys: List of existing key dicts with key_name, sample_values, etc.
 
         Returns:
             Formatted prompt string.
@@ -256,9 +257,23 @@ class MetadataExtractor:
         prompt_parts = [f"Analyze this document and extract metadata:\n\n{text}"]
 
         if existing_keys:
-            keys_str = ", ".join(existing_keys[:20])  # Limit to 20 keys
+            # Build rich key context with sample values
+            key_descriptions = []
+            for key in existing_keys[:15]:  # Limit to 15 keys
+                key_name = key.get("key_name", "")
+                samples = key.get("sample_values", [])[:3]  # Up to 3 samples
+                if samples:
+                    samples_str = ", ".join(f'"{s}"' for s in samples)
+                    key_descriptions.append(f"  - {key_name}: {samples_str}")
+                else:
+                    key_descriptions.append(f"  - {key_name}")
+
+            keys_block = "\n".join(key_descriptions)
             prompt_parts.append(
-                f"\n\nExisting metadata keys you should reuse if applicable: {keys_str}"
+                f"\n\nEXISTING KEYS (you MUST use these instead of creating similar ones):\n{keys_block}\n\n"
+                "IMPORTANT: If your extracted value is semantically similar to an existing key, "
+                "USE THE EXISTING KEY. For example, if 'date' exists, don't create 'date_range' or 'dates'. "
+                "Only create a new key if no existing key captures the same concept."
             )
 
         prompt_parts.append(f"\n\nExtract up to {self.max_keys} relevant metadata fields.")
