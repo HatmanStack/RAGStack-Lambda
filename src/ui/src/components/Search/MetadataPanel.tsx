@@ -1,7 +1,6 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  Container,
-  Header,
+  ExpandableSection,
   SpaceBetween,
   Box,
   Alert,
@@ -112,46 +111,42 @@ export const MetadataPanel: React.FC = () => {
   }
 
   return (
-    <Container
-      header={
-        <Header
-          variant="h2"
-          description="Discover metadata fields and filter patterns in your documents"
-          actions={<AnalyzeButton onComplete={handleAnalysisComplete} />}
-          info={
-            <Popover
-              header="About Metadata Analysis"
-              content={
-                <SpaceBetween size="s">
-                  <Box>
-                    <strong>What it does:</strong> Samples vectors from your Knowledge Base to discover
-                    metadata fields and generate filter examples for improved search.
-                  </Box>
-                  <Box>
-                    <strong>Key Statistics:</strong> Shows which metadata keys exist in your documents,
-                    their data types, and how often they appear.
-                  </Box>
-                  <Box>
-                    <strong>Filter Examples:</strong> AI-generated filter patterns based on your actual
-                    metadata. When multi-slice retrieval is enabled, these examples are fed to the LLM
-                    after each user query to generate targeted metadata filters, creating parallel search
-                    vectors that improve recall by searching both filtered and unfiltered results.
-                  </Box>
-                </SpaceBetween>
-              }
-              dismissButton={false}
-              position="right"
-              size="large"
-            >
-              <Box color="text-status-info" display="inline">
-                <Icon name="status-info" />
+    <ExpandableSection
+      variant="container"
+      headerText="Metadata Analysis"
+      headerInfo={
+        <Popover
+          header="About Metadata Analysis"
+          content={
+            <SpaceBetween size="s">
+              <Box>
+                <strong>What it does:</strong> Samples vectors from your Knowledge Base to discover
+                metadata fields and generate filter examples for improved search.
               </Box>
-            </Popover>
+              <Box>
+                <strong>Key Statistics:</strong> Shows which metadata keys exist in your documents,
+                their data types, and how often they appear.
+              </Box>
+              <Box>
+                <strong>Filter Examples:</strong> AI-generated filter patterns based on your actual
+                metadata. When multi-slice retrieval is enabled, these examples are fed to the LLM
+                after each user query to generate targeted metadata filters, creating parallel search
+                vectors that improve recall by searching both filtered and unfiltered results.
+              </Box>
+            </SpaceBetween>
           }
+          dismissButton={false}
+          position="right"
+          size="large"
         >
-          Metadata Analysis
-        </Header>
+          <Box color="text-status-info" display="inline">
+            <Icon name="status-info" />
+          </Box>
+        </Popover>
       }
+      headerDescription="Discover metadata fields and filter patterns in your documents"
+      headerActions={<AnalyzeButton onComplete={handleAnalysisComplete} />}
+      defaultExpanded={false}
     >
       <SpaceBetween size="l">
         {(totalKeys === 0 && totalExamples === 0 && !statsLoading && !examplesLoading) ? (
@@ -186,6 +181,6 @@ export const MetadataPanel: React.FC = () => {
           </SpaceBetween>
         )}
       </SpaceBetween>
-    </Container>
+    </ExpandableSection>
   );
 };
