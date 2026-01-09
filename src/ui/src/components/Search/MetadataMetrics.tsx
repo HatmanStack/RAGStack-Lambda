@@ -107,7 +107,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               id: 'dataType',
               header: 'Type',
               cell: (item) => getDataTypeBadge(item.dataType),
-              minWidth: 100,
+              minWidth: 120,
             },
             {
               id: 'occurrenceCount',
