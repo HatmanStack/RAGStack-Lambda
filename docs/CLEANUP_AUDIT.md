@@ -182,7 +182,9 @@ Added to `vulture_whitelist.py`:
 
 | Language | File | Lines Removed | Phase |
 |----------|------|---------------|-------|
-| *To be populated during Phases 1-2* | | | |
+| Python | - | 0 | 1 |
+
+**Note:** No executable `print()` statements found in production code (`lib/`, `src/lambda/`). Three `print()` calls exist in docstring examples (`text_extractors/__init__.py`) and are preserved per ADR-001.
 
 ---
 
