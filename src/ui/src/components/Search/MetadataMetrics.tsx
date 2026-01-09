@@ -90,13 +90,14 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <Table
-          loading={loading}
-          loadingText="Loading metadata keys..."
-          items={stats}
-          wrapLines={false}
-          stickyColumns={{ first: 1 }}
-          columnDefinitions={[
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <Table
+            loading={loading}
+            loadingText="Loading metadata keys..."
+            items={stats}
+            wrapLines={false}
+            stickyColumns={{ first: 1 }}
+            columnDefinitions={[
             {
               id: 'keyName',
               header: 'Key Name',
@@ -145,10 +146,11 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               </Box>
             </Box>
           }
-          variant="embedded"
-          stripedRows
-          sortingDisabled
-        />
+            variant="embedded"
+            stripedRows
+            sortingDisabled
+          />
+        </div>
       </SpaceBetween>
     </ExpandableSection>
   );

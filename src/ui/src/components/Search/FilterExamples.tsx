@@ -130,13 +130,14 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}
       >
-        <Table
-          loading={loading}
-          loadingText="Loading filter examples..."
-          items={examples}
-          wrapLines={false}
-          stickyColumns={{ first: 2 }}
-          columnDefinitions={[
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <Table
+            loading={loading}
+            loadingText="Loading filter examples..."
+            items={examples}
+            wrapLines={false}
+            stickyColumns={{ first: 2 }}
+            columnDefinitions={[
             {
               id: 'enabled',
               header: 'Active',
@@ -194,9 +195,10 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
               </Box>
             </Box>
           }
-          variant="embedded"
-          stripedRows
-        />
+            variant="embedded"
+            stripedRows
+          />
+        </div>
       </ExpandableSection>
 
       {selectedFilter && (
