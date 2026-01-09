@@ -160,12 +160,6 @@ class KeyLibrary:
             logger.exception("Error scanning key library table")
             raise
 
-    def invalidate_cache(self) -> None:
-        """Invalidate the active keys cache, forcing a fresh query on next access."""
-        self._active_keys_cache = None
-        self._active_keys_cache_time = None
-        logger.debug("Key library cache invalidated")
-
     def get_key(self, key_name: str) -> dict[str, Any] | None:
         """
         Get details for a specific metadata key.

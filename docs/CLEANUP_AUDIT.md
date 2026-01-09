@@ -139,7 +139,26 @@ Added to `vulture_whitelist.py`:
 
 | File | Function/Class | Line | Reason | Phase |
 |------|---------------|------|--------|-------|
-| *To be populated as code is removed* | | | | |
+| `lib/ragstack_common/image.py` | `prepare_image` | 188 | Never called (60% confidence) | 1 |
+| `lib/ragstack_common/image.py` | `apply_adaptive_binarization` | 221 | Never called (60% confidence) | 1 |
+| `lib/ragstack_common/key_library.py` | `invalidate_cache` | 163 | Never called (60% confidence) | 1 |
+| `lib/ragstack_common/models.py` | `MeteringRecord` | 142 | Never used (60% confidence) | 1 |
+| `lib/ragstack_common/scraper/fetcher.py` | `fetch_with_http` | 331 | Async variant never used | 1 |
+| `lib/ragstack_common/scraper/fetcher.py` | `fetch_page` | 361 | Async variant never used | 1 |
+| `lib/ragstack_common/sources.py` | `ParsedURI` | 174 | Only used by dead functions | 1 |
+| `lib/ragstack_common/sources.py` | `parse_citation_uri` | 186 | Never called | 1 |
+| `lib/ragstack_common/sources.py` | `extract_page_number` | 268 | Never called | 1 |
+| `lib/ragstack_common/sources.py` | `lookup_document_metadata` | 294 | Never called | 1 |
+| `lib/ragstack_common/sources.py` | `generate_presigned_url` | 323 | Duplicated in Lambda handlers | 1 |
+| `lib/ragstack_common/sources.py` | `generate_document_url` | 345 | Never called | 1 |
+| `lib/ragstack_common/sources.py` | `resolve_document_s3_uri` | 387 | Never called | 1 |
+| `lib/ragstack_common/sources.py` | `build_source_object` | 432 | Never called | 1 |
+| `lib/ragstack_common/storage.py` | `read_s3_json` | 94 | Never called | 1 |
+| `lib/ragstack_common/storage.py` | `write_s3_json` | 135 | Never called | 1 |
+| `lib/ragstack_common/storage.py` | `write_s3_binary` | 159 | Never called | 1 |
+| `lib/ragstack_common/storage.py` | `s3_object_exists` | 183 | Never called | 1 |
+
+**Total: 18 items removed from lib/**
 
 ---
 

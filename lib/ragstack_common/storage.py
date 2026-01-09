@@ -4,7 +4,6 @@ Storage utilities for S3 and DynamoDB operations.
 Provides simple, consistent interface for reading/writing data.
 """
 
-import json
 import logging
 from typing import Any
 
@@ -91,12 +90,6 @@ def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str:
         raise
 
 
-def read_s3_json(s3_uri: str) -> dict:
-    """Read JSON content from S3."""
-    text = read_s3_text(s3_uri)
-    return json.loads(text)
-
-
 def read_s3_binary(s3_uri: str) -> bytes:
     """Read binary content from S3."""
     bucket, key = parse_s3_uri(s3_uri)
@@ -130,64 +123,6 @@ def write_s3_text(s3_uri: str, content: str, encoding: str = "utf-8") -> str:
     except ClientError:
         logger.exception(f"Failed to write S3 text to {s3_uri}")
         raise
-
-
-def write_s3_json(s3_uri: str, data: dict) -> str:
-    """
-    Write JSON content to S3.
-
-    Args:
-        s3_uri: Destination S3 URI
-        data: Data to write as JSON
-
-    Returns:
-        The S3 URI that was written to
-    """
-    content = json.dumps(data, indent=2)
-    bucket, key = parse_s3_uri(s3_uri)
-    try:
-        get_s3_client().put_object(
-            Bucket=bucket, Key=key, Body=content.encode("utf-8"), ContentType="application/json"
-        )
-        logger.info(f"Wrote JSON to {s3_uri}")
-        return s3_uri
-    except ClientError:
-        logger.exception(f"Failed to write S3 JSON to {s3_uri}")
-        raise
-
-
-def write_s3_binary(
-    s3_uri: str, content: bytes, content_type: str = "application/octet-stream"
-) -> str:
-    """
-    Write binary content to S3.
-
-    Args:
-        s3_uri: Destination S3 URI
-        content: Binary content to write
-        content_type: MIME type of the content
-
-    Returns:
-        The S3 URI that was written to
-    """
-    bucket, key = parse_s3_uri(s3_uri)
-    try:
-        get_s3_client().put_object(Bucket=bucket, Key=key, Body=content, ContentType=content_type)
-        logger.info(f"Wrote binary to {s3_uri}")
-        return s3_uri
-    except ClientError:
-        logger.exception(f"Failed to write S3 binary to {s3_uri}")
-        raise
-
-
-def s3_object_exists(s3_uri: str) -> bool:
-    """Check if S3 object exists."""
-    bucket, key = parse_s3_uri(s3_uri)
-    try:
-        get_s3_client().head_object(Bucket=bucket, Key=key)
-        return True
-    except ClientError:
-        return False
 
 
 def delete_s3_object(s3_uri: str) -> None:

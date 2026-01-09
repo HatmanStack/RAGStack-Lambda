@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageFilter
+from PIL import Image
 
 from ragstack_common.constants import (
     MAX_IMAGE_SIZE_BYTES,
@@ -183,93 +183,6 @@ def resize_image(
         f"Image {current_width}x{current_height} already fits within {target_width}x{target_height}"
     )
     return image_data
-
-
-def prepare_image(
-    image_source: str | bytes,
-    target_width: int | None = None,
-    target_height: int | None = None,
-    allow_upscale: bool = False,
-) -> bytes:
-    """
-    Prepare an image for model input from either S3 URI or raw bytes.
-
-    Args:
-        image_source: Either an S3 URI (s3://bucket/key) or raw image bytes
-        target_width: Target width in pixels (None = no resize)
-        target_height: Target height in pixels (None = no resize)
-        allow_upscale: Whether to allow making the image larger
-
-    Returns:
-        Processed image bytes ready for model input
-    """
-    # Get the image data
-    if isinstance(image_source, str) and image_source.startswith("s3://"):
-        # Import here to avoid circular dependency
-        from .storage import read_s3_binary
-
-        image_data = read_s3_binary(image_source)
-    elif isinstance(image_source, bytes):
-        image_data = image_source
-    else:
-        raise ValueError(f"Invalid image source: {type(image_source)}. Must be S3 URI or bytes.")
-
-    # Resize and process
-    return resize_image(image_data, target_width, target_height, allow_upscale)
-
-
-def apply_adaptive_binarization(image_data: bytes) -> bytes:
-    """
-    Apply adaptive binarization to improve OCR accuracy on documents with
-    uneven lighting, low contrast, or background noise.
-
-    Args:
-        image_data: Raw image bytes
-
-    Returns:
-        Processed image as JPEG bytes with adaptive binarization applied
-    """
-    try:
-        # Convert bytes to PIL Image
-        pil_image = Image.open(io.BytesIO(image_data))
-
-        # Convert to grayscale if not already
-        if pil_image.mode != "L":
-            pil_image = pil_image.convert("L")
-
-        # Apply adaptive thresholding using Pillow operations
-        block_size = 15
-        threshold_offset = 10
-
-        # Create a blurred version for local mean calculation
-        radius = block_size // 2
-        blurred = pil_image.filter(ImageFilter.BoxBlur(radius))
-
-        # Apply adaptive threshold: original > (blurred - threshold_offset) ? 255 : 0
-        width, height = pil_image.size
-        original_pixels = list(pil_image.getdata())
-        blurred_pixels = list(blurred.getdata())
-
-        binary_pixels = []
-        for orig, blur in zip(original_pixels, blurred_pixels, strict=True):
-            threshold = blur - threshold_offset
-            binary_pixels.append(255 if orig > threshold else 0)
-
-        # Create binary image
-        binary_image = Image.new("L", (width, height))
-        binary_image.putdata(binary_pixels)
-
-        # Convert to JPEG bytes
-        img_byte_array = io.BytesIO()
-        binary_image.save(img_byte_array, format="JPEG", quality=95)
-
-        logger.debug("Applied adaptive binarization preprocessing")
-        return img_byte_array.getvalue()
-
-    except Exception:
-        logger.exception("Error applying adaptive binarization")
-        logger.warning("Falling back to original image")
-        return image_data
 
 
 def prepare_bedrock_image_attachment(image_data: bytes) -> dict[str, Any]:
