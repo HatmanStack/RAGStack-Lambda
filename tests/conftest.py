@@ -102,5 +102,3 @@ def mock_bedrock_client():
     from tests.mocks.bedrock_mock import create_mock_bedrock_client
 
     return create_mock_bedrock_client()
-
-

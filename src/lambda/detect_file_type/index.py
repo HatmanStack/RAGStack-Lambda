@@ -143,11 +143,11 @@ def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
         return True
 
     # AVIF: ....ftypavif (ftyp box at offset 4)
-    if len(content_first_bytes) >= 12 and b"ftyp" in content_first_bytes[:12]:
-        if b"avif" in content_first_bytes[:16] or b"avis" in content_first_bytes[:16]:
-            return True
-
-    return False
+    return (
+        len(content_first_bytes) >= 12
+        and b"ftyp" in content_first_bytes[:12]
+        and (b"avif" in content_first_bytes[:16] or b"avis" in content_first_bytes[:16])
+    )
 
 
 def lambda_handler(event, context):

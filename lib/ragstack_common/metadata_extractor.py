@@ -270,9 +270,11 @@ class MetadataExtractor:
 
             keys_block = "\n".join(key_descriptions)
             prompt_parts.append(
-                f"\n\nEXISTING KEYS (you MUST use these instead of creating similar ones):\n{keys_block}\n\n"
-                "IMPORTANT: If your extracted value is semantically similar to an existing key, "
-                "USE THE EXISTING KEY. For example, if 'date' exists, don't create 'date_range' or 'dates'. "
+                f"\n\nEXISTING KEYS (you MUST use these instead of creating similar "
+                f"ones):\n{keys_block}\n\n"
+                "IMPORTANT: If your extracted value is semantically similar to an "
+                "existing key, USE THE EXISTING KEY. For example, if 'date' exists, "
+                "don't create 'date_range' or 'dates'. "
                 "Only create a new key if no existing key captures the same concept."
             )
 

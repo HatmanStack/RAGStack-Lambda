@@ -315,8 +315,8 @@ def lambda_handler(event, context):
     existing_metadata = check_existing_metadata(output_s3_uri)
     llm_metadata_extracted = False
 
-    # LLM-extracted metadata: written to S3 for Bedrock KB filtering AND stored in DynamoDB
-    # Base fields (document_id, filename, etc.) are already columns in tracking table - no duplication
+    # LLM-extracted metadata: written to S3 for KB filtering AND stored in DynamoDB
+    # Base fields (document_id, etc.) already in tracking table - no duplication
     llm_metadata = {}
 
     if existing_metadata:

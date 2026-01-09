@@ -275,7 +275,8 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
-Generate exactly {num_examples} practical filter examples that users might find useful. Each example should have:
+Generate exactly {num_examples} practical filter examples that users might find useful.
+Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter

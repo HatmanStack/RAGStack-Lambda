@@ -375,4 +375,3 @@ But this is not JSON."""
 TEXT_LOOKS_LIKE_XML = """Compare apples < oranges and oranges > bananas.
 This is not XML <but> it has angle brackets.
 HTML tags like <div> might confuse detection."""
-
