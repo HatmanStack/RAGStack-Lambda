@@ -49,3 +49,6 @@ amplifyconfiguration*
 amplify/data/config.ts
 .env
 ragstack-packaged.yaml
+
+# Generated files
+src/ragstack-chat/src/amplify-config.generated.ts
