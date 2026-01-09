@@ -96,3 +96,10 @@ skip-magic-trailing-comma = false
 [tool.ruff.lint.isort]
 # Import sorting configuration
 known-first-party = ["ragstack_common"]
+
+[tool.vulture]
+# Vulture configuration for dead code detection
+# Run: uvx vulture lib/ src/lambda/ tests/ vulture_whitelist.py --min-confidence 80
+min_confidence = 80
+paths = ["lib/", "src/lambda/", "tests/"]
+exclude = [".venv", "__pycache__", ".aws-sam", "node_modules"]
