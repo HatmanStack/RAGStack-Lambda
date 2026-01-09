@@ -90,7 +90,10 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <div style={{ width: '100%', overflowX: 'auto' }}>
+        <div
+          style={{ width: '100%', overflowX: 'auto' }}
+          className="table-scroll-container"
+        >
           <Table
             loading={loading}
             loadingText="Loading metadata keys..."
