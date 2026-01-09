@@ -90,12 +90,12 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <div style={{ overflowX: 'scroll', minWidth: 0, paddingBottom: 8 }}>
         <Table
           loading={loading}
           loadingText="Loading metadata keys..."
           items={stats}
           wrapLines={false}
+          stickyColumns={{ first: 1 }}
           columnDefinitions={[
             {
               id: 'keyName',
@@ -149,7 +149,6 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           stripedRows
           sortingDisabled
         />
-        </div>
       </SpaceBetween>
     </ExpandableSection>
   );
