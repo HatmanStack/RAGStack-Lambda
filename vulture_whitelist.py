@@ -5,6 +5,12 @@
 handler
 lambda_handler
 
+# CloudFormation custom resource helper decorators (crhelper)
+# These functions are invoked by the CfnResource framework via decorator registration
+create_or_update  # @helper.create and @helper.update
+poll_create_or_update  # @helper.poll_create and @helper.poll_update
+delete  # @helper.delete
+
 # Pytest fixtures (injected by pytest, not direct calls)
 # Configuration resolver test fixtures
 mock_env  # pytest fixture that sets environment variables
@@ -17,6 +23,15 @@ sample_document
 mock_env_with_key_library
 set_env_vars
 
+# Fixtures from tests/conftest.py
+pytest_configure  # pytest hook
+sample_key_library_entries
+sample_immigration_text
+sample_census_text
+sample_genealogy_text
+sample_image_caption
+immigration_metadata
+
 # Common pytest patterns
 request  # pytest fixture parameter
 tmp_path  # pytest built-in fixture
@@ -24,6 +39,9 @@ monkeypatch  # pytest built-in fixture
 capsys  # pytest built-in fixture
 caplog  # pytest built-in fixture for log capture
 mocker  # pytest-mock fixture
+
+# Mock attributes (set dynamically in tests)
+side_effect
 
 # Test function keyword arguments captured but unused
 kw

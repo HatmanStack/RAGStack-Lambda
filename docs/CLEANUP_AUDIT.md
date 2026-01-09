@@ -66,11 +66,80 @@ This section will be updated after cleanup phases are complete.
 
 ---
 
+## Phase 1 Analysis Findings (Task 1)
+
+### Vulture Analysis at 60% Confidence
+
+Running `uvx vulture lib/ src/lambda/ tests/ vulture_whitelist.py --min-confidence 60` identified the following candidates for removal:
+
+#### lib/ragstack_common/ - Confirmed Dead Code (Auto-delete)
+
+| File | Item | Type | Confidence |
+|------|------|------|------------|
+| `image.py:188` | `prepare_image` | function | 60% |
+| `image.py:221` | `apply_adaptive_binarization` | function | 60% |
+| `key_library.py:163` | `invalidate_cache` | method | 60% |
+| `models.py:142` | `MeteringRecord` | class | 60% |
+| `scraper/fetcher.py:331` | `fetch_with_http` | function | 60% |
+| `scraper/fetcher.py:361` | `fetch_page` | function | 60% |
+| `sources.py:186` | `parse_citation_uri` | function | 60% |
+| `sources.py:268` | `extract_page_number` | function | 60% |
+| `sources.py:294` | `lookup_document_metadata` | function | 60% |
+| `sources.py:345` | `generate_document_url` | function | 60% |
+| `sources.py:387` | `resolve_document_s3_uri` | function | 60% |
+| `sources.py:432` | `build_source_object` | function | 60% |
+| `storage.py:94` | `read_s3_json` | function | 60% |
+| `storage.py:135` | `write_s3_json` | function | 60% |
+| `storage.py:159` | `write_s3_binary` | function | 60% |
+| `storage.py:183` | `s3_object_exists` | function | 60% |
+
+**Total: 16 items in lib/**
+
+#### lib/ragstack_common/constants.py - Unused Constants (Review)
+
+| Constant | Line | Notes |
+|----------|------|-------|
+| `MAX_QUERY_LENGTH` | 13 | Never imported |
+| `SNIPPET_LENGTH` | 16 | Never imported |
+| `MESSAGE_LIMIT` | 19 | Never imported |
+| `MAX_SEARCH_RESULTS` | 22 | Never imported |
+| `DEFAULT_SEARCH_RESULTS` | 23 | Never imported |
+| `PRESIGNED_URL_EXPIRY` | 31 | Never imported |
+| `LAMBDA_TIMEOUT` | 34 | Never imported |
+| `INGEST_TIMEOUT` | 37 | Never imported |
+| `QUERY_TIMEOUT` | 40 | Never imported |
+| `DEFAULT_PAGE_SIZE` | 48 | Never imported |
+| `MAX_PAGE_SIZE` | 51 | Never imported |
+| `MAX_IMAGE_DIMENSION` | 62 | Never imported |
+| `DEFAULT_GLOBAL_QUOTA_DAILY` | 70 | Never imported |
+| `DEFAULT_PER_USER_QUOTA_DAILY` | 73 | Never imported |
+
+**Note:** Constants file is exported via `__init__.py` but individual constants are not used. Consider removing unused constants.
+
+#### src/lambda/ - Confirmed Dead Code (Auto-delete)
+
+| File | Item | Type | Confidence |
+|------|------|------|------------|
+| `detect_file_type/index.py:41` | `OCR_TYPES` | variable | 60% |
+| `kb_custom_resource/index.py:25` | `generate_random_suffix` | function | 60% |
+| `metadata_analyzer/index.py:53` | `DEFAULT_MIN_OCCURRENCE_RATE` | variable | 60% |
+
+**Total: 3 items in src/lambda/**
+
+#### Whitelisted Items (False Positives)
+
+Added to `vulture_whitelist.py`:
+- `create_or_update`, `poll_create_or_update`, `delete` - crhelper decorator-registered functions
+- pytest fixtures from `tests/conftest.py`: `pytest_configure`, `sample_key_library_entries`, `sample_immigration_text`, `sample_census_text`, `sample_genealogy_text`, `sample_image_caption`, `immigration_metadata`
+- `side_effect` - mock attribute set dynamically in tests
+
+---
+
 ## Python Dead Code Removed
 
 | File | Function/Class | Line | Reason | Phase |
 |------|---------------|------|--------|-------|
-| *To be populated during Phase 1* | | | | |
+| *To be populated as code is removed* | | | | |
 
 ---
 
