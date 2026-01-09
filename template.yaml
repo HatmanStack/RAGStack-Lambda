@@ -3513,6 +3513,18 @@ Resources:
                     'description': 'Filter examples for few-shot learning (JSON array)',
                     'default': []
                 },
+                'metadata_filter_examples_disabled': {
+                    'type': 'array',
+                    'order': 211,
+                    'description': 'Names of disabled filter examples',
+                    'default': []
+                },
+                'metadata_filter_examples_updated_at': {
+                    'type': 'string',
+                    'order': 212,
+                    'description': 'Timestamp when filter examples were last generated',
+                    'default': ''
+                },
                 'metadata_extraction_enabled': {
                     'type': 'boolean',
                     'order': 22,
