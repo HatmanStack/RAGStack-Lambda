@@ -3620,7 +3620,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "2"  # v2: added metadata extraction settings
+      SchemaVersion: "3"  # v3: added metadata_filter_examples_disabled and _updated_at
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently
