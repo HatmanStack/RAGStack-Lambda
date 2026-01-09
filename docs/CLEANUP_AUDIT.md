@@ -247,7 +247,10 @@ Added to `vulture_whitelist.py`:
 
 | File | Item | Reason for Uncertainty | Resolution |
 |------|------|----------------------|------------|
-| *To be populated during cleanup* | | | |
+| src/ui/src/components/Chat/ChatPanel.test.tsx | it.skip('supports Enter key') | CloudScape keyboard event handling | Keep - documented, core functionality tested via button |
+| src/ui/src/components/Settings/index.test.tsx | it.skip('shows customized indicator') | Flaky or needs fixing | Keep - needs investigation |
+| src/ragstack-chat/.../ChatInterface.test.tsx | 2x it.skip (sessionStorage tests) | Mock configuration issues | Keep - TODO documented |
+| src/ragstack-chat/.../integration/*.test.tsx | describe.skip (integration tests) | Requires deployed backend | Keep - appropriate for integration tests |
 
 ---
 
