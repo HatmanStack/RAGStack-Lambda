@@ -1423,6 +1423,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           TRACKING_TABLE: !Ref TrackingTable
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1433,6 +1434,8 @@ Resources:
             TableName: !Ref ConversationHistoryTable
         - DynamoDBReadPolicy:
             TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - Statement:
@@ -1472,6 +1475,7 @@ Resources:
           IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image search
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1484,10 +1488,19 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+        - Statement:
+            - Effect: Allow
+              Action:
                 - dynamodb:GetItem
+                - dynamodb:Scan
               Resource:
                 - !GetAtt ConfigurationTable.Arn
                 - !GetAtt TrackingTable.Arn
+                - !GetAtt MetadataKeyLibraryTable.Arn
 
   ##########################################################################
   # Configuration Resolver Lambda
