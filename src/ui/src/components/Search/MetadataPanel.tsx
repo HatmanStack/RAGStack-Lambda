@@ -38,46 +38,42 @@ export const MetadataPanel: React.FC = () => {
     refetch: refetchExamples,
   } = useFilterExamples();
 
-  // Track which filter examples are enabled (null = not yet loaded)
-  const [enabledExamples, setEnabledExamples] = useState<string[] | null>(null);
+  // Track DISABLED examples (inverted: all enabled by default, store only disabled)
+  const [disabledExamples, setDisabledExamples] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  // Load enabled examples from configuration
+  // Load disabled examples from configuration
   useEffect(() => {
-    const loadEnabled = async () => {
+    const loadDisabled = async () => {
       try {
         const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
         const config = response.data?.getConfiguration as { Custom?: string } | undefined;
         if (config?.Custom) {
           const custom = JSON.parse(config.Custom);
-          if (Array.isArray(custom.metadata_filter_examples_enabled)) {
-            setEnabledExamples(custom.metadata_filter_examples_enabled);
-            return;
+          if (Array.isArray(custom.metadata_filter_examples_disabled)) {
+            setDisabledExamples(custom.metadata_filter_examples_disabled);
           }
         }
-        // No saved preference - will default to all enabled when examples load
-        setEnabledExamples(null);
       } catch (err) {
-        console.error('Failed to load enabled examples:', err);
-        setEnabledExamples(null);
+        console.error('Failed to load disabled examples:', err);
+      } finally {
+        setLoaded(true);
       }
     };
-    loadEnabled();
+    loadDisabled();
   }, []);
 
-  // When examples load, if no saved preference exists, default all to enabled
-  useEffect(() => {
-    if (enabledExamples === null && examples.length > 0) {
-      setEnabledExamples(examples.map(e => e.name));
-    }
-  }, [examples, enabledExamples]);
+  // Compute enabled list from examples minus disabled
+  const enabledExamples = examples
+    .map(e => e.name)
+    .filter(name => !disabledExamples.includes(name));
 
   const handleToggleExample = useCallback(async (name: string, enabled: boolean) => {
-    const current = enabledExamples || [];
-    const newEnabled = enabled
-      ? [...current, name]
-      : current.filter(n => n !== name);
+    const newDisabled = enabled
+      ? disabledExamples.filter(n => n !== name) // Remove from disabled
+      : [...disabledExamples, name]; // Add to disabled
 
-    setEnabledExamples(newEnabled);
+    setDisabledExamples(newDisabled);
 
     // Save to configuration immediately
     try {
@@ -85,16 +81,16 @@ export const MetadataPanel: React.FC = () => {
         query: updateConfiguration,
         variables: {
           customConfig: JSON.stringify({
-            metadata_filter_examples_enabled: newEnabled,
+            metadata_filter_examples_disabled: newDisabled,
           }),
         },
       });
     } catch (err) {
-      console.error('Failed to save enabled examples:', err);
+      console.error('Failed to save disabled examples:', err);
       // Revert on failure
-      setEnabledExamples(current);
+      setDisabledExamples(disabledExamples);
     }
-  }, [enabledExamples]);
+  }, [disabledExamples]);
 
   const handleAnalysisComplete = useCallback(() => {
     // Refetch both stats and examples after analysis

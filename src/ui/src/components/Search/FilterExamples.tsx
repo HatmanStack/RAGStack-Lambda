@@ -109,6 +109,10 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
                   filter accuracy for your use case.
                 </Box>
                 <Box>
+                  <strong>Re-analysis:</strong> When you run "Analyze Metadata" again, your
+                  disabled preferences are preserved. New examples are enabled by default.
+                </Box>
+                <Box>
                   <strong>Multi-slice retrieval:</strong> When enabled, each query generates
                   parallel searches with different metadata filters based on these examples.
                 </Box>
