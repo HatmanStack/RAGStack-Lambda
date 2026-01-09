@@ -74,14 +74,16 @@ def build_scrape_metadata(
     metadata = dict(job_metadata) if job_metadata else {}
 
     # Add/override with deterministic fields
-    metadata.update({
-        "source_url": url,
-        "source_domain": parsed.netloc,
-        "job_id": job_id,
-        "content_type": "web_page",
-        "title": title or "Untitled",
-        "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
-    })
+    metadata.update(
+        {
+            "source_url": url,
+            "source_domain": parsed.netloc,
+            "job_id": job_id,
+            "content_type": "web_page",
+            "title": title or "Untitled",
+            "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        }
+    )
 
     return metadata
 

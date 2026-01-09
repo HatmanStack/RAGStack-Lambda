@@ -97,7 +97,18 @@ def _is_pdf_or_image(filename: str, content_first_bytes: bytes) -> bool:
     lower_name = filename.lower()
 
     # Check by extension
-    pdf_image_extensions = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".gif", ".bmp", ".webp", ".avif"}
+    pdf_image_extensions = {
+        ".pdf",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".tiff",
+        ".tif",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".avif",
+    }
     for ext in pdf_image_extensions:
         if lower_name.endswith(ext):
             return True

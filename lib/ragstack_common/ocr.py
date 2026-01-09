@@ -279,6 +279,7 @@ class OcrService:
 
                 # Poll for completion
                 import time
+
                 max_wait_seconds = 300  # 5 minutes max
                 poll_interval = 2
                 elapsed = 0
@@ -345,9 +346,7 @@ class OcrService:
 
                 blocks = response.get("Blocks", [])
                 lines = [b.get("Text", "") for b in blocks if b["BlockType"] == "LINE"]
-                confidences = [
-                    b.get("Confidence", 0) for b in blocks if b["BlockType"] == "LINE"
-                ]
+                confidences = [b.get("Confidence", 0) for b in blocks if b["BlockType"] == "LINE"]
 
                 text = "\n".join(lines)
                 avg_confidence = sum(confidences) / len(confidences) if confidences else 0

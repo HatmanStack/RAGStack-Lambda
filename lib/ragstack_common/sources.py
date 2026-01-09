@@ -158,5 +158,3 @@ def construct_image_uri_from_content_uri(
         return content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
     except Exception:
         return None
-
-

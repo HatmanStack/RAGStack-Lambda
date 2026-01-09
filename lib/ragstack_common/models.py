@@ -137,5 +137,3 @@ class Document:
             error_message=data.get("error_message"),
             metadata=data.get("metadata", {}),
         )
-
-

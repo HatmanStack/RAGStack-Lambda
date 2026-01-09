@@ -563,8 +563,7 @@ def lambda_handler(event: dict, context) -> dict:
             # Keep examples that are NOT disabled
             if current_examples and isinstance(current_examples, list):
                 preserved_examples = [
-                    ex for ex in current_examples
-                    if ex.get("name") not in disabled_names
+                    ex for ex in current_examples if ex.get("name") not in disabled_names
                 ]
                 logger.info(f"Preserving {len(preserved_examples)} enabled examples")
 
