@@ -90,7 +90,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <div style={{ width: '100%', overflowX: 'scroll' }}>
+        <div className="table-scroll-container">
           <Table
             loading={loading}
             loadingText="Loading metadata keys..."
@@ -114,7 +114,17 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               id: 'occurrenceCount',
               header: 'Occurrences',
               cell: (item) => item.occurrenceCount.toLocaleString(),
-              width: 110,  // Fixed: number display
+              width: 110,
+            },
+            {
+              id: 'status',
+              header: 'Status',
+              cell: (item) => (
+                <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
+                  {item.status}
+                </StatusIndicator>
+              ),
+              width: 100,
             },
             {
               id: 'sampleValues',
@@ -125,17 +135,7 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                   {item.sampleValues?.length > 3 && ` +${item.sampleValues.length - 3} more`}
                 </Box>
               ),
-              minWidth: 200,  // Flex: takes remaining space
-            },
-            {
-              id: 'status',
-              header: 'Status',
-              cell: (item) => (
-                <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
-                  {item.status}
-                </StatusIndicator>
-              ),
-              width: 100,  // Fixed: "active"/"inactive"
+              minWidth: 200,
             },
           ]}
           empty={

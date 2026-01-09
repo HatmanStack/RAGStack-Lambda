@@ -24,3 +24,28 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Custom scrollbar for table containers */
+.table-scroll-container {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #687078 #e9ebed;
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #e9ebed;
+  border-radius: 5px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #687078;
+  border-radius: 5px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #414d5c;
+}

@@ -252,9 +252,10 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
   ];
 
   return (
-    <Table
-      {...collectionProps}
-      header={
+    <div className="table-scroll-container">
+      <Table
+        {...collectionProps}
+        header={
         <Header
           variant="h2"
           counter={`(${filteredDocuments.length}${filteredDocuments.length !== documents.length ? ` of ${documents.length}` : ''})`}
@@ -363,6 +364,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
           )}
         />
       }
-    />
+      />
+    </div>
   );
 };
