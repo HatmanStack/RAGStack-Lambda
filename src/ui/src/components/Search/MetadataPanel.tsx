@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Header,
@@ -63,34 +63,38 @@ export const MetadataPanel: React.FC = () => {
     loadDisabled();
   }, []);
 
-  // Compute enabled list from examples minus disabled
-  const enabledExamples = examples
-    .map(e => e.name)
-    .filter(name => !disabledExamples.includes(name));
+  // Compute enabled list from examples minus disabled (memoized)
+  const enabledExamples = useMemo(
+    () => examples.map(e => e.name).filter(name => !disabledExamples.includes(name)),
+    [examples, disabledExamples]
+  );
 
-  const handleToggleExample = useCallback(async (name: string, enabled: boolean) => {
-    const newDisabled = enabled
-      ? disabledExamples.filter(n => n !== name) // Remove from disabled
-      : [...disabledExamples, name]; // Add to disabled
+  const handleToggleExample = useCallback((name: string, enabled: boolean) => {
+    // Update local state immediately
+    setDisabledExamples(prev => {
+      const newDisabled = enabled
+        ? prev.filter(n => n !== name) // Remove from disabled
+        : [...prev, name]; // Add to disabled
 
-    setDisabledExamples(newDisabled);
+      // Save to configuration asynchronously (don't block UI)
+      (async () => {
+        try {
+          await client.graphql({
+            query: updateConfiguration,
+            variables: {
+              customConfig: JSON.stringify({
+                metadata_filter_examples_disabled: newDisabled,
+              }),
+            },
+          });
+        } catch (err) {
+          console.error('Failed to save disabled examples:', err);
+        }
+      })();
 
-    // Save to configuration immediately
-    try {
-      await client.graphql({
-        query: updateConfiguration,
-        variables: {
-          customConfig: JSON.stringify({
-            metadata_filter_examples_disabled: newDisabled,
-          }),
-        },
-      });
-    } catch (err) {
-      console.error('Failed to save disabled examples:', err);
-      // Revert on failure
-      setDisabledExamples(disabledExamples);
-    }
-  }, [disabledExamples]);
+      return newDisabled;
+    });
+  }, []);
 
   const handleAnalysisComplete = useCallback(() => {
     // Refetch stats and examples, clear local disabled list (backend cleared it)
