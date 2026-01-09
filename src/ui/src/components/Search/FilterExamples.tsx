@@ -110,7 +110,8 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
                 </Box>
                 <Box>
                   <strong>Re-analysis:</strong> When you run "Analyze Metadata" again, your
-                  disabled preferences are preserved. New examples are enabled by default.
+                  enabled filter examples are preserved. New examples will be created to replace
+                  the disabled examples.
                 </Box>
                 <Box>
                   <strong>Multi-slice retrieval:</strong> When enabled, each query generates
