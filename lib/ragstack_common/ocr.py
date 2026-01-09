@@ -290,12 +290,11 @@ class OcrService:
                     if status == "SUCCEEDED":
                         logger.info(f"Textract job completed: {job_id}")
                         break
-                    elif status == "FAILED":
+                    if status == "FAILED":
                         error_msg = response.get("StatusMessage", "Unknown error")
                         raise Exception(f"Textract job failed: {error_msg}")
-                    else:
-                        time.sleep(poll_interval)
-                        elapsed += poll_interval
+                    time.sleep(poll_interval)
+                    elapsed += poll_interval
 
                 if elapsed >= max_wait_seconds:
                     raise Exception(f"Textract job timed out after {max_wait_seconds}s")

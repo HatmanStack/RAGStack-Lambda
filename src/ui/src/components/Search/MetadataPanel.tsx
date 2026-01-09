@@ -93,9 +93,10 @@ export const MetadataPanel: React.FC = () => {
   }, [disabledExamples]);
 
   const handleAnalysisComplete = useCallback(() => {
-    // Refetch both stats and examples after analysis
+    // Refetch stats and examples, clear local disabled list (backend cleared it)
     refetchStats();
     refetchExamples();
+    setDisabledExamples([]); // Backend clears disabled after replacement
   }, [refetchStats, refetchExamples]);
 
   // Show nothing if both have errors (service not configured)

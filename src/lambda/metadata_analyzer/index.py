@@ -226,6 +226,7 @@ def sample_vectors_from_kb(
 def generate_filter_examples(
     field_analysis: dict[str, dict],
     model_id: str | None = None,
+    num_examples: int = 6,
 ) -> list[dict]:
     """
     Generate filter examples using LLM based on discovered fields.
@@ -233,12 +234,17 @@ def generate_filter_examples(
     Args:
         field_analysis: Dictionary of field analysis results.
         model_id: Bedrock model ID for generation.
+        num_examples: Number of examples to generate.
 
     Returns:
         List of filter example dictionaries.
     """
     if not field_analysis:
         logger.info("No fields to generate examples for")
+        return []
+
+    if num_examples <= 0:
+        logger.info("No new examples requested")
         return []
 
     model_id = model_id or DEFAULT_FILTER_MODEL
@@ -270,7 +276,7 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
-Generate 5-8 practical filter examples that users might find useful. Each example should have:
+Generate exactly {num_examples} practical filter examples that users might find useful. Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter
@@ -419,22 +425,26 @@ def update_key_library_counts(
             logger.warning(f"Failed to update key '{key_name}': {e}")
 
 
-def update_config_with_examples(examples: list[dict]) -> None:
+def update_config_with_examples(examples: list[dict], clear_disabled: bool = False) -> None:
     """
     Update configuration table with filter examples.
 
     Args:
         examples: List of filter example dictionaries.
+        clear_disabled: If True, clear the disabled list (after replacement).
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     config_manager = get_config_manager()
     if config_manager:
         try:
-            config_manager.update_custom_config({
+            update_data = {
                 "metadata_filter_examples": examples,
-                "metadata_filter_examples_updated_at": datetime.now(timezone.utc).isoformat(),
-            })
+                "metadata_filter_examples_updated_at": datetime.now(UTC).isoformat(),
+            }
+            if clear_disabled:
+                update_data["metadata_filter_examples_disabled"] = []
+            config_manager.update_custom_config(update_data)
             logger.info(f"Updated config with {len(examples)} filter examples")
         except Exception as e:
             logger.warning(f"Failed to update config with examples: {e}")
@@ -521,18 +531,41 @@ def lambda_handler(event: dict, context) -> dict:
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table)
 
-        # Step 5: Generate filter examples
-        examples = []
-        if field_analysis:
-            examples = generate_filter_examples(field_analysis)
+        # Step 5: Load existing examples and disabled list, preserve enabled ones
+        preserved_examples = []
+        disabled_names = set()
+        target_example_count = 6  # Default target
 
-        # Step 6: Store results
+        if config:
+            current_examples = config.get_parameter("metadata_filter_examples", default=[])
+            disabled_list = config.get_parameter("metadata_filter_examples_disabled", default=[])
+            disabled_names = set(disabled_list) if disabled_list else set()
+
+            # Keep examples that are NOT disabled
+            if current_examples and isinstance(current_examples, list):
+                preserved_examples = [
+                    ex for ex in current_examples
+                    if ex.get("name") not in disabled_names
+                ]
+                logger.info(f"Preserving {len(preserved_examples)} enabled examples")
+
+        # Step 6: Generate new examples to replace disabled ones
+        num_to_generate = max(0, target_example_count - len(preserved_examples))
+        new_examples = []
+        if field_analysis and num_to_generate > 0:
+            new_examples = generate_filter_examples(field_analysis, num_examples=num_to_generate)
+            logger.info(f"Generated {len(new_examples)} new examples")
+
+        # Combine preserved + new
+        examples = preserved_examples + new_examples
+
+        # Step 7: Store results
         if data_bucket and examples:
             store_filter_examples(examples, data_bucket)
 
-        # Step 7: Update config with examples
+        # Step 8: Update config with examples and clear disabled list
         if examples:
-            update_config_with_examples(examples)
+            update_config_with_examples(examples, clear_disabled=True)
 
         execution_time_ms = int((time.time() - start_time) * 1000)
 
