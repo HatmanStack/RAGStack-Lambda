@@ -93,37 +93,35 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
     <>
       <ExpandableSection
         variant="container"
-        headerText={
-          <SpaceBetween direction="horizontal" size="xs">
-            <span>Filter Examples</span>
-            <Popover
-              header="How Filter Examples Work"
-              content={
-                <SpaceBetween size="s">
-                  <Box>
-                    <strong>Few-shot learning:</strong> Enabled examples are fed to the LLM as
-                    reference patterns when generating metadata filters for your queries.
-                  </Box>
-                  <Box>
-                    <strong>Control what the LLM sees:</strong> Toggle examples on/off to control
-                    which patterns guide filter generation. Disable irrelevant examples to improve
-                    filter accuracy for your use case.
-                  </Box>
-                  <Box>
-                    <strong>Multi-slice retrieval:</strong> When enabled, each query generates
-                    parallel searches with different metadata filters based on these examples.
-                  </Box>
-                </SpaceBetween>
-              }
-              dismissButton={false}
-              position="right"
-              size="large"
-            >
-              <Box color="text-status-info" display="inline">
-                <Icon name="status-info" />
-              </Box>
-            </Popover>
-          </SpaceBetween>
+        headerText="Filter Examples"
+        headerInfo={
+          <Popover
+            header="How Filter Examples Work"
+            content={
+              <SpaceBetween size="s">
+                <Box>
+                  <strong>Few-shot learning:</strong> Enabled examples are fed to the LLM as
+                  reference patterns when generating metadata filters for your queries.
+                </Box>
+                <Box>
+                  <strong>Control what the LLM sees:</strong> Toggle examples on/off to control
+                  which patterns guide filter generation. Disable irrelevant examples to improve
+                  filter accuracy for your use case.
+                </Box>
+                <Box>
+                  <strong>Multi-slice retrieval:</strong> When enabled, each query generates
+                  parallel searches with different metadata filters based on these examples.
+                </Box>
+              </SpaceBetween>
+            }
+            dismissButton={false}
+            position="right"
+            size="large"
+          >
+            <Box color="text-status-info" display="inline">
+              <Icon name="status-info" />
+            </Box>
+          </Popover>
         }
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}

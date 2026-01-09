@@ -38,9 +38,8 @@ export const MetadataPanel: React.FC = () => {
     refetch: refetchExamples,
   } = useFilterExamples();
 
-  // Track which filter examples are enabled
-  const [enabledExamples, setEnabledExamples] = useState<string[]>([]);
-  const [enabledLoaded, setEnabledLoaded] = useState(false);
+  // Track which filter examples are enabled (null = not yet loaded)
+  const [enabledExamples, setEnabledExamples] = useState<string[] | null>(null);
 
   // Load enabled examples from configuration
   useEffect(() => {
@@ -52,29 +51,31 @@ export const MetadataPanel: React.FC = () => {
           const custom = JSON.parse(config.Custom);
           if (Array.isArray(custom.metadata_filter_examples_enabled)) {
             setEnabledExamples(custom.metadata_filter_examples_enabled);
+            return;
           }
         }
+        // No saved preference - will default to all enabled when examples load
+        setEnabledExamples(null);
       } catch (err) {
         console.error('Failed to load enabled examples:', err);
-      } finally {
-        setEnabledLoaded(true);
+        setEnabledExamples(null);
       }
     };
     loadEnabled();
   }, []);
 
-  // When examples load, if no enabled list exists, default all to enabled
+  // When examples load, if no saved preference exists, default all to enabled
   useEffect(() => {
-    if (enabledLoaded && examples.length > 0 && enabledExamples.length === 0) {
-      // No saved preference - all examples are enabled by default
+    if (enabledExamples === null && examples.length > 0) {
       setEnabledExamples(examples.map(e => e.name));
     }
-  }, [enabledLoaded, examples, enabledExamples.length]);
+  }, [examples, enabledExamples]);
 
   const handleToggleExample = useCallback(async (name: string, enabled: boolean) => {
+    const current = enabledExamples || [];
     const newEnabled = enabled
-      ? [...enabledExamples, name]
-      : enabledExamples.filter(n => n !== name);
+      ? [...current, name]
+      : current.filter(n => n !== name);
 
     setEnabledExamples(newEnabled);
 
@@ -91,7 +92,7 @@ export const MetadataPanel: React.FC = () => {
     } catch (err) {
       console.error('Failed to save enabled examples:', err);
       // Revert on failure
-      setEnabledExamples(enabledExamples);
+      setEnabledExamples(current);
     }
   }, [enabledExamples]);
 
@@ -177,7 +178,7 @@ export const MetadataPanel: React.FC = () => {
               totalExamples={totalExamples}
               lastGenerated={lastGenerated}
               loading={examplesLoading}
-              enabledExamples={enabledExamples}
+              enabledExamples={enabledExamples || []}
               onToggleExample={handleToggleExample}
               error={examplesError}
             />
