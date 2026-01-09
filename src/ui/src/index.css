@@ -24,27 +24,3 @@ body {
 * {
   box-sizing: border-box;
 }
-
-/* Force visible scrollbars for table containers */
-.table-scroll-container {
-  scrollbar-width: thin;
-  scrollbar-color: #888 #f1f1f1;
-}
-
-.table-scroll-container::-webkit-scrollbar {
-  height: 12px;
-}
-
-.table-scroll-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 6px;
-}
-
-.table-scroll-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 6px;
-}
-
-.table-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
