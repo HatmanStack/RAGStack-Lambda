@@ -661,27 +661,23 @@ export function Settings() {
         </ColumnLayout>
       </Container>
 
-      <Container
-        header={
-          <Header
-            variant="h2"
-            info={
-              <Popover
-                header="About Metadata Extraction"
-                content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
-                dismissButton={false}
-                position="right"
-                size="medium"
-              >
-                <Box color="text-status-info" display="inline">
-                  <Icon name="status-info" />
-                </Box>
-              </Popover>
-            }
+      <ExpandableSection
+        variant="container"
+        headerText="Metadata Extraction"
+        headerInfo={
+          <Popover
+            header="About Metadata Extraction"
+            content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
+            dismissButton={false}
+            position="right"
+            size="medium"
           >
-            Metadata Extraction
-          </Header>
+            <Box color="text-status-info" display="inline">
+              <Icon name="status-info" />
+            </Box>
+          </Popover>
         }
+        defaultExpanded={false}
       >
         <SpaceBetween size="m">
           <FormField
@@ -772,29 +768,25 @@ export function Settings() {
             existing metadata.
           </Alert>
         </SpaceBetween>
-      </Container>
+      </ExpandableSection>
 
-      <Container
-        header={
-          <Header
-            variant="h2"
-            info={
-              <Popover
-                header="About Metadata Query"
-                content="Configure how metadata filters are generated and applied during knowledge base queries. Multi-slice retrieval runs parallel queries with different filters for better recall."
-                dismissButton={false}
-                position="right"
-                size="medium"
-              >
-                <Box color="text-status-info" display="inline">
-                  <Icon name="status-info" />
-                </Box>
-              </Popover>
-            }
+      <ExpandableSection
+        variant="container"
+        headerText="Metadata Query"
+        headerInfo={
+          <Popover
+            header="About Metadata Query"
+            content="Configure how metadata filters are generated and applied during knowledge base queries. Multi-slice retrieval runs parallel queries with different filters for better recall."
+            dismissButton={false}
+            position="right"
+            size="medium"
           >
-            Metadata Query
-          </Header>
+            <Box color="text-status-info" display="inline">
+              <Icon name="status-info" />
+            </Box>
+          </Popover>
         }
+        defaultExpanded={false}
       >
         <SpaceBetween size="m">
           <FormField
@@ -879,7 +871,7 @@ export function Settings() {
             </>
           )}
         </SpaceBetween>
-      </Container>
+      </ExpandableSection>
 
       <MetadataPanel />
 
