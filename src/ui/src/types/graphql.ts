@@ -14,8 +14,3 @@ export type GqlResponse<T = Record<string, unknown>> = {
   errors?: Array<{ message: string }>;
 };
 
-/**
- * Type assertion helper - use after await client.graphql()
- * Example: const response = await client.graphql({...}) as GqlResponse;
- */
-export type { GqlResponse as GraphQLQueryResponse };

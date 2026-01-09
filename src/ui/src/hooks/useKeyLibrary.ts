@@ -3,7 +3,7 @@ import { generateClient } from 'aws-amplify/api';
 import { getKeyLibrary } from '../graphql/queries/getKeyLibrary';
 import type { GqlResponse } from '../types/graphql';
 
-export interface MetadataKey {
+interface MetadataKey {
   keyName: string;
   dataType: string;
   sampleValues: string[];
@@ -11,7 +11,7 @@ export interface MetadataKey {
   status: string;
 }
 
-export interface UseKeyLibraryReturn {
+interface UseKeyLibraryReturn {
   keys: MetadataKey[];
   loading: boolean;
   error: string | null;

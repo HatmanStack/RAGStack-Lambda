@@ -11,7 +11,7 @@ import type { MultiselectProps } from '@cloudscape-design/components';
 import { useKeyLibrary } from '../../hooks/useKeyLibrary';
 import { findSimilarKeys } from '../../utils/similarity';
 
-export interface MetadataKeyInputProps {
+interface MetadataKeyInputProps {
   value: string[];
   onChange: (keys: string[]) => void;
   disabled?: boolean;
