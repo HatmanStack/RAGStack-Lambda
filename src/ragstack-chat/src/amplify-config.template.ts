@@ -10,8 +10,10 @@
  * SAM Stack GraphQL API endpoint and API key
  * Used by ChatInterface to query the knowledge base
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 declare const SAM_GRAPHQL_ENDPOINT: string;
 declare const SAM_GRAPHQL_API_KEY: string;
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 /**
  * Theme configuration embedded at build time (fallback defaults)
