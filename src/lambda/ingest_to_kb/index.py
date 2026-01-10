@@ -334,8 +334,9 @@ def lambda_handler(event, context):
 
     # Add base metadata that's always included for filtering
     # content_type distinguishes documents from images/web_pages
+    # Merge order ensures base_metadata wins (cannot be overwritten by LLM)
     base_metadata = {"content_type": "document"}
-    llm_metadata = {**base_metadata, **llm_metadata}
+    llm_metadata = {**llm_metadata, **base_metadata}
 
     try:
         # Build the document object for ingestion
