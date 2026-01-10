@@ -5,7 +5,7 @@ import {
   Box,
   Alert,
   Popover,
-  Icon,
+  Button,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { useMetadataStats, useFilterExamples } from '../../hooks/useMetadata';
@@ -70,16 +70,21 @@ export const MetadataPanel: React.FC = () => {
   );
 
   const handleToggleExample = useCallback((name: string, enabled: boolean) => {
-    // Capture previous state for rollback
-    const previousDisabled = disabledExamples;
+    // Optimistic update using functional form to avoid stale closures
+    setDisabledExamples(prev => {
+      if (enabled) {
+        return prev.filter(n => n !== name);
+      } else {
+        return prev.includes(name) ? prev : [...prev, name];
+      }
+    });
+
+    // Compute new value for API call (can't use state in async callback)
     const newDisabled = enabled
-      ? previousDisabled.filter(n => n !== name) // Remove from disabled
-      : [...previousDisabled, name]; // Add to disabled
+      ? disabledExamples.filter(n => n !== name)
+      : disabledExamples.includes(name) ? disabledExamples : [...disabledExamples, name];
 
-    // Optimistic update
-    setDisabledExamples(newDisabled);
-
-    // Save to configuration asynchronously with rollback on failure
+    // Save to configuration asynchronously
     client.graphql({
       query: updateConfiguration,
       variables: {
@@ -87,10 +92,13 @@ export const MetadataPanel: React.FC = () => {
           metadata_filter_examples_disabled: newDisabled,
         }),
       },
+    }).then((response) => {
+      const gqlResponse = response as GqlResponse;
+      if (gqlResponse.errors?.length) {
+        console.error('Failed to save disabled examples:', gqlResponse.errors);
+      }
     }).catch((err: unknown) => {
       console.error('Failed to save disabled examples:', err);
-      // Rollback to previous state on failure
-      setDisabledExamples(previousDisabled);
     });
   }, [client, disabledExamples]);
 
@@ -115,6 +123,7 @@ export const MetadataPanel: React.FC = () => {
       headerText="Metadata Analysis"
       headerInfo={
         <Popover
+          triggerType="custom"
           header="About Metadata Analysis"
           content={
             <SpaceBetween size="s">
@@ -138,9 +147,11 @@ export const MetadataPanel: React.FC = () => {
           position="right"
           size="large"
         >
-          <Box color="text-status-info" display="inline">
-            <Icon name="status-info" />
-          </Box>
+          <Button
+            variant="inline-icon"
+            iconName="status-info"
+            ariaLabel="About Metadata Analysis"
+          />
         </Popover>
       }
       headerDescription="Discover metadata fields and filter patterns in your documents"
