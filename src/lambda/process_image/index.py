@@ -441,7 +441,7 @@ def lambda_handler(event, context):
             "type": "S3_LOCATION",
             "s3Location": {"uri": caption_metadata_uri},
         }
-        logger.info(f"Adding metadata reference to caption ingestion")
+        logger.info("Adding metadata reference to caption ingestion")
 
         documents_to_ingest = [image_document, caption_document]
 
