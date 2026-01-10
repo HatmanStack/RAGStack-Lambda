@@ -279,3 +279,77 @@ def publish_image_update(
     except Exception as e:
         # Don't fail the Lambda if subscription publish fails
         logger.warning(f"Failed to publish image update: {e}")
+
+
+def publish_reindex_update(
+    graphql_endpoint: str,
+    status: str,
+    total_documents: int,
+    processed_count: int,
+    current_document: str = None,
+    error_count: int = 0,
+    error_messages: list[str] = None,
+    new_knowledge_base_id: str = None,
+) -> None:
+    """
+    Publish a reindex progress update to AppSync subscribers.
+
+    Args:
+        graphql_endpoint: AppSync GraphQL endpoint URL
+        status: Reindex status (PENDING, CREATING_KB, PROCESSING, DELETING_OLD_KB,
+            COMPLETED, FAILED)
+        total_documents: Total documents to reindex
+        processed_count: Number of documents processed so far
+        current_document: Currently processing document filename (optional)
+        error_count: Number of errors encountered
+        error_messages: List of error messages (optional)
+        new_knowledge_base_id: New KB ID after successful migration (optional)
+    """
+    if not graphql_endpoint:
+        logger.debug("No GraphQL endpoint configured, skipping subscription publish")
+        return
+
+    mutation = """
+    mutation PublishReindexUpdate(
+        $status: ReindexStatus!
+        $totalDocuments: Int!
+        $processedCount: Int!
+        $currentDocument: String
+        $errorCount: Int!
+        $errorMessages: [String!]
+        $newKnowledgeBaseId: String
+        $updatedAt: String!
+    ) {
+        publishReindexUpdate(
+            status: $status
+            totalDocuments: $totalDocuments
+            processedCount: $processedCount
+            currentDocument: $currentDocument
+            errorCount: $errorCount
+            errorMessages: $errorMessages
+            newKnowledgeBaseId: $newKnowledgeBaseId
+            updatedAt: $updatedAt
+        ) {
+            status
+            processedCount
+        }
+    }
+    """
+
+    variables = {
+        "status": status.upper(),
+        "totalDocuments": total_documents,
+        "processedCount": processed_count,
+        "currentDocument": current_document,
+        "errorCount": error_count,
+        "errorMessages": error_messages,
+        "newKnowledgeBaseId": new_knowledge_base_id,
+        "updatedAt": datetime.now(UTC).isoformat(),
+    }
+
+    try:
+        execute_appsync_mutation(graphql_endpoint, mutation, variables)
+        logger.info(f"Published reindex update: {status} ({processed_count}/{total_documents})")
+    except Exception as e:
+        # Don't fail the Lambda if subscription publish fails
+        logger.warning(f"Failed to publish reindex update: {e}")
