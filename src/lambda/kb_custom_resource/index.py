@@ -90,29 +90,12 @@ def get_knowledge_base_attributes(kb_id):
 
         # Get data source IDs - identify by inclusion prefix
         ds_response = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
-        text_data_source_id = ""
-        image_data_source_id = ""
 
+        # Get first data source (single unified data source)
+        data_source_id = None
         for ds_summary in ds_response.get("dataSourceSummaries", []):
-            ds_id = ds_summary["dataSourceId"]
-            # Get full data source details to check prefix
-            try:
-                ds_detail = bedrock_agent.get_data_source(knowledgeBaseId=kb_id, dataSourceId=ds_id)
-                ds_config = ds_detail.get("dataSource", {}).get("dataSourceConfiguration", {})
-                s3_config = ds_config.get("s3Configuration", {})
-                prefixes = s3_config.get("inclusionPrefixes", [])
-
-                if "output/" in prefixes:
-                    text_data_source_id = ds_id
-                elif "images/" in prefixes:
-                    image_data_source_id = ds_id
-            except Exception as e:
-                logger.warning(f"Could not get details for data source {ds_id}: {e}")
-                # Fallback: first one is text, second is images
-                if not text_data_source_id:
-                    text_data_source_id = ds_id
-                elif not image_data_source_id:
-                    image_data_source_id = ds_id
+            data_source_id = ds_summary["dataSourceId"]
+            break  # Only one data source expected
 
         # Get index ARN from storage config
         index_arn = ""
@@ -123,9 +106,7 @@ def get_knowledge_base_attributes(kb_id):
         return {
             "KnowledgeBaseId": kb_id,
             "KnowledgeBaseArn": kb_arn,
-            "DataSourceId": text_data_source_id,  # Backwards compatible
-            "TextDataSourceId": text_data_source_id,  # output/ prefix
-            "ImageDataSourceId": image_data_source_id,  # images/ prefix
+            "DataSourceId": data_source_id,  # Single data source for all content
             "IndexArn": index_arn,
         }
     except Exception as e:
@@ -250,8 +231,9 @@ def create_knowledge_base(properties):
         logger.error(f"Failed to create Knowledge Base: {e}")
         raise
 
-    # Step 5: Create Data Sources for S3 data bucket
-    # AWS limits inclusionPrefixes to 1, so we need separate data sources for output/ and images/
+    # Step 5: Create single Data Source for all KB content
+    # All content (documents, images, scraped pages) uses content/ prefix
+    # Content types are distinguished via content_type metadata field
     project_name = properties.get("ProjectName", "default")
     sts_client = boto3.client("sts")
     account_id = sts_client.get_caller_identity()["Account"]
@@ -267,44 +249,30 @@ def create_knowledge_base(properties):
         }
     }
 
-    # Track both data source IDs separately
-    text_data_source_id = None  # output/ prefix for text documents
-    image_data_source_id = None  # images/ prefix for images
+    ds_name = f"{kb_name}-datasource"
+    logger.info(f"Creating Data Source: {ds_name} for bucket {data_bucket}/content/")
 
-    for prefix, suffix in [("output/", ""), ("images/", "-images")]:
-        ds_name = f"{kb_name}-datasource{suffix}"
-        logger.info(f"Creating Data Source: {ds_name} for bucket {data_bucket}/{prefix}")
-
-        try:
-            ds_response = bedrock_agent.create_data_source(
-                knowledgeBaseId=kb_id,
-                name=ds_name,
-                description=f"S3 data source for {project_name} ({prefix.rstrip('/')})",
-                dataSourceConfiguration={
-                    "type": "S3",
-                    "s3Configuration": {
-                        "bucketArn": data_bucket_arn,
-                        "bucketOwnerAccountId": account_id,
-                        "inclusionPrefixes": [prefix],
-                    },
+    try:
+        ds_response = bedrock_agent.create_data_source(
+            knowledgeBaseId=kb_id,
+            name=ds_name,
+            description=f"S3 data source for {project_name} (all content types)",
+            dataSourceConfiguration={
+                "type": "S3",
+                "s3Configuration": {
+                    "bucketArn": data_bucket_arn,
+                    "bucketOwnerAccountId": account_id,
+                    "inclusionPrefixes": ["content/"],
                 },
-                vectorIngestionConfiguration=chunking_config,
-            )
+            },
+            vectorIngestionConfiguration=chunking_config,
+        )
 
-            ds_id = ds_response["dataSource"]["dataSourceId"]
-            logger.info(f"Created Data Source: {ds_id} for {prefix}")
-
-            # Track each data source ID separately
-            if prefix == "output/":
-                text_data_source_id = ds_id
-            elif prefix == "images/":
-                image_data_source_id = ds_id
-        except Exception as e:
-            logger.error(f"Failed to create Data Source for {prefix}: {e}")
-            raise
-
-    # For backwards compatibility, DataSourceId points to text data source
-    data_source_id = text_data_source_id
+        data_source_id = ds_response["dataSource"]["dataSourceId"]
+        logger.info(f"Created Data Source: {data_source_id} for content/")
+    except Exception as e:
+        logger.error(f"Failed to create Data Source: {e}")
+        raise
 
     # Store KB ID in Parameter Store for easy reference
     project_name = properties.get("ProjectName", "default")
@@ -328,9 +296,7 @@ def create_knowledge_base(properties):
     return {
         "KnowledgeBaseId": kb_id,
         "KnowledgeBaseArn": kb_arn,
-        "DataSourceId": data_source_id,  # Backwards compatible (text data source)
-        "TextDataSourceId": text_data_source_id,  # output/ prefix
-        "ImageDataSourceId": image_data_source_id,  # images/ prefix
+        "DataSourceId": data_source_id,  # Single data source for all content
         "IndexArn": index_arn,
     }
 

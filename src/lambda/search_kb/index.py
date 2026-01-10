@@ -97,11 +97,11 @@ def _get_filter_examples():
 
 
 def extract_document_id_from_uri(uri):
-    """Extract document_id from S3 URI like s3://bucket/output/{doc_id}/extracted_text.txt"""
+    """Extract document_id from S3 URI like s3://bucket/content/{doc_id}/extracted_text.txt"""
     if not uri:
         return None
-    # Match output/{uuid}/... or images/{uuid}/...
-    match = re.search(r"(?:output|images)/([a-f0-9-]{36})/", uri)
+    # Match content/{uuid}/... (unified prefix for all KB content)
+    match = re.search(r"content/([a-f0-9-]{36})/", uri)
     if match:
         return match.group(1)
     return None
@@ -146,8 +146,6 @@ def lambda_handler(event, context):
     # Get environment variables
     knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
     tracking_table_name = os.environ.get("TRACKING_TABLE")
-    text_data_source_id = os.environ.get("TEXT_DATA_SOURCE_ID")
-    image_data_source_id = os.environ.get("IMAGE_DATA_SOURCE_ID")
     if not knowledge_base_id:
         return {
             "query": "",
@@ -201,7 +199,7 @@ def lambda_handler(event, context):
             max_results = 5  # Use default if invalid
 
         # Query Knowledge Base using retrieve (raw vector search)
-        # If data source IDs are configured, run separate queries for balanced results
+        # Single unified query with optional metadata filter (includes content_type)
         retrieval_results = []
         generated_filter = None
 
@@ -225,89 +223,38 @@ def lambda_handler(event, context):
             except Exception as e:
                 logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
-        if text_data_source_id or image_data_source_id:
-            # Query each data source with full maxResults for comprehensive coverage
+        # Single unified query with optional metadata filter
+        try:
+            if multislice_enabled and generated_filter:
+                # Use multi-slice retrieval with filter
+                _, _, multislice_retriever = _get_filter_components()
+                retrieval_results = multislice_retriever.retrieve(
+                    query=query,
+                    knowledge_base_id=knowledge_base_id,
+                    data_source_id=None,  # No data source filtering with unified content/
+                    metadata_filter=generated_filter,
+                    num_results=max_results,
+                )
+            else:
+                # Standard single-query retrieval
+                retrieval_config = {
+                    "vectorSearchConfiguration": {
+                        "numberOfResults": max_results,
+                    }
+                }
+                # Apply generated filter if available
+                if generated_filter:
+                    retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
 
-            # Query text data source
-            if text_data_source_id:
-                try:
-                    if multislice_enabled and generated_filter:
-                        # Use multi-slice retrieval with filter
-                        _, _, multislice_retriever = _get_filter_components()
-                        text_results = multislice_retriever.retrieve(
-                            query=query,
-                            knowledge_base_id=knowledge_base_id,
-                            data_source_id=text_data_source_id,
-                            metadata_filter=generated_filter,
-                            num_results=max_results,
-                        )
-                    else:
-                        # Standard single-query retrieval
-                        text_response = bedrock_agent.retrieve(
-                            knowledgeBaseId=knowledge_base_id,
-                            retrievalQuery={"text": query},
-                            retrievalConfiguration={
-                                "vectorSearchConfiguration": {
-                                    "numberOfResults": max_results,
-                                    "filter": {
-                                        "equals": {
-                                            "key": "x-amz-bedrock-kb-data-source-id",
-                                            "value": text_data_source_id,
-                                        }
-                                    },
-                                }
-                            },
-                        )
-                        text_results = text_response.get("retrievalResults", [])
-                    retrieval_results.extend(text_results)
-                    logger.info("Retrieved %d text results", len(text_results))
-                except Exception as e:
-                    logger.warning(f"Text search failed: {e}")
-
-            # Query image data source
-            if image_data_source_id:
-                try:
-                    if multislice_enabled and generated_filter:
-                        # Use multi-slice retrieval with filter
-                        _, _, multislice_retriever = _get_filter_components()
-                        image_results = multislice_retriever.retrieve(
-                            query=query,
-                            knowledge_base_id=knowledge_base_id,
-                            data_source_id=image_data_source_id,
-                            metadata_filter=generated_filter,
-                            num_results=max_results,
-                        )
-                    else:
-                        # Standard single-query retrieval
-                        image_response = bedrock_agent.retrieve(
-                            knowledgeBaseId=knowledge_base_id,
-                            retrievalQuery={"text": query},
-                            retrievalConfiguration={
-                                "vectorSearchConfiguration": {
-                                    "numberOfResults": max_results,
-                                    "filter": {
-                                        "equals": {
-                                            "key": "x-amz-bedrock-kb-data-source-id",
-                                            "value": image_data_source_id,
-                                        }
-                                    },
-                                }
-                            },
-                        )
-                        image_results = image_response.get("retrievalResults", [])
-                    retrieval_results.extend(image_results)
-                    logger.info("Retrieved %d image results", len(image_results))
-                except Exception as e:
-                    logger.warning(f"Image search failed: {e}")
-        else:
-            # Fallback: unfiltered query if no data source IDs configured
-            vector_config = {"numberOfResults": max_results}
-            response = bedrock_agent.retrieve(
-                knowledgeBaseId=knowledge_base_id,
-                retrievalQuery={"text": query},
-                retrievalConfiguration={"vectorSearchConfiguration": vector_config},
-            )
-            retrieval_results = response.get("retrievalResults", [])
+                response = bedrock_agent.retrieve(
+                    knowledgeBaseId=knowledge_base_id,
+                    retrievalQuery={"text": query},
+                    retrievalConfiguration=retrieval_config,
+                )
+                retrieval_results = response.get("retrievalResults", [])
+            logger.info(f"Retrieved {len(retrieval_results)} results")
+        except Exception as e:
+            logger.warning(f"Search failed: {e}")
 
         # Parse results
         results = []

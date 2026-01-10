@@ -356,7 +356,7 @@ def create_image_record(
     content_type = content_type_map.get(ext, "application/octet-stream")
 
     # Upload image to S3
-    image_key = f"images/{image_id}/{filename}"
+    image_key = f"content/{image_id}/{filename}"
     s3.put_object(
         Bucket=data_bucket,
         Key=image_key,
@@ -373,7 +373,7 @@ def create_image_record(
         "sourceUploadId": upload_id,
         "createdAt": timestamp,
     }
-    metadata_key = f"images/{image_id}/metadata.json"
+    metadata_key = f"content/{image_id}/metadata.json"
     s3.put_object(
         Bucket=data_bucket,
         Key=metadata_key,

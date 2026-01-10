@@ -500,7 +500,7 @@ def lambda_handler(event: dict, context) -> dict:
             }
 
         data_bucket = os.environ.get("DATA_BUCKET")
-        text_data_source_id = os.environ.get("TEXT_DATA_SOURCE_ID")
+        data_source_id = os.environ.get("DATA_SOURCE_ID")
         key_library_table = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
         # Get configuration options
@@ -519,7 +519,7 @@ def lambda_handler(event: dict, context) -> dict:
         # Step 1: Sample vectors from KB
         vectors = sample_vectors_from_kb(
             knowledge_base_id=knowledge_base_id,
-            data_source_id=text_data_source_id,
+            data_source_id=data_source_id,
             max_samples=max_samples,
         )
 

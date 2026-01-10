@@ -94,10 +94,10 @@ class TestCreateImageUploadUrl:
         assert "fields" in result
         assert result["uploadUrl"] == "https://test-bucket.s3.amazonaws.com/"
 
-        # Verify S3 presigned URL was requested with images/ prefix
+        # Verify S3 presigned URL was requested with content/ prefix
         mock_boto3["s3"].generate_presigned_post.assert_called_once()
         call_kwargs = mock_boto3["s3"].generate_presigned_post.call_args.kwargs
-        assert call_kwargs["Key"].startswith("images/")
+        assert call_kwargs["Key"].startswith("content/")
         assert call_kwargs["Key"].endswith("/test-image.png")
 
         # Verify DynamoDB record was created

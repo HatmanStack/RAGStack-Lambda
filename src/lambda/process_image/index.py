@@ -13,8 +13,8 @@ Trigger modes:
 
 Input event (from Step Functions or S3 trigger):
 {
-    "image_id": "abc123" or "images/abc123/image.jpg",
-    "input_s3_uri": "s3://bucket/images/abc123/image.png",
+    "image_id": "abc123" or "content/abc123/image.jpg",
+    "input_s3_uri": "s3://bucket/content/abc123/image.png",
     "trigger_type": "auto_process" (optional, for API/MCP uploads)
 }
 
@@ -179,37 +179,45 @@ def extract_image_metadata(
         return {}
 
 
-def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def write_metadata_to_s3(s3_uri: str, metadata: dict[str, Any]) -> str:
     """
-    Convert metadata dictionary to Bedrock KB inline attributes format.
+    Write metadata to S3 as a .metadata.json file alongside the content file.
+
+    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
+    provided inline. The metadata file must be in the same location as the
+    content file with .metadata.json suffix.
 
     Args:
-        metadata: Dictionary of metadata key-value pairs.
+        s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
+        metadata: Dictionary of metadata key-value pairs
 
     Returns:
-        List of inline attribute objects for Bedrock KB API.
+        S3 URI of the metadata file
     """
-    attributes = []
+    # Parse S3 URI
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Invalid S3 URI: {s3_uri}")
 
-    for key, value in metadata.items():
-        if value is None or (isinstance(value, str) and not value.strip()):
-            continue
+    path = s3_uri[5:]  # Remove 's3://'
+    bucket, key = path.split("/", 1)
 
-        if isinstance(value, bool):
-            str_value = str(value).lower()
-        elif isinstance(value, (int, float)):
-            str_value = str(value)
-        elif isinstance(value, list):
-            str_value = ", ".join(str(v) for v in value[:5])
-        else:
-            str_value = str(value)
-            if len(str_value) > 100:
-                logger.debug(f"Truncating metadata key '{key}' from {len(str_value)} to 100 chars")
-                str_value = str_value[:100]
+    # Create metadata file key (same location with .metadata.json suffix)
+    metadata_key = f"{key}.metadata.json"
+    metadata_uri = f"s3://{bucket}/{metadata_key}"
 
-        attributes.append({"key": key, "value": {"stringValue": str_value}})
+    # Build metadata JSON in Bedrock KB format
+    metadata_content = {"metadataAttributes": metadata}
 
-    return attributes
+    # Write to S3
+    s3.put_object(
+        Bucket=bucket,
+        Key=metadata_key,
+        Body=json.dumps(metadata_content),
+        ContentType="application/json",
+    )
+
+    logger.info(f"Wrote metadata to {metadata_uri}")
+    return metadata_uri
 
 
 def is_valid_uuid(value: str) -> bool:
@@ -238,7 +246,7 @@ def lambda_handler(event, context):
         raise ValueError("TRACKING_TABLE environment variable is required")
 
     # Extract image info from event
-    # EventBridge passes image_id as path like "images/{imageId}/file.ext"
+    # EventBridge passes image_id as path like "content/{imageId}/file.ext"
     raw_image_id = event.get("image_id", "")
     input_s3_uri = event.get("input_s3_uri", "")
     trigger_type = event.get("trigger_type", "")
@@ -255,8 +263,8 @@ def lambda_handler(event, context):
             logger.info(f"Skipping non-image file: {raw_image_id}")
             return {"status": "SKIPPED", "message": "Not an image file"}
 
-        # Handle paths like "images/abc123/image.jpg"
-        match = re.match(r"images/([^/]+)/", raw_image_id)
+        # Handle paths like "content/abc123/image.jpg"
+        match = re.match(r"content/([^/]+)/", raw_image_id)
         if match:
             image_id = match.group(1)
         elif "/" not in raw_image_id:
@@ -264,8 +272,8 @@ def lambda_handler(event, context):
             image_id = raw_image_id
         else:
             # Path doesn't match expected format - skip silently
-            logger.info(f"Ignoring non-images path: {raw_image_id}")
-            return {"status": "SKIPPED", "message": "Not an images/ path"}
+            logger.info(f"Ignoring non-content path: {raw_image_id}")
+            return {"status": "SKIPPED", "message": "Not a content/ path"}
 
     if not image_id:
         raise ValueError("image_id is required in event (either as path or direct ID)")
@@ -358,7 +366,7 @@ def lambda_handler(event, context):
             raise
 
         # Get or create metadata file
-        # Metadata key: images/{imageId}/metadata.json
+        # Metadata key: content/{imageId}/metadata.json
         key_parts = image_key.rsplit("/", 1)
         base_path = key_parts[0] if len(key_parts) > 1 else image_key
         metadata_key = f"{base_path}/metadata.json"
@@ -400,7 +408,7 @@ def lambda_handler(event, context):
         )
         logger.info(f"Created caption file: {text_s3_uri}")
 
-        # Build metadata for KB inline attributes
+        # Build metadata for KB filtering
         # Base metadata (always included)
         base_metadata = get_base_image_metadata(image_id, filename, input_s3_uri, item)
 
@@ -410,8 +418,10 @@ def lambda_handler(event, context):
         # Merge metadata: base fields + LLM-extracted fields
         combined_metadata = {**base_metadata, **llm_metadata}
 
-        # Build inline attributes for KB ingestion
-        inline_attributes = build_inline_attributes(combined_metadata)
+        # Write metadata to S3 for caption (used for KB filtering)
+        # The caption.txt.metadata.json file enables content_type filtering
+        caption_metadata_uri = write_metadata_to_s3(text_s3_uri, combined_metadata)
+        logger.info(f"Wrote {len(combined_metadata)} metadata fields to: {caption_metadata_uri}")
 
         # Ingest BOTH the image and caption into KB
         # Nova Multimodal Embeddings will:
@@ -425,15 +435,13 @@ def lambda_handler(event, context):
             "content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}
         }
 
-        # Add metadata to both documents
-        if inline_attributes:
-            metadata_config = {
-                "type": "IN_LINE_ATTRIBUTE",
-                "inlineAttributes": inline_attributes,
-            }
-            image_document["metadata"] = metadata_config
-            caption_document["metadata"] = metadata_config
-            logger.info(f"Adding {len(inline_attributes)} metadata attributes to image ingestion")
+        # Add metadata reference to caption document for KB filtering
+        # Image document ingests without metadata (visual embedding only)
+        caption_document["metadata"] = {
+            "type": "S3_LOCATION",
+            "s3Location": {"uri": caption_metadata_uri},
+        }
+        logger.info("Adding metadata reference to caption ingestion")
 
         documents_to_ingest = [image_document, caption_document]
 

@@ -308,8 +308,8 @@ class TestLambdaHandler:
             # Should still succeed, just without LLM metadata
             assert result["status"] == "indexed"
             assert result["llm_metadata_extracted"] is False
-            # metadata_keys should be empty when extraction fails
-            assert result["metadata_keys"] == []
+            # metadata_keys should contain at least content_type (base metadata)
+            assert "content_type" in result["metadata_keys"]
 
     def test_missing_required_params(self, set_env_vars, lambda_context):
         """Test that missing required params raise ValueError."""

@@ -665,8 +665,8 @@ def construct_image_uri_from_content_uri(content_s3_uri, content_text=None):
     """
     Convert caption/content.txt S3 URI to the actual image file URI.
 
-    The caption file is stored at: images/{imageId}/caption.txt (or content.txt)
-    The actual image is at: images/{imageId}/{filename}.ext
+    The caption file is stored at: content/{imageId}/caption.txt
+    The actual image is at: content/{imageId}/{filename}.ext
 
     We extract the filename from the frontmatter in the caption text.
 
@@ -744,13 +744,13 @@ def extract_sources(citations):
             logger.info(f"Processing source URI: {uri}")
 
             # Parse S3 URI to construct the original input document URI
-            # Actual structures in this project:
-            # 1. PDF output: s3://bucket/output/{docId}/{docId}/extracted_text.txt
+            # All content now uses unified content/ prefix:
+            # 1. PDF/document: s3://bucket/content/{docId}/extracted_text.txt
             #    Input: s3://bucket/input/{docId}/{filename}.pdf
-            # 2. Scraped output: s3://bucket/output/{docId}/full_text.txt
+            # 2. Scraped: s3://bucket/content/{docId}/full_text.txt
             #    Input: s3://bucket/input/{docId}/{docId}.scraped.md
-            # 3. Images: s3://bucket/images/{imageId}/caption.txt
-            #    Actual image: s3://bucket/images/{imageId}/{filename}.ext
+            # 3. Images: s3://bucket/content/{imageId}/caption.txt
+            #    Actual image: s3://bucket/content/{imageId}/{filename}.ext
             try:
                 uri_path = uri.replace("s3://", "")
                 parts = uri_path.split("/")
@@ -768,13 +768,27 @@ def extract_sources(citations):
                 is_image = False
 
                 # Detect structure based on path prefix
-                if len(parts) > 2 and parts[1] == "images":
-                    # Image structure: bucket/images/{imageId}/caption.txt
+                if len(parts) > 2 and parts[1] == "content":
+                    # Unified content structure: bucket/content/{docId}/...
                     document_id = unquote(parts[2])
-                    input_prefix = "images"
-                    is_image = True
-                    # original_filename will be extracted from frontmatter later
-                    logger.info(f"Image structure detected: imageId={document_id}")
+
+                    # Determine content type from filename
+                    last_part = parts[-1] if parts else ""
+                    if last_part == "caption.txt":
+                        # Image caption
+                        input_prefix = "content"
+                        is_image = True
+                        logger.info(f"Image caption detected: imageId={document_id}")
+                    elif last_part == "full_text.txt":
+                        # Scraped content
+                        input_prefix = "input"
+                        original_filename = f"{document_id}.scraped.md"
+                        is_scraped = True
+                        logger.info(f"Scraped content detected: docId={document_id}")
+                    else:
+                        # PDF or other document
+                        input_prefix = "input"
+                        logger.info(f"Document content detected: docId={document_id}")
 
                 elif len(parts) > 3 and parts[1] == "input":
                     # Input structure: bucket/input/{docId}/{filename}
@@ -785,23 +799,6 @@ def extract_sources(citations):
                     if original_filename and original_filename.endswith(".md"):
                         is_scraped = True
                     logger.info(f"Input structure: docId={document_id}, file={original_filename}")
-
-                elif len(parts) > 2 and parts[1] == "output":
-                    # Output structure: bucket/output/{docId}/...
-                    document_id = unquote(parts[2])
-                    input_prefix = "input"
-
-                    # Check if it's scraped content (full_text.txt) or PDF (extracted_text.txt)
-                    last_part = parts[-1] if parts else ""
-                    if last_part == "full_text.txt":
-                        # Scraped: input filename is {docId}.scraped.md
-                        original_filename = f"{document_id}.scraped.md"
-                        is_scraped = True
-                        logger.info(f"Scraped content detected: docId={document_id}")
-                    else:
-                        # PDF or other document - need to look up filename from tracking table
-                        # For now, we'll need to query DynamoDB to get the original filename
-                        logger.info(f"Document output detected: docId={document_id}")
 
                 else:
                     # Fallback: try to parse as generic structure
@@ -1152,10 +1149,6 @@ def lambda_handler(event, context):
         retrieval_query = build_retrieval_query(query, history)
         logger.info(f"Retrieval query: {retrieval_query[:100]}...")
 
-        # Get data source IDs for separate queries (text vs images)
-        text_data_source_id = os.environ.get("TEXT_DATA_SOURCE_ID")
-        image_data_source_id = os.environ.get("IMAGE_DATA_SOURCE_ID")
-
         retrieval_results = []
         generated_filter = None
 
@@ -1163,7 +1156,7 @@ def lambda_handler(event, context):
         filter_enabled = config_manager.get_parameter("filter_generation_enabled", default=True)
         multislice_enabled = config_manager.get_parameter("multislice_enabled", default=True)
 
-        # Generate metadata filter if enabled
+        # Generate metadata filter if enabled (includes content_type filtering)
         if filter_enabled:
             try:
                 _, filter_generator, _ = _get_filter_components()
@@ -1179,90 +1172,38 @@ def lambda_handler(event, context):
             except Exception as e:
                 logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
-        # Query text data source if configured
-        if text_data_source_id:
-            try:
-                if multislice_enabled and generated_filter:
-                    # Use multi-slice retrieval with filter
-                    _, _, multislice_retriever = _get_filter_components()
-                    text_results = multislice_retriever.retrieve(
-                        query=retrieval_query,
-                        knowledge_base_id=knowledge_base_id,
-                        data_source_id=text_data_source_id,
-                        metadata_filter=generated_filter,
-                        num_results=5,
-                    )
-                else:
-                    # Standard single-query retrieval
-                    text_response = bedrock_agent.retrieve(
-                        knowledgeBaseId=knowledge_base_id,
-                        retrievalQuery={"text": retrieval_query},
-                        retrievalConfiguration={
-                            "vectorSearchConfiguration": {
-                                "numberOfResults": 5,
-                                "filter": {
-                                    "equals": {
-                                        "key": "x-amz-bedrock-kb-data-source-id",
-                                        "value": text_data_source_id,
-                                    }
-                                },
-                            }
-                        },
-                    )
-                    text_results = text_response.get("retrievalResults", [])
-                logger.info(f"Retrieved {len(text_results)} text results")
-                retrieval_results.extend(text_results)
-            except Exception as e:
-                logger.warning(f"Text retrieval failed: {e}")
-
-        # Query image data source if configured
-        if image_data_source_id:
-            try:
-                if multislice_enabled and generated_filter:
-                    # Use multi-slice retrieval with filter
-                    _, _, multislice_retriever = _get_filter_components()
-                    image_results = multislice_retriever.retrieve(
-                        query=retrieval_query,
-                        knowledge_base_id=knowledge_base_id,
-                        data_source_id=image_data_source_id,
-                        metadata_filter=generated_filter,
-                        num_results=5,
-                    )
-                else:
-                    # Standard single-query retrieval
-                    image_response = bedrock_agent.retrieve(
-                        knowledgeBaseId=knowledge_base_id,
-                        retrievalQuery={"text": retrieval_query},
-                        retrievalConfiguration={
-                            "vectorSearchConfiguration": {
-                                "numberOfResults": 5,
-                                "filter": {
-                                    "equals": {
-                                        "key": "x-amz-bedrock-kb-data-source-id",
-                                        "value": image_data_source_id,
-                                    }
-                                },
-                            }
-                        },
-                    )
-                    image_results = image_response.get("retrievalResults", [])
-                logger.info(f"Retrieved {len(image_results)} image results")
-                retrieval_results.extend(image_results)
-            except Exception as e:
-                logger.warning(f"Image retrieval failed: {e}")
-
-        # Fallback: unfiltered query if no data source IDs configured
-        if not text_data_source_id and not image_data_source_id:
-            retrieve_response = bedrock_agent.retrieve(
-                knowledgeBaseId=knowledge_base_id,
-                retrievalQuery={"text": retrieval_query},
-                retrievalConfiguration={
+        # Single unified query with optional metadata filter
+        try:
+            if multislice_enabled and generated_filter:
+                # Use multi-slice retrieval with filter
+                _, _, multislice_retriever = _get_filter_components()
+                retrieval_results = multislice_retriever.retrieve(
+                    query=retrieval_query,
+                    knowledge_base_id=knowledge_base_id,
+                    data_source_id=None,  # No data source filtering with unified content/
+                    metadata_filter=generated_filter,
+                    num_results=10,
+                )
+            else:
+                # Standard single-query retrieval
+                retrieval_config = {
                     "vectorSearchConfiguration": {
-                        "numberOfResults": 5,
+                        "numberOfResults": 10,
                     }
-                },
-            )
-            retrieval_results = retrieve_response.get("retrievalResults", [])
+                }
+                # Apply generated filter if available
+                if generated_filter:
+                    retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
+
+                retrieve_response = bedrock_agent.retrieve(
+                    knowledgeBaseId=knowledge_base_id,
+                    retrievalQuery={"text": retrieval_query},
+                    retrievalConfiguration=retrieval_config,
+                )
+                retrieval_results = retrieve_response.get("retrievalResults", [])
+            logger.info(f"Retrieved {len(retrieval_results)} results")
+        except Exception as e:
+            logger.warning(f"Retrieval failed: {e}")
 
         logger.info(f"Retrieved {len(retrieval_results)} total results from KB")
 

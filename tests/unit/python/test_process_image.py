@@ -72,7 +72,7 @@ def mock_boto3():
                 "caption": "Test caption",
                 "type": "image",
                 "status": "PROCESSING",
-                "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
+                "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
             }
         }
         mock_dynamodb = MagicMock()
@@ -109,8 +109,8 @@ class TestProcessImage:
         module.dynamodb = mock_boto3["dynamodb"]
 
         event = {
-            "image_id": "images/test-image-id/test.png",
-            "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
+            "image_id": "content/test-image-id/test.png",
+            "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
         }
 
         # Mock publish_image_update
@@ -141,8 +141,8 @@ class TestProcessImage:
         mock_boto3["table"].get_item.return_value = {}
 
         event = {
-            "image_id": "images/nonexistent-id/test.png",
-            "input_s3_uri": "s3://test-bucket/images/nonexistent-id/test.png",
+            "image_id": "content/nonexistent-id/test.png",
+            "input_s3_uri": "s3://test-bucket/content/nonexistent-id/test.png",
         }
 
         with pytest.raises(ValueError, match="not found"):
@@ -165,8 +165,8 @@ class TestProcessImage:
         }
 
         event = {
-            "image_id": "images/test-id/test.png",
-            "input_s3_uri": "s3://test-bucket/images/test-id/test.png",
+            "image_id": "content/test-id/test.png",
+            "input_s3_uri": "s3://test-bucket/content/test-id/test.png",
         }
 
         with pytest.raises(ValueError, match="not an image"):
@@ -176,7 +176,7 @@ class TestProcessImage:
         """Test error when image_id is missing."""
         module = _load_process_image_module()
 
-        event = {"input_s3_uri": "s3://test-bucket/images/test-id/test.png"}
+        event = {"input_s3_uri": "s3://test-bucket/content/test-id/test.png"}
 
         with pytest.raises(ValueError, match="required"):
             module.lambda_handler(event, None)
@@ -199,7 +199,7 @@ class TestProcessImage:
             }
         }
 
-        event = {"image_id": "images/test-image-id/test.png"}
+        event = {"image_id": "content/test-image-id/test.png"}
 
         with pytest.raises(ValueError, match="No input_s3_uri"):
             module.lambda_handler(event, None)
@@ -219,8 +219,8 @@ class TestProcessImage:
         )
 
         event = {
-            "image_id": "images/test-image-id/test.png",
-            "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
+            "image_id": "content/test-image-id/test.png",
+            "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
         }
 
         with pytest.raises(ValueError, match="not found in S3"):
@@ -235,8 +235,8 @@ class TestProcessImage:
         module = _load_process_image_module()
 
         event = {
-            "image_id": "images/test-image-id/test.png",
-            "input_s3_uri": "s3://test-bucket/images/test-image-id/test.png",
+            "image_id": "content/test-image-id/test.png",
+            "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
         }
 
         with pytest.raises(ValueError, match="required"):

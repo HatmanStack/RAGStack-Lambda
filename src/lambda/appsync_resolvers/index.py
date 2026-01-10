@@ -859,7 +859,7 @@ def create_image_upload_url(args):
     Create presigned URL for image upload.
 
     Returns upload URL and image ID for tracking.
-    The image is stored at images/{imageId}/{filename}.
+    The image is stored at content/{imageId}/{filename}.
 
     Args:
         args: Dictionary containing:
@@ -895,8 +895,8 @@ def create_image_upload_url(args):
         image_id = str(uuid4())
         logger.info(f"Generated image ID: {image_id}")
 
-        # Generate S3 key with images/ prefix
-        s3_key = f"images/{image_id}/{filename}"
+        # Generate S3 key with content/ prefix (unified for all KB content)
+        s3_key = f"content/{image_id}/{filename}"
 
         # Build presigned POST conditions and fields
         # Include metadata for auto-processing if requested
@@ -1214,8 +1214,8 @@ def submit_image(args):
         }
 
         # Derive metadata key from image key
-        # Image key: images/{imageId}/{filename}
-        # Metadata key: images/{imageId}/metadata.json
+        # Image key: content/{imageId}/{filename}
+        # Metadata key: content/{imageId}/metadata.json
         key_parts = key.rsplit("/", 1)
         base_path = key_parts[0] if len(key_parts) > 1 else key
         metadata_key = f"{base_path}/metadata.json"
@@ -1366,13 +1366,13 @@ def list_images(args):
 
         table = dynamodb.Table(TRACKING_TABLE)
 
-        # Scan with filter for type="image" OR input_s3_uri contains /images/
+        # Scan with filter for type="image"
         # Note: Don't use DynamoDB Limit with FilterExpression - Limit applies BEFORE
         # filtering, which can return 0 results. Scan all and apply limit after.
         scan_kwargs = {
-            "FilterExpression": "#type = :image_type OR contains(input_s3_uri, :images_prefix)",
+            "FilterExpression": "#type = :image_type",
             "ExpressionAttributeNames": {"#type": "type"},
-            "ExpressionAttributeValues": {":image_type": "image", ":images_prefix": "/images/"},
+            "ExpressionAttributeValues": {":image_type": "image"},
         }
 
         if next_token:
