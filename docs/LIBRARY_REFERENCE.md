@@ -269,9 +269,10 @@ def extract_text(content: bytes, filename: str) -> ExtractionResult
 def extract_source_url_from_content(content_text: str) -> str | None
 def extract_image_caption_from_content(content_text: str) -> str | None
 def extract_filename_from_frontmatter(content_text: str) -> str | None
+def construct_image_uri_from_content_uri(content_s3_uri: str, content_text: str | None = None) -> str | None
 ```
 
-**Purpose:** Extract metadata from vector content frontmatter for source attribution.
+**Purpose:** Extract metadata from vector content frontmatter for source attribution. `construct_image_uri_from_content_uri` converts caption/content.txt S3 URIs to the actual image file URI.
 
 ## scraper/
 

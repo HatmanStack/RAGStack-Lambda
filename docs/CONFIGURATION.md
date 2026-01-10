@@ -178,7 +178,7 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `chat_system_prompt` | string | (default prompt) | System prompt for chat responses |
 
 **Primary model options:**
-- `us.anthropic.claude-sonnet-4-20250514-v1:0`
+- `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
 - `us.amazon.nova-pro-v1:0`
 - `us.amazon.nova-lite-v1:0`

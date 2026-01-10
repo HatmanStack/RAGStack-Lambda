@@ -161,7 +161,12 @@ def extract_job_metadata(url: str, config: ScrapeConfig) -> dict:
 
         # Use markdown content for extraction (truncate if too long)
         content_for_extraction = extracted.markdown[:8000]
-        metadata = extractor.extract(content_for_extraction)
+        # Use URL as document_id for job-level metadata; don't update key library
+        metadata = extractor.extract_metadata(
+            content_for_extraction,
+            document_id=url,
+            update_library=False,
+        )
 
         logger.info(f"Extracted job metadata: {list(metadata.keys())}")
         return metadata

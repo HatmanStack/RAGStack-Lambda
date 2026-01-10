@@ -16,9 +16,9 @@ import { updateConfiguration } from '../../graphql/mutations/updateConfiguration
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import type { GqlResponse } from '../../types/graphql';
 
-const client = generateClient();
-
 export const MetadataPanel: React.FC = () => {
+  // Initialize client inside component to ensure Amplify is configured
+  const client = useMemo(() => generateClient(), []);
   const {
     stats,
     totalKeys,
@@ -60,7 +60,7 @@ export const MetadataPanel: React.FC = () => {
       }
     };
     loadDisabled();
-  }, []);
+  }, [client]);
 
   // Compute enabled list from examples minus disabled (memoized)
   const enabledExamples = useMemo(
@@ -69,31 +69,29 @@ export const MetadataPanel: React.FC = () => {
   );
 
   const handleToggleExample = useCallback((name: string, enabled: boolean) => {
-    // Update local state immediately
-    setDisabledExamples(prev => {
-      const newDisabled = enabled
-        ? prev.filter(n => n !== name) // Remove from disabled
-        : [...prev, name]; // Add to disabled
+    // Capture previous state for rollback
+    const previousDisabled = disabledExamples;
+    const newDisabled = enabled
+      ? previousDisabled.filter(n => n !== name) // Remove from disabled
+      : [...previousDisabled, name]; // Add to disabled
 
-      // Save to configuration asynchronously (don't block UI)
-      (async () => {
-        try {
-          await client.graphql({
-            query: updateConfiguration,
-            variables: {
-              customConfig: JSON.stringify({
-                metadata_filter_examples_disabled: newDisabled,
-              }),
-            },
-          });
-        } catch (err) {
-          console.error('Failed to save disabled examples:', err);
-        }
-      })();
+    // Optimistic update
+    setDisabledExamples(newDisabled);
 
-      return newDisabled;
+    // Save to configuration asynchronously with rollback on failure
+    client.graphql({
+      query: updateConfiguration,
+      variables: {
+        customConfig: JSON.stringify({
+          metadata_filter_examples_disabled: newDisabled,
+        }),
+      },
+    }).catch((err: unknown) => {
+      console.error('Failed to save disabled examples:', err);
+      // Rollback to previous state on failure
+      setDisabledExamples(previousDisabled);
     });
-  }, []);
+  }, [client, disabledExamples]);
 
   const handleAnalysisComplete = useCallback(() => {
     // Refetch stats and examples, clear local disabled list (backend cleared it)
