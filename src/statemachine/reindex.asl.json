@@ -23,7 +23,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
-          "Next": "CleanupFailed"
+          "Next": "PrepareCleanup"
         }
       ],
       "Next": "ProcessBatch"
@@ -47,7 +47,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
-          "Next": "CleanupFailed"
+          "Next": "PrepareCleanup"
         }
       ],
       "Next": "CheckBatchComplete"
@@ -109,15 +109,20 @@
       "End": true
     },
 
+    "PrepareCleanup": {
+      "Type": "Pass",
+      "Comment": "Prepare cleanup payload with safe defaults",
+      "Parameters": {
+        "action": "cleanup_failed",
+        "state.$": "$"
+      },
+      "Next": "CleanupFailed"
+    },
+
     "CleanupFailed": {
       "Type": "Task",
       "Resource": "${ReindexKBFunctionArn}",
       "Comment": "Clean up partial KB on failure",
-      "Parameters": {
-        "action": "cleanup_failed",
-        "new_kb_id.$": "$.new_kb_id",
-        "error_message.$": "States.Format('Reindex failed: {}', $.error.Cause)"
-      },
       "TimeoutSeconds": 300,
       "ResultPath": "$.cleanup_result",
       "Retry": [
@@ -126,6 +131,13 @@
           "IntervalSeconds": 5,
           "MaxAttempts": 2,
           "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": null,
+          "Next": "ReindexFailed"
         }
       ],
       "Next": "ReindexFailed"

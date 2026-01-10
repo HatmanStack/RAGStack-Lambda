@@ -25,6 +25,7 @@ class KBMigrator:
     def __init__(
         self,
         data_bucket: str,
+        vector_bucket: str,
         stack_name: str,
         kb_role_arn: str,
         embedding_model_arn: str,
@@ -34,13 +35,15 @@ class KBMigrator:
         Initialize KBMigrator.
 
         Args:
-            data_bucket: S3 bucket for content and vectors
+            data_bucket: S3 bucket for document content
+            vector_bucket: S3 Vectors bucket for vector storage
             stack_name: CloudFormation stack name (for resource naming)
             kb_role_arn: IAM role ARN for Knowledge Base
             embedding_model_arn: Bedrock embedding model ARN
             region: AWS region (defaults to session region)
         """
         self.data_bucket = data_bucket
+        self.vector_bucket = vector_bucket
         self.stack_name = stack_name
         self.kb_role_arn = kb_role_arn
         self.embedding_model_arn = embedding_model_arn
@@ -50,6 +53,7 @@ class KBMigrator:
 
         self.bedrock_agent = boto3.client("bedrock-agent", region_name=self.region)
         self.s3vectors = boto3.client("s3vectors", region_name=self.region)
+        self.sts = boto3.client("sts", region_name=self.region)
 
     def create_knowledge_base(self, suffix: str = None) -> dict[str, Any]:
         """
@@ -59,7 +63,7 @@ class KBMigrator:
             suffix: Optional suffix for unique naming (e.g., timestamp)
 
         Returns:
-            Dictionary with kb_id, data_source_id, and status
+            Dictionary with kb_id, data_source_id, vector_bucket_name, and status
         """
         kb_name = f"{self.stack_name}-KB"
         if suffix:
@@ -67,15 +71,22 @@ class KBMigrator:
 
         logger.info(f"Creating Knowledge Base: {kb_name}")
 
-        # Step 1: Create S3 Vectors index
-        index_name = f"{self.stack_name.lower()}-vectors"
+        # Step 1: Initialize S3 Vectors bucket
+        self._initialize_vector_bucket()
+
+        # Step 2: Create S3 Vectors index
+        index_name = f"{self.stack_name.lower()}-index"
         if suffix:
             index_name = f"{index_name}-{suffix}"
 
         vector_index_arn = self._create_s3_vectors_index(index_name)
         logger.info(f"Created S3 Vectors index: {vector_index_arn}")
 
-        # Step 2: Create Knowledge Base
+        # Step 3: Create Knowledge Base
+        # Note: supplementalDataStorageConfiguration uses data_bucket (for Nova Multimodal)
+        # storageConfiguration uses vector_bucket (for S3 Vectors index)
+        multimodal_storage_uri = f"s3://{self.data_bucket}"
+
         try:
             kb_response = self.bedrock_agent.create_knowledge_base(
                 name=kb_name,
@@ -84,18 +95,27 @@ class KBMigrator:
                 knowledgeBaseConfiguration={
                     "type": "VECTOR",
                     "vectorKnowledgeBaseConfiguration": {
-                        "embeddingModelArn": self.embedding_model_arn,
                         "embeddingModelConfiguration": {
-                            "bedrockEmbeddingModelConfiguration": {"dimensions": 1024}
+                            "bedrockEmbeddingModelConfiguration": {
+                                "dimensions": 1024,
+                                "embeddingDataType": "FLOAT32",
+                            }
+                        },
+                        "embeddingModelArn": self.embedding_model_arn,
+                        # Required for Nova Multimodal Embeddings
+                        "supplementalDataStorageConfiguration": {
+                            "storageLocations": [
+                                {
+                                    "type": "S3",
+                                    "s3Location": {"uri": multimodal_storage_uri},
+                                }
+                            ]
                         },
                     },
                 },
                 storageConfiguration={
-                    "type": "S3",
-                    "s3Configuration": {
-                        "bucketArn": f"arn:aws:s3:::{self.data_bucket}",
-                        "vectorIndexArn": vector_index_arn,
-                    },
+                    "type": "S3_VECTORS",
+                    "s3VectorsConfiguration": {"indexArn": vector_index_arn},
                 },
             )
 
@@ -105,7 +125,7 @@ class KBMigrator:
             # Wait for KB to be available
             self._wait_for_kb_status(kb_id, "ACTIVE")
 
-            # Step 3: Create Data Source
+            # Step 4: Create Data Source (reads from data_bucket)
             ds_response = self.bedrock_agent.create_data_source(
                 knowledgeBaseId=kb_id,
                 name=f"{kb_name}-DataSource",
@@ -126,6 +146,7 @@ class KBMigrator:
                 "kb_id": kb_id,
                 "data_source_id": data_source_id,
                 "vector_index_arn": vector_index_arn,
+                "vector_bucket_name": self.vector_bucket,
                 "status": "ACTIVE",
             }
 
@@ -134,6 +155,27 @@ class KBMigrator:
             error_msg = e.response.get("Error", {}).get("Message", str(e))
             logger.error(f"Failed to create Knowledge Base: {error_code} - {error_msg}")
             raise
+
+    def _initialize_vector_bucket(self) -> None:
+        """
+        Initialize S3 Vectors bucket.
+
+        Creates the vector bucket if it doesn't exist.
+        Follows pattern from kb_custom_resource.
+        """
+        logger.info(f"Initializing S3 Vectors bucket: {self.vector_bucket}")
+        try:
+            self.s3vectors.create_vector_bucket(vectorBucketName=self.vector_bucket)
+            logger.info(f"S3 Vectors bucket initialized: {self.vector_bucket}")
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = str(e)
+            # Bucket already exists is a non-fatal condition
+            if error_code == "ConflictException" or "already exists" in error_msg.lower():
+                logger.info(f"S3 Vectors bucket already exists: {self.vector_bucket}")
+            else:
+                logger.error(f"Failed to create S3 Vectors bucket: {e}")
+                raise
 
     def _create_s3_vectors_index(self, index_name: str) -> str:
         """
@@ -149,24 +191,35 @@ class KBMigrator:
             # Check if index already exists
             try:
                 existing = self.s3vectors.get_index(
-                    indexBucketName=self.data_bucket, indexName=index_name
+                    vectorBucketName=self.vector_bucket, indexName=index_name
                 )
                 return existing["index"]["indexArn"]
             except ClientError as e:
                 if e.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
                     raise
 
-            # Create new index
-            response = self.s3vectors.create_index(
-                indexBucketName=self.data_bucket,
+            # Create new index in vector bucket
+            account_id = self.sts.get_caller_identity()["Account"]
+            self.s3vectors.create_index(
+                vectorBucketName=self.vector_bucket,
                 indexName=index_name,
-                vectorConfiguration={
-                    "dimension": 1024,
-                    "distanceMetric": "cosine",
+                dataType="float32",
+                dimension=1024,
+                distanceMetric="cosine",
+                metadataConfiguration={
+                    "nonFilterableMetadataKeys": [
+                        "AMAZON_BEDROCK_TEXT",
+                        "AMAZON_BEDROCK_METADATA",
+                    ]
                 },
             )
 
-            index_arn = response["index"]["indexArn"]
+            # Construct index ARN
+            index_arn = (
+                f"arn:aws:s3vectors:{self.region}:{account_id}:"
+                f"bucket/{self.vector_bucket}/index/{index_name}"
+            )
+            logger.info(f"Created S3 Vectors index ARN: {index_arn}")
 
             # Wait for index to be ready
             self._wait_for_index_status(index_name, "READY")
@@ -216,7 +269,7 @@ class KBMigrator:
         while time.time() - start_time < timeout:
             try:
                 response = self.s3vectors.get_index(
-                    indexBucketName=self.data_bucket, indexName=index_name
+                    vectorBucketName=self.vector_bucket, indexName=index_name
                 )
                 status = response["index"]["indexStatus"]
 
@@ -266,9 +319,7 @@ class KBMigrator:
                 for ds in ds_response.get("dataSourceSummaries", []):
                     ds_id = ds["dataSourceId"]
                     logger.info(f"Deleting data source: {ds_id}")
-                    self.bedrock_agent.delete_data_source(
-                        knowledgeBaseId=kb_id, dataSourceId=ds_id
-                    )
+                    self.bedrock_agent.delete_data_source(knowledgeBaseId=kb_id, dataSourceId=ds_id)
             except ClientError as e:
                 logger.warning(f"Error listing/deleting data sources: {e}")
 

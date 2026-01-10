@@ -281,17 +281,15 @@ Resources:
         Type: S3
         Location:
           Fn::Sub: ${UISourceBucket}/${UISourceKey}
-        BuildSpec: "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo\
-          \ \"Installing dependencies...\"\n      - cd ui\n      - npm install\n \
-          \ build:\n    commands:\n      - echo \"Building React application...\"\n\
-          \      - npm run build\n  post_build:\n    commands:\n      - echo \"Deploying\
-          \ to S3...\"\n      - aws s3 sync dist/ s3://${UI_BUCKET}/ --delete\n  \
-          \    - echo \"Invalidating CloudFront cache...\"\n      - aws cloudfront\
-          \ create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths \"\
-          /*\"\n      - echo \"\"\n      - echo \"============================================================\"\
-          \n      - echo \"DEPLOYMENT COMPLETE\"\n      - echo \"============================================================\"\
-          \n      - echo \"\"\n      - echo \"Dashboard UI:  https://${CLOUDFRONT_DOMAIN}\"\
-          \n      - echo \"GraphQL API:   ${VITE_GRAPHQL_URL}\"\n      - echo \"\"\
+        BuildSpec: "version: 0.2\nphases:\n  install:\n    runtime-versions:\n   \
+          \   nodejs: 24\n  pre_build:\n    commands:\n      - echo \"Installing dependencies...\"\
+          \n      - cd ui\n      - npm install\n  build:\n    commands:\n      - echo\
+          \ \"Building React application...\"\n      - npm run build\n  post_build:\n\
+          \    commands:\n      - echo \"Deploying to S3...\"\n      - aws s3 sync\
+          \ dist/ s3://${UI_BUCKET}/ --delete\n      - echo \"Invalidating CloudFront\
+          \ cache...\"\n      - aws cloudfront create-invalidation --distribution-id\
+          \ ${CLOUDFRONT_DIST_ID} --paths \"/*\"\n      - echo \"============================================================\"\
+          \n      - echo \"DEPLOYMENT COMPLETE - Dashboard UI https://${CLOUDFRONT_DOMAIN}\"\
           \n      - echo \"============================================================\"\
           \n"
       Environment:
@@ -795,6 +793,30 @@ Resources:
         Value: Conversation History Storage
     Metadata:
       SamResourceId: ConversationHistoryTable
+  MetadataKeyLibraryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-metadata-keys
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+      - AttributeName: key_name
+        AttributeType: S
+      KeySchema:
+      - AttributeName: key_name
+        KeyType: HASH
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+      - Key: Purpose
+        Value: Metadata Key Library
+    Metadata:
+      SamResourceId: MetadataKeyLibraryTable
   ScrapeJobsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -875,7 +897,7 @@ Resources:
       LayerName:
         Fn::Sub: ${AWS::StackName}-Common
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/97443234832150da2fe9b3bc06029e3f
+      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f0c84691ee56c0b991967fa675d67bff
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -886,7 +908,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f2cfa648e496e565141e74f9e20fd480
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ed16fe86d4f934037f218262e329d90e
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
       Layers:
@@ -935,6 +957,8 @@ Resources:
           Action:
           - textract:DetectDocumentText
           - textract:AnalyzeDocument
+          - textract:StartDocumentTextDetection
+          - textract:GetDocumentTextDetection
           Resource: '*'
         - Effect: Allow
           Action: bedrock:InvokeModel
@@ -978,6 +1002,75 @@ Resources:
             Ref: TrackingTable
     Metadata:
       SamResourceId: GetPageInfoFunction
+  DetectFileTypeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-detect-file-type
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f00c71d6696dfedaa5397a92c99ebdb7
+      Handler: index.lambda_handler
+      Description: Detect file type for routing (ocr/text/passthrough)
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataBucket
+    Metadata:
+      SamResourceId: DetectFileTypeFunction
+  ProcessTextFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-process-text
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5d1c27d088895654a25a4dc006f7a392
+      Handler: index.lambda_handler
+      Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB,
+        DOCX, XLSX)
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: ProcessTextFunction
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1034,7 +1127,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-queue-processor
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4d5b6565150bc0255654d1e985006102
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/6d4062640ee4df55188db37e6c4b363a
       Handler: index.lambda_handler
       Description: Process SQS messages to start Step Functions executions
       Runtime: python3.13
@@ -1192,7 +1285,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-ingest
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/91c6dea9e6ca8aa0bfd5f156ee8e1a12
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/a1c44fe2ad2bf1dd5dc79d02d5143df9
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
@@ -1215,6 +1308,10 @@ Resources:
             Fn::GetAtt:
             - GraphQLApi
             - GraphQLUrl
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
       Layers:
       - Ref: RagstackCommonLayer
       Tags:
@@ -1225,6 +1322,15 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
       - Statement:
         - Effect: Allow
           Action:
@@ -1245,6 +1351,11 @@ Resources:
           Action: appsync:GraphQL
           Resource:
             Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+        - Effect: Allow
+          Action: bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
     Metadata:
       SamResourceId: IngestToKBFunction
   ProcessImageFunction:
@@ -1252,7 +1363,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process-image
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/1bb7d1ae1330dc99face2e1e5123c1b8
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/790f8fa54fb7cb951e0bf6c1d03514ab
       Handler: index.lambda_handler
       Description: Process uploaded images and ingest to Knowledge Base
       Layers:
@@ -1281,6 +1392,8 @@ Resources:
             Ref: DataBucket
           CONFIGURATION_TABLE_NAME:
             Ref: ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1295,6 +1408,9 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
       - DynamoDBReadPolicy:
           TableName:
             Ref: ConfigurationTable
@@ -1325,6 +1441,66 @@ Resources:
           - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
     Metadata:
       SamResourceId: ProcessImageFunction
+  MetadataAnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-metadata-analyzer
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4c9cd729e3a84ae19c62325422e72cae
+      Handler: index.lambda_handler
+      Description: Analyze Knowledge Base vectors to discover metadata fields and
+        generate filter examples
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          TEXT_DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - TextDataSourceId
+          DATA_BUCKET:
+            Ref: DataBucket
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:Retrieve
+          - bedrock:RetrieveAndGenerate
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+    Metadata:
+      SamResourceId: MetadataAnalyzerFunction
   ProcessZipFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1405,7 +1581,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-query
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/cbdd311688dc68b8211f71878bd01cca
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/666214e32c369e73306d2a9395111d9c
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
@@ -1434,6 +1610,8 @@ Resources:
             Ref: ConversationHistoryTable
           TRACKING_TABLE:
             Ref: TrackingTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1448,6 +1626,9 @@ Resources:
       - DynamoDBReadPolicy:
           TableName:
             Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
       - S3ReadPolicy:
           BucketName:
             Ref: DataBucket
@@ -1474,7 +1655,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-search
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ae44867a0f5f1b24fa26dd5a19aa87ea
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/80f20591992548615ddc8f6b5cc0eca7
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -1501,6 +1682,8 @@ Resources:
             Ref: ConfigurationTable
           TRACKING_TABLE:
             Ref: TrackingTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1515,13 +1698,24 @@ Resources:
       - Statement:
         - Effect: Allow
           Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+      - Statement:
+        - Effect: Allow
+          Action:
           - dynamodb:GetItem
+          - dynamodb:Scan
           Resource:
           - Fn::GetAtt:
             - ConfigurationTable
             - Arn
           - Fn::GetAtt:
             - TrackingTable
+            - Arn
+          - Fn::GetAtt:
+            - MetadataKeyLibraryTable
             - Arn
     Metadata:
       SamResourceId: SearchKBFunction
@@ -1530,7 +1724,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-config
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/53b11cfff80a7bbbdfc7dc9e28c5809a
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/85d89ccd20a85758ed845236ace5938a
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
       Layers:
@@ -1619,14 +1813,14 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-scrape-start
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/bc87167c4af20135b322c4ca1f21dece
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/362af034794abb1885e8856b0da946e8
       Handler: index.lambda_handler
       Description: Initiate web scraping job
       Layers:
       - Ref: RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 30
-      MemorySize: 128
+      Timeout: 60
+      MemorySize: 256
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1640,6 +1834,8 @@ Resources:
             Fn::GetAtt:
             - GraphQLApi
             - GraphQLUrl
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1648,6 +1844,9 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: ScrapeJobsTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
       - SQSSendMessagePolicy:
           QueueName:
             Fn::GetAtt:
@@ -1664,6 +1863,12 @@ Resources:
           Action: appsync:GraphQL
           Resource:
             Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+      - Statement:
+        - Effect: Allow
+          Action: bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
     Metadata:
       SamResourceId: ScrapeStartFunction
   ScrapeDiscoverFunction:
@@ -1736,7 +1941,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-scrape-process
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/2aaf512fae3a7df06a7270f231d11cf5
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/fb46d9a38b9a65d94e7bea494a19c744
       Handler: index.lambda_handler
       Description: Process scraped pages and save to S3
       Layers:
@@ -1876,6 +2081,12 @@ Resources:
             - Fn::GetAtt:
               - EnqueueBatchesFunction
               - Arn
+            - Fn::GetAtt:
+              - DetectFileTypeFunction
+              - Arn
+            - Fn::GetAtt:
+              - ProcessTextFunction
+              - Arn
       - PolicyName: CloudWatchLogs
         PolicyDocument:
           Version: '2012-10-17'
@@ -1901,7 +2112,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-ProcessingPipeline
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public-631094035453
-        Key: ragstack-quicklaunch/73f97de83b2fd9a4e1ae76847f2cecc0
+        Key: ragstack-quicklaunch/d9017f127b7ed336d54ec24aed5dba2d
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn:
           Fn::GetAtt:
@@ -1918,6 +2129,14 @@ Resources:
         EnqueueBatchesFunctionArn:
           Fn::GetAtt:
           - EnqueueBatchesFunction
+          - Arn
+        DetectFileTypeFunctionArn:
+          Fn::GetAtt:
+          - DetectFileTypeFunction
+          - Arn
+        ProcessTextFunctionArn:
+          Fn::GetAtt:
+          - ProcessTextFunction
           - Arn
       Role:
         Fn::GetAtt:
@@ -2297,7 +2516,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-kb-init
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/26ff0bfbd9318571e46f469ce73ed9d7
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5c2c92a7399fd60603d4a96b4ad6b77d
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
       Layers:
@@ -2566,7 +2785,7 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/66a9191982d493f6fd4dfd083f9d7fde
+      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/2744ce90c3680b978d3ceb893947119d
     Metadata:
       SamResourceId: GraphQLSchema
   GraphQLApiKey:
@@ -2599,7 +2818,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-appsync
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5fcfd3e95e5c339a5be9179443647fff
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/614ed05f6e5458c4c62fa437c1a7359d
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -2626,6 +2845,12 @@ Resources:
             - Arn
           CONFIGURATION_TABLE_NAME:
             Ref: ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
+          METADATA_ANALYZER_FUNCTION_ARN:
+            Fn::GetAtt:
+            - MetadataAnalyzerFunction
+            - Arn
       Tags:
         Project:
           Ref: AWS::StackName
@@ -2651,6 +2876,9 @@ Resources:
       - DynamoDBReadPolicy:
           TableName:
             Ref: ScrapeUrlsTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
       - Statement:
         - Effect: Allow
           Action:
@@ -2658,6 +2886,14 @@ Resources:
           Resource:
             Fn::GetAtt:
             - ScrapeStartFunction
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - MetadataAnalyzerFunction
             - Arn
       - Statement:
         - Effect: Allow
@@ -2683,7 +2919,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-ui-builder
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/d1ffdee8b4deb6acf06debadaaee341c
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/1fb612e04e10498306a3bf43bc2e6347
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
       Layers:
@@ -2751,8 +2987,6 @@ Resources:
         Ref: UICodeBuildProject
       SourceLocationOverride:
         Fn::Sub: ${UISourceBucket}/${UISourceKey}
-      SuccessUrl:
-        Fn::Sub: https://${CloudFrontDistribution.DomainName}
     Metadata:
       SamResourceId: CodeBuildRun
   WCCodeBuildRun:
@@ -2767,8 +3001,6 @@ Resources:
         Ref: WebComponentBuildProject
       SourceLocationOverride:
         Fn::Sub: ${UISourceBucket}/${WebComponentSourceKey}
-      SuccessUrl:
-        Fn::Sub: https://${WebComponentDistribution.DomainName}/ragstack-chat.js
     Metadata:
       SamResourceId: WCCodeBuildRun
   AppSyncLambdaDataSource:
@@ -2939,6 +3171,70 @@ Resources:
         - Name
     Metadata:
       SamResourceId: ListDocumentsResolver
+  GetMetadataStatsResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getMetadataStats
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetMetadataStatsResolver
+  GetFilterExamplesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getFilterExamples
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetFilterExamplesResolver
+  GetKeyLibraryResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getKeyLibrary
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetKeyLibraryResolver
+  CheckKeySimilarityResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: checkKeySimilarity
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: CheckKeySimilarityResolver
   CreateUploadUrlResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -3275,6 +3571,22 @@ Resources:
         - Name
     Metadata:
       SamResourceId: CreateZipUploadUrlResolver
+  AnalyzeMetadataResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: analyzeMetadata
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: AnalyzeMetadataResolver
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -3670,6 +3982,167 @@ Resources:
               BOOL: true
     Metadata:
       SamResourceId: BudgetInitTrigger
+  ConfigurationSeederFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-config-seeder
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: ConfigurationTable
+          WC_CDN_URL:
+            Fn::Sub: https://${WebComponentDistribution.DomainName}/ragstack-chat.js
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      InlineCode: "import json\nimport os\nimport boto3\nfrom urllib.request import\
+        \ Request, urlopen\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\
+        \nSCHEMA = {\n    'type': 'object',\n    'required': ['ocr_backend'],\n  \
+        \  'properties': {\n        'ocr_backend': {\n            'type': 'string',\n\
+        \            'order': 1,\n            'description': 'OCR backend for document\
+        \ processing',\n            'enum': ['textract', 'bedrock'],\n           \
+        \ 'default': 'textract'\n        },\n        'bedrock_ocr_model_id': {\n \
+        \           'type': 'string',\n            'order': 2,\n            'description':\
+        \ 'Bedrock model for OCR (only if backend is bedrock)',\n            'enum':\
+        \ [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n    \
+        \            'us.anthropic.claude-sonnet-4-20250514-v1:0',\n             \
+        \   'meta.llama3-2-90b-instruct-v1:0',\n                'meta.llama3-2-11b-instruct-v1:0'\n\
+        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \            'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}\n \
+        \       },\n        'chat_system_prompt': {\n            'type': 'string',\n\
+        \            'order': 3,\n            'description': 'System prompt for chat\
+        \ responses',\n            'default': 'You are a helpful assistant that answers\
+        \ questions based on information from a knowledge base. Always base your answers\
+        \ on the provided knowledge base information. If the provided information\
+        \ doesn\\'t contain the answer, clearly state that and provide what relevant\
+        \ information you can. Be concise but thorough.'\n        },\n        'chat_primary_model':\
+        \ {\n            'type': 'string',\n            'order': 3,\n            'description':\
+        \ 'Primary chat model',\n            'enum': [\n                'us.anthropic.claude-sonnet-4-20250514-v1:0',\n\
+        \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
+        \        'us.amazon.nova-pro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
+        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
+        \        },\n        'chat_fallback_model': {\n            'type': 'string',\n\
+        \            'order': 4,\n            'description': 'Fallback model when\
+        \ quotas exceeded',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \                'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
+        \            ],\n            'default': 'us.amazon.nova-micro-v1:0'\n    \
+        \    },\n        'chat_global_quota_daily': {\n            'type': 'number',\n\
+        \            'order': 5,\n            'description': 'Max messages per day\
+        \ (all users)',\n            'default': 10000\n        },\n        'chat_per_user_quota_daily':\
+        \ {\n            'type': 'number',\n            'order': 6,\n            'description':\
+        \ 'Max messages per user per day',\n            'default': 100\n        },\n\
+        \        'chat_cdn_url': {\n            'type': 'string',\n            'order':\
+        \ 7,\n            'description': 'Web component CDN URL',\n            'readOnly':\
+        \ True\n        },\n        'chat_allow_document_access': {\n            'type':\
+        \ 'boolean',\n            'order': 8,\n            'description': 'Allow document\
+        \ downloads via presigned URLs',\n            'default': False\n        },\n\
+        \        'public_access_chat': {\n            'type': 'boolean',\n       \
+        \     'order': 9,\n            'description': 'Allow unauthenticated chat',\n\
+        \            'default': True\n        },\n        'public_access_search':\
+        \ {\n            'type': 'boolean',\n            'order': 10,\n          \
+        \  'description': 'Allow unauthenticated search',\n            'default':\
+        \ True\n        },\n        'public_access_upload': {\n            'type':\
+        \ 'boolean',\n            'order': 11,\n            'description': 'Allow\
+        \ unauthenticated uploads',\n            'default': False\n        },\n  \
+        \      'public_access_image_upload': {\n            'type': 'boolean',\n \
+        \           'order': 12,\n            'description': 'Allow unauthenticated\
+        \ image uploads',\n            'default': False\n        },\n        'image_caption_prompt':\
+        \ {\n            'type': 'string',\n            'order': 14,\n           \
+        \ 'description': 'System prompt for image caption generation',\n         \
+        \   'default': 'You are an image captioning assistant. Generate concise, descriptive\
+        \ captions that are suitable for use as search keywords. Focus on the main\
+        \ subject, setting, and any notable visual elements. Keep captions under 200\
+        \ characters.'\n        },\n        'public_access_scrape': {\n          \
+        \  'type': 'boolean',\n            'order': 13,\n            'description':\
+        \ 'Allow unauthenticated web scraping',\n            'default': False\n  \
+        \      },\n        'budget_alert_threshold': {\n            'type': 'number',\n\
+        \            'order': 14,\n            'description': 'Monthly budget alert\
+        \ threshold (USD)',\n            'default': 100\n        },\n        'budget_alert_enabled':\
+        \ {\n            'type': 'boolean',\n            'order': 15,\n          \
+        \  'description': 'Enable budget alerts',\n            'default': True\n \
+        \       },\n        'filter_generation_enabled': {\n            'type': 'boolean',\n\
+        \            'order': 16,\n            'description': 'Enable LLM-based metadata\
+        \ filter generation for queries',\n            'default': True\n        },\n\
+        \        'filter_generation_model': {\n            'type': 'string',\n   \
+        \         'order': 17,\n            'description': 'Model for filter generation',\n\
+        \            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \                'us.anthropic.claude-3-5-haiku-20241022-v1:0'\n         \
+        \   ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
+        \        },\n        'multislice_enabled': {\n            'type': 'boolean',\n\
+        \            'order': 18,\n            'description': 'Enable multi-slice\
+        \ retrieval (parallel filtered/unfiltered queries)',\n            'default':\
+        \ True\n        },\n        'multislice_count': {\n            'type': 'number',\n\
+        \            'order': 19,\n            'description': 'Number of parallel\
+        \ retrieval slices (2-4)',\n            'default': 2\n        },\n       \
+        \ 'multislice_timeout_ms': {\n            'type': 'number',\n            'order':\
+        \ 20,\n            'description': 'Timeout per slice in milliseconds',\n \
+        \           'default': 5000\n        },\n        'metadata_filter_examples':\
+        \ {\n            'type': 'array',\n            'order': 21,\n            'description':\
+        \ 'Filter examples for few-shot learning (JSON array)',\n            'default':\
+        \ []\n        },\n        'metadata_filter_examples_disabled': {\n       \
+        \     'type': 'array',\n            'order': 211,\n            'description':\
+        \ 'Names of disabled filter examples',\n            'default': []\n      \
+        \  },\n        'metadata_filter_examples_updated_at': {\n            'type':\
+        \ 'string',\n            'order': 212,\n            'description': 'Timestamp\
+        \ when filter examples were last generated',\n            'default': ''\n\
+        \        },\n        'metadata_extraction_enabled': {\n            'type':\
+        \ 'boolean',\n            'order': 22,\n            'description': 'Enable\
+        \ LLM metadata extraction during ingestion',\n            'default': True\n\
+        \        },\n        'metadata_extraction_model': {\n            'type': 'string',\n\
+        \            'order': 23,\n            'description': 'Model for metadata\
+        \ extraction',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \                'us.anthropic.claude-3-5-haiku-20241022-v1:0',\n        \
+        \        'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
+        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
+        \        },\n        'metadata_max_keys': {\n            'type': 'number',\n\
+        \            'order': 24,\n            'description': 'Maximum metadata fields\
+        \ to extract per document',\n            'default': 8\n        },\n      \
+        \  'metadata_extraction_mode': {\n            'type': 'string',\n        \
+        \    'order': 25,\n            'description': 'Extraction mode: auto (LLM\
+        \ decides) or manual (admin specifies)',\n            'enum': ['auto', 'manual'],\n\
+        \            'default': 'auto'\n        },\n        'metadata_manual_keys':\
+        \ {\n            'type': 'array',\n            'order': 26,\n            'description':\
+        \ 'Keys to extract in manual mode',\n            'default': [],\n        \
+        \    'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}\n\
+        \        }\n    }\n}\n\ndef lambda_handler(event, context):\n    print(f\"\
+        Event: {json.dumps(event)}\")\n    request_type = event.get('RequestType',\
+        \ '')\n\n    try:\n        if request_type in ['Create', 'Update']:\n    \
+        \        # Build defaults from schema\n            defaults = {'Configuration':\
+        \ 'Default'}\n            for key, prop in SCHEMA['properties'].items():\n\
+        \                if 'default' in prop:\n                    defaults[key]\
+        \ = prop['default']\n            defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL',\
+        \ '')\n\n            # Seed Schema (stored as dict, not JSON string)\n   \
+        \         table.put_item(Item={\n                'Configuration': 'Schema',\n\
+        \                'Schema': SCHEMA\n            })\n\n            # Seed Default\
+        \ (values at top level, not nested)\n            table.put_item(Item=defaults)\n\
+        \n            print(\"Configuration seeded successfully\")\n\n        # Send\
+        \ success response\n        send_response(event, 'SUCCESS', {})\n\n    except\
+        \ Exception as e:\n        print(f\"Error: {e}\")\n        send_response(event,\
+        \ 'FAILED', {}, str(e))\n\ndef send_response(event, status, data, reason=''):\n\
+        \    body = {\n        'Status': status,\n        'PhysicalResourceId': 'config-seeder',\n\
+        \        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n\
+        \        'LogicalResourceId': event['LogicalResourceId'],\n        'Reason':\
+        \ reason or 'See CloudWatch logs',\n        'Data': data\n    }\n    request\
+        \ = Request(\n        event['ResponseURL'],\n        data=json.dumps(body).encode('utf-8'),\n\
+        \        headers={'Content-Type': ''},\n        method='PUT'\n    )\n    urlopen(request)\n"
+    Metadata:
+      SamResourceId: ConfigurationSeederFunction
+  ConfigurationSeeder:
+    Type: Custom::ConfigurationSeeder
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - ConfigurationSeederFunction
+        - Arn
+      SchemaVersion: '3'
+    Metadata:
+      SamResourceId: ConfigurationSeeder
   AdminUserProvisionerFunction:
     Type: AWS::Serverless::Function
     Properties:

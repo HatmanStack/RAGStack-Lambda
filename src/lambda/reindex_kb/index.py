@@ -149,6 +149,7 @@ def handle_init(event: dict) -> dict:
     """
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     data_bucket = os.environ.get("DATA_BUCKET")
+    vector_bucket = os.environ.get("VECTOR_BUCKET")
     stack_name = os.environ.get("STACK_NAME")
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
@@ -182,6 +183,7 @@ def handle_init(event: dict) -> dict:
     timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     migrator = KBMigrator(
         data_bucket=data_bucket,
+        vector_bucket=vector_bucket,
         stack_name=stack_name,
         kb_role_arn=kb_role_arn,
         embedding_model_arn=embedding_model_arn,
@@ -320,6 +322,7 @@ def handle_finalize(event: dict) -> dict:
     error_messages = event.get("error_messages", [])
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
     data_bucket = os.environ.get("DATA_BUCKET")
+    vector_bucket = os.environ.get("VECTOR_BUCKET")
     stack_name = os.environ.get("STACK_NAME")
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
@@ -339,6 +342,7 @@ def handle_finalize(event: dict) -> dict:
         try:
             migrator = KBMigrator(
                 data_bucket=data_bucket,
+                vector_bucket=vector_bucket,
                 stack_name=stack_name,
                 kb_role_arn=kb_role_arn,
                 embedding_model_arn=embedding_model_arn,
@@ -375,21 +379,29 @@ def handle_cleanup_failed(event: dict) -> dict:
     Clean up after a failed reindex operation.
 
     Deletes the new KB if it was created.
+    Event structure from PrepareCleanup: { action, state: { new_kb_id, error, ... } }
     """
-    new_kb_id = event.get("new_kb_id")
+    # Extract state from nested structure (PrepareCleanup wraps the original state)
+    state = event.get("state", event)  # Fallback to event itself for backwards compatibility
+
+    new_kb_id = state.get("new_kb_id")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
     data_bucket = os.environ.get("DATA_BUCKET")
+    vector_bucket = os.environ.get("VECTOR_BUCKET")
     stack_name = os.environ.get("STACK_NAME")
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
-    error_message = event.get("error_message", "Unknown error")
+
+    # Extract error message from the error object
+    error_obj = state.get("error", {})
+    error_message = error_obj.get("Cause", error_obj.get("Error", "Unknown error"))
 
     # Publish failure status
     publish_reindex_update(
         graphql_endpoint,
         status="FAILED",
-        total_documents=event.get("total_documents", 0),
-        processed_count=event.get("processed_count", 0),
+        total_documents=state.get("total_documents", 0),
+        processed_count=state.get("processed_count", 0),
         error_count=1,
         error_messages=[error_message],
     )
@@ -399,6 +411,7 @@ def handle_cleanup_failed(event: dict) -> dict:
         try:
             migrator = KBMigrator(
                 data_bucket=data_bucket,
+                vector_bucket=vector_bucket,
                 stack_name=stack_name,
                 kb_role_arn=kb_role_arn,
                 embedding_model_arn=embedding_model_arn,

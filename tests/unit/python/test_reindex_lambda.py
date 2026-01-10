@@ -17,11 +17,7 @@ from botocore.exceptions import ClientError
 def load_reindex_module():
     """Load the reindex_kb index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src"
-        / "lambda"
-        / "reindex_kb"
-        / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "reindex_kb" / "index.py"
     ).resolve()
 
     spec = importlib.util.spec_from_file_location("reindex_kb_index", str(module_path))
@@ -86,11 +82,13 @@ class TestKBMigrator:
             module = load_kb_migrator_module()
             migrator = module.KBMigrator(
                 data_bucket="test-bucket",
+                vector_bucket="test-vector-bucket",
                 stack_name="test-stack",
                 kb_role_arn="arn:aws:iam::123:role/test",
                 embedding_model_arn="arn:aws:bedrock:us-east-1::model/test",
             )
             assert migrator.data_bucket == "test-bucket"
+            assert migrator.vector_bucket == "test-vector-bucket"
             assert migrator.stack_name == "test-stack"
 
     def test_delete_knowledge_base_not_found(self, set_env_vars):
@@ -100,6 +98,7 @@ class TestKBMigrator:
 
             migrator = module.KBMigrator(
                 data_bucket="test-bucket",
+                vector_bucket="test-vector-bucket",
                 stack_name="test-stack",
                 kb_role_arn="arn:aws:iam::123:role/test",
                 embedding_model_arn="arn:aws:bedrock:us-east-1::model/test",

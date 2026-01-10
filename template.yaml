@@ -1364,6 +1364,7 @@ Resources:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
+          VECTOR_BUCKET: !Ref VectorBucket
           STACK_NAME: !Ref AWS::StackName
           KB_ROLE_ARN: !GetAtt KnowledgeBaseRole.Arn
           EMBEDDING_MODEL_ARN: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
