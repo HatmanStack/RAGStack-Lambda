@@ -48,6 +48,7 @@ import {
   validateQuota,
   validateBudgetThreshold,
 } from '../../utils/validation';
+import { ReindexSection } from './ReindexSection';
 import type { GqlResponse } from '../../types/graphql';
 import { MetadataKeyInput } from './MetadataKeyInput';
 import { MetadataPanel } from '../Search/MetadataPanel';
@@ -767,6 +768,14 @@ export function Settings() {
             Changes apply to newly uploaded documents only. Previously indexed documents retain their
             existing metadata.
           </Alert>
+
+          {/* Divider */}
+          <Box margin={{ top: 'm' }}>
+            <hr style={{ border: 'none', borderTop: '1px solid #e9ebed' }} />
+          </Box>
+
+          {/* Reindex section */}
+          <ReindexSection />
         </SpaceBetween>
       </ExpandableSection>
 

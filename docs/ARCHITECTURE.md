@@ -86,6 +86,15 @@ Upload → DetectFileType → Route by Type:
 2. **Indexing:** ProcessImage ingests image + caption to Bedrock KB
 3. **Cross-modal:** Both visual and text vectors share image_id
 
+### Knowledge Base Reindex
+1. **Trigger:** User → AppSync → startReindex mutation → Step Functions
+2. **Init:** Create new S3 Vectors bucket + Knowledge Base
+3. **Process:** Map state iterates documents, regenerates metadata, ingests to new KB
+4. **Finalize:** Update SSM parameter to new KB ID
+5. **Cleanup:** Delete old KB and S3 Vectors bucket
+
+**Note:** Reindex regenerates metadata only - does NOT re-run OCR/text extraction.
+
 ### Chat Query
 1. **Query:** User → AppSync → QueryKB Lambda
 2. **Quota Check:** Atomic DynamoDB transaction (global + per-user limits)
@@ -100,6 +109,7 @@ All state changes publish via GraphQL subscriptions:
 - `onDocumentUpdate` - Document processing progress
 - `onImageUpdate` - Image processing progress
 - `onScrapeUpdate` - Web scraping progress
+- `onReindexUpdate` - Knowledge Base reindex progress
 
 UI subscribes on load, updates automatically without polling.
 

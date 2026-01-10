@@ -1343,6 +1343,92 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
+  # =========================================================================
+  # KB Reindex Lambda
+  # =========================================================================
+
+  ReindexKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-reindex-kb'
+      CodeUri: src/lambda/reindex_kb/
+      Handler: index.lambda_handler
+      Description: Reindex Knowledge Base - creates new KB, re-ingests documents, deletes old KB
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 900  # 15 minutes for long-running batch operations
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+          VECTOR_BUCKET: !Ref VectorBucket
+          STACK_NAME: !Ref AWS::StackName
+          KB_ROLE_ARN: !GetAtt KnowledgeBaseRole.Arn
+          EMBEDDING_MODEL_ARN: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - S3CrudPolicy:
+            BucketName: !Ref VectorBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:CreateKnowledgeBase
+                - bedrock:DeleteKnowledgeBase
+                - bedrock:GetKnowledgeBase
+                - bedrock:ListKnowledgeBases
+                - bedrock:CreateDataSource
+                - bedrock:DeleteDataSource
+                - bedrock:GetDataSource
+                - bedrock:ListDataSources
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:CreateKnowledgeBase
+              Resource: '*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action:
+                - iam:PassRole
+              Resource: !GetAtt KnowledgeBaseRole.Arn
+            - Effect: Allow
+              Action:
+                - s3vectors:CreateIndex
+                - s3vectors:DeleteIndex
+                - s3vectors:GetIndex
+                - s3vectors:ListVectors
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
+                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+
   ProcessZipFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1903,6 +1989,68 @@ Resources:
       RetentionInDays: 30
 
   # =========================================================================
+  # KB Reindex State Machine
+  # =========================================================================
+
+  ReindexStateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ReindexKBFunction.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  ReindexStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${AWS::StackName}-ReindexWorkflow'
+      DefinitionUri: src/statemachine/reindex.asl.json
+      DefinitionSubstitutions:
+        ReindexKBFunctionArn: !GetAtt ReindexKBFunction.Arn
+      Role: !GetAtt ReindexStateMachineExecutionRole.Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt ReindexStateMachineLogGroup.Arn
+
+  ReindexStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-ReindexWorkflow'
+      RetentionInDays: 30
+
+  # =========================================================================
   # EventBridge Rule for S3 Upload Trigger
   # =========================================================================
 
@@ -2445,6 +2593,8 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           # Metadata analyzer for KB analysis
           METADATA_ANALYZER_FUNCTION_ARN: !GetAtt MetadataAnalyzerFunction.Arn
+          # Reindex state machine for KB reindex operations
+          REINDEX_STATE_MACHINE_ARN: !GetAtt ReindexStateMachine.Arn
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -2457,7 +2607,9 @@ Resources:
             - Effect: Allow
               Action:
                 - states:StartExecution
-              Resource: !GetAtt ProcessingStateMachine.Arn
+              Resource:
+                - !GetAtt ProcessingStateMachine.Arn
+                - !GetAtt ReindexStateMachine.Arn
         # Scrape policies
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
@@ -2897,6 +3049,15 @@ Resources:
       ApiId: !GetAtt GraphQLApi.ApiId
       TypeName: Mutation
       FieldName: analyzeMetadata
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  StartReindexResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: startReindex
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
   # =========================================================================

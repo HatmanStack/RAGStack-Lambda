@@ -24,6 +24,7 @@ Serverless document processing with AI chat. Upload documents, extract text with
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
 - 🔍 **NEW** Metadata filtering - auto-discover document metadata and filter search results
+- 🔄 Knowledge Base reindex - regenerate metadata for existing documents with updated settings
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
 - 💰 $7-10/month (1000 docs, Textract + Haiku)
