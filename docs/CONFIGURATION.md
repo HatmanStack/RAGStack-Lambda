@@ -142,6 +142,34 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 - Using Haiku: ~$0.0001 per document
 - Disable if not needed to reduce costs
 
+## Knowledge Base Reindex
+
+Reindex allows you to regenerate metadata for all existing documents using current extraction settings. This is useful when:
+
+- You uploaded documents before enabling metadata extraction
+- You changed metadata settings (e.g., switched from auto to manual mode with specific keys)
+- You're migrating from an older version with different S3 prefix structures
+
+**Location:** Dashboard → Settings → Metadata Extraction → Reindex All Documents
+
+**What happens during reindex:**
+1. Creates a new Knowledge Base with fresh S3 Vectors storage
+2. Iterates through all documents in the tracking table
+3. Regenerates metadata using current extraction settings
+4. Ingests documents into the new Knowledge Base
+5. Deletes the old Knowledge Base after successful migration
+
+**Important notes:**
+- Reindex does NOT re-run OCR/text extraction (uses existing extracted text)
+- Documents without extracted text (`output_s3_uri`) are skipped
+- Queries may return partial results during reindex
+- Process time depends on document count (expect several minutes for large KBs)
+- Progress is displayed in real-time via the Settings UI
+
+**When NOT to use reindex:**
+- To re-extract text from documents (re-upload them instead)
+- For minor setting changes that don't affect existing documents
+
 ## Query-Time Filtering
 
 | Setting | Values | Default | Notes |
