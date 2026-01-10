@@ -135,6 +135,22 @@ type Mutation {
   # Analyze metadata in Knowledge Base vectors
   # Samples vectors, analyzes field occurrences, and generates filter examples
   analyzeMetadata: MetadataAnalysisResult @aws_api_key @aws_cognito_user_pools
+
+  # Start Knowledge Base reindex operation (admin only)
+  # Creates new KB, regenerates metadata for all documents, migrates content, deletes old KB
+  startReindex: ReindexJob @aws_cognito_user_pools
+
+  # Internal: Publish reindex progress update (called by Lambda)
+  publishReindexUpdate(
+    status: ReindexStatus!
+    totalDocuments: Int!
+    processedCount: Int!
+    currentDocument: String
+    errorCount: Int!
+    errorMessages: [String!]
+    newKnowledgeBaseId: String
+    updatedAt: String!
+  ): ReindexUpdate @aws_iam
 }
 
 type Subscription {
@@ -149,6 +165,10 @@ type Subscription {
   # Subscribe to image status updates
   onImageUpdate: ImageUpdate
     @aws_subscribe(mutations: ["publishImageUpdate"])
+
+  # Subscribe to reindex progress updates
+  onReindexUpdate: ReindexUpdate
+    @aws_subscribe(mutations: ["publishReindexUpdate"])
 }
 
 # Real-time document update payload
@@ -181,6 +201,39 @@ type ImageUpdate {
   caption: String
   errorMessage: String
   updatedAt: String!
+}
+
+# =========================================================================
+# KB Reindex Types
+# =========================================================================
+
+# Reindex operation status enum
+enum ReindexStatus {
+  PENDING
+  CREATING_KB
+  PROCESSING
+  DELETING_OLD_KB
+  COMPLETED
+  FAILED
+}
+
+# Real-time reindex progress update payload
+type ReindexUpdate {
+  status: ReindexStatus!
+  totalDocuments: Int!
+  processedCount: Int!
+  currentDocument: String
+  errorCount: Int!
+  errorMessages: [String!]
+  newKnowledgeBaseId: String
+  updatedAt: String!
+}
+
+# Reindex job response (returned from startReindex mutation)
+type ReindexJob @aws_cognito_user_pools {
+  executionArn: String!
+  status: ReindexStatus!
+  startedAt: String!
 }
 
 # Document type
