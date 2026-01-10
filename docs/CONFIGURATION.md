@@ -109,14 +109,17 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
-| `image_caption_prompt` | string | (default prompt) | System prompt for image caption generation |
+| `image_caption_prompt` | string | See below | System prompt for image caption generation |
+
+**Default image caption prompt:**
+> You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.
 
 ## Metadata Extraction
 
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
-| `metadata_extraction_model` | See options below | claude-haiku-4-5 | Model for metadata extraction |
+| `metadata_extraction_model` | See options below | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for metadata extraction |
 | `metadata_max_keys` | number | 8 | Maximum metadata fields per document |
 | `metadata_extraction_mode` | auto, manual | auto | Auto: LLM decides keys. Manual: use specified keys only |
 | `metadata_manual_keys` | string[] | [] | Keys to extract in manual mode |
@@ -144,7 +147,7 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `filter_generation_enabled` | boolean | true | Enable LLM-based filter generation from queries |
-| `filter_generation_model` | See options below | claude-haiku-4-5 | Model for filter generation |
+| `filter_generation_model` | See options below | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for filter generation |
 | `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
 | `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
 | `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
@@ -175,7 +178,10 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |
 | `chat_per_user_quota_daily` | number | 100 | Queries/day per authenticated user |
 | `chat_allow_document_access` | boolean | false | Show "View Document" links in sources |
-| `chat_system_prompt` | string | (default prompt) | System prompt for chat responses |
+| `chat_system_prompt` | string | See below | System prompt for chat responses |
+
+**Default chat system prompt:**
+> You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn't contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.
 
 **Primary model options:**
 - `us.anthropic.claude-sonnet-4-5-20250929-v1:0`

@@ -50,7 +50,7 @@ _key_library = None
 
 # Configuration
 DEFAULT_MAX_SAMPLES = 1000
-DEFAULT_FILTER_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 MAX_SAMPLE_VALUES = 10
 
 

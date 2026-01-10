@@ -74,7 +74,9 @@ def _get_filter_components():
         _key_library = KeyLibrary()
 
     if _filter_generator is None:
-        _filter_generator = FilterGenerator(key_library=_key_library)
+        # Read configured model, falling back to default if not set
+        filter_model = config_manager.get_parameter("filter_generation_model", default=None)
+        _filter_generator = FilterGenerator(key_library=_key_library, model_id=filter_model)
 
     if _multislice_retriever is None:
         _multislice_retriever = MultiSliceRetriever(bedrock_agent_client=bedrock_agent)

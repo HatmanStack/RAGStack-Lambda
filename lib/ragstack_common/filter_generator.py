@@ -21,7 +21,7 @@ from ragstack_common.key_library import KeyLibrary
 logger = logging.getLogger(__name__)
 
 # Default model for filter generation (cost-efficient)
-DEFAULT_FILTER_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # S3 Vectors filter syntax documentation for prompts
 S3_VECTORS_FILTER_SYNTAX = """

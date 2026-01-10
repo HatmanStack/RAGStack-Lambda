@@ -17,7 +17,7 @@ import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import type { GqlResponse } from '../../types/graphql';
 
 export const MetadataPanel: React.FC = () => {
-  // Initialize client inside component to ensure Amplify is configured
+  // Generate GraphQL client (memoized to avoid recreating on re-renders)
   const client = useMemo(() => generateClient(), []);
   const {
     stats,
@@ -39,13 +39,16 @@ export const MetadataPanel: React.FC = () => {
 
   // Track DISABLED examples (inverted: all enabled by default, store only disabled)
   const [disabledExamples, setDisabledExamples] = useState<string[]>([]);
-  const [loaded, setLoaded] = useState(false);
 
   // Load disabled examples from configuration
   useEffect(() => {
     const loadDisabled = async () => {
       try {
         const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
+        if (response.errors?.length) {
+          console.error('GraphQL errors loading configuration:', response.errors);
+          return;
+        }
         const config = response.data?.getConfiguration as { Custom?: string } | undefined;
         if (config?.Custom) {
           const custom = JSON.parse(config.Custom);
@@ -55,8 +58,6 @@ export const MetadataPanel: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to load disabled examples:', err);
-      } finally {
-        setLoaded(true);
       }
     };
     loadDisabled();

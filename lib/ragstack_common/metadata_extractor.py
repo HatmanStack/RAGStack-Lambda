@@ -21,7 +21,7 @@ from ragstack_common.key_library import KeyLibrary
 logger = logging.getLogger(__name__)
 
 # Default model for metadata extraction (cost-efficient)
-DEFAULT_EXTRACTION_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_EXTRACTION_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Reserved keys that should not be extracted by LLM
 RESERVED_KEYS = frozenset(
