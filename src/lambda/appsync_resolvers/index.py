@@ -80,6 +80,9 @@ METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 # Configuration table (optional, for caption generation and filter examples)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
+# Reindex state machine (optional, for KB reindex operations)
+REINDEX_STATE_MACHINE_ARN = os.environ.get("REINDEX_STATE_MACHINE_ARN")
+
 # Initialize Bedrock runtime client for caption generation (use Lambda's region)
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
 
@@ -144,6 +147,8 @@ def lambda_handler(event, context):
         "getFilterExamples": get_filter_examples,
         "getKeyLibrary": get_key_library,
         "checkKeySimilarity": check_key_similarity,
+        # KB Reindex
+        "startReindex": start_reindex,
     }
 
     resolver = resolvers.get(field_name)
@@ -1928,3 +1933,64 @@ def check_key_similarity(args):
             "similarKeys": [],
             "hasSimilar": False,
         }
+
+
+# =========================================================================
+# KB Reindex Resolvers
+# =========================================================================
+
+
+def start_reindex(args):
+    """
+    Start a Knowledge Base reindex operation.
+
+    Initiates a Step Functions workflow that:
+    1. Creates a new Knowledge Base
+    2. Re-extracts metadata for all documents
+    3. Re-ingests documents into the new KB
+    4. Deletes the old KB
+
+    This is an admin-only operation (requires Cognito auth).
+
+    Returns:
+        ReindexJob with executionArn, status, and startedAt
+    """
+    logger.info("Starting KB reindex operation")
+
+    if not REINDEX_STATE_MACHINE_ARN:
+        logger.error("REINDEX_STATE_MACHINE_ARN not configured")
+        raise ValueError("Reindex feature is not enabled")
+
+    try:
+        # Start the Step Functions execution
+        execution_name = f"reindex-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+
+        response = sfn.start_execution(
+            stateMachineArn=REINDEX_STATE_MACHINE_ARN,
+            name=execution_name,
+            input=json.dumps({"action": "init"}),
+        )
+
+        execution_arn = response["executionArn"]
+        started_at = response["startDate"].isoformat()
+
+        logger.info(f"Started reindex execution: {execution_arn}")
+
+        return {
+            "executionArn": execution_arn,
+            "status": "PENDING",
+            "startedAt": started_at,
+        }
+
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        error_msg = e.response.get("Error", {}).get("Message", str(e))
+        logger.error(f"Failed to start reindex: {error_code} - {error_msg}")
+
+        if error_code == "ExecutionAlreadyExists":
+            raise ValueError("A reindex operation is already in progress") from e
+
+        raise ValueError(f"Failed to start reindex: {error_msg}") from e
+    except Exception as e:
+        logger.error(f"Unexpected error starting reindex: {e}")
+        raise ValueError(f"Failed to start reindex: {str(e)}") from e
