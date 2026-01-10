@@ -554,7 +554,7 @@ describe('Settings Component', () => {
 
       // Check regenerate button exists (separate assertion to help debug failures)
       await waitFor(() => {
-        expect(screen.getByText(/Regenerate/i)).toBeInTheDocument();
+        expect(screen.getByText(/Regenerate API Key/i)).toBeInTheDocument();
       });
     });
 
