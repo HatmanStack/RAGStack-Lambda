@@ -505,7 +505,7 @@ def format_document(item):
         "errorMessage": item.get("error_message"),
         "createdAt": item.get("created_at"),
         "updatedAt": item.get("updated_at"),
-        "metadata": json.dumps(item.get("metadata", {})),
+        "metadata": item.get("extracted_metadata"),
         "previewUrl": preview_url,
     }
 

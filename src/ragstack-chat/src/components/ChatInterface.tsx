@@ -160,16 +160,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           messages.length > MESSAGE_LIMIT ? messages.slice(-MESSAGE_LIMIT) : messages;
 
         sessionStorage.setItem(storageKey, JSON.stringify(messagesToStore));
-      } catch (err) {
-        // Handle QuotaExceededError gracefully
-        if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-          console.warn(
-            `ChatInterface: sessionStorage quota exceeded for key "${storageKey}". ` +
-              'Conversation will continue without persistence.'
-          );
-        } else {
-          console.error('ChatInterface: Failed to save messages to sessionStorage:', err);
-        }
+      } catch {
+        // QuotaExceededError or other storage errors - conversation continues without persistence
       }
     }
   }, [messages, storageKey]);

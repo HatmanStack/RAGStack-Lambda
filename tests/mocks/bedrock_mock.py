@@ -8,8 +8,6 @@ import json
 from typing import Any
 from unittest.mock import MagicMock
 
-from botocore.exceptions import ClientError
-
 
 def create_converse_response(
     text: str,
@@ -65,45 +63,6 @@ def create_metadata_extraction_response(metadata: dict[str, Any]) -> dict[str, A
     return create_converse_response(json.dumps(metadata))
 
 
-def create_throttling_error_response() -> ClientError:
-    """Create a mock throttling error response."""
-    return ClientError(
-        {
-            "Error": {
-                "Code": "ThrottlingException",
-                "Message": "Rate exceeded",
-            }
-        },
-        "Converse",
-    )
-
-
-def create_model_error_response() -> ClientError:
-    """Create a mock model error response."""
-    return ClientError(
-        {
-            "Error": {
-                "Code": "ModelErrorException",
-                "Message": "Model failed to generate response",
-            }
-        },
-        "Converse",
-    )
-
-
-def create_validation_error_response() -> ClientError:
-    """Create a mock validation error response."""
-    return ClientError(
-        {
-            "Error": {
-                "Code": "ValidationException",
-                "Message": "Invalid request parameters",
-            }
-        },
-        "Converse",
-    )
-
-
 # Pre-built responses for common test scenarios
 
 SUCCESSFUL_IMMIGRATION_RESPONSE = create_metadata_extraction_response(
@@ -115,32 +74,6 @@ SUCCESSFUL_IMMIGRATION_RESPONSE = create_metadata_extraction_response(
         "source_category": "government_record",
     }
 )
-
-SUCCESSFUL_GENEALOGY_RESPONSE = create_metadata_extraction_response(
-    {
-        "topic": "genealogy",
-        "document_type": "family_tree",
-        "date_range": "1850-1920",
-        "location": "County Cork, Ireland",
-        "source_category": "personal_document",
-    }
-)
-
-SUCCESSFUL_CENSUS_RESPONSE = create_metadata_extraction_response(
-    {
-        "topic": "census",
-        "document_type": "census_record",
-        "date_range": "1900",
-        "location": "Brooklyn, New York",
-        "source_category": "government_record",
-    }
-)
-
-MALFORMED_JSON_RESPONSE = create_converse_response("This is not valid JSON {topic: broken")
-
-EMPTY_RESPONSE = create_converse_response("")
-
-ARRAY_RESPONSE = create_converse_response('["not", "a", "dict"]')
 
 
 def create_mock_bedrock_client(default_response: dict[str, Any] | None = None) -> MagicMock:

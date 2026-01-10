@@ -1,6 +1,6 @@
 import { distance } from 'fastest-levenshtein';
 
-export interface SimilarKey {
+interface SimilarKey {
   keyName: string;
   similarity: number;
 }

@@ -28,8 +28,6 @@ WHITESPACE_ONLY_TEXT = "   \n\n\t\t\n   "
 
 SINGLE_LINE_TEXT = "Just one line without newline"
 
-LONG_LINE_TEXT = "A" * 500 + " word " + "B" * 500
-
 # =============================================================================
 # HTML SAMPLES
 # =============================================================================
@@ -377,16 +375,3 @@ But this is not JSON."""
 TEXT_LOOKS_LIKE_XML = """Compare apples < oranges and oranges > bananas.
 This is not XML <but> it has angle brackets.
 HTML tags like <div> might confuse detection."""
-
-# =============================================================================
-# BINARY CONTENT MARKERS
-# =============================================================================
-
-# These are just the magic bytes / signatures for detection testing
-# Actual binary files will be created in tests using respective libraries
-
-EPUB_SIGNATURE = b"PK\x03\x04"  # EPUB is a ZIP file
-DOCX_SIGNATURE = b"PK\x03\x04"  # DOCX is also a ZIP file
-XLSX_SIGNATURE = b"PK\x03\x04"  # XLSX is also a ZIP file
-PDF_SIGNATURE = b"%PDF-"
-ZIP_SIGNATURE = b"PK\x03\x04"

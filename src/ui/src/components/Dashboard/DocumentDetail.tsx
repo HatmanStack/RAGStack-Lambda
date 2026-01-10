@@ -217,21 +217,43 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
             </Container>
           )}
 
-          {document.metadata && (
-            <ExpandableSection headerText="Metadata" variant="container">
-              <Box>
-                <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
-                  {(() => {
-                    try {
-                      return JSON.stringify(JSON.parse(document.metadata), null, 2);
-                    } catch {
-                      return `Invalid JSON: ${document.metadata}`;
-                    }
-                  })()}
-                </pre>
-              </Box>
-            </ExpandableSection>
-          )}
+          {document.metadata && (() => {
+            const formatLabel = (key: string) =>
+              key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+            const formatValue = (value: unknown): string => {
+              if (typeof value === 'string') return value;
+              if (Array.isArray(value)) return value.join(', ');
+              return String(value);
+            };
+
+            try {
+              // Handle both object (from AWSJSON) and string (legacy) formats
+              const parsed = typeof document.metadata === 'string'
+                ? JSON.parse(document.metadata)
+                : document.metadata;
+
+              if (!parsed || typeof parsed !== 'object') return null;
+
+              const fields = Object.entries(parsed).sort(([a], [b]) => a.localeCompare(b));
+              if (fields.length === 0) return null;
+
+              return (
+                <Container header={<Header variant="h2">Extracted Metadata</Header>}>
+                  <ColumnLayout columns={2} variant="text-grid">
+                    {fields.map(([key, value]) => (
+                      <div key={key}>
+                        <Box variant="awsui-key-label">{formatLabel(key)}</Box>
+                        <div>{formatValue(value)}</div>
+                      </div>
+                    ))}
+                  </ColumnLayout>
+                </Container>
+              );
+            } catch {
+              return null;
+            }
+          })()}
         </SpaceBetween>
       )}
     </Modal>

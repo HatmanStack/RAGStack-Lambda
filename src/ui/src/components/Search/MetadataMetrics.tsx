@@ -37,7 +37,11 @@ const getDataTypeBadge = (dataType: string) => {
     boolean: 'grey',
     list: 'red',
   };
-  return <Badge color={colorMap[dataType] || 'grey'}>{dataType}</Badge>;
+  return (
+    <span style={{ whiteSpace: 'nowrap' }}>
+      <Badge color={colorMap[dataType] || 'grey'}>{dataType}</Badge>
+    </span>
+  );
 };
 
 export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
@@ -86,27 +90,40 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           </div>
         </ColumnLayout>
 
-        <Table
-          loading={loading}
-          loadingText="Loading metadata keys..."
-          items={stats}
-          columnDefinitions={[
+        <div className="table-scroll-container">
+          <Table
+            loading={loading}
+            loadingText="Loading metadata keys..."
+            items={stats}
+            wrapLines={false}
+            stickyColumns={{ first: 1 }}
+            columnDefinitions={[
             {
               id: 'keyName',
               header: 'Key Name',
               cell: (item) => <Box fontWeight="bold">{item.keyName}</Box>,
-              width: 150,
+              minWidth: 140,
             },
             {
               id: 'dataType',
               header: 'Type',
               cell: (item) => getDataTypeBadge(item.dataType),
-              width: 80,
+              minWidth: 120,
             },
             {
               id: 'occurrenceCount',
               header: 'Occurrences',
               cell: (item) => item.occurrenceCount.toLocaleString(),
+              width: 110,
+            },
+            {
+              id: 'status',
+              header: 'Status',
+              cell: (item) => (
+                <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
+                  {item.status}
+                </StatusIndicator>
+              ),
               width: 100,
             },
             {
@@ -120,16 +137,6 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               ),
               minWidth: 200,
             },
-            {
-              id: 'status',
-              header: 'Status',
-              cell: (item) => (
-                <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
-                  {item.status}
-                </StatusIndicator>
-              ),
-              width: 80,
-            },
           ]}
           empty={
             <Box textAlign="center" color="inherit">
@@ -139,10 +146,11 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
               </Box>
             </Box>
           }
-          variant="embedded"
-          stripedRows
-          sortingDisabled
-        />
+            variant="embedded"
+            stripedRows
+            sortingDisabled
+          />
+        </div>
       </SpaceBetween>
     </ExpandableSection>
   );

@@ -86,10 +86,11 @@ SUPPORTED_IMAGE_TYPES = {
     "image/jpeg": ".jpg",
     "image/gif": ".gif",
     "image/webp": ".webp",
+    "image/avif": ".avif",
 }
 
 # Supported image file extensions
-SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"}
 
 
 # =============================================================================

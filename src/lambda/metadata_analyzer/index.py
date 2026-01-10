@@ -50,8 +50,7 @@ _key_library = None
 
 # Configuration
 DEFAULT_MAX_SAMPLES = 1000
-DEFAULT_MIN_OCCURRENCE_RATE = 0.1  # 10% minimum occurrence to include in analysis
-DEFAULT_FILTER_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 MAX_SAMPLE_VALUES = 10
 
 
@@ -226,6 +225,7 @@ def sample_vectors_from_kb(
 def generate_filter_examples(
     field_analysis: dict[str, dict],
     model_id: str | None = None,
+    num_examples: int = 6,
 ) -> list[dict]:
     """
     Generate filter examples using LLM based on discovered fields.
@@ -233,12 +233,17 @@ def generate_filter_examples(
     Args:
         field_analysis: Dictionary of field analysis results.
         model_id: Bedrock model ID for generation.
+        num_examples: Number of examples to generate.
 
     Returns:
         List of filter example dictionaries.
     """
     if not field_analysis:
         logger.info("No fields to generate examples for")
+        return []
+
+    if num_examples <= 0:
+        logger.info("No new examples requested")
         return []
 
     model_id = model_id or DEFAULT_FILTER_MODEL
@@ -270,7 +275,8 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
-Generate 5-8 practical filter examples that users might find useful. Each example should have:
+Generate exactly {num_examples} practical filter examples that users might find useful.
+Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter
@@ -385,6 +391,10 @@ def update_key_library_counts(
     """
     Update the key library with analyzed field counts.
 
+    Sets status based on extraction settings:
+    - "active" if extraction mode is auto, or key is in manual selection
+    - "inactive" if extraction mode is manual and key is not selected
+
     Args:
         field_analysis: Dictionary of field analysis results.
         table_name: DynamoDB table name for key library.
@@ -392,7 +402,23 @@ def update_key_library_counts(
     table = dynamodb.Table(table_name)
     now = datetime.now(UTC).isoformat()
 
+    # Get extraction settings to determine status
+    config = get_config_manager()
+    extraction_mode = "auto"
+    manual_keys: set[str] = set()
+    if config:
+        extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+        manual_keys_list = config.get_parameter("metadata_manual_keys", default=[])
+        if manual_keys_list and isinstance(manual_keys_list, list):
+            manual_keys = set(manual_keys_list)
+
     for key_name, stats in field_analysis.items():
+        # Determine status based on extraction settings
+        if extraction_mode == "manual":
+            status = "active" if key_name in manual_keys else "inactive"
+        else:
+            status = "active"
+
         try:
             # Update or create key entry
             table.update_item(
@@ -402,7 +428,7 @@ def update_key_library_counts(
                         data_type = :dtype,
                         sample_values = :samples,
                         last_analyzed = :now,
-                        #status = if_not_exists(#status, :active),
+                        #status = :status,
                         first_seen = if_not_exists(first_seen, :now)
                 """,
                 ExpressionAttributeNames={"#status": "status"},
@@ -411,25 +437,34 @@ def update_key_library_counts(
                     ":dtype": stats["data_type"],
                     ":samples": stats["sample_values"][:MAX_SAMPLE_VALUES],
                     ":now": now,
-                    ":active": "active",
+                    ":status": status,
                 },
             )
-            logger.debug(f"Updated key library entry: {key_name}")
+            logger.debug(f"Updated key library entry: {key_name} (status={status})")
         except ClientError as e:
             logger.warning(f"Failed to update key '{key_name}': {e}")
 
 
-def update_config_with_examples(examples: list[dict]) -> None:
+def update_config_with_examples(examples: list[dict], clear_disabled: bool = False) -> None:
     """
     Update configuration table with filter examples.
 
     Args:
         examples: List of filter example dictionaries.
+        clear_disabled: If True, clear the disabled list (after replacement).
     """
+    from datetime import datetime
+
     config_manager = get_config_manager()
     if config_manager:
         try:
-            config_manager.update_custom_config({"metadata_filter_examples": examples})
+            update_data = {
+                "metadata_filter_examples": examples,
+                "metadata_filter_examples_updated_at": datetime.now(UTC).isoformat(),
+            }
+            if clear_disabled:
+                update_data["metadata_filter_examples_disabled"] = []
+            config_manager.update_custom_config(update_data)
             logger.info(f"Updated config with {len(examples)} filter examples")
         except Exception as e:
             logger.warning(f"Failed to update config with examples: {e}")
@@ -516,18 +551,40 @@ def lambda_handler(event: dict, context) -> dict:
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table)
 
-        # Step 5: Generate filter examples
-        examples = []
-        if field_analysis:
-            examples = generate_filter_examples(field_analysis)
+        # Step 5: Load existing examples and disabled list, preserve enabled ones
+        preserved_examples = []
+        disabled_names = set()
+        target_example_count = 6  # Default target
 
-        # Step 6: Store results
+        if config:
+            current_examples = config.get_parameter("metadata_filter_examples", default=[])
+            disabled_list = config.get_parameter("metadata_filter_examples_disabled", default=[])
+            disabled_names = set(disabled_list) if disabled_list else set()
+
+            # Keep examples that are NOT disabled
+            if current_examples and isinstance(current_examples, list):
+                preserved_examples = [
+                    ex for ex in current_examples if ex.get("name") not in disabled_names
+                ]
+                logger.info(f"Preserving {len(preserved_examples)} enabled examples")
+
+        # Step 6: Generate new examples to replace disabled ones
+        num_to_generate = max(0, target_example_count - len(preserved_examples))
+        new_examples = []
+        if field_analysis and num_to_generate > 0:
+            new_examples = generate_filter_examples(field_analysis, num_examples=num_to_generate)
+            logger.info(f"Generated {len(new_examples)} new examples")
+
+        # Combine preserved + new
+        examples = preserved_examples + new_examples
+
+        # Step 7: Store results
         if data_bucket and examples:
             store_filter_examples(examples, data_bucket)
 
-        # Step 7: Update config with examples
+        # Step 8: Update config with examples and clear disabled list
         if examples:
-            update_config_with_examples(examples)
+            update_config_with_examples(examples, clear_disabled=True)
 
         execution_time_ms = int((time.time() - start_time) * 1000)
 

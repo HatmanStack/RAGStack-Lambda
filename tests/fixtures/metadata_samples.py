@@ -64,16 +64,6 @@ SAMPLE_KEY_LIBRARY_ENTRIES = [
 
 # Sample extracted metadata for different document types
 
-GENEALOGY_DOCUMENT_METADATA = {
-    "topic": "genealogy",
-    "document_type": "family_tree",
-    "date_range": "1850-1920",
-    "location": "County Cork, Ireland",
-    "source_category": "personal_document",
-    "language": "english",
-    "people_mentioned": "multiple",
-}
-
 IMMIGRATION_RECORD_METADATA = {
     "topic": "immigration",
     "document_type": "ship_manifest",
@@ -83,72 +73,6 @@ IMMIGRATION_RECORD_METADATA = {
     "language": "english",
     "port_of_origin": "Liverpool",
 }
-
-CENSUS_RECORD_METADATA = {
-    "topic": "census",
-    "document_type": "census_record",
-    "date_range": "1900",
-    "location": "Brooklyn, New York",
-    "source_category": "government_record",
-    "language": "english",
-    "household_size": "5",
-}
-
-MILITARY_SERVICE_METADATA = {
-    "topic": "military_service",
-    "document_type": "service_record",
-    "date_range": "1941-1945",
-    "location": "Fort Dix, New Jersey",
-    "source_category": "government_record",
-    "conflict": "World War II",
-}
-
-BIRTH_CERTIFICATE_METADATA = {
-    "topic": "vital_records",
-    "document_type": "birth_certificate",
-    "date_range": "1892",
-    "location": "Boston, Massachusetts",
-    "source_category": "government_record",
-    "language": "english",
-}
-
-# Image metadata samples
-
-FAMILY_PHOTO_METADATA = {
-    "topic": "family_history",
-    "document_type": "photograph",
-    "date_range": "1920s",
-    "location": "unknown",
-    "occasion": "wedding",
-    "people_mentioned": "multiple",
-}
-
-DOCUMENT_SCAN_METADATA = {
-    "topic": "genealogy",
-    "document_type": "document_scan",
-    "date_range": "1880-1890",
-    "source_category": "church_record",
-    "language": "german",
-}
-
-# Edge cases
-
-MINIMAL_METADATA = {
-    "topic": "unknown",
-}
-
-MAXIMAL_METADATA = {
-    "topic": "genealogy",
-    "document_type": "mixed_collection",
-    "date_range": "1800-1950",
-    "location": "Various",
-    "source_category": "mixed",
-    "language": "multiple",
-    "people_mentioned": "multiple",
-    "notes": "Complex document with many elements",
-}
-
-EMPTY_METADATA: dict = {}
 
 # Sample document texts for extraction testing
 

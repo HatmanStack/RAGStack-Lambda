@@ -6,7 +6,7 @@
  * without rebuilding the web component.
  */
 
-export interface CDNConfig {
+interface CDNConfig {
   apiEndpoint: string;
   identityPoolId: string;
   region: string;

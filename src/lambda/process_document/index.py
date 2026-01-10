@@ -233,6 +233,12 @@ def lambda_handler(event, context):
             "bedrock_ocr_model_id", default="anthropic.claude-3-5-haiku-20241022-v1:0"
         )
 
+        # Force Bedrock for formats not supported by Textract (WebP, AVIF)
+        lower_uri = input_s3_uri.lower()
+        if lower_uri.endswith((".webp", ".avif")) and ocr_backend == "textract":
+            ocr_backend = "bedrock"
+            logger.info(f"Forcing Bedrock OCR for unsupported Textract format: {filename}")
+
         logger.info(f"Using OCR backend: {ocr_backend}")
         if ocr_backend == "bedrock":
             logger.info(f"Using Bedrock OCR model: {bedrock_model_id}")

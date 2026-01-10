@@ -16,8 +16,8 @@ type Query {
   # Accessible via IAM (unauthenticated), API key (server-side), or Cognito (admin UI)
   searchKnowledgeBase(query: String!, maxResults: Int): KBQueryResult @aws_iam @aws_api_key @aws_cognito_user_pools
 
-  # Get system configuration (Schema, Default, and Custom)
-  getConfiguration: ConfigurationResponse @aws_cognito_user_pools
+  # Get system configuration (Schema, Default, and Custom) - read-only via API key
+  getConfiguration: ConfigurationResponse @aws_api_key @aws_cognito_user_pools
 
   # Get scrape job by ID with pages
   # Accessible via API key for external integrations, or Cognito for admin UI
@@ -40,17 +40,17 @@ type Query {
   # Get current API key (admin only)
   getApiKey: ApiKeyResponse @aws_cognito_user_pools
 
-  # Get metadata key statistics from key library (admin only)
-  getMetadataStats: MetadataStatsResponse @aws_cognito_user_pools
+  # Get metadata key statistics from key library
+  getMetadataStats: MetadataStatsResponse @aws_api_key @aws_cognito_user_pools
 
-  # Get filter examples for metadata filtering (admin and chat)
+  # Get filter examples for metadata filtering
   getFilterExamples: FilterExamplesResponse @aws_iam @aws_api_key @aws_cognito_user_pools
 
-  # Get key library for metadata key suggestions (admin only)
-  getKeyLibrary: [MetadataKey] @aws_cognito_user_pools
+  # Get key library for metadata key suggestions
+  getKeyLibrary: [MetadataKey] @aws_api_key @aws_cognito_user_pools
 
-  # Check if a proposed key is similar to existing keys (admin only)
-  checkKeySimilarity(keyName: String!, threshold: Float): KeySimilarityResult @aws_cognito_user_pools
+  # Check if a proposed key is similar to existing keys
+  checkKeySimilarity(keyName: String!, threshold: Float): KeySimilarityResult @aws_api_key @aws_cognito_user_pools
 }
 
 type Mutation {
@@ -132,9 +132,9 @@ type Mutation {
     updatedAt: String!
   ): ImageUpdate @aws_iam
 
-  # Analyze metadata in Knowledge Base vectors (admin only)
+  # Analyze metadata in Knowledge Base vectors
   # Samples vectors, analyzes field occurrences, and generates filter examples
-  analyzeMetadata: MetadataAnalysisResult @aws_cognito_user_pools
+  analyzeMetadata: MetadataAnalysisResult @aws_api_key @aws_cognito_user_pools
 }
 
 type Subscription {

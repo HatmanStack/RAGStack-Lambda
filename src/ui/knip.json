@@ -1,5 +1,5 @@
 {
-  "entry": ["src/main.jsx"],
-  "project": ["src/**/*.{js,jsx}"],
-  "ignore": ["src/**/*.test.*"]
+  "entry": ["src/main.tsx"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/**/*.test.*", "**/*.d.ts"]
 }

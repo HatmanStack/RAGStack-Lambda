@@ -8,6 +8,17 @@ Images are indexed with both:
 - **Visual embeddings** (Nova Multimodal) - find visually similar images
 - **Text embeddings** (captions) - find images by description
 
+## Dashboard Image Tab
+
+The Image Upload tab provides:
+
+### Caption Prompt Editor
+Customize the AI prompt used to generate image captions. Changes apply immediately to new uploads.
+
+**Location:** Image Upload tab → Caption Prompt (expandable section)
+
+**Default prompt:** Generates concise, searchable captions focusing on main subject, setting, and visual elements.
+
 ## Single Image Upload (Auto-Process)
 
 For the simplest workflow, use `autoProcess: true` to let AI generate captions automatically:
@@ -256,7 +267,7 @@ async function uploadImageZip(zipFile, generateCaptions = true) {
 
 ## Supported Formats
 
-- **Images:** JPG, JPEG, PNG, GIF, WEBP
+- **Images:** JPG, JPEG, PNG, GIF, WebP, AVIF
 - **Max size:** 50 MB per image, 500 MB per ZIP
 
 ## Querying Images

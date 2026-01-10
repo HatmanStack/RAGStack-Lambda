@@ -19,7 +19,7 @@ import styles from './SourcesToggle.module.css';
 
 const STORAGE_KEY = 'amplify-chat-sources-expanded';
 
-export interface SourcesToggleProps {
+interface SourcesToggleProps {
   /**
    * Array of sources to display
    */

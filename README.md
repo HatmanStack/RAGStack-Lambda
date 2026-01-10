@@ -26,7 +26,7 @@ Serverless document processing with AI chat. Upload documents, extract text with
 - 🔍 **NEW** Metadata filtering - auto-discover document metadata and filter search results
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
-- 💰 $7-18/month (1000 docs)
+- 💰 $7-10/month (1000 docs, Textract + Haiku)
 
 ## Live Demo
 
@@ -155,7 +155,7 @@ Upload documents in various formats. Auto-detection routes to optimal processor:
 | Type | Formats | Processing |
 |------|---------|------------|
 | **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct extraction with smart analysis |
-| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP | Textract or Bedrock vision OCR |
+| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP, WebP, AVIF | Textract or Bedrock vision OCR (WebP/AVIF require Bedrock) |
 | **Passthrough** | Markdown (.md) | Direct copy |
 
 Processing time: UPLOADED → PROCESSING → INDEXED (typically 1-5 min for text, 2-15 min for OCR)

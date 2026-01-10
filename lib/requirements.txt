@@ -10,3 +10,11 @@ httpx>=0.27.0
 beautifulsoup4>=4.12.0
 markdownify>=0.13.0
 lxml>=5.0.0
+
+# YAML parsing (used by text_extractors)
+PyYAML>=6.0
+
+# Text extraction
+python-docx>=1.1    # DOCX extraction
+openpyxl>=3.1       # XLSX extraction
+ebooklib>=0.18      # EPUB extraction

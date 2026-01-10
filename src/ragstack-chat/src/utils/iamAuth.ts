@@ -22,7 +22,7 @@ const credentialsCache = new Map<string, CognitoCredentials>();
 /**
  * Get temporary AWS credentials from Cognito Identity Pool
  */
-export async function getCredentials(
+async function getCredentials(
   identityPoolId: string,
   region: string
 ): Promise<CognitoCredentials | null> {
@@ -96,7 +96,7 @@ export async function getCredentials(
  * Sign a request using AWS Signature Version 4
  * Simplified implementation for AppSync GraphQL requests
  */
-export async function signRequest(
+async function signRequest(
   url: string,
   method: string,
   body: string,

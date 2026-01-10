@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
-    setupFiles: ['./src/setupTests.js'],
+    setupFiles: ['./src/setupTests.ts'],
     css: true,
     testTimeout: 15000,
     include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
@@ -14,7 +14,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: [
         'node_modules/',
-        'src/setupTests.js',
+        'src/setupTests.ts',
       ]
     }
   },

@@ -11,7 +11,7 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 **Principles:**
 - Serverless (auto-scaling, no servers)
 - Cost-optimized (S3 vectors ~$1/mo vs OpenSearch $50+/mo)
-- Production-ready (error handling, monitoring)
+- Error handling (DLQ, 3x retry), CloudWatch metrics
 
 ## Components
 
@@ -60,7 +60,7 @@ Upload → DetectFileType → Route by Type:
 | Category | Types | Processing |
 |----------|-------|------------|
 | **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct text extraction with smart analysis |
-| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP | Textract or Bedrock vision OCR |
+| **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP, WebP, AVIF | Textract or Bedrock vision OCR (WebP/AVIF require Bedrock) |
 | **Passthrough** | Markdown (.md) | Copy directly to output |
 
 **Text Processing:** Content sniffing detects actual file type regardless of extension. Structured formats (CSV, JSON, XML) get smart extraction with schema analysis.
@@ -153,7 +153,7 @@ All operations support both API key and Cognito authentication:
 ## Cost
 
 1000 docs/month (5 pages each):
-- Textract + Haiku: **$7-18/month**
+- Textract + Haiku: **$7-10/month**
 - Bedrock OCR + Haiku: **$25-75/month**
 
 See [Configuration](CONFIGURATION.md)

@@ -50,20 +50,6 @@ const ANALYZE_METADATA = gql`
   }
 `;
 
-const CHECK_KEY_SIMILARITY = gql`
-  query CheckKeySimilarity($keyName: String!, $threshold: Float) {
-    checkKeySimilarity(keyName: $keyName, threshold: $threshold) {
-      proposedKey
-      similarKeys {
-        keyName
-        similarity
-        occurrenceCount
-      }
-      hasSimilar
-    }
-  }
-`;
-
 export interface MetadataKeyStats {
   keyName: string;
   dataType: string;
@@ -87,18 +73,6 @@ export interface MetadataAnalysisResult {
   examplesGenerated: number;
   executionTimeMs: number;
   error?: string;
-}
-
-export interface SimilarKey {
-  keyName: string;
-  similarity: number;
-  occurrenceCount: number;
-}
-
-export interface KeySimilarityResult {
-  proposedKey: string;
-  similarKeys: SimilarKey[];
-  hasSimilar: boolean;
 }
 
 const client = generateClient();
@@ -235,51 +209,6 @@ export const useMetadataAnalyzer = () => {
   return {
     analyze,
     analyzing,
-    result,
-    error,
-  };
-};
-
-export const useKeySimilarity = () => {
-  const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState<KeySimilarityResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const checkSimilarity = useCallback(
-    async (keyName: string, threshold = 0.8): Promise<KeySimilarityResult | null> => {
-      setChecking(true);
-      setError(null);
-      setResult(null);
-
-      try {
-        const response = (await client.graphql({
-          query: CHECK_KEY_SIMILARITY as unknown as string,
-          variables: { keyName, threshold },
-        })) as GqlResponse;
-
-        const similarityResult = response.data?.checkKeySimilarity;
-        if (!similarityResult) {
-          setError('No response from server');
-          return null;
-        }
-
-        setResult(similarityResult);
-        return similarityResult;
-      } catch (err) {
-        console.error('Key similarity check failed:', err);
-        const errorMessage = (err as Error).message;
-        setError(errorMessage);
-        return null;
-      } finally {
-        setChecking(false);
-      }
-    },
-    []
-  );
-
-  return {
-    checkSimilarity,
-    checking,
     result,
     error,
   };

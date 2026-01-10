@@ -1,5 +1,6 @@
 module.exports = {
   root: true,
+  ignorePatterns: ['src/amplify-config.generated.ts'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2020,
