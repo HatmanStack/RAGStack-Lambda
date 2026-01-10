@@ -129,7 +129,7 @@ Resources:
 
   # Unified data bucket with prefix-based organization:
   #   input/   - User uploads (EventBridge triggers processing)
-  #   output/  - Processed documents
+  #   content/ - All KB content (documents, images, scraped pages)
   #   working/ - Temporary files (7-day TTL)
   DataBucket:
     Type: AWS::S3::Bucket
@@ -1191,7 +1191,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # Text documents (output/ prefix)
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
@@ -1252,7 +1252,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # Images (images/ prefix)
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -1315,7 +1315,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
@@ -1360,7 +1360,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # ZIP contains images (images/ prefix)
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
@@ -1418,8 +1418,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document retrieval
-          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image retrieval
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           TRACKING_TABLE: !Ref TrackingTable
@@ -1471,8 +1470,7 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID: !GetAtt KnowledgeBase.TextDataSourceId  # For text document search
-          IMAGE_DATA_SOURCE_ID: !GetAtt KnowledgeBase.ImageDataSourceId  # For image search
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId  # Unified content data source
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
@@ -1939,7 +1937,7 @@ Resources:
               {
                 "document_id": "<key>",
                 "input_s3_uri": "s3://<bucket>/<key>",
-                "output_s3_prefix": "s3://<bucket>/output/<key>/"
+                "output_s3_prefix": "s3://<bucket>/content/<key>/"
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
@@ -1952,7 +1950,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${AWS::StackName}-ImageUploadTrigger'
-      Description: Trigger image processing on S3 upload to images/ prefix (metadata.json)
+      Description: Trigger image processing on S3 upload to content/ prefix (metadata.json)
       EventPattern:
         source:
           - aws.s3
@@ -1990,7 +1988,7 @@ Resources:
       SourceArn: !GetAtt ImageUploadRule.Arn
 
   # EventBridge Rule for Auto-Process Image Uploads (API/MCP)
-  # Triggers on actual image file uploads to images/ prefix
+  # Triggers on actual image file uploads to content/ prefix
   # Uses suffix patterns to only match image files (not caption.txt or metadata.json)
   # The Lambda checks if auto_process=true in DynamoDB before processing
   ImageAutoProcessRule:
@@ -2009,8 +2007,8 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              # Match only files in images/ prefix (Lambda validates file type)
-              - prefix: 'images/'
+              # Match only files in content/ prefix (Lambda validates file type)
+              - prefix: 'content/'
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessImageFunction.Arn
@@ -2242,7 +2240,7 @@ Resources:
       Region: !Ref AWS::Region
       ProjectName: !Ref AWS::StackName
       # Version property forces custom resource update to return new attributes
-      Version: "2"  # Increment to force update and get TextDataSourceId/ImageDataSourceId
+      Version: "1"  # Reset for clean deployment
 
   # =========================================================================
   # Cognito Authentication
@@ -3671,7 +3669,7 @@ Resources:
 Outputs:
   # S3 Buckets
   DataBucketName:
-    Description: S3 bucket for data (input/, output/, working/ prefixes)
+    Description: S3 bucket for data (input/, content/, working/ prefixes)
     Value: !Ref DataBucket
     Export:
       Name: !Sub '${AWS::StackName}-DataBucket'
@@ -3845,18 +3843,6 @@ Outputs:
     Value: !GetAtt KnowledgeBase.DataSourceId
     Export:
       Name: !Sub '${AWS::StackName}-DataSourceId'
-
-  TextDataSourceId:
-    Description: Data Source ID for text documents (output/ prefix)
-    Value: !GetAtt KnowledgeBase.TextDataSourceId
-    Export:
-      Name: !Sub '${AWS::StackName}-TextDataSourceId'
-
-  ImageDataSourceId:
-    Description: Data Source ID for images (images/ prefix)
-    Value: !GetAtt KnowledgeBase.ImageDataSourceId
-    Export:
-      Name: !Sub '${AWS::StackName}-ImageDataSourceId'
 
   # API & Authentication
   GraphQLApiUrl:

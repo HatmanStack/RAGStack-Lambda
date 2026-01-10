@@ -201,11 +201,11 @@ def lambda_handler(event, context):
             filename = input_parts[-1] if input_parts else "document.pdf"
 
         # Fix output_s3_prefix - EventBridge template produces wrong format
-        # Received: s3://bucket/output/input/{doc_id}/{filename}/
-        # Expected: s3://bucket/output/{doc_id}/
-        if "/output/input/" in output_s3_prefix:
-            bucket_and_prefix = output_s3_prefix.split("/output/input/")[0]
-            output_s3_prefix = f"{bucket_and_prefix}/output/{document_id}/"
+        # Received: s3://bucket/content/input/{doc_id}/{filename}/
+        # Expected: s3://bucket/content/{doc_id}/
+        if "/content/input/" in output_s3_prefix:
+            bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
+            output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
 
         logger.info(f"Parsed document_id: {document_id}, filename: {filename}")
         logger.info(f"Output S3 prefix: {output_s3_prefix}")
