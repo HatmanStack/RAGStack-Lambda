@@ -218,4 +218,3 @@ If issues occur after migration:
 
 For issues:
 - Check [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
-- Open an issue at https://github.com/anthropics/claude-code/issues
