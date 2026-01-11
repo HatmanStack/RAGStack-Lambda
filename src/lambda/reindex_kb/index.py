@@ -3,10 +3,15 @@ Reindex Knowledge Base Lambda Handler.
 
 Handles the reindex workflow for regenerating Knowledge Base content:
 1. Create new KB with S3 Vectors
-2. Re-ingest all documents with fresh metadata
+2. Re-ingest all content (documents, images, scraped pages) with fresh metadata
 3. Delete old KB on success
 
 This Lambda is invoked by Step Functions at different stages of the workflow.
+
+Content Types:
+- Documents (type=None): Text extracted via OCR, stored at output_s3_uri
+- Images (type="image"): Visual files with captions at caption_s3_uri
+- Scraped (type="scraped"): Web content stored at output_s3_uri
 """
 
 import json
@@ -37,6 +42,10 @@ s3_client = boto3.client("s3")
 _key_library = None
 _metadata_extractor = None
 _config_manager = None
+
+# Cache for job metadata (persists within a single Lambda invocation/batch)
+# Key: job_id, Value: dict of extracted metadata from seed document
+_job_metadata_cache: dict[str, dict] = {}
 
 
 def get_key_library() -> KeyLibrary:
@@ -112,6 +121,11 @@ def lambda_handler(event: dict, context: Any) -> dict:
     action = event.get("action", "init")
     logger.info(f"Reindex action: {action}")
 
+    # Clear caches at start of each invocation to prevent stale data
+    # across warm Lambda containers
+    global _job_metadata_cache
+    _job_metadata_cache.clear()
+
     try:
         if action == "init":
             return handle_init(event)
@@ -164,12 +178,20 @@ def handle_init(event: dict) -> dict:
         processed_count=0,
     )
 
-    # Count documents to reindex (excluding images and scraped - they have their own types)
+    # Count all content to reindex (documents, images, scraped pages)
     tracking_table = dynamodb.Table(tracking_table_name)
-    documents = list_all_documents(tracking_table)
+    all_content = list_all_content(tracking_table)
 
-    total_documents = len(documents)
-    logger.info(f"Found {total_documents} documents to reindex")
+    # Count by type for logging
+    doc_count = sum(1 for item in all_content if not item.get("type"))
+    image_count = sum(1 for item in all_content if item.get("type") == "image")
+    scraped_count = sum(1 for item in all_content if item.get("type") == "scraped")
+
+    total_documents = len(all_content)
+    logger.info(
+        f"Found {total_documents} items to reindex: "
+        f"{doc_count} documents, {image_count} images, {scraped_count} scraped pages"
+    )
 
     # Publish creating KB status
     publish_reindex_update(
@@ -210,9 +232,10 @@ def handle_init(event: dict) -> dict:
 
 def handle_process_batch(event: dict) -> dict:
     """
-    Process a batch of documents.
+    Process a batch of content items.
 
-    Re-extracts metadata and ingests each document into the new KB.
+    Re-extracts metadata and ingests each item into the new KB.
+    Handles documents, images, and scraped pages with type-specific logic.
     """
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     data_bucket = os.environ.get("DATA_BUCKET")
@@ -227,21 +250,21 @@ def handle_process_batch(event: dict) -> dict:
     batch_size = event.get("batch_size", 10)
     current_batch_index = event.get("current_batch_index", 0)
 
-    # Get documents for this batch
+    # Get all content for this batch
     tracking_table = dynamodb.Table(tracking_table_name)
-    documents = list_all_documents(tracking_table)
+    all_content = list_all_content(tracking_table)
 
     batch_start = current_batch_index * batch_size
-    batch_end = min(batch_start + batch_size, len(documents))
-    batch_docs = documents[batch_start:batch_end]
+    batch_end = min(batch_start + batch_size, len(all_content))
+    batch_items = all_content[batch_start:batch_end]
 
-    logger.info(f"Processing batch {current_batch_index}: documents {batch_start}-{batch_end}")
+    logger.info(f"Processing batch {current_batch_index}: items {batch_start}-{batch_end}")
 
-    # Process each document in the batch
-    for doc in batch_docs:
-        doc_id = doc.get("document_id")
-        filename = doc.get("filename", "unknown")
-        output_s3_uri = doc.get("output_s3_uri")
+    # Process each item in the batch
+    for item in batch_items:
+        doc_id = item.get("document_id")
+        filename = item.get("filename", "unknown")
+        item_type = item.get("type", "")  # "", "image", or "scraped"
 
         # Publish progress
         publish_reindex_update(
@@ -255,25 +278,41 @@ def handle_process_batch(event: dict) -> dict:
         )
 
         try:
-            if not output_s3_uri:
-                logger.warning(f"Document {doc_id} has no output_s3_uri, skipping")
-                processed_count += 1
-                continue
-
-            # Re-extract metadata
-            metadata = extract_document_metadata(output_s3_uri, doc_id)
-
-            # Add base metadata
-            metadata["content_type"] = "document"
-
-            # Write metadata to S3
-            metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
-
-            # Ingest to new KB
-            ingest_document(new_kb_id, new_ds_id, output_s3_uri, metadata_uri)
-
-            processed_count += 1
-            logger.info(f"Reindexed document {doc_id}: {filename}")
+            if item_type == "image":
+                # Images: read text from caption_s3_uri, ingest both image and caption
+                processed_count, error_count, error_messages = process_image_item(
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    processed_count,
+                    error_count,
+                    error_messages,
+                )
+            elif item_type == "scraped":
+                # Scraped pages: use job-aware metadata extraction
+                processed_count, error_count, error_messages = process_scraped_item(
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    all_content,
+                    processed_count,
+                    error_count,
+                    error_messages,
+                )
+            else:
+                # Regular documents: read text from output_s3_uri
+                processed_count, error_count, error_messages = process_text_item(
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    "document",
+                    processed_count,
+                    error_count,
+                    error_messages,
+                )
 
             # Small delay to avoid rate limiting
             time.sleep(0.5)
@@ -286,8 +325,8 @@ def handle_process_batch(event: dict) -> dict:
             processed_count += 1  # Count as processed even if failed
 
     # Check if more batches to process
-    if batch_end < len(documents):
-        # More documents to process
+    if batch_end < len(all_content):
+        # More items to process
         return {
             **event,
             "action": "process_batch",
@@ -296,7 +335,7 @@ def handle_process_batch(event: dict) -> dict:
             "error_messages": error_messages,
             "current_batch_index": current_batch_index + 1,
         }
-    # All documents processed, move to finalize
+    # All items processed, move to finalize
     return {
         **event,
         "action": "finalize",
@@ -304,6 +343,258 @@ def handle_process_batch(event: dict) -> dict:
         "error_count": error_count,
         "error_messages": error_messages,
     }
+
+
+def process_text_item(
+    item: dict,
+    kb_id: str,
+    ds_id: str,
+    data_bucket: str,
+    content_type: str,
+    processed_count: int,
+    error_count: int,
+    error_messages: list,
+) -> tuple[int, int, list]:
+    """
+    Process a text-based item (document or scraped page).
+
+    Args:
+        item: DynamoDB tracking record
+        kb_id: Knowledge Base ID
+        ds_id: Data Source ID
+        data_bucket: S3 bucket name
+        content_type: "document" or "web_page"
+        processed_count: Current processed count
+        error_count: Current error count
+        error_messages: List of error messages
+
+    Returns:
+        Tuple of (processed_count, error_count, error_messages)
+    """
+    doc_id = item.get("document_id")
+    filename = item.get("filename", "unknown")
+    output_s3_uri = item.get("output_s3_uri")
+
+    if not output_s3_uri:
+        logger.warning(f"Item {doc_id} has no output_s3_uri, skipping")
+        return processed_count + 1, error_count, error_messages
+
+    # Re-extract metadata from text content
+    metadata = extract_document_metadata(output_s3_uri, doc_id)
+
+    # Add base metadata
+    metadata["content_type"] = content_type
+    metadata["document_id"] = doc_id
+    metadata["filename"] = filename
+
+    # For scraped pages, preserve source_url if available
+    if content_type == "web_page" and item.get("source_url"):
+        metadata["source_url"] = item["source_url"]
+
+    # Write metadata to S3
+    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+
+    # Ingest to new KB
+    ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
+
+    logger.info(f"Reindexed {content_type} {doc_id}: {filename}")
+    return processed_count + 1, error_count, error_messages
+
+
+def process_scraped_item(
+    item: dict,
+    kb_id: str,
+    ds_id: str,
+    data_bucket: str,
+    all_content: list[dict],
+    processed_count: int,
+    error_count: int,
+    error_messages: list,
+) -> tuple[int, int, list]:
+    """
+    Process a scraped page with job-aware metadata.
+
+    For scraped content, we combine:
+    1. Job-level metadata (extracted from seed URL using new settings)
+    2. Page-specific deterministic fields (source_url, scraped_date, etc.)
+
+    This ensures all pages in a job share semantic metadata from the seed.
+
+    Args:
+        item: DynamoDB tracking record
+        kb_id: Knowledge Base ID
+        ds_id: Data Source ID
+        data_bucket: S3 bucket name
+        all_content: All content items (to find seed document)
+        processed_count: Current processed count
+        error_count: Current error count
+        error_messages: List of error messages
+
+    Returns:
+        Tuple of (processed_count, error_count, error_messages)
+    """
+    from datetime import UTC, datetime
+    from urllib.parse import urlparse
+
+    doc_id = item.get("document_id")
+    filename = item.get("filename", "unknown")
+    output_s3_uri = item.get("output_s3_uri")
+    input_s3_uri = item.get("input_s3_uri")
+    source_url = item.get("source_url", "")
+
+    if not output_s3_uri:
+        logger.warning(f"Scraped item {doc_id} has no output_s3_uri, skipping")
+        return processed_count + 1, error_count, error_messages
+
+    # Get job_id from S3 input file metadata
+    job_id = None
+    if input_s3_uri:
+        job_id = get_job_id_from_s3(input_s3_uri)
+
+    # Get job-level metadata (from seed document, using new extraction settings)
+    job_metadata = {}
+    if job_id:
+        job_metadata = get_or_extract_job_metadata(job_id, all_content, data_bucket)
+        logger.info(f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {job_id})")
+    else:
+        logger.warning(f"No job_id found for scraped item {doc_id}, using page-only metadata")
+
+    # Start with job-level metadata (semantic fields from seed)
+    metadata = dict(job_metadata) if job_metadata else {}
+
+    # Add/override with page-specific deterministic fields
+    parsed = urlparse(source_url) if source_url else None
+    metadata.update(
+        {
+            "content_type": "web_page",
+            "document_id": doc_id,
+            "filename": filename,
+            "source_url": source_url,
+            "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        }
+    )
+
+    if parsed and parsed.netloc:
+        metadata["source_domain"] = parsed.netloc
+
+    if job_id:
+        metadata["job_id"] = job_id
+
+    # Write metadata to S3
+    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+
+    # Ingest to new KB
+    ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
+
+    logger.info(f"Reindexed scraped page {doc_id}: {filename} (job: {job_id or 'none'})")
+    return processed_count + 1, error_count, error_messages
+
+
+def process_image_item(
+    item: dict,
+    kb_id: str,
+    ds_id: str,
+    data_bucket: str,
+    processed_count: int,
+    error_count: int,
+    error_messages: list,
+) -> tuple[int, int, list]:
+    """
+    Process an image item.
+
+    Images are ingested as TWO documents:
+    1. The image file itself (for visual embeddings)
+    2. The caption text (for semantic text search)
+
+    Both share the same metadata for filtering.
+
+    Args:
+        item: DynamoDB tracking record
+        kb_id: Knowledge Base ID
+        ds_id: Data Source ID
+        data_bucket: S3 bucket name
+        processed_count: Current processed count
+        error_count: Current error count
+        error_messages: List of error messages
+
+    Returns:
+        Tuple of (processed_count, error_count, error_messages)
+    """
+    doc_id = item.get("document_id")
+    filename = item.get("filename", "unknown")
+    image_s3_uri = item.get("output_s3_uri") or item.get("input_s3_uri")
+    caption_s3_uri = item.get("caption_s3_uri")
+
+    if not caption_s3_uri:
+        logger.warning(f"Image {doc_id} has no caption_s3_uri, skipping")
+        return processed_count + 1, error_count, error_messages
+
+    # Read caption text for metadata extraction
+    try:
+        caption_text = read_s3_text(caption_s3_uri)
+    except Exception as e:
+        logger.warning(f"Failed to read caption for {doc_id}: {e}")
+        caption_text = ""
+
+    # Extract metadata from caption using LLM
+    metadata = {}
+    if caption_text and caption_text.strip():
+        try:
+            extractor = get_metadata_extractor()
+            metadata = extractor.extract_metadata(caption_text, doc_id)
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata for image {doc_id}: {e}")
+
+    # Add base metadata for images
+    metadata["content_type"] = "image"
+    metadata["document_id"] = doc_id
+    metadata["filename"] = filename
+
+    if item.get("user_caption"):
+        metadata["has_user_caption"] = "true"
+    if item.get("ai_caption"):
+        metadata["has_ai_caption"] = "true"
+
+    # Write metadata to S3 (for caption file)
+    metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata, data_bucket)
+
+    # Ingest both image and caption to KB
+    # Both documents share the same metadata for filtering by content_type
+    image_document = {
+        "content": {
+            "dataSourceType": "S3",
+            "s3": {"s3Location": {"uri": image_s3_uri}},
+        },
+        "metadata": {
+            "type": "S3_LOCATION",
+            "s3Location": {"uri": metadata_uri},
+        },
+    }
+
+    # Caption document (text embedding with metadata for filtering)
+    caption_document = {
+        "content": {
+            "dataSourceType": "S3",
+            "s3": {"s3Location": {"uri": caption_s3_uri}},
+        },
+        "metadata": {
+            "type": "S3_LOCATION",
+            "s3Location": {"uri": metadata_uri},
+        },
+    }
+
+    # Ingest both documents
+    response = bedrock_agent.ingest_knowledge_base_documents(
+        knowledgeBaseId=kb_id,
+        dataSourceId=ds_id,
+        documents=[image_document, caption_document],
+    )
+
+    doc_details = response.get("documentDetails", [])
+    statuses = [d.get("status", "UNKNOWN") for d in doc_details]
+    logger.info(f"Reindexed image {doc_id}: {filename}, statuses: {statuses}")
+
+    return processed_count + 1, error_count, error_messages
 
 
 def handle_finalize(event: dict) -> dict:
@@ -427,34 +718,215 @@ def handle_cleanup_failed(event: dict) -> dict:
     }
 
 
-def list_all_documents(tracking_table) -> list[dict]:
+def get_job_id_from_s3(input_s3_uri: str) -> str | None:
     """
-    List all documents from tracking table (excluding images and scraped pages).
+    Get job_id from S3 object metadata.
+
+    The scrape_process Lambda stores job_id in S3 object metadata when saving
+    scraped markdown files.
+
+    Args:
+        input_s3_uri: S3 URI of the input file (e.g., s3://bucket/input/docId/docId.scraped.md)
 
     Returns:
-        List of document items
+        job_id if found, None otherwise
     """
-    documents = []
-    scan_kwargs = {
-        "FilterExpression": (
-            "attribute_not_exists(#type) OR (#type <> :image_type AND #type <> :scraped_type)"
-        ),
-        "ExpressionAttributeNames": {"#type": "type"},
-        "ExpressionAttributeValues": {
-            ":image_type": "image",
-            ":scraped_type": "scraped",
-        },
-    }
+    if not input_s3_uri or not input_s3_uri.startswith("s3://"):
+        return None
+
+    try:
+        path = input_s3_uri[5:]  # Remove 's3://'
+        bucket, key = path.split("/", 1)
+
+        response = s3_client.head_object(Bucket=bucket, Key=key)
+        metadata = response.get("Metadata", {})
+        return metadata.get("job_id") or metadata.get("job-id")
+    except Exception as e:
+        logger.debug(f"Failed to get job_id from S3 metadata: {e}")
+        return None
+
+
+def get_scrape_job_info(job_id: str) -> dict | None:
+    """
+    Look up scrape job info from ScrapeJobs table.
+
+    Args:
+        job_id: The scrape job ID
+
+    Returns:
+        Dict with base_url and other job info, or None if not found
+    """
+    jobs_table_name = os.environ.get("SCRAPE_JOBS_TABLE")
+    if not jobs_table_name:
+        logger.warning("SCRAPE_JOBS_TABLE not configured, skipping job metadata lookup")
+        return None
+
+    try:
+        jobs_table = dynamodb.Table(jobs_table_name)
+        response = jobs_table.get_item(Key={"job_id": job_id})
+        return response.get("Item")
+    except Exception as e:
+        logger.warning(f"Failed to get scrape job info for {job_id}: {e}")
+        return None
+
+
+def find_seed_document(
+    all_content: list[dict],
+    base_url: str,
+) -> dict | None:
+    """
+    Find the seed document for a scrape job.
+
+    The seed document is the one whose source_url matches the job's base_url.
+
+    Args:
+        all_content: List of all content items from tracking table
+        base_url: The job's base URL (seed URL)
+
+    Returns:
+        The seed document item, or None if not found
+    """
+    for item in all_content:
+        if item.get("type") == "scraped" and item.get("source_url") == base_url:
+            return item
+    return None
+
+
+def extract_job_level_metadata(
+    seed_doc: dict,
+    data_bucket: str,
+) -> dict:
+    """
+    Extract job-level metadata from the seed document.
+
+    Uses the current metadata extraction settings to re-extract metadata
+    from the seed document's text content.
+
+    Args:
+        seed_doc: The seed document tracking record
+        data_bucket: S3 bucket name
+
+    Returns:
+        Dictionary of extracted metadata
+    """
+    output_s3_uri = seed_doc.get("output_s3_uri")
+    doc_id = seed_doc.get("document_id", "seed")
+
+    if not output_s3_uri:
+        logger.warning(f"Seed document {doc_id} has no output_s3_uri")
+        return {}
+
+    try:
+        text = read_s3_text(output_s3_uri)
+
+        if not text or not text.strip():
+            logger.warning(f"Empty seed document text for {doc_id}")
+            return {}
+
+        # Truncate for job-level extraction (same as scrape_start does)
+        content_for_extraction = text[:8000]
+
+        extractor = get_metadata_extractor()
+        # Don't update key library for job-level metadata
+        metadata = extractor.extract_metadata(
+            content_for_extraction,
+            doc_id,
+            update_library=False,
+        )
+
+        logger.info(f"Extracted job-level metadata from seed {doc_id}: {list(metadata.keys())}")
+        return metadata
+
+    except Exception as e:
+        logger.warning(f"Failed to extract job-level metadata from seed {doc_id}: {e}")
+        return {}
+
+
+def get_or_extract_job_metadata(
+    job_id: str,
+    all_content: list[dict],
+    data_bucket: str,
+) -> dict:
+    """
+    Get job-level metadata for a scrape job, extracting from seed if needed.
+
+    Uses a cache to avoid re-extracting for each document in the same job.
+
+    Args:
+        job_id: The scrape job ID
+        all_content: List of all content items (to find seed document)
+        data_bucket: S3 bucket name
+
+    Returns:
+        Dictionary of job-level metadata
+    """
+    global _job_metadata_cache
+
+    # Check cache first
+    if job_id in _job_metadata_cache:
+        logger.debug(f"Using cached job metadata for {job_id}")
+        return _job_metadata_cache[job_id]
+
+    # Look up job info to get base_url
+    job_info = get_scrape_job_info(job_id)
+    if not job_info:
+        logger.warning(f"Could not find job info for {job_id}")
+        _job_metadata_cache[job_id] = {}
+        return {}
+
+    base_url = job_info.get("base_url")
+    if not base_url:
+        logger.warning(f"Job {job_id} has no base_url")
+        _job_metadata_cache[job_id] = {}
+        return {}
+
+    # Find seed document
+    seed_doc = find_seed_document(all_content, base_url)
+    if not seed_doc:
+        logger.warning(f"Could not find seed document for job {job_id} (base_url: {base_url})")
+        _job_metadata_cache[job_id] = {}
+        return {}
+
+    # Extract metadata from seed document
+    job_metadata = extract_job_level_metadata(seed_doc, data_bucket)
+
+    # Cache for future documents in the same job
+    _job_metadata_cache[job_id] = job_metadata
+    logger.info(f"Cached job metadata for {job_id}: {len(job_metadata)} fields")
+
+    return job_metadata
+
+
+def list_all_content(tracking_table) -> list[dict]:
+    """
+    List all content from tracking table (documents, images, and scraped pages).
+
+    Returns:
+        List of all content items sorted by type for consistent ordering
+    """
+    items = []
+    scan_kwargs: dict = {}
 
     while True:
         response = tracking_table.scan(**scan_kwargs)
-        documents.extend(response.get("Items", []))
+        items.extend(response.get("Items", []))
 
         if "LastEvaluatedKey" not in response:
             break
         scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
-    return documents
+    # Sort by type for consistent processing order: documents first, then images, then scraped
+    def sort_key(item):
+        item_type = item.get("type", "")
+        if not item_type:
+            return (0, item.get("document_id", ""))  # Documents (no type) first
+        if item_type == "image":
+            return (1, item.get("document_id", ""))
+        if item_type == "scraped":
+            return (2, item.get("document_id", ""))
+        return (3, item.get("document_id", ""))
+
+    return sorted(items, key=sort_key)
 
 
 def extract_document_metadata(output_s3_uri: str, document_id: str) -> dict[str, Any]:
