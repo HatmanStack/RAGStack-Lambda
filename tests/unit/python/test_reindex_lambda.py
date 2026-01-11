@@ -191,11 +191,11 @@ class TestLambdaHandler:
                 module.lambda_handler({"action": "invalid"}, lambda_context)
 
 
-class TestListAllDocuments:
-    """Tests for list_all_documents function."""
+class TestListAllContent:
+    """Tests for list_all_content function."""
 
-    def test_returns_documents(self, set_env_vars):
-        """Test listing documents from DynamoDB."""
+    def test_returns_all_content_types(self, set_env_vars):
+        """Test listing all content types from DynamoDB."""
         with (
             patch("boto3.client"),
             patch("boto3.resource"),
@@ -206,14 +206,18 @@ class TestListAllDocuments:
             mock_table = MagicMock()
             mock_table.scan.return_value = {
                 "Items": [
-                    {"document_id": "doc1", "filename": "test.pdf"},
-                    {"document_id": "doc2", "filename": "test2.pdf"},
+                    {"document_id": "doc1", "filename": "test.pdf"},  # document (no type)
+                    {"document_id": "img1", "filename": "photo.jpg", "type": "image"},
+                    {"document_id": "scrape1", "filename": "page.md", "type": "scraped"},
                 ]
             }
 
-            result = module.list_all_documents(mock_table)
-            assert len(result) == 2
+            result = module.list_all_content(mock_table)
+            assert len(result) == 3
+            # Documents first, then images, then scraped (sorted order)
             assert result[0]["document_id"] == "doc1"
+            assert result[1]["document_id"] == "img1"
+            assert result[2]["document_id"] == "scrape1"
 
     def test_handles_pagination(self, set_env_vars):
         """Test handling paginated DynamoDB results."""
@@ -233,8 +237,36 @@ class TestListAllDocuments:
                 {"Items": [{"document_id": "doc2"}]},
             ]
 
-            result = module.list_all_documents(mock_table)
+            result = module.list_all_content(mock_table)
             assert len(result) == 2
+
+    def test_sorts_by_type(self, set_env_vars):
+        """Test content is sorted by type: documents, images, scraped."""
+        with (
+            patch("boto3.client"),
+            patch("boto3.resource"),
+            patch("boto3.Session"),
+        ):
+            module = load_reindex_module()
+
+            mock_table = MagicMock()
+            # Items returned in random order
+            mock_table.scan.return_value = {
+                "Items": [
+                    {"document_id": "scrape1", "type": "scraped"},
+                    {"document_id": "img1", "type": "image"},
+                    {"document_id": "doc1"},  # no type = document
+                    {"document_id": "img2", "type": "image"},
+                ]
+            }
+
+            result = module.list_all_content(mock_table)
+            assert len(result) == 4
+            # Sorted: documents first, then images, then scraped
+            assert result[0]["document_id"] == "doc1"
+            assert result[1]["document_id"] == "img1"
+            assert result[2]["document_id"] == "img2"
+            assert result[3]["document_id"] == "scrape1"
 
 
 class TestIngestDocument:
