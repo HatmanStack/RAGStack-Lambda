@@ -127,12 +127,14 @@ def update_tracking_record(
     item: dict,
     bucket: str,
     dry_run: bool = False,
-) -> bool:
+) -> str:
     """
     Update a tracking record with new content/ prefix paths.
 
     Returns:
-        True if updated, False if skipped or failed
+        "updated" if record was updated
+        "skipped" if no changes needed
+        "failed" if update failed
     """
     doc_id = item.get("document_id")
 
@@ -165,14 +167,14 @@ def update_tracking_record(
 
     if not update_parts:
         logger.debug(f"No updates needed for {doc_id}")
-        return False
+        return "skipped"
 
     update_expr = "SET " + ", ".join(update_parts)
 
     if dry_run:
         logger.info(f"[DRY RUN] Would update {doc_id}: {update_expr}")
         logger.info(f"  Values: {json.dumps(expr_values, indent=2)}")
-        return True
+        return "updated"
 
     try:
         table.update_item(
@@ -181,10 +183,10 @@ def update_tracking_record(
             ExpressionAttributeValues=expr_values,
         )
         logger.debug(f"Updated tracking record: {doc_id}")
-        return True
+        return "updated"
     except Exception as e:
         logger.error(f"Failed to update {doc_id}: {e}")
-        return False
+        return "failed"
 
 
 def migrate_stack(
@@ -205,7 +207,8 @@ def migrate_stack(
     """
     stats = MigrationStats()
 
-    logger.info(f"{'[DRY RUN] ' if dry_run else ''}Starting migration for stack: {stack_name}")
+    prefix = "[DRY RUN] " if dry_run else ""
+    logger.info(f"{prefix}Starting migration for stack: {stack_name}")
 
     # Get stack outputs
     outputs = get_stack_outputs(stack_name, region)
@@ -247,17 +250,22 @@ def migrate_stack(
         items = response.get("Items", [])
 
         for item in items:
-            if update_tracking_record(table, item, bucket, dry_run=dry_run):
+            result = update_tracking_record(table, item, bucket, dry_run=dry_run)
+            if result == "updated":
                 stats.tracking_records_updated += 1
-            else:
+            elif result == "skipped":
                 stats.skipped += 1
+            else:  # "failed"
+                stats.errors += 1
 
         if "LastEvaluatedKey" not in response:
             break
         paginator_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
     logger.info(f"  Updated {stats.tracking_records_updated} tracking records")
-    logger.info(f"  Skipped {stats.skipped} records (already migrated or no changes needed)")
+    logger.info(f"  Skipped {stats.skipped} records (already migrated or no changes)")
+    if stats.errors:
+        logger.warning(f"  Failed {stats.errors} records (see errors above)")
 
     return stats
 

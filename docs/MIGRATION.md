@@ -98,7 +98,7 @@ After reindex completes:
 
 ### What the Script Does
 
-```
+```text
 migrate_v1_to_v2.py
 ├── Get stack outputs (bucket name, table name)
 ├── Step 1: Copy output/* → content/*
@@ -149,7 +149,7 @@ Scraped content uses a special two-level metadata extraction:
    - `source_url`, `source_domain`, `scraped_date`, `job_id`
 
 **How it works:**
-```
+```text
 Scraped Page → S3 metadata → job_id
                                ↓
                           ScrapeJobs table → base_url

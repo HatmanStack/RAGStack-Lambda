@@ -121,6 +121,11 @@ def lambda_handler(event: dict, context: Any) -> dict:
     action = event.get("action", "init")
     logger.info(f"Reindex action: {action}")
 
+    # Clear caches at start of each invocation to prevent stale data
+    # across warm Lambda containers
+    global _job_metadata_cache
+    _job_metadata_cache.clear()
+
     try:
         if action == "init":
             return handle_init(event)
@@ -276,20 +281,37 @@ def handle_process_batch(event: dict) -> dict:
             if item_type == "image":
                 # Images: read text from caption_s3_uri, ingest both image and caption
                 processed_count, error_count, error_messages = process_image_item(
-                    item, new_kb_id, new_ds_id, data_bucket,
-                    processed_count, error_count, error_messages
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    processed_count,
+                    error_count,
+                    error_messages,
                 )
             elif item_type == "scraped":
                 # Scraped pages: use job-aware metadata extraction
                 processed_count, error_count, error_messages = process_scraped_item(
-                    item, new_kb_id, new_ds_id, data_bucket, all_content,
-                    processed_count, error_count, error_messages
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    all_content,
+                    processed_count,
+                    error_count,
+                    error_messages,
                 )
             else:
                 # Regular documents: read text from output_s3_uri
                 processed_count, error_count, error_messages = process_text_item(
-                    item, new_kb_id, new_ds_id, data_bucket, "document",
-                    processed_count, error_count, error_messages
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    "document",
+                    processed_count,
+                    error_count,
+                    error_messages,
                 )
 
             # Small delay to avoid rate limiting
@@ -442,13 +464,15 @@ def process_scraped_item(
 
     # Add/override with page-specific deterministic fields
     parsed = urlparse(source_url) if source_url else None
-    metadata.update({
-        "content_type": "web_page",
-        "document_id": doc_id,
-        "filename": filename,
-        "source_url": source_url,
-        "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
-    })
+    metadata.update(
+        {
+            "content_type": "web_page",
+            "document_id": doc_id,
+            "filename": filename,
+            "source_url": source_url,
+            "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        }
+    )
 
     if parsed and parsed.netloc:
         metadata["source_domain"] = parsed.netloc
@@ -535,11 +559,15 @@ def process_image_item(
     metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata, data_bucket)
 
     # Ingest both image and caption to KB
-    # Image document (visual embedding, no metadata)
+    # Both documents share the same metadata for filtering by content_type
     image_document = {
         "content": {
             "dataSourceType": "S3",
             "s3": {"s3Location": {"uri": image_s3_uri}},
+        },
+        "metadata": {
+            "type": "S3_LOCATION",
+            "s3Location": {"uri": metadata_uri},
         },
     }
 
