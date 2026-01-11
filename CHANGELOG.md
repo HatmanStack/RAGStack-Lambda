@@ -16,9 +16,9 @@
 
 ### Migration
 
-- **Requires full re-indexing**: Existing deployments must be re-deployed with fresh data ingestion
-- No backwards compatibility with v1.x data structures
-- All documents and images must be re-uploaded after deployment
+- **Migration script provided**: `scripts/migrate_v1_to_v2.py` handles S3 file copying and tracking table updates
+- **Reindex handles re-ingestion**: After migration, use Settings UI to trigger reindex with fresh metadata
+- See [docs/MIGRATION.md](docs/MIGRATION.md) for complete migration guide
 
 ### Added
 
@@ -28,6 +28,8 @@
   - Web pages: `content_type: "web_page"`
 - **Simplified query handlers**: Single unified query instead of dual data source queries
 - **Optional content_type filtering**: Query by content type using metadata filters
+- **Universal reindex**: Reindex now processes all content types (documents, images, scraped pages)
+- **Migration script**: `scripts/migrate_v1_to_v2.py` for migrating v1.x deployments
 
 ### Removed
 
