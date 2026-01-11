@@ -1372,6 +1372,7 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1382,6 +1383,8 @@ Resources:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScrapeJobsTable
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - S3CrudPolicy:
