@@ -557,11 +557,14 @@ def process_image_item(
     if item.get("ai_caption"):
         metadata["has_ai_caption"] = "true"
 
-    # Write metadata to S3 (for caption file)
-    metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata, data_bucket)
+    # Write metadata to S3 for BOTH files (Bedrock requires metadata filename to match content)
+    # Caption metadata
+    caption_metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata, data_bucket)
+    # Image metadata (same content, different filename)
+    image_metadata_uri = write_metadata_to_s3(image_s3_uri, metadata, data_bucket)
 
     # Ingest both image and caption to KB
-    # Both documents share the same metadata for filtering by content_type
+    # Both documents have same metadata content but separate files
     image_document = {
         "content": {
             "dataSourceType": "S3",
@@ -569,7 +572,7 @@ def process_image_item(
         },
         "metadata": {
             "type": "S3_LOCATION",
-            "s3Location": {"uri": metadata_uri},
+            "s3Location": {"uri": image_metadata_uri},
         },
     }
 
@@ -581,7 +584,7 @@ def process_image_item(
         },
         "metadata": {
             "type": "S3_LOCATION",
-            "s3Location": {"uri": metadata_uri},
+            "s3Location": {"uri": caption_metadata_uri},
         },
     }
 
