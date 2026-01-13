@@ -577,6 +577,58 @@ def generate_presigned_url(bucket, key, expiration=3600):
         return None
 
 
+def format_timestamp(seconds):
+    """
+    Format seconds into M:SS or MM:SS display format.
+
+    Args:
+        seconds (int): Time in seconds
+
+    Returns:
+        str: Formatted timestamp like "1:30" or "10:00"
+    """
+    if seconds is None:
+        return None
+    minutes = seconds // 60
+    secs = seconds % 60
+    return f"{minutes}:{secs:02d}"
+
+
+def generate_media_url(bucket, key, timestamp_start, timestamp_end, expiration=3600):
+    """
+    Generate presigned URL for media with optional timestamp fragment.
+
+    For media sources, appends HTML5 media fragment (#t=start,end) to enable
+    direct seeking in video/audio players.
+
+    Args:
+        bucket (str): S3 bucket name
+        key (str): S3 object key
+        timestamp_start (int|None): Start time in seconds
+        timestamp_end (int|None): End time in seconds
+        expiration (int): URL expiration time in seconds (default 1 hour)
+
+    Returns:
+        str: Presigned URL with optional timestamp fragment, or None on error
+    """
+    try:
+        base_url = s3_client.generate_presigned_url(
+            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
+        )
+        if not base_url:
+            return None
+
+        # Append HTML5 media fragment for timestamp seeking
+        if timestamp_start is not None:
+            if timestamp_end is not None:
+                return f"{base_url}#t={timestamp_start},{timestamp_end}"
+            return f"{base_url}#t={timestamp_start}"
+        return base_url
+    except Exception as e:
+        logger.error(f"Failed to generate media URL for {bucket}/{key}: {e}")
+        return None
+
+
 def extract_source_url_from_content(content_text):
     """
     Extract source_url from scraped markdown frontmatter.
@@ -977,6 +1029,38 @@ def extract_sources(citations):
                         document_url = source_url
                         logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
+                    # Check for media sources (transcript or visual content types)
+                    metadata = ref.get("metadata", {})
+                    content_type = metadata.get("content_type")
+                    is_media = content_type in ("transcript", "visual")
+                    media_type = metadata.get("media_type") if is_media else None
+                    timestamp_start = metadata.get("timestamp_start") if is_media else None
+                    timestamp_end = metadata.get("timestamp_end") if is_media else None
+                    speaker = metadata.get("speaker") if is_media else None
+                    segment_index = metadata.get("segment_index") if is_media else None
+
+                    # For media sources, generate URL with timestamp fragment
+                    if is_media and allow_document_access and document_s3_uri:
+                        s3_path = document_s3_uri.replace("s3://", "")
+                        s3_match = s3_path.split("/", 1)
+                        if len(s3_match) == 2 and s3_match[1]:
+                            media_bucket = s3_match[0]
+                            media_key = s3_match[1]
+                            document_url = generate_media_url(
+                                media_bucket, media_key, timestamp_start, timestamp_end
+                            )
+                            logger.info(
+                                f"[SOURCE] Media URL generated with timestamps: "
+                                f"#t={timestamp_start},{timestamp_end}"
+                            )
+
+                    # Format timestamp display for media sources
+                    timestamp_display = None
+                    if is_media and timestamp_start is not None:
+                        start_fmt = format_timestamp(timestamp_start)
+                        end_fmt = format_timestamp(timestamp_end) if timestamp_end else ""
+                        timestamp_display = f"{start_fmt}-{end_fmt}" if end_fmt else start_fmt
+
                     source_obj = {
                         "documentId": document_id,
                         "pageNumber": page_num,
@@ -990,6 +1074,15 @@ def extract_sources(citations):
                         "isImage": is_image,
                         "thumbnailUrl": thumbnail_url,
                         "caption": image_caption,
+                        # Media-specific fields
+                        "isMedia": is_media if is_media else None,
+                        "mediaType": media_type,
+                        "contentType": content_type if is_media else None,
+                        "timestampStart": timestamp_start,
+                        "timestampEnd": timestamp_end,
+                        "timestampDisplay": timestamp_display,
+                        "speaker": speaker,
+                        "segmentIndex": segment_index,
                     }
                     # Log the complete source object for debugging
                     doc_url_preview = (
