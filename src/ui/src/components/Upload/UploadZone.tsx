@@ -36,7 +36,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
         <Header variant="h2">Upload Documents</Header>
 
         <Alert type="info">
-          Supported formats: PDF, JPG, PNG, TIFF, DOCX, XLSX, TXT, CSV, MD, EPUB
+          Supported formats: PDF, JPG, PNG, TIFF, DOCX, XLSX, TXT, CSV, MD, EPUB, MP4, WebM, MP3, WAV
         </Alert>
 
         <div
@@ -65,7 +65,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
             style={{ display: 'none' }}
             id="file-upload-input"
             disabled={disabled}
-            accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.docx,.xlsx,.txt,.csv,.md,.epub"
+            accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.docx,.xlsx,.txt,.csv,.md,.epub,.mp4,.webm,.mp3,.wav,.m4a,.ogg"
           />
           <label
             htmlFor="file-upload-input"
