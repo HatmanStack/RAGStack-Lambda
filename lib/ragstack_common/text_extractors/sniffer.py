@@ -233,10 +233,13 @@ class ContentSniffer:
         if content[:3] == b"ID3":
             return ("audio", 0.95)
         # MP3 frame sync: 0xFF 0xFB, 0xFF 0xFA, 0xFF 0xF3, 0xFF 0xF2 (MPEG Audio)
-        if len(content) >= 2 and content[0] == 0xFF and (content[1] & 0xE0) == 0xE0:
-            # Additional check: MPEG audio frame header
-            if content[1] in (0xFB, 0xFA, 0xF3, 0xF2, 0xE3, 0xE2):
-                return ("audio", 0.9)
+        if (
+            len(content) >= 2
+            and content[0] == 0xFF
+            and (content[1] & 0xE0) == 0xE0
+            and content[1] in (0xFB, 0xFA, 0xF3, 0xF2, 0xE3, 0xE2)
+        ):
+            return ("audio", 0.9)
 
         # WAV - RIFF....WAVE
         if content[:4] == b"RIFF" and len(content) >= 12 and content[8:12] == b"WAVE":

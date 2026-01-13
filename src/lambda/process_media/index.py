@@ -65,13 +65,8 @@ def _get_media_duration_estimate(content_length: int, media_type: str) -> float:
     Returns:
         Estimated duration in seconds.
     """
-    # Rough estimates based on typical bitrates
-    # Video: ~1MB per second (8 Mbps), Audio: ~128KB per second (1 Mbps)
-    if media_type == "video":
-        bytes_per_second = 1_000_000  # ~1MB/s for typical video
-    else:
-        bytes_per_second = 128_000  # ~128KB/s for typical audio
-
+    # Rough estimates: Video ~1MB/s (8 Mbps), Audio ~128KB/s (1 Mbps)
+    bytes_per_second = 1_000_000 if media_type == "video" else 128_000
     return max(30.0, content_length / bytes_per_second)
 
 
@@ -178,7 +173,9 @@ def lambda_handler(event, context):
 
         # Wait for transcription to complete
         result = transcribe_client.wait_for_completion(
-            job_name, poll_interval=10, max_wait=900  # 15 minute max
+            job_name,
+            poll_interval=10,
+            max_wait=900,  # 15 minute max
         )
 
         if result["status"] != "COMPLETED":
@@ -208,8 +205,8 @@ def lambda_handler(event, context):
         logger.info(f"Created {len(segments)} segments")
 
         # Write full transcript to S3
-        full_transcript = transcript_json.get("results", {}).get("transcripts", [{}])[0].get(
-            "transcript", ""
+        full_transcript = (
+            transcript_json.get("results", {}).get("transcripts", [{}])[0].get("transcript", "")
         )
         output_bucket, output_prefix = parse_s3_uri(output_s3_prefix)
         transcript_key = f"{output_prefix}transcript_full.txt".replace("//", "/")
@@ -322,9 +319,7 @@ def lambda_handler(event, context):
                 table.update_item(
                     Key={"document_id": document_id},
                     UpdateExpression=(
-                        "SET #status = :status, "
-                        "error_message = :error, "
-                        "updated_at = :updated_at"
+                        "SET #status = :status, error_message = :error, updated_at = :updated_at"
                     ),
                     ExpressionAttributeNames={"#status": "status"},
                     ExpressionAttributeValues={

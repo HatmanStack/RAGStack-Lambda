@@ -39,7 +39,7 @@ class MediaSegmenter:
         """Segment transcript words into time-aligned chunks.
 
         Args:
-            words: List of word dictionaries from TranscribeClient.parse_transcript_with_timestamps().
+            words: List of word dicts from TranscribeClient.parse_transcript_with_timestamps.
                    Each word has: word, start_time, end_time, type, speaker (optional).
             total_duration: Total duration of the media in seconds.
 
@@ -81,7 +81,6 @@ class MediaSegmenter:
             segment = self._build_segment(
                 segment_index=idx,
                 words=segment_words[idx],
-                all_words=words,
             )
             segments.append(segment)
 
@@ -92,14 +91,12 @@ class MediaSegmenter:
         self,
         segment_index: int,
         words: list[dict[str, Any]],
-        all_words: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Build segment metadata from words.
 
         Args:
             segment_index: Zero-based index of this segment.
             words: Words belonging to this segment.
-            all_words: All words in transcript (for punctuation attachment).
 
         Returns:
             Segment dictionary with metadata.
@@ -107,8 +104,8 @@ class MediaSegmenter:
         timestamp_start = segment_index * self.segment_duration
         timestamp_end = (segment_index + 1) * self.segment_duration
 
-        # Build text from words with proper punctuation handling
-        text = self._build_text(words, all_words, timestamp_start, timestamp_end)
+        # Build text from words
+        text = self._build_text(words)
 
         # Count pronunciation words only
         word_count = sum(1 for w in words if w.get("type") == "pronunciation")
@@ -129,20 +126,11 @@ class MediaSegmenter:
 
         return segment
 
-    def _build_text(
-        self,
-        words: list[dict[str, Any]],
-        all_words: list[dict[str, Any]],
-        timestamp_start: float,
-        timestamp_end: float,
-    ) -> str:
-        """Build text from words with proper spacing and punctuation.
+    def _build_text(self, words: list[dict[str, Any]]) -> str:
+        """Build text from words with proper spacing.
 
         Args:
             words: Words in this segment.
-            all_words: All words for punctuation lookup.
-            timestamp_start: Segment start time.
-            timestamp_end: Segment end time.
 
         Returns:
             Formatted text string.
@@ -150,7 +138,6 @@ class MediaSegmenter:
         if not words:
             return ""
 
-        # Get word indices in all_words for punctuation handling
         text_parts = []
         for word in words:
             if word.get("type") == "pronunciation":

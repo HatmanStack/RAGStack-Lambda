@@ -13,11 +13,7 @@ import pytest
 def load_process_media_module():
     """Load the process_media index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src"
-        / "lambda"
-        / "process_media"
-        / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "process_media" / "index.py"
     ).resolve()
 
     spec = importlib.util.spec_from_file_location("process_media_index", str(module_path))
@@ -105,13 +101,13 @@ class TestProcessMediaValidation:
 
     def test_missing_tracking_table_raises_error(self, sample_event):
         """Test that missing TRACKING_TABLE raises error."""
-        with patch.dict(os.environ, {"TRACKING_TABLE": ""}, clear=False):
-            # Clear the cached env var
-            with patch.dict(os.environ, {}, clear=True):
-                module = load_process_media_module()
-
-                with pytest.raises(ValueError, match="TRACKING_TABLE"):
-                    module.lambda_handler(sample_event, None)
+        with (
+            patch.dict(os.environ, {"TRACKING_TABLE": ""}, clear=False),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            module = load_process_media_module()
+            with pytest.raises(ValueError, match="TRACKING_TABLE"):
+                module.lambda_handler(sample_event, None)
 
 
 class TestProcessMediaFlow:
@@ -187,14 +183,13 @@ class TestProcessMediaFlow:
         module = load_process_media_module()
 
         # Patch the module-level clients
-        with patch.object(module, "s3_client", mock_s3), patch.object(
-            module, "dynamodb", mock_dynamodb
-        ), patch.object(module, "TranscribeClient", mock_transcribe_class), patch.object(
-            module, "MediaSegmenter", mock_segmenter_class
-        ), patch.object(
-            module, "ConfigurationManager", mock_config_manager_class
-        ), patch.object(
-            module, "publish_document_update", mock_publish
+        with (
+            patch.object(module, "s3_client", mock_s3),
+            patch.object(module, "dynamodb", mock_dynamodb),
+            patch.object(module, "TranscribeClient", mock_transcribe_class),
+            patch.object(module, "MediaSegmenter", mock_segmenter_class),
+            patch.object(module, "ConfigurationManager", mock_config_manager_class),
+            patch.object(module, "publish_document_update", mock_publish),
         ):
             result = module.lambda_handler(sample_event, None)
 
@@ -238,9 +233,7 @@ class TestProcessMediaErrorHandling:
 
         mock_transcribe = MagicMock()
         mock_transcribe.start_transcription_job.return_value = "job-123"
-        mock_transcribe.wait_for_completion.side_effect = TranscriptionError(
-            "Transcription failed"
-        )
+        mock_transcribe.wait_for_completion.side_effect = TranscriptionError("Transcription failed")
         mock_transcribe_class.return_value = mock_transcribe
 
         # Mock S3 client
@@ -257,13 +250,14 @@ class TestProcessMediaErrorHandling:
         # Load and call the lambda
         module = load_process_media_module()
 
-        with patch.object(module, "s3_client", mock_s3), patch.object(
-            module, "dynamodb", mock_dynamodb
-        ), patch.object(module, "TranscribeClient", mock_transcribe_class), patch.object(
-            module, "ConfigurationManager", mock_config_manager_class
-        ), patch.object(
-            module, "publish_document_update", mock_publish
-        ), pytest.raises(TranscriptionError):
+        with (
+            patch.object(module, "s3_client", mock_s3),
+            patch.object(module, "dynamodb", mock_dynamodb),
+            patch.object(module, "TranscribeClient", mock_transcribe_class),
+            patch.object(module, "ConfigurationManager", mock_config_manager_class),
+            patch.object(module, "publish_document_update", mock_publish),
+            pytest.raises(TranscriptionError),
+        ):
             module.lambda_handler(sample_event, None)
 
         # Verify status was updated to failed

@@ -191,9 +191,7 @@ class TestGetTranscriptResult:
             "TranscriptionJob": {
                 "TranscriptionJobName": "test-job",
                 "TranscriptionJobStatus": "COMPLETED",
-                "Transcript": {
-                    "TranscriptFileUri": "s3://bucket/transcripts/test-job.json"
-                },
+                "Transcript": {"TranscriptFileUri": "s3://bucket/transcripts/test-job.json"},
             }
         }
         mock_boto3_client.return_value = mock_client
@@ -368,9 +366,7 @@ class TestWaitForCompletion:
             "TranscriptionJob": {
                 "TranscriptionJobName": "test-job",
                 "TranscriptionJobStatus": "COMPLETED",
-                "Transcript": {
-                    "TranscriptFileUri": "s3://bucket/transcripts/test-job.json"
-                },
+                "Transcript": {"TranscriptFileUri": "s3://bucket/transcripts/test-job.json"},
             }
         }
         mock_boto3_client.return_value = mock_client
@@ -403,9 +399,7 @@ class TestWaitForCompletion:
                 "TranscriptionJob": {
                     "TranscriptionJobName": "test-job",
                     "TranscriptionJobStatus": "COMPLETED",
-                    "Transcript": {
-                        "TranscriptFileUri": "s3://bucket/transcripts/test-job.json"
-                    },
+                    "Transcript": {"TranscriptFileUri": "s3://bucket/transcripts/test-job.json"},
                 }
             },
         ]

@@ -103,8 +103,20 @@ class TestSpeakerLabels:
     def test_segment_preserves_speaker_labels(self):
         """Test that speaker labels are preserved in segments."""
         words = [
-            {"word": "Hello", "start_time": 0.0, "end_time": 0.5, "speaker": "spk_0", "type": "pronunciation"},
-            {"word": "Hi", "start_time": 1.0, "end_time": 1.5, "speaker": "spk_1", "type": "pronunciation"},
+            {
+                "word": "Hello",
+                "start_time": 0.0,
+                "end_time": 0.5,
+                "speaker": "spk_0",
+                "type": "pronunciation",
+            },
+            {
+                "word": "Hi",
+                "start_time": 1.0,
+                "end_time": 1.5,
+                "speaker": "spk_1",
+                "type": "pronunciation",
+            },
         ]
 
         segmenter = MediaSegmenter(segment_duration=30)
@@ -116,9 +128,27 @@ class TestSpeakerLabels:
     def test_segment_identifies_primary_speaker(self):
         """Test that primary speaker is identified when multiple speakers."""
         words = [
-            {"word": "One", "start_time": 0.0, "end_time": 0.5, "speaker": "spk_0", "type": "pronunciation"},
-            {"word": "Two", "start_time": 0.5, "end_time": 1.0, "speaker": "spk_0", "type": "pronunciation"},
-            {"word": "Three", "start_time": 1.0, "end_time": 1.5, "speaker": "spk_1", "type": "pronunciation"},
+            {
+                "word": "One",
+                "start_time": 0.0,
+                "end_time": 0.5,
+                "speaker": "spk_0",
+                "type": "pronunciation",
+            },
+            {
+                "word": "Two",
+                "start_time": 0.5,
+                "end_time": 1.0,
+                "speaker": "spk_0",
+                "type": "pronunciation",
+            },
+            {
+                "word": "Three",
+                "start_time": 1.0,
+                "end_time": 1.5,
+                "speaker": "spk_1",
+                "type": "pronunciation",
+            },
         ]
 
         segmenter = MediaSegmenter(segment_duration=30)
