@@ -18,16 +18,16 @@ const client = generateClient();
 
 export const useUpload = () => {
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
-  const pendingUploads = useRef(new Map());
+  const [error, setError] = useState<string | null>(null);
+  const pendingUploads = useRef(new Map<string, File>());
 
-  const addUpload = useCallback((file) => {
+  const addUpload = useCallback((file: File) => {
     const uploadId = crypto.randomUUID();
     pendingUploads.current.set(uploadId, file);
     return uploadId;
   }, []);
 
-  const uploadFile = useCallback(async (uploadId) => {
+  const uploadFile = useCallback(async (uploadId: string) => {
     const file = pendingUploads.current.get(uploadId);
 
     if (!file) {
@@ -41,7 +41,7 @@ export const useUpload = () => {
     try {
       // Get presigned URL
       const response = await client.graphql({
-        query: CREATE_UPLOAD_URL as any,
+        query: CREATE_UPLOAD_URL as ReturnType<typeof gql>,
         variables: { filename: file.name }
       }) as GqlResponse;
 
@@ -59,7 +59,7 @@ export const useUpload = () => {
 
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(err.message || 'Upload failed');
+      setError(err instanceof Error ? err.message : 'Upload failed');
       throw err;
     } finally {
       setUploading(false);

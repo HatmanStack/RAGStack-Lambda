@@ -7,13 +7,25 @@ import { listScrapeJobs as listScrapeJobsQuery } from '../graphql/queries/listSc
 import { checkScrapeUrl as checkScrapeUrlQuery } from '../graphql/queries/checkScrapeUrl';
 import type { GqlResponse } from '../types/graphql';
 
+export interface ScrapeJob {
+  jobId: string;
+  baseUrl?: string;
+  title?: string;
+  status: string;
+  totalUrls?: number;
+  processedCount?: number;
+  failedCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 const client = generateClient();
 
 export const useScrape = () => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [jobs, setJobs] = useState([]);
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<ScrapeJob[]>([]);
+  const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null);
 
   const startScrape = useCallback(async (input: Record<string, unknown>) => {
     setLoading(true);
@@ -31,7 +43,7 @@ export const useScrape = () => {
         throw new Error(errorDetails);
       }
 
-      const job = response.data?.startScrape;
+      const job = response.data?.startScrape as ScrapeJob | undefined;
       if (!job) {
         console.error('[useScrape] No job returned in response');
         throw new Error('No job data returned from server');
@@ -42,19 +54,20 @@ export const useScrape = () => {
     } catch (err) {
       // Log full error details
       console.error('[useScrape] Error starting scrape:', err);
+      const typedErr = err as { message?: string; errors?: Array<{ message: string }>; data?: unknown; stack?: string };
       console.error('[useScrape] Error details:', {
-        message: err.message,
-        errors: err.errors,
-        data: err.data,
-        stack: err.stack
+        message: typedErr.message,
+        errors: typedErr.errors,
+        data: typedErr.data,
+        stack: typedErr.stack
       });
 
       // Extract the most useful error message
       let errorMessage = 'Failed to start scrape';
-      if (err.errors && err.errors.length > 0) {
-        errorMessage = err.errors.map(e => e.message).join('; ');
-      } else if (err.message) {
-        errorMessage = err.message;
+      if (typedErr.errors && typedErr.errors.length > 0) {
+        errorMessage = typedErr.errors.map(e => e.message).join('; ');
+      } else if (typedErr.message) {
+        errorMessage = typedErr.message;
       }
 
       setError(errorMessage);
@@ -64,7 +77,7 @@ export const useScrape = () => {
     }
   }, []);
 
-  const cancelScrape = useCallback(async (jobId) => {
+  const cancelScrape = useCallback(async (jobId: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -76,7 +89,7 @@ export const useScrape = () => {
         j.jobId === jobId ? { ...j, status: 'CANCELLED' } : j
       ));
     } catch (err) {
-      setError(err.message || 'Failed to cancel scrape');
+      setError(err instanceof Error ? err.message : 'Failed to cancel scrape');
     } finally {
       setLoading(false);
     }
@@ -90,10 +103,10 @@ export const useScrape = () => {
         query: listScrapeJobsQuery,
         variables: { limit }
       }) as GqlResponse;
-      const listResult = response.data?.listScrapeJobs as { items?: unknown[] } | undefined;
+      const listResult = response.data?.listScrapeJobs as { items?: ScrapeJob[] } | undefined;
       setJobs(listResult?.items || []);
     } catch (err) {
-      setError(err.message || 'Failed to fetch jobs');
+      setError(err instanceof Error ? err.message : 'Failed to fetch jobs');
     } finally {
       setLoading(false);
     }
@@ -107,10 +120,11 @@ export const useScrape = () => {
         query: getScrapeJobQuery,
         variables: { jobId }
       }) as GqlResponse;
-      setSelectedJob(response.data?.getScrapeJob);
-      return response.data?.getScrapeJob;
+      const job = response.data?.getScrapeJob as ScrapeJob | undefined;
+      setSelectedJob(job || null);
+      return job;
     } catch (err) {
-      setError(err.message || 'Failed to fetch job detail');
+      setError(err instanceof Error ? err.message : 'Failed to fetch job detail');
     } finally {
       setLoading(false);
     }
