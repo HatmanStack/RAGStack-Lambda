@@ -326,6 +326,159 @@ class TestContentSnifferExtensionHints:
         assert file_type == "txt"
 
 
+class TestContentSnifferMedia:
+    """Tests for video/audio media detection."""
+
+    def _create_mp4_header(self, brand: bytes = b"isom") -> bytes:
+        """Create minimal MP4 ftyp box header."""
+        # MP4 starts with [size(4)][ftyp(4)][brand(4)][version(4)]
+        size = b"\x00\x00\x00\x14"  # 20 bytes
+        ftyp = b"ftyp"
+        minor_version = b"\x00\x00\x00\x00"
+        return size + ftyp + brand + minor_version
+
+    def _create_webm_header(self) -> bytes:
+        """Create minimal WebM EBML header."""
+        # EBML header magic + doctype webm
+        ebml_id = b"\x1a\x45\xdf\xa3"  # EBML header
+        # Simplified - just include webm doctype marker
+        return ebml_id + b"\x01\x00\x00\x00\x00\x00\x00\x1fwebm" + b"\x00" * 44
+
+    def _create_mp3_id3_header(self) -> bytes:
+        """Create minimal MP3 with ID3 tag."""
+        # ID3v2 header
+        return b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\x00" * 100
+
+    def _create_mp3_frame_sync(self) -> bytes:
+        """Create MP3 frame sync header."""
+        # MPEG Audio Layer III frame sync
+        return b"\xff\xfb\x90\x00" + b"\x00" * 100
+
+    def _create_wav_header(self) -> bytes:
+        """Create minimal WAV header."""
+        # RIFF....WAVE
+        return b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 100
+
+    def _create_ogg_vorbis_header(self) -> bytes:
+        """Create minimal OGG Vorbis header."""
+        return b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00" + b"\x01vorbis" + b"\x00" * 40
+
+    def _create_flac_header(self) -> bytes:
+        """Create minimal FLAC header."""
+        return b"fLaC\x00\x00\x00\x22" + b"\x00" * 100
+
+    def test_detects_mp4_video(self):
+        """Test detection of MP4 video file."""
+        sniffer = ContentSniffer()
+        mp4_bytes = self._create_mp4_header(b"isom")
+        file_type, confidence = sniffer.sniff(mp4_bytes)
+        assert file_type == "video"
+        assert confidence >= 0.8
+
+    def test_detects_mov_video(self):
+        """Test detection of QuickTime MOV video file."""
+        sniffer = ContentSniffer()
+        mov_bytes = self._create_mp4_header(b"qt  ")
+        file_type, confidence = sniffer.sniff(mov_bytes)
+        assert file_type == "video"
+        assert confidence >= 0.9
+
+    def test_detects_m4a_audio(self):
+        """Test detection of M4A audio file."""
+        sniffer = ContentSniffer()
+        m4a_bytes = self._create_mp4_header(b"M4A ")
+        file_type, confidence = sniffer.sniff(m4a_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.9
+
+    def test_detects_webm_video(self):
+        """Test detection of WebM video file."""
+        sniffer = ContentSniffer()
+        webm_bytes = self._create_webm_header()
+        file_type, confidence = sniffer.sniff(webm_bytes)
+        assert file_type == "video"
+        assert confidence >= 0.8
+
+    def test_detects_mp3_with_id3(self):
+        """Test detection of MP3 with ID3 tag."""
+        sniffer = ContentSniffer()
+        mp3_bytes = self._create_mp3_id3_header()
+        file_type, confidence = sniffer.sniff(mp3_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.9
+
+    def test_detects_mp3_frame_sync(self):
+        """Test detection of MP3 via frame sync."""
+        sniffer = ContentSniffer()
+        mp3_bytes = self._create_mp3_frame_sync()
+        file_type, confidence = sniffer.sniff(mp3_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.8
+
+    def test_detects_wav(self):
+        """Test detection of WAV audio file."""
+        sniffer = ContentSniffer()
+        wav_bytes = self._create_wav_header()
+        file_type, confidence = sniffer.sniff(wav_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.9
+
+    def test_detects_ogg_vorbis(self):
+        """Test detection of OGG Vorbis audio file."""
+        sniffer = ContentSniffer()
+        ogg_bytes = self._create_ogg_vorbis_header()
+        file_type, confidence = sniffer.sniff(ogg_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.8
+
+    def test_detects_flac(self):
+        """Test detection of FLAC audio file."""
+        sniffer = ContentSniffer()
+        flac_bytes = self._create_flac_header()
+        file_type, confidence = sniffer.sniff(flac_bytes)
+        assert file_type == "audio"
+        assert confidence >= 0.9
+
+    def test_video_extension_hint_fallback(self):
+        """Test video detection with extension hint when magic bytes unclear."""
+        sniffer = ContentSniffer()
+        # Generic binary content
+        content = b"\x00" * 100
+        file_type, confidence = sniffer.sniff(content, "video.mp4")
+        assert file_type == "video"
+        assert confidence >= 0.5
+
+    def test_audio_extension_hint_fallback(self):
+        """Test audio detection with extension hint when magic bytes unclear."""
+        sniffer = ContentSniffer()
+        # Generic binary content
+        content = b"\x00" * 100
+        file_type, confidence = sniffer.sniff(content, "audio.mp3")
+        assert file_type == "audio"
+        assert confidence >= 0.5
+
+    def test_media_detection_priority_over_text(self):
+        """Test that media magic bytes take priority over text detection."""
+        sniffer = ContentSniffer()
+        # MP4 header followed by text-like content
+        mp4_bytes = self._create_mp4_header() + b'{"key": "value"}'
+        file_type, confidence = sniffer.sniff(mp4_bytes)
+        assert file_type == "video"
+        assert confidence >= 0.8
+
+    def test_existing_document_types_unchanged(self):
+        """Test that existing document detection still works after media additions."""
+        sniffer = ContentSniffer()
+        # Verify HTML still works
+        html = b"<!DOCTYPE html><html><body>Test</body></html>"
+        file_type, _ = sniffer.sniff(html)
+        assert file_type == "html"
+        # Verify JSON still works
+        json_content = b'{"key": "value"}'
+        file_type, _ = sniffer.sniff(json_content)
+        assert file_type == "json"
+
+
 class TestContentSnifferEdgeCases:
     """Tests for edge cases."""
 

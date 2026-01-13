@@ -17,10 +17,11 @@ class ContentSniffer:
     """Detect file type from content with extension hints.
 
     Detection priority:
-    1. Binary format signatures (EPUB, DOCX, XLSX are ZIP-based)
-    2. Text content patterns (HTML tags, JSON structure, email headers)
-    3. Extension hint for tie-breaking
-    4. Fallback to plain text
+    1. Media format signatures (video/audio magic bytes)
+    2. Binary format signatures (EPUB, DOCX, XLSX are ZIP-based)
+    3. Text content patterns (HTML tags, JSON structure, email headers)
+    4. Extension hint for tie-breaking
+    5. Fallback to plain text
     """
 
     # Extension to file type mapping
@@ -36,6 +37,35 @@ class ContentSniffer:
         ".epub": "epub",
         ".docx": "docx",
         ".xlsx": "xlsx",
+        # Video extensions
+        ".mp4": "video",
+        ".mov": "video",
+        ".webm": "video",
+        ".m4v": "video",
+        # Audio extensions
+        ".mp3": "audio",
+        ".wav": "audio",
+        ".m4a": "audio",
+        ".ogg": "audio",
+        ".oga": "audio",
+        ".flac": "audio",
+    }
+
+    # Media MIME type to file type mapping
+    MEDIA_MIME_TYPES = {
+        # Video MIME types
+        "video/mp4": "video",
+        "video/quicktime": "video",
+        "video/webm": "video",
+        "video/x-m4v": "video",
+        # Audio MIME types
+        "audio/mpeg": "audio",
+        "audio/wav": "audio",
+        "audio/x-wav": "audio",
+        "audio/x-m4a": "audio",
+        "audio/mp4": "audio",
+        "audio/ogg": "audio",
+        "audio/flac": "audio",
     }
 
     def sniff(self, content: bytes, filename: str | None = None) -> tuple[str, float]:
@@ -47,6 +77,7 @@ class ContentSniffer:
 
         Returns:
             Tuple of (file_type, confidence) where confidence is 0.0-1.0.
+            For media files, returns ("video", confidence) or ("audio", confidence).
         """
         if not content:
             return ("txt", 0.5)
@@ -57,7 +88,12 @@ class ContentSniffer:
             ext = Path(filename).suffix.lower()
             extension_hint = self.EXTENSION_MAP.get(ext)
 
-        # Check binary formats first (ZIP-based)
+        # Check media formats first (highest priority for new feature)
+        media_result = self._check_media(content, extension_hint)
+        if media_result:
+            return media_result
+
+        # Check binary formats (ZIP-based)
         if self._is_zip(content):
             zip_type = self._detect_zip_type(content)
             if zip_type:
@@ -135,6 +171,100 @@ class ContentSniffer:
 
         # Default to plain text
         return ("txt", 0.7)
+
+    def _check_media(self, content: bytes, extension_hint: str | None) -> tuple[str, float] | None:
+        """Check for video/audio media formats using magic bytes.
+
+        Args:
+            content: File content as bytes.
+            extension_hint: Extension-based type hint.
+
+        Returns:
+            Tuple of (media_type, confidence) if media detected, None otherwise.
+        """
+        # MP4/MOV/M4A/M4V - ISO Base Media File Format (ftyp box)
+        # Format: [4-byte size][ftyp][brand]
+        if len(content) >= 12:
+            # Check for ftyp box (can be at offset 0 or 4)
+            ftyp_at_4 = content[4:8] == b"ftyp"
+            if ftyp_at_4:
+                brand = content[8:12]
+                # Video brands
+                video_brands = [
+                    b"isom",  # ISO Base Media
+                    b"iso2",  # ISO Base Media v2
+                    b"mp41",  # MP4 v1
+                    b"mp42",  # MP4 v2
+                    b"avc1",  # H.264/AVC
+                    b"qt  ",  # QuickTime MOV
+                    b"M4V ",  # M4V video
+                ]
+                # Audio brands
+                audio_brands = [
+                    b"M4A ",  # M4A audio
+                    b"M4B ",  # M4B audiobook
+                    b"mp4a",  # MP4 audio
+                ]
+                if brand in video_brands:
+                    return ("video", 0.95)
+                if brand in audio_brands:
+                    return ("audio", 0.95)
+                # Generic ftyp could be either - use extension hint
+                if extension_hint == "audio":
+                    return ("audio", 0.85)
+                if extension_hint == "video":
+                    return ("video", 0.85)
+                # Default to video for generic MP4
+                return ("video", 0.8)
+
+        # WebM - starts with EBML header (Matroska/WebM)
+        # 0x1A 0x45 0xDF 0xA3 = EBML header
+        if content[:4] == b"\x1a\x45\xdf\xa3":
+            # Check for webm doctype in first 64 bytes
+            if b"webm" in content[:64]:
+                return ("video", 0.95)
+            # Generic Matroska could be video or audio
+            if extension_hint == "audio":
+                return ("audio", 0.8)
+            return ("video", 0.8)
+
+        # MP3 - ID3 tag or frame sync
+        # ID3v2: starts with "ID3"
+        if content[:3] == b"ID3":
+            return ("audio", 0.95)
+        # MP3 frame sync: 0xFF 0xFB, 0xFF 0xFA, 0xFF 0xF3, 0xFF 0xF2 (MPEG Audio)
+        if len(content) >= 2 and content[0] == 0xFF and (content[1] & 0xE0) == 0xE0:
+            # Additional check: MPEG audio frame header
+            if content[1] in (0xFB, 0xFA, 0xF3, 0xF2, 0xE3, 0xE2):
+                return ("audio", 0.9)
+
+        # WAV - RIFF....WAVE
+        if content[:4] == b"RIFF" and len(content) >= 12 and content[8:12] == b"WAVE":
+            return ("audio", 0.95)
+
+        # OGG - starts with "OggS"
+        if content[:4] == b"OggS":
+            # Could be Vorbis audio or Theora video
+            # Check for Vorbis or Opus audio
+            if b"vorbis" in content[:64] or b"OpusHead" in content[:64]:
+                return ("audio", 0.95)
+            # Check for Theora video
+            if b"theora" in content[:64]:
+                return ("video", 0.95)
+            # Default to audio for OGG
+            if extension_hint == "video":
+                return ("video", 0.8)
+            return ("audio", 0.8)
+
+        # FLAC - starts with "fLaC"
+        if content[:4] == b"fLaC":
+            return ("audio", 0.95)
+
+        # Extension-only fallback for media types
+        if extension_hint in ("video", "audio"):
+            return (extension_hint, 0.6)
+
+        return None
 
     def _is_zip(self, content: bytes) -> bool:
         """Check if content is a ZIP file."""
