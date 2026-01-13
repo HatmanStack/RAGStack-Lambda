@@ -9,21 +9,24 @@
 <p align="center">
 <a href="https://aws.amazon.com/lambda/"><img src="https://img.shields.io/badge/AWS-Lambda-FF9900" alt="AWS Lambda" /></a>
 <a href="https://aws.amazon.com/bedrock/"><img src="https://img.shields.io/badge/AWS-Bedrock-232F3E" alt="AWS Bedrock" /></a>
+<a href="https://aws.amazon.com/transcribe/"><img src="https://img.shields.io/badge/AWS-Transcribe-527FFF" alt="AWS Transcribe" /></a>
 <a href="https://aws.amazon.com/s3/"><img src="https://img.shields.io/badge/AWS-S3-569A31" alt="AWS S3" /></a>
 <a href="https://aws.amazon.com/dynamodb/"><img src="https://img.shields.io/badge/AWS-DynamoDB-4053D6" alt="AWS DynamoDB" /></a>
 <a href="https://aws.amazon.com/cognito/"><img src="https://img.shields.io/badge/AWS-Cognito-DD344C" alt="AWS Cognito" /></a>
 </p>
 
-Serverless document processing with AI chat. Upload documents, extract text with OCR, query using Amazon Bedrock.
+Serverless document and media processing with AI chat. Upload documents, images, video, and audio — extract text with OCR or transcription — query using Amazon Bedrock.
 
 ## Features
 
 - ☁️ Fully serverless architecture (Lambda, Step Functions, S3, DynamoDB)
 - 🧠 **NEW** Amazon Nova multimodal embeddings for text and image vectorization
 - 📄 Document processing & vectorization (PDF, images, Office docs, HTML, CSV, JSON, XML, EML, EPUB) → stored in managed knowledge base
+- 🎬 **NEW** Video/audio processing - transcribe speech with AWS Transcribe, searchable by timestamp
 - 💬 AI chat with retrieval-augmented context and source attribution
 - 📎 Collapsible source citations with optional document downloads
-- 🔍 **NEW** Metadata filtering - auto-discover document metadata and filter search results
+- ⏱️ **NEW** Media sources with timestamp links - click to play at exact position
+- 🔍 Metadata filtering - auto-discover document metadata and filter search results
 - 🔄 Knowledge Base reindex - regenerate metadata for existing documents with updated settings
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
@@ -157,15 +160,26 @@ Upload documents in various formats. Auto-detection routes to optimal processor:
 |------|---------|------------|
 | **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct extraction with smart analysis |
 | **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP, WebP, AVIF | Textract or Bedrock vision OCR (WebP/AVIF require Bedrock) |
+| **Media** | MP4, WebM, MP3, WAV, M4A, OGG, FLAC | AWS Transcribe → 30s segments → searchable with timestamps |
 | **Passthrough** | Markdown (.md) | Direct copy |
 
-Processing time: UPLOADED → PROCESSING → INDEXED (typically 1-5 min for text, 2-15 min for OCR)
+Processing time: UPLOADED → PROCESSING → INDEXED (typically 1-5 min for text, 2-15 min for OCR, 5-20 min for media)
 
 ### Images
 Upload JPG, PNG, GIF, WebP with captions. Both visual content and caption text are searchable.
 
 ### Web Scraping
 Scrape websites into the knowledge base. See [Web Scraping](docs/WEB_SCRAPING.md).
+
+### Video & Audio
+Upload MP4, WebM, MP3, WAV, M4A, OGG, or FLAC files. Speech is transcribed using AWS Transcribe and segmented into 30-second chunks for search. Sources include timestamps (e.g., "1:30-2:00") with clickable links that play at the exact position.
+
+**Features:**
+- Speaker diarization (identify who said what)
+- Configurable language (30+ languages supported)
+- Timestamp-linked sources in chat responses
+
+See [Configuration](docs/CONFIGURATION.md#media-processing-videoaudio) for language and speaker settings.
 
 ### Chat
 Ask questions about your content. Sources show where answers came from.

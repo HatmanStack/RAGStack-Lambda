@@ -23,6 +23,31 @@ Quick reference for common issues and solutions.
 | Documents fail with ERROR | Error in dashboard | Check Lambda logs: `aws logs tail /aws/lambda/RAGStack-<project>-ProcessDocument --follow`. Image-heavy PDFs may need Bedrock OCR (set `ocr_backend` to `bedrock`). |
 | Slow processing | Takes >30 minutes | Text-native PDFs should be faster (~2-5 min). Image-heavy docs slower. Check CloudWatch for bottlenecks. |
 
+## Media Processing Issues (Video/Audio)
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Media stuck in PROCESSING | Transcribe job still running | Check Transcribe console for job status. Large files (>1hr) take longer. Wait up to 30 minutes for long media. |
+| No transcript generated | Unsupported format or no audio | Verify file has audio track. MOV files not supported - convert to MP4. Check file isn't corrupted. |
+| Wrong language detected | Incorrect language setting | Set `transcribe_language_code` in Settings to match audio language. Default is `en-US`. |
+| Missing speaker labels | Diarization disabled | Enable `speaker_diarization_enabled` in Settings. Only works with supported languages. |
+| Timestamp links not working | Browser doesn't support media fragments | Try Chrome/Firefox (best support). Safari has limited `#t=` fragment support. Check presigned URL hasn't expired. |
+| Media player won't load | CORS or expired URL | Presigned URLs expire after 1 hour. Refresh chat to get new URLs. Check browser console for CORS errors. |
+| Transcribe access denied | Missing IAM permissions | Verify Lambda has `transcribe:StartTranscriptionJob` and `transcribe:GetTranscriptionJob` permissions. |
+
+**Debugging media processing:**
+```bash
+# Check Transcribe job status
+aws transcribe list-transcription-jobs --status IN_PROGRESS
+
+# View ProcessMedia Lambda logs
+aws logs tail /aws/lambda/RAGStack-<project>-ProcessMedia --follow
+
+# Check document status in DynamoDB
+aws dynamodb get-item --table-name RAGStack-<project>-Documents \
+  --key '{"document_id": {"S": "<document-id>"}}'
+```
+
 ## Knowledge Base Issues
 
 | Problem | Cause | Solution |

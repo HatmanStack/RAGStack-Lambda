@@ -63,6 +63,7 @@ RAGStack-Lambda/
 ├── src/
 │   ├── lambda/                 # Lambda function handlers
 │   │   ├── process_document/   # OCR extraction
+│   │   ├── process_media/      # Video/audio transcription
 │   │   ├── ingest_to_kb/       # Bedrock KB ingestion
 │   │   ├── query_kb/           # Chat queries with sources
 │   │   ├── process_image/      # Image ingestion

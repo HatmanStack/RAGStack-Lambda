@@ -111,13 +111,26 @@ Source citations appear below each AI response in a collapsible UI:
 - **Accessibility:** Keyboard navigable (Tab + Enter), screen reader support
 
 ```tsx
-// Example source structure
+// Example document source
 {
   title: "financial-report-2024.pdf",
   location: "chunk-005",
   snippet: "Q4 revenue was $2.3M...",
   documentUrl: "https://s3.amazonaws.com/...",  // Optional
   documentAccessAllowed: true  // Configuration flag
+}
+
+// Example media source (video/audio)
+{
+  title: "team-meeting.mp4",
+  location: "1:30-2:00",  // Timestamp range
+  snippet: "We discussed the Q4 targets...",
+  documentUrl: "https://s3.amazonaws.com/...#t=90,120",  // URL with timestamp fragment
+  isMedia: true,
+  mediaType: "video",  // "video" or "audio"
+  timestampStart: 90,  // seconds
+  timestampEnd: 120,
+  speaker: "speaker_0"  // When diarization enabled
 }
 ```
 
@@ -139,6 +152,23 @@ When `chat_allow_document_access` is enabled (admin UI -> Configuration):
 **Admin controls:**
 - Toggle on/off in real-time (no redeployment)
 - Changes apply within 60 seconds (DynamoDB config cache)
+
+### Media Sources (Video/Audio)
+
+When sources come from video or audio files:
+
+- **Timestamp display:** Shows time range (e.g., "1:30-2:00")
+- **Click to play:** Opens inline player at that timestamp
+- **Speaker label:** Shows speaker ID when diarization is enabled
+- **Inline player:** HTML5 video/audio player embedded in source citation
+
+**URL format:** Presigned S3 URLs include `#t=start,end` media fragment for automatic seeking.
+
+**Player features:**
+- Play/pause controls
+- Seek bar
+- Volume control
+- Compact inline display (max 400px width for video)
 
 ### Accessibility Features
 
@@ -373,8 +403,14 @@ interface ChatMessage {
 ```typescript
 interface Source {
   title: string;      // Document filename
-  location: string;   // Page or offset
+  location: string;   // Page, offset, or timestamp range (e.g., "1:30-2:00")
   snippet: string;    // Quote
+  // Media-specific fields (optional)
+  isMedia?: boolean;           // true for video/audio sources
+  mediaType?: 'video' | 'audio';
+  timestampStart?: number;     // seconds
+  timestampEnd?: number;       // seconds
+  speaker?: string;            // speaker ID when diarization enabled
 }
 ```
 

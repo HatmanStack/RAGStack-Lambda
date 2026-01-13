@@ -19,6 +19,7 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 |-----------|---------|
 | DetectFileType Lambda | Detect file type and route to appropriate processor |
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) for PDF/images |
+| ProcessMedia Lambda | Video/audio transcription via AWS Transcribe, 30s segmentation |
 | ProcessText Lambda | Text extraction for HTML, CSV, JSON, XML, EML, EPUB, DOCX, XLSX |
 | GetPageInfo Lambda | Count pages, determine batching strategy |
 | EnqueueBatches Lambda | Queue batch jobs to SQS |
@@ -51,6 +52,9 @@ Upload → DetectFileType → Route by Type:
          ├── OCR files (PDF, images)
          │   └── GetPageInfo → ProcessDocument → IngestToKB → Bedrock KB
          │
+         ├── Media files (MP4, WebM, MP3, WAV, M4A, OGG, FLAC)
+         │   └── ProcessMedia → AWS Transcribe → 30s segments → IngestToKB → Bedrock KB
+         │
          └── Passthrough (Markdown)
              └── ProcessDocument → IngestToKB → Bedrock KB
 ```
@@ -61,6 +65,7 @@ Upload → DetectFileType → Route by Type:
 |----------|-------|------------|
 | **Text** | HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX | Direct text extraction with smart analysis |
 | **OCR** | PDF, JPG, PNG, TIFF, GIF, BMP, WebP, AVIF | Textract or Bedrock vision OCR (WebP/AVIF require Bedrock) |
+| **Media** | MP4, WebM, MP3, WAV, M4A, OGG, FLAC | AWS Transcribe speech-to-text, 30s segments with timestamps |
 | **Passthrough** | Markdown (.md) | Copy directly to output |
 
 **Text Processing:** Content sniffing detects actual file type regardless of extension. Structured formats (CSV, JSON, XML) get smart extraction with schema analysis.
@@ -85,6 +90,18 @@ Upload → DetectFileType → Route by Type:
 1. **Upload:** User → S3 images/ → EventBridge → ProcessImage
 2. **Indexing:** ProcessImage ingests image + caption to Bedrock KB
 3. **Cross-modal:** Both visual and text vectors share image_id
+
+### Media Processing (Video/Audio)
+1. **Upload:** User → S3 input/ → EventBridge → DetectFileType
+2. **Transcribe:** ProcessMedia → AWS Transcribe batch job → transcript with timestamps
+3. **Segment:** Transcript split into 30-second chunks
+4. **Metadata:** Each segment tagged with `timestamp_start`, `timestamp_end`, `speaker` (if diarization enabled)
+5. **Indexing:** Segments ingested to Bedrock KB with timestamp metadata
+6. **Query:** Sources include timestamp ranges, URLs with `#t=start,end` fragment for HTML5 playback
+
+**Speaker diarization:** When enabled, Transcribe identifies up to 10 speakers. Each segment tracks the primary speaker for filtering.
+
+**Source format:** Chat responses show timestamps like "1:30-2:00" with clickable links that open the media at that position.
 
 ### Knowledge Base Reindex
 1. **Trigger:** User → AppSync → startReindex mutation → Step Functions
@@ -172,6 +189,6 @@ See [Configuration](CONFIGURATION.md)
 
 - **Infrastructure:** SAM, Lambda, Step Functions
 - **Storage:** S3, DynamoDB, Bedrock KB
-- **APIs:** AppSync, Bedrock, Textract
+- **APIs:** AppSync, Bedrock, Textract, Transcribe
 - **Frontend:** React 19, Vite, Cloudscape
 - **Chat:** ragstack-chat web component
