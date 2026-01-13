@@ -37,6 +37,7 @@ from ragstack_common.exceptions import TranscriptionError
 from ragstack_common.media_segmenter import MediaSegmenter
 from ragstack_common.storage import parse_s3_uri
 from ragstack_common.transcribe_client import TranscribeClient
+from ragstack_common.visual_segmenter import VisualSegmenter
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -299,6 +300,38 @@ def lambda_handler(event, context):
             total_pages=len(segments),
         )
 
+        # Extract visual segments for video files (optional)
+        visual_segments = []
+        if detected_type == "video":
+            try:
+                logger.info("Extracting visual segments for video file")
+                visual_segmenter = VisualSegmenter(segment_duration=segment_duration)
+                visual_segments = visual_segmenter.extract_segments_to_s3(
+                    input_s3_uri=input_s3_uri,
+                    output_s3_prefix=output_s3_prefix,
+                    document_id=document_id,
+                    media_type="video",
+                )
+                logger.info(f"Extracted {len(visual_segments)} visual segments")
+            except Exception as visual_error:
+                logger.warning(
+                    f"Visual segment extraction failed (continuing without): {visual_error}"
+                )
+                visual_segments = []
+
+        # Build transcript segment list for output
+        transcript_segments = [
+            {
+                "segment_index": s["segment_index"],
+                "timestamp_start": s["timestamp_start"],
+                "timestamp_end": s["timestamp_end"],
+                "text": s["text"],
+                "word_count": s["word_count"],
+                "speaker": s.get("speaker"),
+            }
+            for s in segments
+        ]
+
         # Return result for Step Functions
         return {
             "document_id": document_id,
@@ -307,6 +340,8 @@ def lambda_handler(event, context):
             "total_segments": len(segments),
             "duration_seconds": int(estimated_duration),
             "media_type": detected_type,
+            "visual_segments": visual_segments,
+            "transcript_segments": transcript_segments,
         }
 
     except Exception as e:
