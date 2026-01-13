@@ -78,7 +78,7 @@ Media Query Filter Examples:
 
 6. Combined media filters:
    Query: "Find transcript from the first 5 minutes of the video"
-   Filter: {"$and": [{"content_type": {"$eq": "transcript"}}, {"media_type": {"$eq": "video"}}, {"timestamp_end": {"$lte": 300}}]}
+   Filter: {"$and": [{"content_type": {"$eq": "transcript"}}, {"timestamp_end": {"$lte": 300}}]}
 """
 
 
