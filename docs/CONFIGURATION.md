@@ -149,10 +149,10 @@ For the complete list of supported languages, see [AWS Transcribe Supported Lang
 - Default 30s balances precision and context
 
 **Supported formats:**
-- Video: MP4, MOV, WebM
+- Video: MP4, WebM
 - Audio: MP3, WAV, M4A, OGG, FLAC
 
-**Note:** AWS Transcribe extracts audio from video files automatically. No FFmpeg preprocessing is required.
+**Note:** AWS Transcribe extracts audio from MP4 and WebM video files automatically. MOV files are not natively supported and must be converted to MP4 first.
 
 ## Image Processing
 

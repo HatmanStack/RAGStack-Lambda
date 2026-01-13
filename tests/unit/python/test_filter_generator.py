@@ -382,16 +382,6 @@ def test_s3_vectors_filter_syntax_constant():
 # Test: Media Query Filter Patterns
 
 
-def test_media_filter_examples_constant():
-    """Test that MEDIA_FILTER_EXAMPLES constant exists."""
-    from ragstack_common.filter_generator import MEDIA_FILTER_EXAMPLES
-
-    assert isinstance(MEDIA_FILTER_EXAMPLES, str)
-    assert "content_type" in MEDIA_FILTER_EXAMPLES
-    assert "transcript" in MEDIA_FILTER_EXAMPLES
-    assert "visual" in MEDIA_FILTER_EXAMPLES
-
-
 def test_generate_filter_for_transcript_query(mock_bedrock_client, mock_key_library):
     """Test filter generation for transcript-specific queries."""
     # Add content_type to available keys
@@ -460,8 +450,8 @@ def test_generate_filter_for_timestamp_query(mock_bedrock_client, mock_key_libra
     assert result is not None
 
 
-def test_generate_filter_includes_media_examples_in_prompt(mock_bedrock_client, mock_key_library):
-    """Test that media filter examples are included in the prompt."""
+def test_generate_filter_includes_media_keys_in_prompt(mock_bedrock_client, mock_key_library):
+    """Test that media metadata keys are included in the prompt."""
     mock_key_library.get_active_keys.return_value = [
         {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
     ]
@@ -479,5 +469,5 @@ def test_generate_filter_includes_media_examples_in_prompt(mock_bedrock_client, 
     call_args = mock_bedrock_client.invoke_model.call_args
     content = call_args.kwargs["content"][0]["text"]
 
-    # Media examples should be included
+    # Media keys should be included in available keys
     assert "content_type" in content

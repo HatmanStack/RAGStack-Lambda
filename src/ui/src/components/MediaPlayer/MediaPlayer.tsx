@@ -37,6 +37,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   // Manual seek to timestamp if fragment not supported by browser
   useEffect(() => {
+    // Clear error state when source changes (e.g., refreshed presigned URL)
+    setError(null);
+
     const media = mediaRef.current;
     if (!media) return;
 
@@ -87,7 +90,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       media.removeEventListener('timeupdate', handleTimeUpdate);
       media.removeEventListener('error', handleError);
     };
-  }, [timestampStart, timestampEnd]);
+  }, [src, mediaType, timestampStart, timestampEnd]);
 
   // Format time for display
   const formatTime = (seconds: number): string => {

@@ -582,13 +582,14 @@ def format_timestamp(seconds):
     Format seconds into M:SS or MM:SS display format.
 
     Args:
-        seconds (int): Time in seconds
+        seconds (int | float | Decimal): Time in seconds
 
     Returns:
         str: Formatted timestamp like "1:30" or "10:00"
     """
     if seconds is None:
         return None
+    seconds = int(seconds)
     minutes = seconds // 60
     secs = seconds % 60
     return f"{minutes}:{secs:02d}"

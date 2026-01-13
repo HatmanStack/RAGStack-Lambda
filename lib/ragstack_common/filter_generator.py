@@ -52,35 +52,6 @@ VALID_OPERATORS = frozenset(
     {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin", "$exists", "$and", "$or"}
 )
 
-# Media-specific filter examples for few-shot learning
-MEDIA_FILTER_EXAMPLES = """
-Media Query Filter Examples:
-
-1. Search transcript content only:
-   Query: "What did John say in the interview?"
-   Filter: {"content_type": {"$eq": "transcript"}}
-
-2. Search visual content only:
-   Query: "Find similar scenes to this meeting"
-   Filter: {"content_type": {"$eq": "visual"}}
-
-3. Search within timestamp range:
-   Query: "What was discussed between 5 and 10 minutes?"
-   Filter: {"$and": [{"timestamp_start": {"$gte": 300}}, {"timestamp_end": {"$lte": 600}}]}
-
-4. Search by media type:
-   Query: "Find all video content"
-   Filter: {"media_type": {"$eq": "video"}}
-
-5. Search by speaker:
-   Query: "What did the first speaker say?"
-   Filter: {"speaker": {"$eq": "spk_0"}}
-
-6. Combined media filters:
-   Query: "Find transcript from the first 5 minutes of the video"
-   Filter: {"$and": [{"content_type": {"$eq": "transcript"}}, {"timestamp_end": {"$lte": 300}}]}
-"""
-
 
 def _normalize_filter_value(value):
     """

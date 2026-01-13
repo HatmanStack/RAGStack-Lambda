@@ -381,3 +381,35 @@ def lambda_handler(event, context):
             logger.error(f"Failed to update status: {update_error}")
 
         raise
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Failed to ingest media: {error_msg}", exc_info=True)
+
+        # Update status to failed
+        try:
+            tracking_table.update_item(
+                Key={"document_id": document_id},
+                UpdateExpression=(
+                    "SET #status = :status, "
+                    "error_message = :error, "
+                    "updated_at = :updated_at"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": "failed",
+                    ":error": error_msg,
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                },
+            )
+            publish_document_update(
+                graphql_endpoint,
+                document_id,
+                filename,
+                "FAILED",
+                error_message=error_msg,
+            )
+        except Exception as update_error:
+            logger.error(f"Failed to update status: {update_error}")
+
+        raise
