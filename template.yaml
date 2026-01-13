@@ -1278,6 +1278,66 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
+  # IngestMedia Lambda - handles dual embedding ingestion for video/audio
+  IngestMediaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ingest-media'
+      CodeUri: src/lambda/ingest_media/
+      Handler: index.lambda_handler
+      Description: Ingest media content with dual embeddings (transcript + visual)
+      Runtime: python3.13
+      Timeout: 600  # 10 minutes for embedding generation
+      MemorySize: 512  # Moderate - handles embedding processing
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+      Layers:
+        - !Ref RagstackCommonLayer
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - S3CrudPolicy:
+            BucketName: !Ref VectorBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataKeyLibraryTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetKnowledgeBase
+                - bedrock:GetDataSource
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
