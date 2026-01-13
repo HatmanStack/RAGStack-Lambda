@@ -290,7 +290,8 @@ class KBMigrator:
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code")
                 # S3 Vectors returns NotFoundException, not ResourceNotFoundException
-                if error_code in ("ResourceNotFoundException", "NotFoundException") and target_status == "DELETED":
+                not_found = error_code in ("ResourceNotFoundException", "NotFoundException")
+                if not_found and target_status == "DELETED":
                     return
                 raise
 

@@ -75,13 +75,15 @@ EXAMPLES:
 
 Input: "Letter from James Wilson to his daughter Sarah Wilson, dated March 15, 1892, \
 discussing the family farm in County Cork, Ireland."
-Output: {"document_type": "letter", "year": "1892", "people_mentioned": ["james wilson", "sarah wilson"], \
-"surnames": ["wilson"], "country": "ireland", "topic": "family_correspondence"}
+Output: {"document_type": "letter", "year": "1892", \
+"people_mentioned": ["james wilson", "sarah wilson"], "surnames": ["wilson"], \
+"country": "ireland", "topic": "family_correspondence"}
 
 Input: "1920 US Census record for the O'Brien household in Chicago, Illinois showing \
 Patrick O'Brien (head), Margaret O'Brien (wife), and three children."
 Output: {"document_type": "census_record", "year": "1920", "country": "united_states", \
-"state_province": "illinois", "city": "chicago", "people_mentioned": ["patrick o'brien", "margaret o'brien"], \
+"state_province": "illinois", "city": "chicago", \
+"people_mentioned": ["patrick o'brien", "margaret o'brien"], \
 "surnames": ["o'brien"], "source_category": "government_record"}
 
 OUTPUT FORMAT:

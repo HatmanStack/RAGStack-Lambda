@@ -65,6 +65,7 @@ def _normalize_filter_value(value):
         return [v.lower() if isinstance(v, str) else v for v in value]
     return value
 
+
 # System prompt for filter generation
 FILTER_SYSTEM_PROMPT = f"""You are a metadata filter generator. Analyze user queries and generate
 S3 Vectors compatible filter JSON expressions when appropriate.
@@ -76,7 +77,7 @@ IMPORTANT RULES:
 2. Return "null" (without quotes) if the query has no clear filter intent
 3. Use only the available metadata keys provided
 4. Prefer simple filters over complex ones
-5. For ARRAY fields (people_mentioned, surnames, locations, tags): use $eq to match individual elements
+5. For ARRAY fields (people_mentioned, surnames, locations, tags): use $eq to match elements
 6. For non-array fields: use $eq for exact match, $in for multiple possible values
 7. Do not guess or invent filter values not suggested by the query
 8. ALL STRING VALUES MUST BE LOWERCASE - metadata is stored in lowercase

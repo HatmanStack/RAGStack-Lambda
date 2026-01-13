@@ -296,7 +296,8 @@ Return ONLY a JSON array of filter examples, no explanation. Example format:
     "name": "Letters from John Smith",
     "description": "Filter for letters mentioning John Smith",
     "use_case": "Finding correspondence involving a specific person",
-    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}}, {{"people_mentioned": {{"$in": ["john smith"]}}}}]}}
+    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}},
+      {{"people_mentioned": {{"$eq": "john smith"}}}}]}}
   }}
 ]"""
 
