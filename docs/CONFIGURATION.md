@@ -105,6 +105,55 @@ aws cloudformation describe-stacks --stack-name YOUR_STACK_NAME \
 | `ocr_backend` | textract, bedrock | textract | Textract is faster and cheaper |
 | `bedrock_ocr_model_id` | Claude model ID | haiku | Only used when ocr_backend=bedrock |
 
+## Media Processing (Video/Audio)
+
+| Setting | Values | Default | Notes |
+|---------|--------|---------|-------|
+| `transcribe_language_code` | See options below | en-US | Language for speech-to-text |
+| `speaker_diarization_enabled` | boolean | true | Identify and label speakers |
+| `media_segment_duration_seconds` | number | 30 | Chunk duration for embedding |
+
+**Language code options (common):**
+- `en-US` - English (US) - default
+- `en-GB` - English (UK)
+- `en-AU` - English (Australia)
+- `es-ES` - Spanish (Spain)
+- `es-US` - Spanish (US)
+- `fr-FR` - French
+- `de-DE` - German
+- `it-IT` - Italian
+- `pt-BR` - Portuguese (Brazil)
+- `ja-JP` - Japanese
+- `ko-KR` - Korean
+- `zh-CN` - Chinese (Simplified)
+
+For the complete list of supported languages, see [AWS Transcribe Supported Languages](https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html).
+
+**How it works:**
+1. Video/audio files are detected by content type during upload
+2. Files are sent to AWS Transcribe for speech-to-text conversion
+3. Transcripts are segmented into 30-second chunks (configurable)
+4. Each segment is embedded and indexed for search
+5. Speaker labels are preserved when diarization is enabled
+
+**Speaker diarization:**
+- When enabled, Transcribe identifies different speakers in the audio
+- Up to 10 speakers can be identified
+- Each segment tracks the primary speaker
+- Useful for interviews, meetings, podcasts
+
+**Segment duration:**
+- Controls how transcripts are chunked for embedding
+- Shorter segments (15-30s) = more precise search results
+- Longer segments (60-120s) = more context per result
+- Default 30s balances precision and context
+
+**Supported formats:**
+- Video: MP4, MOV, WebM
+- Audio: MP3, WAV, M4A, OGG, FLAC
+
+**Note:** AWS Transcribe extracts audio from video files automatically. No FFmpeg preprocessing is required.
+
 ## Image Processing
 
 | Setting | Values | Default | Notes |
