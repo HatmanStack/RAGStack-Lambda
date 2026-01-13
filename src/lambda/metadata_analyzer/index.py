@@ -78,6 +78,25 @@ def get_key_library() -> KeyLibrary | None:
     return _key_library
 
 
+def strip_embedded_quotes(value: str) -> str:
+    """
+    Strip embedded quotes from values returned by S3 Vectors retrieve API.
+
+    S3 Vectors JSON-encodes STRING_LIST values when storing, so retrieve returns
+    strings like '"test-document.docx"' with literal quote characters. This
+    function strips those embedded quotes.
+
+    Args:
+        value: String value that may have embedded quotes.
+
+    Returns:
+        String with leading/trailing quotes stripped.
+    """
+    if value and len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        return value[1:-1]
+    return value
+
+
 def infer_data_type(value: Any) -> str:
     """
     Infer the data type of a metadata value.
@@ -132,10 +151,20 @@ def analyze_metadata_fields(metadata_list: list[dict[str, Any]]) -> dict[str, di
             field_stats[key]["count"] += 1
 
             # Collect sample values (up to MAX_SAMPLE_VALUES)
+            # Note: S3 Vectors returns STRING_LIST values with embedded quotes
+            # e.g., '"test-document.docx"' - we strip these for clean display
             if len(field_stats[key]["sample_values"]) < MAX_SAMPLE_VALUES:
-                # Convert value to string for storage
-                str_value = str(value)[:100]  # Truncate long values
-                field_stats[key]["sample_values"].add(str_value)
+                if isinstance(value, list):
+                    for item in value:
+                        if len(field_stats[key]["sample_values"]) >= MAX_SAMPLE_VALUES:
+                            break
+                        str_value = strip_embedded_quotes(str(item))[:100]
+                        if str_value:
+                            field_stats[key]["sample_values"].add(str_value)
+                else:
+                    str_value = strip_embedded_quotes(str(value))[:100]
+                    if str_value:
+                        field_stats[key]["sample_values"].add(str_value)
 
     # Calculate occurrence rates and convert sets to lists
     for _key, stats in field_stats.items():

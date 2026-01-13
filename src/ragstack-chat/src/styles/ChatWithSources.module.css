@@ -654,3 +654,116 @@
 .skipLink:focus {
   top: 0;
 }
+
+/* ============================================================================
+   MEDIA SOURCE STYLES
+   ============================================================================ */
+
+.mediaHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  margin-bottom: var(--chat-spacing-xs);
+  flex-wrap: wrap;
+}
+
+.mediaIcon {
+  font-size: var(--chat-font-size-lg);
+  line-height: 1;
+}
+
+.timestampButton {
+  padding: var(--chat-spacing-xs) var(--chat-spacing-sm);
+  background-color: var(--chat-color-source-accent);
+  color: white;
+  border: none;
+  border-radius: var(--chat-radius-md);
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--chat-transition-fast);
+  font-family: var(--chat-font-family);
+}
+
+.timestampButton:hover {
+  background-color: #0861b8;
+}
+
+.timestampButton:active {
+  background-color: #065099;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px var(--chat-spacing-sm);
+  border-radius: var(--chat-radius-sm);
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badgeBlue {
+  background-color: rgba(9, 114, 211, 0.15);
+  color: var(--chat-color-source-accent);
+}
+
+.badgeGray {
+  background-color: rgba(102, 102, 102, 0.15);
+  color: var(--chat-color-text-secondary);
+}
+
+.mediaPlayerContainer {
+  margin-top: var(--chat-spacing-sm);
+  padding: var(--chat-spacing-sm);
+  background-color: rgba(0, 0, 0, 0.03);
+  border-radius: var(--chat-radius-md);
+}
+
+.mediaPlayer {
+  width: 100%;
+  max-width: 400px;
+  max-height: 225px;
+  border-radius: var(--chat-radius-md);
+  background-color: #000;
+}
+
+.audioPlayer {
+  width: 100%;
+  max-width: 400px;
+  height: 40px;
+}
+
+.mediaError {
+  margin-top: var(--chat-spacing-sm);
+  padding: var(--chat-spacing-sm);
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--chat-radius-md);
+  color: #991b1b;
+  font-size: var(--chat-font-size-xs);
+}
+
+/* Dark mode media styles */
+@media (prefers-color-scheme: dark) {
+  .timestampButton {
+    background-color: #0972d3;
+  }
+
+  .timestampButton:hover {
+    background-color: #1086ed;
+  }
+
+  .badgeBlue {
+    background-color: rgba(9, 114, 211, 0.3);
+    color: #6bb3f5;
+  }
+
+  .badgeGray {
+    background-color: rgba(153, 153, 153, 0.3);
+    color: #cccccc;
+  }
+
+  .mediaPlayerContainer {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}

@@ -30,6 +30,45 @@ logger = logging.getLogger(__name__)
 MAX_SAMPLE_VALUES = 10
 DEFAULT_CACHE_TTL_SECONDS = 300  # 5 minutes
 
+# Default media metadata keys for video/audio content
+MEDIA_DEFAULT_KEYS = [
+    {
+        "key_name": "content_type",
+        "data_type": "string",
+        "sample_values": ["transcript", "visual"],
+    },
+    {
+        "key_name": "media_type",
+        "data_type": "string",
+        "sample_values": ["video", "audio"],
+    },
+    {
+        "key_name": "timestamp_start",
+        "data_type": "number",
+        "sample_values": [],
+    },
+    {
+        "key_name": "timestamp_end",
+        "data_type": "number",
+        "sample_values": [],
+    },
+    {
+        "key_name": "speaker",
+        "data_type": "string",
+        "sample_values": [],
+    },
+    {
+        "key_name": "segment_index",
+        "data_type": "number",
+        "sample_values": [],
+    },
+    {
+        "key_name": "duration_seconds",
+        "data_type": "number",
+        "sample_values": [],
+    },
+]
+
 
 class KeyLibrary:
     """
@@ -355,6 +394,52 @@ class KeyLibrary:
         except ClientError:
             logger.exception("Error getting library stats")
             raise
+
+    def seed_media_keys(self) -> None:
+        """
+        Seed default media metadata keys to the library.
+
+        Creates entries for content_type, media_type, timestamp_start,
+        timestamp_end, speaker, segment_index, and duration_seconds.
+        Uses upsert behavior so existing keys are not overwritten.
+        """
+        if not self._check_table_exists():
+            logger.warning("Cannot seed media keys: table does not exist")
+            return
+
+        now = datetime.now(UTC).isoformat()
+
+        for key_def in MEDIA_DEFAULT_KEYS:
+            key_name = key_def["key_name"]
+            data_type = key_def["data_type"]
+            sample_values = key_def.get("sample_values", [])
+
+            try:
+                self.table.update_item(
+                    Key={"key_name": key_name},
+                    UpdateExpression="""
+                        SET data_type = if_not_exists(data_type, :data_type),
+                            last_seen = :now,
+                            #status = if_not_exists(#status, :active),
+                            first_seen = if_not_exists(first_seen, :now),
+                            sample_values = if_not_exists(sample_values, :samples),
+                            occurrence_count = if_not_exists(occurrence_count, :zero)
+                    """,
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":data_type": data_type,
+                        ":now": now,
+                        ":active": "active",
+                        ":samples": sample_values,
+                        ":zero": 0,
+                    },
+                )
+                logger.debug(f"Seeded media key '{key_name}'")
+
+            except ClientError:
+                logger.warning(f"Failed to seed media key '{key_name}'")
+
+        logger.info(f"Seeded {len(MEDIA_DEFAULT_KEYS)} media keys to library")
 
     def check_key_similarity(
         self,

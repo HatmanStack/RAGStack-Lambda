@@ -471,3 +471,132 @@ class MetadataExtractor:
 
         text = "\n".join(context_parts)
         return self.extract_metadata(text, document_id, update_library)
+
+    def extract_media_metadata(
+        self,
+        transcript: str,
+        segments: list[dict[str, Any]],
+        technical_metadata: dict[str, Any],
+        document_id: str,
+        update_library: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Extract metadata from audio/video content.
+
+        Combines technical metadata with LLM-extracted content metadata
+        from the transcript. Returns technical metadata even if LLM fails.
+
+        Args:
+            transcript: Full transcript text.
+            segments: List of transcript segments with timestamps.
+            technical_metadata: Dictionary of technical metadata (duration, format, etc).
+            document_id: Document identifier.
+            update_library: Whether to update the key library.
+
+        Returns:
+            Combined metadata dictionary.
+        """
+        # Start with technical metadata
+        result = {**technical_metadata}
+
+        # Skip LLM extraction if no transcript
+        if not transcript or not transcript.strip():
+            logger.warning(f"No transcript for media {document_id}")
+            return result
+
+        try:
+            # Build media-specific prompt
+            prompt = self._build_media_extraction_prompt(transcript, segments)
+
+            # Get existing keys for context
+            existing_keys = []
+            if self.key_library:
+                try:
+                    existing_keys = self.key_library.get_active_keys()
+                except Exception as e:
+                    logger.warning(f"Failed to get existing keys: {e}")
+
+            # Build full prompt with existing keys
+            full_prompt = self._build_extraction_prompt(prompt, existing_keys)
+
+            # Media-specific system prompt
+            system_prompt = """You are a metadata extraction system for audio/video content.
+Extract structured metadata from the transcript to enable search and filtering.
+
+Focus on:
+- main_topic: Primary subject matter
+- content_type: Type of content (podcast, interview, lecture, conversation, etc.)
+- speakers: List of identified speakers
+- key_themes: Major themes discussed
+- sentiment: Overall tone (informative, entertaining, serious, casual, etc.)
+
+Return ONLY valid JSON with lowercase values. No explanations."""
+
+            # Invoke model
+            response = self.bedrock_client.invoke_model(
+                model_id=self.model_id,
+                system_prompt=system_prompt,
+                content=[{"text": full_prompt}],
+                temperature=0.0,
+                context="media_metadata_extraction",
+            )
+
+            # Parse response
+            response_text = self.bedrock_client.extract_text_from_response(response)
+            extracted = self._parse_response(response_text)
+            filtered = self._filter_metadata(extracted)
+
+            # Update key library
+            if update_library:
+                self._update_key_library(filtered)
+
+            # Merge with technical metadata
+            result.update(filtered)
+            logger.info(f"Extracted media metadata for {document_id}: {list(result.keys())}")
+
+        except Exception as e:
+            logger.warning(f"Failed to extract media metadata for {document_id}: {e}")
+            # Return technical metadata even if LLM extraction fails
+
+        return result
+
+    def _build_media_extraction_prompt(
+        self,
+        transcript: str,
+        segments: list[dict[str, Any]],
+    ) -> str:
+        """
+        Build extraction prompt for media content.
+
+        Args:
+            transcript: Full transcript text.
+            segments: List of transcript segments.
+
+        Returns:
+            Prompt string for extraction.
+        """
+        # Truncate long transcripts
+        max_length = 4000
+        if len(transcript) > max_length:
+            transcript = transcript[:max_length] + "\n[Transcript truncated...]"
+
+        # Build segment summary
+        segment_summary = ""
+        if segments:
+            num_segments = len(segments)
+            total_duration = max(s.get("timestamp_end", 0) for s in segments) if segments else 0
+            speakers = {s.get("speaker") for s in segments if s.get("speaker")}
+
+            segment_summary = f"""
+Segment Summary:
+- Total segments: {num_segments}
+- Duration: {total_duration} seconds
+- Speakers detected: {len(speakers)}
+"""
+
+        return f"""AUDIO/VIDEO TRANSCRIPT:
+{transcript}
+
+{segment_summary}
+
+Extract metadata from this media content."""

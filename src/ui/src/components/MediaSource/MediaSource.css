@@ -1,0 +1,10 @@
+.media-source {
+  border-left: 3px solid #0073bb;
+  padding-left: 12px;
+  margin: 4px 0;
+}
+
+.media-source-snippet {
+  font-style: italic;
+  line-height: 1.4;
+}

@@ -39,6 +39,7 @@ _sniffer = None
 # File type routing categories
 TEXT_TYPES = {"html", "txt", "csv", "json", "xml", "eml", "epub", "docx", "xlsx"}
 PASSTHROUGH_TYPES = {"markdown"}
+MEDIA_TYPES = {"video", "audio"}
 
 # Amount of content to read for sniffing (4KB)
 SNIFF_BYTES = 4096
@@ -76,12 +77,14 @@ def _get_routing_category(file_type: str) -> str:
         file_type: Detected file type from content sniffer.
 
     Returns:
-        Routing category: 'text', 'ocr', or 'passthrough'.
+        Routing category: 'text', 'media', 'ocr', or 'passthrough'.
     """
     if file_type in TEXT_TYPES:
         return "text"
     if file_type in PASSTHROUGH_TYPES:
         return "passthrough"
+    if file_type in MEDIA_TYPES:
+        return "media"
     # Default to OCR for unknown types (PDFs, images, etc.)
     return "ocr"
 

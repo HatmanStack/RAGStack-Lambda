@@ -48,6 +48,11 @@
         },
         {
           "Variable": "$.fileType",
+          "StringEquals": "media",
+          "Next": "ProcessMedia"
+        },
+        {
+          "Variable": "$.fileType",
           "StringEquals": "passthrough",
           "Next": "ProcessDocumentSingle"
         }
@@ -71,6 +76,35 @@
           ],
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ProcessingFailed"
+        }
+      ],
+      "Next": "IngestToKnowledgeBase"
+    },
+
+    "ProcessMedia": {
+      "Type": "Task",
+      "Resource": "${ProcessMediaFunctionArn}",
+      "Comment": "Process video/audio files through AWS Transcribe",
+      "TimeoutSeconds": 960,
+      "ResultPath": "$.processResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed",
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
           "BackoffRate": 2.0
         }
       ],

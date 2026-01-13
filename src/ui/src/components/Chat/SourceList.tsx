@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, ExpandableSection, Link, SpaceBetween, Icon } from '@cloudscape-design/components';
 import { ImageSource } from './ImageSource';
+import { MediaSource } from '../MediaSource';
 
 export function SourceList({ sources }) {
   // Early return if no sources
@@ -16,11 +17,13 @@ export function SourceList({ sources }) {
       <Box variant="small">
         {sources.map((source, index) => (
           <Box
-            key={`${source.documentId || source.title}-${source.pageNumber ?? 'no-page'}-${index}`}
+            key={`${source.documentId || source.title}-${source.pageNumber ?? 'no-page'}-${source.timestampStart ?? ''}-${index}`}
             padding={{ bottom: 's' }}
           >
-            {/* For image sources, use ImageSource component */}
-            {source.isImage ? (
+            {/* Route to appropriate source component based on type */}
+            {source.isMedia ? (
+              <MediaSource source={source} />
+            ) : source.isImage ? (
               <ImageSource source={source} />
             ) : (
               <>

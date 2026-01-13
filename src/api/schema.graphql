@@ -308,10 +308,22 @@ type Source @aws_iam @aws_api_key @aws_cognito_user_pools {
   snippet: String
   documentUrl: String
   documentAccessAllowed: Boolean
+  # Scraped content fields
+  isScraped: Boolean
+  sourceUrl: String
   # Image-specific fields
   isImage: Boolean
   thumbnailUrl: String
   caption: String
+  # Media-specific fields (video/audio)
+  isMedia: Boolean
+  mediaType: String  # "video" | "audio"
+  contentType: String  # "transcript" | "visual"
+  timestampStart: Int  # seconds
+  timestampEnd: Int  # seconds
+  timestampDisplay: String  # "1:30-2:00" formatted
+  speaker: String  # speaker label from transcription
+  segmentIndex: Int  # segment number (0-indexed)
 }
 
 # Knowledge Base search result (raw vector search)

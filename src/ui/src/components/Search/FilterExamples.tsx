@@ -11,6 +11,7 @@ import {
   Popover,
   Icon,
   ExpandableSection,
+  CopyToClipboard,
 } from '@cloudscape-design/components';
 import type { FilterExample } from '../../hooks/useMetadata';
 
@@ -222,20 +223,30 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
               <Box>{selectedFilter.useCase}</Box>
             </Box>
             <Box>
-              <Box variant="awsui-key-label">Filter JSON</Box>
+              <SpaceBetween direction="horizontal" size="xs">
+                <Box variant="awsui-key-label">Filter JSON</Box>
+                <CopyToClipboard
+                  variant="icon"
+                  textToCopy={JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}
+                  copyButtonText="Copy"
+                  copySuccessText="Copied!"
+                  copyErrorText="Failed to copy"
+                />
+              </SpaceBetween>
               <pre
                 style={{
-                  backgroundColor: '#1d1f21',
-                  color: '#c5c8c6',
+                  backgroundColor: '#1a1a2e',
+                  color: '#e6e6e6',
                   padding: '12px',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   overflow: 'auto',
                   fontSize: '13px',
-                  fontFamily: 'monospace',
+                  fontFamily: "'Fira Code', 'Monaco', monospace",
+                  lineHeight: '1.5',
                   margin: '8px 0 0 0',
                 }}
               >
-                <code>{JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}</code>
+                {JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}
               </pre>
             </Box>
           </SpaceBetween>
