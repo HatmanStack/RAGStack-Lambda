@@ -1,6 +1,5 @@
 """Unit tests for TranscribeClient wrapper."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,7 +22,7 @@ class TestTranscribeClientInit:
     def test_accepts_custom_region(self, mock_boto3_client):
         """Test that custom region is passed to boto3."""
         mock_boto3_client.return_value = MagicMock()
-        client = TranscribeClient(region="us-west-2")
+        _client = TranscribeClient(region="us-west-2")
         mock_boto3_client.assert_called_with("transcribe", region_name="us-west-2")
 
 

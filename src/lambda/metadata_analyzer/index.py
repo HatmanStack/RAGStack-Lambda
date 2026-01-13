@@ -133,9 +133,16 @@ def analyze_metadata_fields(metadata_list: list[dict[str, Any]]) -> dict[str, di
 
             # Collect sample values (up to MAX_SAMPLE_VALUES)
             if len(field_stats[key]["sample_values"]) < MAX_SAMPLE_VALUES:
-                # Convert value to string for storage
-                str_value = str(value)[:100]  # Truncate long values
-                field_stats[key]["sample_values"].add(str_value)
+                # Handle lists by extracting individual values
+                if isinstance(value, list):
+                    for item in value:
+                        if len(field_stats[key]["sample_values"]) >= MAX_SAMPLE_VALUES:
+                            break
+                        str_value = str(item)[:100]
+                        field_stats[key]["sample_values"].add(str_value)
+                else:
+                    str_value = str(value)[:100]
+                    field_stats[key]["sample_values"].add(str_value)
 
     # Calculate occurrence rates and convert sets to lists
     for _key, stats in field_stats.items():
