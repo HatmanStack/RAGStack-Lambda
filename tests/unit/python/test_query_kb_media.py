@@ -30,7 +30,7 @@ class TestMediaSourceExtraction:
         mock_bedrock_runtime = MagicMock()
 
         # Setup mock clients
-        mock_boto3.client.side_effect = lambda service, **kwargs: {
+        mock_boto3.client.side_effect = lambda service, **_kwargs: {
             "s3": mock_s3,
             "dynamodb": mock_dynamodb_client,
             "bedrock-agent-runtime": mock_bedrock_agent,
@@ -63,6 +63,7 @@ class TestMediaSourceExtraction:
     def test_extract_media_source_with_transcript_content_type(self):
         """Test extraction of media source with transcript content_type."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -122,6 +123,7 @@ class TestMediaSourceExtraction:
     def test_extract_media_source_with_visual_content_type(self):
         """Test extraction of media source with visual content_type."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -176,6 +178,7 @@ class TestMediaSourceExtraction:
     def test_extract_audio_source_with_transcript(self):
         """Test extraction of audio source with transcript."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -231,6 +234,7 @@ class TestMediaSourceExtraction:
     def test_presigned_url_includes_timestamp_fragment(self):
         """Test that presigned URLs include #t= fragment for media sources."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -280,6 +284,7 @@ class TestMediaSourceExtraction:
     def test_document_source_not_marked_as_media(self):
         """Test that regular document sources are not marked as media."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -328,6 +333,7 @@ class TestMediaSourceExtraction:
     def test_backward_compatibility_with_existing_image_sources(self):
         """Test that existing image sources still work correctly."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -399,6 +405,7 @@ class TestTimestampFormatting:
     def test_format_timestamp_seconds_only(self):
         """Test formatting timestamps under 1 minute."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -410,6 +417,7 @@ class TestTimestampFormatting:
     def test_format_timestamp_minutes_and_seconds(self):
         """Test formatting timestamps over 1 minute."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -422,6 +430,7 @@ class TestTimestampFormatting:
     def test_format_timestamp_hours(self):
         """Test formatting timestamps over 1 hour."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -442,7 +451,7 @@ class TestMediaUrlGeneration:
         mock_conditions = MagicMock()
         mock_s3 = MagicMock()
 
-        mock_boto3.client.side_effect = lambda service, **kwargs: {
+        mock_boto3.client.side_effect = lambda service, **_kwargs: {
             "s3": mock_s3,
         }.get(service, MagicMock())
 
@@ -467,6 +476,7 @@ class TestMediaUrlGeneration:
     def test_generate_media_url_with_timestamps(self):
         """Test generating presigned URL with timestamp fragment."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -483,6 +493,7 @@ class TestMediaUrlGeneration:
     def test_generate_media_url_without_timestamps(self):
         """Test generating presigned URL without timestamps."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -499,6 +510,7 @@ class TestMediaUrlGeneration:
     def test_generate_media_url_with_start_only(self):
         """Test generating presigned URL with start timestamp only."""
         import importlib
+
         import index
 
         importlib.reload(index)
@@ -515,6 +527,7 @@ class TestMediaUrlGeneration:
     def test_generate_media_url_returns_none_on_error(self):
         """Test that URL generation returns None on error."""
         import importlib
+
         import index
 
         importlib.reload(index)
