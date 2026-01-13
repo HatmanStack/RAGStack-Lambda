@@ -13,6 +13,20 @@ export interface Source {
   documentUrl?: string | null;
   /** Whether document access is allowed by admin configuration (optional) */
   documentAccessAllowed?: boolean;
+  /** Whether this source is a media file (video/audio) */
+  isMedia?: boolean;
+  /** Media type - "video" or "audio" */
+  mediaType?: 'video' | 'audio';
+  /** Content type - "transcript" (speech) or "visual" (visual similarity) */
+  contentType?: 'transcript' | 'visual';
+  /** Start timestamp in seconds */
+  timestampStart?: number;
+  /** End timestamp in seconds */
+  timestampEnd?: number;
+  /** Formatted timestamp display (e.g., "1:30-2:00") */
+  timestampDisplay?: string;
+  /** Speaker label from transcription */
+  speaker?: string;
 }
 
 /**
