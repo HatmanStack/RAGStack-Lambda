@@ -9,19 +9,28 @@ import {
   StatusIndicator,
   Alert,
   Spinner,
-  Button,
-  ExpandableSection
+  Button
 } from '@cloudscape-design/components';
 import { useDocuments } from '../../hooks/useDocuments';
+import type { DocumentDetailProps, DocumentDetailData, StatusConfig } from './types';
 
-export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
+const STATUS_MAP: Record<string, StatusConfig> = {
+  'UPLOADED': { type: 'pending', label: 'Uploaded' },
+  'PROCESSING': { type: 'in-progress', label: 'Processing' },
+  'OCR_COMPLETE': { type: 'in-progress', label: 'OCR Complete' },
+  'EMBEDDING_COMPLETE': { type: 'in-progress', label: 'Embedding Complete' },
+  'INDEXED': { type: 'success', label: 'Indexed' },
+  'FAILED': { type: 'error', label: 'Failed' }
+};
+
+export const DocumentDetail = ({ documentId, visible, onDismiss }: DocumentDetailProps) => {
   const { fetchDocument } = useDocuments();
-  const [document, setDocument] = useState(null);
+  const [document, setDocument] = useState<DocumentDetailData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [previewContent, setPreviewContent] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const loadDocument = useCallback(async () => {
     setLoading(true);
@@ -30,10 +39,10 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
     setPreviewError(null);
 
     try {
-      const doc = await fetchDocument(documentId);
+      const doc = await fetchDocument(documentId) as DocumentDetailData;
       setDocument(doc);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {
       setLoading(false);
     }
@@ -54,7 +63,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
       // Limit preview to first 50KB to avoid UI slowdown
       setPreviewContent(text.length > 50000 ? text.slice(0, 50000) + '\n\n... (truncated)' : text);
     } catch (err) {
-      setPreviewError(err.message);
+      setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
     } finally {
       setPreviewLoading(false);
     }
@@ -68,16 +77,8 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
 
   if (!visible) return null;
 
-  const getStatusConfig = (status) => {
-    const statusMap = {
-      'UPLOADED': { type: 'pending', label: 'Uploaded' },
-      'PROCESSING': { type: 'in-progress', label: 'Processing' },
-      'OCR_COMPLETE': { type: 'in-progress', label: 'OCR Complete' },
-      'EMBEDDING_COMPLETE': { type: 'in-progress', label: 'Embedding Complete' },
-      'INDEXED': { type: 'success', label: 'Indexed' },
-      'FAILED': { type: 'error', label: 'Failed' }
-    };
-    return statusMap[status] || { type: 'info', label: status };
+  const getStatusConfig = (status: string): StatusConfig => {
+    return STATUS_MAP[status] || { type: 'info', label: status };
   };
 
   return (
@@ -114,7 +115,7 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
               <div>
                 <Box variant="awsui-key-label">Status</Box>
                 <div>
-                  <StatusIndicator type={getStatusConfig(document.status).type}>
+                  <StatusIndicator type={getStatusConfig(document.status).type as 'pending' | 'in-progress' | 'success' | 'error' | 'info'}>
                     {getStatusConfig(document.status).label}
                   </StatusIndicator>
                 </div>
@@ -133,11 +134,11 @@ export const DocumentDetail = ({ documentId, visible, onDismiss }) => {
               </div>
               <div>
                 <Box variant="awsui-key-label">Created</Box>
-                <div>{new Date(document.createdAt).toLocaleString()}</div>
+                <div>{document.createdAt ? new Date(document.createdAt).toLocaleString() : '-'}</div>
               </div>
               <div>
                 <Box variant="awsui-key-label">Updated</Box>
-                <div>{new Date(document.updatedAt).toLocaleString()}</div>
+                <div>{document.updatedAt ? new Date(document.updatedAt).toLocaleString() : '-'}</div>
               </div>
             </ColumnLayout>
           </Container>

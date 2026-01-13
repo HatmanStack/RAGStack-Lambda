@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import {
   Table,
   Header,
@@ -14,6 +14,8 @@ import {
   ProgressBar
 } from '@cloudscape-design/components';
 import { useCollection } from '@cloudscape-design/collection-hooks';
+import type { DocumentItem } from '../../hooks/useDocuments';
+import type { DocumentTableProps, TablePreferences } from './types';
 
 // Date range options for document retention display
 const DATE_RANGE_OPTIONS = [
@@ -24,14 +26,14 @@ const DATE_RANGE_OPTIONS = [
   { value: 'all', label: 'All time' }
 ];
 
-const DEFAULT_PREFERENCES = {
+const DEFAULT_PREFERENCES: TablePreferences = {
   pageSize: 20,
   visibleContent: ['filename', 'type', 'status', 'progress', 'createdAt'],
   dateRange: '7' // Default to 7 days
 };
 
 // Load preferences from localStorage
-const loadPreferences = () => {
+const loadPreferences = (): TablePreferences => {
   try {
     const saved = localStorage.getItem('documentTablePreferences');
     if (saved) {
@@ -44,7 +46,7 @@ const loadPreferences = () => {
 };
 
 // Save preferences to localStorage
-const savePreferences = (prefs) => {
+const savePreferences = (prefs: TablePreferences): void => {
   try {
     localStorage.setItem('documentTablePreferences', JSON.stringify(prefs));
   } catch {
@@ -53,7 +55,7 @@ const savePreferences = (prefs) => {
 };
 
 // Filter documents by date range
-const filterByDateRange = (items, dateRangeDays) => {
+const filterByDateRange = (items: DocumentItem[], dateRangeDays: string): DocumentItem[] => {
   if (dateRangeDays === 'all') return items;
 
   const days = parseInt(dateRangeDays, 10);
@@ -67,9 +69,16 @@ const filterByDateRange = (items, dateRangeDays) => {
   });
 };
 
-const getStatusIndicator = (status, type) => {
+type StatusIndicatorType = 'pending' | 'in-progress' | 'success' | 'error' | 'warning' | 'info' | 'stopped';
+
+interface StatusMapEntry {
+  type: StatusIndicatorType;
+  text: string;
+}
+
+const getStatusIndicator = (status: string, type: string) => {
   if (type === 'scrape') {
-    const scrapeStatusMap = {
+    const scrapeStatusMap: Record<string, StatusMapEntry> = {
       'PENDING': { type: 'pending', text: 'Pending' },
       'DISCOVERING': { type: 'in-progress', text: 'Discovering' },
       'PROCESSING': { type: 'in-progress', text: 'Processing' },
@@ -78,22 +87,22 @@ const getStatusIndicator = (status, type) => {
       'FAILED': { type: 'error', text: 'Failed' },
       'CANCELLED': { type: 'stopped', text: 'Cancelled' }
     };
-    const config = scrapeStatusMap[status] || { type: 'info', text: status };
+    const config = scrapeStatusMap[status] || { type: 'info' as StatusIndicatorType, text: status };
     return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
   }
 
   if (type === 'image') {
-    const imageStatusMap = {
+    const imageStatusMap: Record<string, StatusMapEntry> = {
       'PENDING': { type: 'pending', text: 'Pending' },
       'PROCESSING': { type: 'in-progress', text: 'Processing' },
       'INDEXED': { type: 'success', text: 'Indexed' },
       'FAILED': { type: 'error', text: 'Failed' }
     };
-    const config = imageStatusMap[status] || { type: 'info', text: status };
+    const config = imageStatusMap[status] || { type: 'info' as StatusIndicatorType, text: status };
     return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
   }
 
-  const statusMap = {
+  const statusMap: Record<string, StatusMapEntry> = {
     'UPLOADED': { type: 'pending', text: 'Uploaded' },
     'PROCESSING': { type: 'in-progress', text: 'Processing' },
     'OCR_COMPLETE': { type: 'in-progress', text: 'OCR Complete' },
@@ -102,11 +111,11 @@ const getStatusIndicator = (status, type) => {
     'FAILED': { type: 'error', text: 'Failed' }
   };
 
-  const config = statusMap[status] || { type: 'info', text: status };
+  const config = statusMap[status] || { type: 'info' as StatusIndicatorType, text: status };
   return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
 };
 
-const getTypeLabel = (type) => {
+const getTypeLabel = (type: string): string => {
   switch (type) {
     case 'scrape': return 'Website';
     case 'image': return 'Image';
@@ -114,9 +123,9 @@ const getTypeLabel = (type) => {
   }
 };
 
-export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument, onDelete }) => {
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [preferences, setPreferences] = useState(loadPreferences);
+export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument, onDelete }: DocumentTableProps) => {
+  const [selectedItems, setSelectedItems] = useState<DocumentItem[]>([]);
+  const [preferences, setPreferences] = useState<TablePreferences>(loadPreferences);
   const [deleting, setDeleting] = useState(false);
 
   // Save preferences when they change
@@ -165,7 +174,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       }
     });
 
-  const getTypeIcon = (type) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
       case 'scrape': return <Icon name="external" size="small" />;
       case 'image': return <Icon name="file" size="small" />;
@@ -197,7 +206,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
     {
       id: 'filename',
       header: 'Name',
-      cell: item => (
+      cell: (item: DocumentItem) => (
         <SpaceBetween direction="horizontal" size="xs">
           {getTypeIcon(item.type)}
           <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
@@ -213,22 +222,22 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
     {
       id: 'type',
       header: 'Type',
-      cell: item => getTypeLabel(item.type),
+      cell: (item: DocumentItem) => getTypeLabel(item.type),
       sortingField: 'type'
     },
     {
       id: 'status',
       header: 'Status',
-      cell: item => getStatusIndicator(item.status, item.type),
+      cell: (item: DocumentItem) => getStatusIndicator(item.status, item.type),
       sortingField: 'status'
     },
     {
       id: 'progress',
       header: 'Progress',
-      cell: item => {
+      cell: (item: DocumentItem) => {
         if (item.type === 'scrape' && ['DISCOVERING', 'PROCESSING'].includes(item.status)) {
-          const progress = item.totalPages > 0
-            ? Math.round((item.processedCount / item.totalPages) * 100)
+          const progress = item.totalPages && item.totalPages > 0
+            ? Math.round(((item.processedCount || 0) / item.totalPages) * 100)
             : 0;
           return (
             <ProgressBar
@@ -237,7 +246,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
             />
           );
         }
-        if (item.type === 'scrape' && item.totalPages > 0) {
+        if (item.type === 'scrape' && item.totalPages && item.totalPages > 0) {
           return `${item.processedCount || 0}/${item.totalPages} pages`;
         }
         return item.totalPages ? `${item.totalPages} pages` : '-';
@@ -246,7 +255,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
     {
       id: 'createdAt',
       header: 'Created',
-      cell: item => new Date(item.createdAt).toLocaleString(),
+      cell: (item: DocumentItem) => item.createdAt ? new Date(item.createdAt).toLocaleString() : '-',
       sortingField: 'createdAt'
     }
   ];
@@ -285,7 +294,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       loadingText="Loading items"
       selectionType="multi"
       selectedItems={selectedItems}
-      onSelectionChange={({ detail }) => setSelectedItems(detail.selectedItems)}
+      onSelectionChange={({ detail }) => setSelectedItems(detail.selectedItems as DocumentItem[])}
       filter={
         <TextFilter
           {...filterProps}
@@ -300,10 +309,10 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
           confirmLabel="Confirm"
           cancelLabel="Cancel"
           onConfirm={({ detail }) => {
-            const newPrefs = {
-              pageSize: detail.pageSize,
-              visibleContent: detail.visibleContent,
-              dateRange: detail.custom?.dateRange || preferences.dateRange
+            const newPrefs: TablePreferences = {
+              pageSize: detail.pageSize || DEFAULT_PREFERENCES.pageSize,
+              visibleContent: detail.visibleContent || DEFAULT_PREFERENCES.visibleContent,
+              dateRange: (detail.custom as { dateRange?: string })?.dateRange || preferences.dateRange
             };
             setPreferences(newPrefs);
             // Reset to first page when preferences change
@@ -345,8 +354,8 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
               <Box>
                 <Box variant="awsui-key-label">Show documents from</Box>
                 <select
-                  value={value?.dateRange || '7'}
-                  onChange={(e) => setValue({ ...value, dateRange: e.target.value })}
+                  value={(value as { dateRange?: string })?.dateRange || '7'}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setValue({ ...value, dateRange: e.target.value })}
                   style={{
                     width: '100%',
                     padding: '8px',
