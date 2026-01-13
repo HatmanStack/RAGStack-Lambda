@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, DragEvent, ChangeEvent } from 'react';
 import {
   Box,
   Button,
@@ -16,12 +16,9 @@ import { generateClient } from 'aws-amplify/api';
 import { ImagePreview } from './ImagePreview';
 import { CaptionInput } from './CaptionInput';
 import { useImage } from '../../hooks/useImage';
-import { ApiDocs } from '../common/ApiDocs';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import type { GqlResponse } from '../../types/graphql';
-
-const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
 const DEFAULT_IMAGE_CAPTION_PROMPT = 'You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.';
 
@@ -30,45 +27,7 @@ interface ConfigData {
   Custom: string;
 }
 
-// API Examples for autoProcess (single-step upload)
-const autoProcessQuery = `mutation CreateImageUploadUrl($filename: String!, $autoProcess: Boolean!, $userCaption: String) {
-  createImageUploadUrl(filename: $filename, autoProcess: $autoProcess, userCaption: $userCaption) {
-    uploadUrl
-    imageId
-    s3Uri
-    fields
-  }
-}`;
-
-const autoProcessJsExample = `// Single-step image upload with auto-captioning
-async function uploadImage(imageFile, userCaption = '') {
-  // 1. Get presigned URL with autoProcess enabled
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-    body: JSON.stringify({
-      query: \`${autoProcessQuery}\`,
-      variables: { filename: imageFile.name, autoProcess: true, userCaption: userCaption }
-    })
-  });
-  const { uploadUrl, imageId, fields } = (await res.json()).data.createImageUploadUrl;
-
-  // 2. Upload to S3 - processing starts automatically
-  const form = new FormData();
-  Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
-  form.append('file', imageFile);
-  await fetch(uploadUrl, { method: 'POST', body: form });
-
-  return imageId;  // Image will be processed and indexed automatically
-}`;
-
-const curlExample = `# Step 1: Get upload URL with autoProcess and optional userCaption
-curl -X POST 'ENDPOINT' \\
-  -H 'Content-Type: application/json' \\
-  -H 'x-api-key: API_KEY' \\
-  -d '{"query": "mutation { createImageUploadUrl(filename: \\"photo.jpg\\", autoProcess: true, userCaption: \\"My description\\") { uploadUrl, imageId, fields } }"}'
-
-# Step 2: Upload file to the presigned URL (use uploadUrl and fields from response)`;
+type UploadStatus = 'idle' | 'uploading' | 'uploaded' | 'submitting' | 'complete' | 'error';
 
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -84,15 +43,15 @@ export const ImageUpload = () => {
     submitImage
   } = useImage();
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [imageId, setImageId] = useState(null);
-  const [imageS3Uri, setImageS3Uri] = useState(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageId, setImageId] = useState<string | null>(null);
+  const [imageS3Uri, setImageS3Uri] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'submitting' | 'complete' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [userCaption, setUserCaption] = useState('');
   const [aiCaption, setAiCaption] = useState('');
-  const [localError, setLocalError] = useState(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   // Caption prompt configuration state
@@ -153,7 +112,7 @@ export const ImageUpload = () => {
     }
   }, [selectedFile]);
 
-  const validateFile = useCallback((file) => {
+  const validateFile = useCallback((file: File): string | null => {
     if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
       return 'Unsupported file type. Please select a PNG, JPG, GIF, or WebP image.';
     }
@@ -163,7 +122,7 @@ export const ImageUpload = () => {
     return null;
   }, []);
 
-  const handleFileSelect = useCallback(async (file) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     const validationError = validateFile(file);
     if (validationError) {
       setLocalError(validationError);
@@ -187,11 +146,11 @@ export const ImageUpload = () => {
       setUploadStatus('uploaded');
     } catch (err) {
       setUploadStatus('error');
-      setLocalError(err.message || 'Failed to upload image');
+      setLocalError(err instanceof Error ? err.message : 'Failed to upload image');
     }
   }, [validateFile, clearError, uploadImage]);
 
-  const handleDrag = useCallback((e) => {
+  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -201,7 +160,7 @@ export const ImageUpload = () => {
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -212,7 +171,7 @@ export const ImageUpload = () => {
     }
   }, [handleFileSelect]);
 
-  const handleFileInput = useCallback((e) => {
+  const handleFileInput = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       handleFileSelect(e.target.files[0]);
     }
@@ -226,7 +185,7 @@ export const ImageUpload = () => {
       const caption = await generateCaption(imageS3Uri);
       setAiCaption(caption);
     } catch (err) {
-      setLocalError(err.message || 'Failed to generate caption');
+      setLocalError(err instanceof Error ? err.message : 'Failed to generate caption');
     }
   }, [imageS3Uri, generateCaption]);
 
@@ -252,7 +211,7 @@ export const ImageUpload = () => {
       }, 2000);
     } catch (err) {
       setUploadStatus('error');
-      setLocalError(err.message || 'Failed to submit image');
+      setLocalError(err instanceof Error ? err.message : 'Failed to submit image');
     }
   }, [imageId, userCaption, aiCaption, submitImage]);
 
@@ -432,19 +391,6 @@ export const ImageUpload = () => {
             )}
           </SpaceBetween>
         </ExpandableSection>
-
-        {graphqlEndpoint && (
-          <ApiDocs
-            title="Image Upload API (Server-side)"
-            description="Use autoProcess: true for automatic AI captioning. The image will be processed and indexed after upload."
-            endpoint={graphqlEndpoint}
-            examples={[
-              { id: 'graphql', label: 'GraphQL', code: autoProcessQuery },
-              { id: 'js', label: 'JavaScript', code: autoProcessJsExample },
-              { id: 'curl', label: 'cURL', code: curlExample },
-            ]}
-          />
-        )}
       </SpaceBetween>
     </Container>
   );
