@@ -95,7 +95,7 @@ export interface ImageDetailProps {
 }
 
 export interface ScrapeJobDetailProps {
-  job: ScrapeJobDetailData | null;
+  job: ScrapeJobDetailData | Record<string, unknown> | null;
   visible: boolean;
   onDismiss: () => void;
   onCancel?: (jobId: string) => Promise<void>;

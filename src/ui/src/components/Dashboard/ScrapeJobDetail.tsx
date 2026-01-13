@@ -13,22 +13,60 @@ import {
   Table,
   Spinner
 } from '@cloudscape-design/components';
+import type { ScrapeJobDetailProps, ScrapeUrlItem, StatusConfig } from './types';
 
-const getStatusIndicator = (status) => {
-  const statusMap = {
-    PENDING: { type: 'pending', label: 'Pending' },
-    DISCOVERING: { type: 'in-progress', label: 'Discovering' },
-    PROCESSING: { type: 'in-progress', label: 'Processing' },
-    COMPLETED: { type: 'success', label: 'Completed' },
-    COMPLETED_WITH_ERRORS: { type: 'warning', label: 'Completed with errors' },
-    FAILED: { type: 'error', label: 'Failed' },
-    CANCELLED: { type: 'stopped', label: 'Cancelled' }
-  };
-  const config = statusMap[status] || { type: 'pending', label: status };
-  return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
+type StatusIndicatorType = 'pending' | 'in-progress' | 'success' | 'error' | 'warning' | 'stopped' | 'info';
+
+const JOB_STATUS_MAP: Record<string, StatusConfig> = {
+  PENDING: { type: 'pending', label: 'Pending' },
+  DISCOVERING: { type: 'in-progress', label: 'Discovering' },
+  PROCESSING: { type: 'in-progress', label: 'Processing' },
+  COMPLETED: { type: 'success', label: 'Completed' },
+  COMPLETED_WITH_ERRORS: { type: 'warning', label: 'Completed with errors' },
+  FAILED: { type: 'error', label: 'Failed' },
+  CANCELLED: { type: 'stopped', label: 'Cancelled' }
 };
 
-export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
+const PAGE_STATUS_MAP: Record<string, StatusConfig> = {
+  COMPLETED: { type: 'success', label: 'Completed' },
+  PENDING: { type: 'pending', label: 'Pending' },
+  PROCESSING: { type: 'in-progress', label: 'Processing' },
+  FAILED: { type: 'error', label: 'Failed' },
+  SKIPPED: { type: 'stopped', label: 'Skipped' }
+};
+
+const getStatusIndicator = (status: string) => {
+  const config = JOB_STATUS_MAP[status] || { type: 'pending', label: status };
+  return <StatusIndicator type={config.type as StatusIndicatorType}>{config.label}</StatusIndicator>;
+};
+
+interface ScrapeJobInfo {
+  jobId: string;
+  baseUrl: string;
+  title?: string;
+  status: string;
+  totalUrls?: number;
+  processedCount?: number;
+  failedCount?: number;
+  createdAt?: string;
+  failedUrls?: string[];
+  config?: {
+    maxPages?: number;
+    maxDepth?: number;
+    scope?: string;
+  };
+}
+
+interface ScrapePageItem {
+  url: string;
+  title?: string;
+  status?: string;
+  contentUrl?: string;
+  depth?: number;
+  error?: string;
+}
+
+export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }: ScrapeJobDetailProps) => {
   if (!visible) return null;
 
   // Show loading while job details are being fetched
@@ -47,7 +85,7 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
     );
   }
 
-  const { job: jobInfo, pages = [] } = job;
+  const { job: jobInfo, pages = [] } = job as { job?: ScrapeJobInfo; pages?: ScrapePageItem[] };
 
   if (!jobInfo) {
     return (
@@ -68,7 +106,7 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
     {
       id: 'url',
       header: 'Original Page',
-      cell: item => (
+      cell: (item: ScrapePageItem) => (
         <Link href={item.url} external>{item.title || item.url}</Link>
       ),
       width: 300
@@ -76,7 +114,7 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
     {
       id: 'content',
       header: 'Parsed Content',
-      cell: item => item.contentUrl ? (
+      cell: (item: ScrapePageItem) => item.contentUrl ? (
         <Link href={item.contentUrl} external>View parsed text</Link>
       ) : (
         <Box color="text-status-inactive">-</Box>
@@ -86,36 +124,29 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
     {
       id: 'status',
       header: 'Status',
-      cell: item => {
-        const status = item.status?.toUpperCase();
-        const statusConfig = {
-          COMPLETED: { type: 'success', label: 'Completed' },
-          PENDING: { type: 'pending', label: 'Pending' },
-          PROCESSING: { type: 'in-progress', label: 'Processing' },
-          FAILED: { type: 'error', label: 'Failed' },
-          SKIPPED: { type: 'stopped', label: 'Skipped' }
-        };
-        const config = statusConfig[status] || { type: 'info', label: item.status };
-        return <StatusIndicator type={config.type}>{config.label}</StatusIndicator>;
+      cell: (item: ScrapePageItem) => {
+        const status = item.status?.toUpperCase() || '';
+        const config = PAGE_STATUS_MAP[status] || { type: 'info', label: item.status || 'Unknown' };
+        return <StatusIndicator type={config.type as StatusIndicatorType}>{config.label}</StatusIndicator>;
       },
       width: 120
     },
     {
       id: 'depth',
       header: 'Depth',
-      cell: item => item.depth,
+      cell: (item: ScrapePageItem) => item.depth,
       width: 80
     },
     {
       id: 'error',
       header: 'Error',
-      cell: item => item.error || '-'
+      cell: (item: ScrapePageItem) => item.error || '-'
     }
   ];
 
   const isActive = ['PENDING', 'DISCOVERING', 'PROCESSING'].includes(jobInfo.status);
-  const progress = jobInfo.totalUrls > 0
-    ? Math.round((jobInfo.processedCount / jobInfo.totalUrls) * 100)
+  const progress = jobInfo.totalUrls && jobInfo.totalUrls > 0
+    ? Math.round(((jobInfo.processedCount || 0) / jobInfo.totalUrls) * 100)
     : 0;
 
   return (
@@ -125,7 +156,7 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
       header={
         <Header
           actions={
-            isActive && (
+            isActive && onCancel && (
               <Button onClick={() => onCancel(jobInfo.jobId)}>Cancel</Button>
             )
           }
@@ -147,7 +178,7 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }) => {
           </div>
           <div>
             <Box variant="awsui-key-label">Created</Box>
-            {new Date(jobInfo.createdAt).toLocaleString()}
+            {jobInfo.createdAt ? new Date(jobInfo.createdAt).toLocaleString() : 'N/A'}
           </div>
           <div>
             <Box variant="awsui-key-label">Configuration</Box>

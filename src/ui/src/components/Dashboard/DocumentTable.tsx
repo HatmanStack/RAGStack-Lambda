@@ -311,7 +311,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
           onConfirm={({ detail }) => {
             const newPrefs: TablePreferences = {
               pageSize: detail.pageSize || DEFAULT_PREFERENCES.pageSize,
-              visibleContent: detail.visibleContent || DEFAULT_PREFERENCES.visibleContent,
+              visibleContent: (detail.visibleContent as string[]) || DEFAULT_PREFERENCES.visibleContent,
               dateRange: (detail.custom as { dateRange?: string })?.dateRange || preferences.dateRange
             };
             setPreferences(newPrefs);

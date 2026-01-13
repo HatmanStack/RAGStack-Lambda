@@ -12,12 +12,22 @@ import {
   Button
 } from '@cloudscape-design/components';
 import { useImage } from '../../hooks/useImage';
+import type { ImageDetailProps, ImageDetailData, StatusConfig } from './types';
 
-export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
+type StatusIndicatorType = 'pending' | 'in-progress' | 'success' | 'error' | 'info';
+
+const STATUS_MAP: Record<string, StatusConfig> = {
+  'PENDING': { type: 'pending', label: 'Pending' },
+  'PROCESSING': { type: 'in-progress', label: 'Processing' },
+  'INDEXED': { type: 'success', label: 'Indexed' },
+  'FAILED': { type: 'error', label: 'Failed' }
+};
+
+export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDetailProps) => {
   const { getImage, deleteImage } = useImage();
-  const [image, setImage] = useState(null);
+  const [image, setImage] = useState<ImageDetailData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const loadImage = useCallback(async () => {
@@ -25,10 +35,10 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
     setError(null);
 
     try {
-      const img = await getImage(imageId);
+      const img = await getImage(imageId) as ImageDetailData;
       setImage(img);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Failed to load image');
     } finally {
       setLoading(false);
     }
@@ -47,7 +57,7 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
       }
       onDismiss();
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Failed to delete image');
     } finally {
       setDeleting(false);
     }
@@ -61,17 +71,11 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
 
   if (!visible) return null;
 
-  const getStatusConfig = (status) => {
-    const statusMap = {
-      'PENDING': { type: 'pending', label: 'Pending' },
-      'PROCESSING': { type: 'in-progress', label: 'Processing' },
-      'INDEXED': { type: 'success', label: 'Indexed' },
-      'FAILED': { type: 'error', label: 'Failed' }
-    };
-    return statusMap[status] || { type: 'info', label: status };
+  const getStatusConfig = (status: string): StatusConfig => {
+    return STATUS_MAP[status] || { type: 'info', label: status };
   };
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = (bytes?: number): string => {
     if (!bytes) return 'N/A';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -186,7 +190,7 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
               <div>
                 <Box variant="awsui-key-label">Status</Box>
                 <div>
-                  <StatusIndicator type={getStatusConfig(image.status).type}>
+                  <StatusIndicator type={getStatusConfig(image.status).type as StatusIndicatorType}>
                     {getStatusConfig(image.status).label}
                   </StatusIndicator>
                 </div>
@@ -201,7 +205,7 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }) => {
               </div>
               <div>
                 <Box variant="awsui-key-label">Created</Box>
-                <div>{new Date(image.createdAt).toLocaleString()}</div>
+                <div>{image.createdAt ? new Date(image.createdAt).toLocaleString() : 'N/A'}</div>
               </div>
             </ColumnLayout>
           </Container>
