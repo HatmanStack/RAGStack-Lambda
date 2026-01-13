@@ -377,3 +377,107 @@ def test_s3_vectors_filter_syntax_constant():
     assert "$gt" in S3_VECTORS_FILTER_SYNTAX
     assert "$and" in S3_VECTORS_FILTER_SYNTAX
     assert "$or" in S3_VECTORS_FILTER_SYNTAX
+
+
+# Test: Media Query Filter Patterns
+
+
+def test_media_filter_examples_constant():
+    """Test that MEDIA_FILTER_EXAMPLES constant exists."""
+    from ragstack_common.filter_generator import MEDIA_FILTER_EXAMPLES
+
+    assert isinstance(MEDIA_FILTER_EXAMPLES, str)
+    assert "content_type" in MEDIA_FILTER_EXAMPLES
+    assert "transcript" in MEDIA_FILTER_EXAMPLES
+    assert "visual" in MEDIA_FILTER_EXAMPLES
+
+
+def test_generate_filter_for_transcript_query(mock_bedrock_client, mock_key_library):
+    """Test filter generation for transcript-specific queries."""
+    # Add content_type to available keys
+    mock_key_library.get_active_keys.return_value = [
+        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+    ]
+
+    generator = FilterGenerator(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+    )
+
+    # Mock LLM response with content_type filter
+    filter_json = '{"$and": [{"content_type": {"$eq": "transcript"}}]}'
+    mock_bedrock_client.invoke_model.return_value = {"response": {}}
+    mock_bedrock_client.extract_text_from_response.return_value = filter_json
+
+    result = generator.generate_filter("What did John say in the interview?")
+
+    assert result is not None
+    assert "content_type" in str(result)
+
+
+def test_generate_filter_for_visual_query(mock_bedrock_client, mock_key_library):
+    """Test filter generation for visual segment queries."""
+    # Add content_type to available keys
+    mock_key_library.get_active_keys.return_value = [
+        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+    ]
+
+    generator = FilterGenerator(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+    )
+
+    # Mock LLM response with visual content_type filter
+    filter_json = '{"$and": [{"content_type": {"$eq": "visual"}}]}'
+    mock_bedrock_client.invoke_model.return_value = {"response": {}}
+    mock_bedrock_client.extract_text_from_response.return_value = filter_json
+
+    result = generator.generate_filter("Find similar scenes to this meeting")
+
+    assert result is not None
+
+
+def test_generate_filter_for_timestamp_query(mock_bedrock_client, mock_key_library):
+    """Test filter generation for timestamp-based queries."""
+    # Add timestamp keys to available keys
+    mock_key_library.get_active_keys.return_value = [
+        {"key_name": "timestamp_start", "data_type": "number", "sample_values": []},
+        {"key_name": "timestamp_end", "data_type": "number", "sample_values": []},
+    ]
+
+    generator = FilterGenerator(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+    )
+
+    # Mock LLM response with timestamp filters
+    filter_json = '{"$and": [{"timestamp_start": {"$gte": 300}}, {"timestamp_end": {"$lte": 600}}]}'
+    mock_bedrock_client.invoke_model.return_value = {"response": {}}
+    mock_bedrock_client.extract_text_from_response.return_value = filter_json
+
+    result = generator.generate_filter("What was discussed between 5 and 10 minutes?")
+
+    assert result is not None
+
+
+def test_generate_filter_includes_media_examples_in_prompt(mock_bedrock_client, mock_key_library):
+    """Test that media filter examples are included in the prompt."""
+    mock_key_library.get_active_keys.return_value = [
+        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+    ]
+
+    generator = FilterGenerator(
+        bedrock_client=mock_bedrock_client,
+        key_library=mock_key_library,
+    )
+
+    mock_bedrock_client.invoke_model.return_value = {"response": {}}
+    mock_bedrock_client.extract_text_from_response.return_value = "null"
+
+    generator.generate_filter("test query")
+
+    call_args = mock_bedrock_client.invoke_model.call_args
+    content = call_args.kwargs["content"][0]["text"]
+
+    # Media examples should be included
+    assert "content_type" in content
