@@ -137,7 +137,6 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
             loadingText="Loading filter examples..."
             items={examples}
             wrapLines={false}
-            stickyColumns={{ first: 2 }}
             columnDefinitions={[
             {
               id: 'enabled',

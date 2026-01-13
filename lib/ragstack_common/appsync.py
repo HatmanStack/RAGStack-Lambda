@@ -331,7 +331,13 @@ def publish_reindex_update(
             updatedAt: $updatedAt
         ) {
             status
+            totalDocuments
             processedCount
+            currentDocument
+            errorCount
+            errorMessages
+            newKnowledgeBaseId
+            updatedAt
         }
     }
     """

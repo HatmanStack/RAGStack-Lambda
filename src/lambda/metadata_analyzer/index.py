@@ -275,12 +275,14 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
+IMPORTANT: All filter values MUST be lowercase. Metadata is stored in lowercase.
+
 Generate exactly {num_examples} practical filter examples that users might find useful.
 Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter
-- filter: The actual filter JSON
+- filter: The actual filter JSON (all string values lowercase)
 
 Return ONLY a JSON array of filter examples, no explanation. Example format:
 [
@@ -289,6 +291,13 @@ Return ONLY a JSON array of filter examples, no explanation. Example format:
     "description": "Filter for PDF document type",
     "use_case": "Finding all PDF files in the knowledge base",
     "filter": {{"document_type": {{"$eq": "pdf"}}}}
+  }},
+  {{
+    "name": "Letters from John Smith",
+    "description": "Filter for letters mentioning John Smith",
+    "use_case": "Finding correspondence involving a specific person",
+    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}},
+      {{"people_mentioned": {{"$eq": "john smith"}}}}]}}
   }}
 ]"""
 

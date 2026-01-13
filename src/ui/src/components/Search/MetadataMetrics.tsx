@@ -10,6 +10,7 @@ import {
   SpaceBetween,
   ExpandableSection,
 } from '@cloudscape-design/components';
+import { useCollection } from '@cloudscape-design/collection-hooks';
 import type { MetadataKeyStats } from '../../hooks/useMetadata';
 
 interface MetadataMetricsProps {
@@ -51,6 +52,15 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
   loading,
   error,
 }) => {
+  const { items, collectionProps } = useCollection(stats, {
+    sorting: {
+      defaultState: {
+        sortingColumn: { sortingField: 'occurrenceCount' },
+        isDescending: true,
+      },
+    },
+  });
+
   if (error) {
     return (
       <Container
@@ -92,63 +102,66 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
 
         <div className="table-scroll-container">
           <Table
+            {...collectionProps}
             loading={loading}
             loadingText="Loading metadata keys..."
-            items={stats}
+            items={items}
             wrapLines={false}
-            stickyColumns={{ first: 1 }}
             columnDefinitions={[
-            {
-              id: 'keyName',
-              header: 'Key Name',
-              cell: (item) => <Box fontWeight="bold">{item.keyName}</Box>,
-              minWidth: 140,
-            },
-            {
-              id: 'dataType',
-              header: 'Type',
-              cell: (item) => getDataTypeBadge(item.dataType),
-              minWidth: 120,
-            },
-            {
-              id: 'occurrenceCount',
-              header: 'Occurrences',
-              cell: (item) => item.occurrenceCount.toLocaleString(),
-              width: 110,
-            },
-            {
-              id: 'status',
-              header: 'Status',
-              cell: (item) => (
-                <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
-                  {item.status}
-                </StatusIndicator>
-              ),
-              width: 100,
-            },
-            {
-              id: 'sampleValues',
-              header: 'Sample Values',
-              cell: (item) => (
-                <Box color="text-body-secondary">
-                  {item.sampleValues?.slice(0, 3).join(', ') || '-'}
-                  {item.sampleValues?.length > 3 && ` +${item.sampleValues.length - 3} more`}
+              {
+                id: 'keyName',
+                header: 'Key Name',
+                cell: (item) => <Box fontWeight="bold">{item.keyName}</Box>,
+                sortingField: 'keyName',
+                minWidth: 140,
+              },
+              {
+                id: 'dataType',
+                header: 'Type',
+                cell: (item) => getDataTypeBadge(item.dataType),
+                sortingField: 'dataType',
+                minWidth: 120,
+              },
+              {
+                id: 'occurrenceCount',
+                header: 'Occurrences',
+                cell: (item) => item.occurrenceCount.toLocaleString(),
+                sortingField: 'occurrenceCount',
+                width: 110,
+              },
+              {
+                id: 'status',
+                header: 'Status',
+                cell: (item) => (
+                  <StatusIndicator type={item.status === 'active' ? 'success' : 'stopped'}>
+                    {item.status}
+                  </StatusIndicator>
+                ),
+                sortingField: 'status',
+                width: 100,
+              },
+              {
+                id: 'sampleValues',
+                header: 'Sample Values',
+                cell: (item) => (
+                  <Box color="text-body-secondary">
+                    {item.sampleValues?.slice(0, 3).join(', ') || '-'}
+                    {item.sampleValues?.length > 3 && ` +${item.sampleValues.length - 3} more`}
+                  </Box>
+                ),
+                minWidth: 200,
+              },
+            ]}
+            empty={
+              <Box textAlign="center" color="inherit">
+                <b>No metadata keys</b>
+                <Box variant="p" color="inherit">
+                  Run the analyzer to discover metadata keys from your documents.
                 </Box>
-              ),
-              minWidth: 200,
-            },
-          ]}
-          empty={
-            <Box textAlign="center" color="inherit">
-              <b>No metadata keys</b>
-              <Box variant="p" color="inherit">
-                Run the analyzer to discover metadata keys from your documents.
               </Box>
-            </Box>
-          }
+            }
             variant="embedded"
             stripedRows
-            sortingDisabled
           />
         </div>
       </SpaceBetween>

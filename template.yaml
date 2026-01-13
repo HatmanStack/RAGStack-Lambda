@@ -1424,6 +1424,8 @@ Resources:
               Resource: !GetAtt KnowledgeBaseRole.Arn
             - Effect: Allow
               Action:
+                - s3vectors:CreateVectorBucket
+                - s3vectors:GetVectorBucket
                 - s3vectors:CreateIndex
                 - s3vectors:DeleteIndex
                 - s3vectors:GetIndex
@@ -1431,6 +1433,18 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
                 - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+            - Effect: Allow
+              Action:
+                - lambda:GetFunctionConfiguration
+                - lambda:UpdateFunctionConfiguration
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-query'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-search'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-reindex-kb'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-image'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-metadata-analyzer'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-zip'
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -1541,6 +1555,9 @@ Resources:
             - Effect: Allow
               Action: bedrock:GetInferenceProfile
               Resource: !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+            - Effect: Allow
+              Action: dynamodb:DescribeTable
+              Resource: !GetAtt MetadataKeyLibraryTable.Arn
 
   SearchKBFunction:
     Type: AWS::Serverless::Function
@@ -1584,6 +1601,7 @@ Resources:
               Action:
                 - dynamodb:GetItem
                 - dynamodb:Scan
+                - dynamodb:DescribeTable
               Resource:
                 - !GetAtt ConfigurationTable.Arn
                 - !GetAtt TrackingTable.Arn
@@ -2794,6 +2812,14 @@ Resources:
       LambdaConfig:
         LambdaFunctionArn: !GetAtt ApiKeyResolverFunction.Arn
 
+  # NONE data source for subscription mutations (passthrough)
+  NoneDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: NoneDataSource
+      Type: NONE
+
   # Resolvers
   GetDocumentResolver:
     Type: AWS::AppSync::Resolver
@@ -3062,6 +3088,71 @@ Resources:
       TypeName: Mutation
       FieldName: startReindex
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  # Subscription publish resolvers (NONE data source - just pass through for subscriptions)
+  PublishReindexUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: publishReindexUpdate
+      DataSourceName: !GetAtt NoneDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2018-05-29",
+          "payload": $util.toJson($context.arguments)
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  PublishDocumentUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: publishDocumentUpdate
+      DataSourceName: !GetAtt NoneDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2018-05-29",
+          "payload": $util.toJson($context.arguments)
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  PublishScrapeUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: publishScrapeUpdate
+      DataSourceName: !GetAtt NoneDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2018-05-29",
+          "payload": $util.toJson($context.arguments)
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  PublishImageUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: publishImageUpdate
+      DataSourceName: !GetAtt NoneDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2018-05-29",
+          "payload": $util.toJson($context.arguments)
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
 
   # =========================================================================
   # Dead Letter Queue for Error Handling

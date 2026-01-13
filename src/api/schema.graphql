@@ -157,22 +157,26 @@ type Subscription {
   # Subscribe to document status updates
   onDocumentUpdate: DocumentUpdate
     @aws_subscribe(mutations: ["publishDocumentUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to scrape job status updates
   onScrapeUpdate: ScrapeUpdate
     @aws_subscribe(mutations: ["publishScrapeUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to image status updates
   onImageUpdate: ImageUpdate
     @aws_subscribe(mutations: ["publishImageUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to reindex progress updates
   onReindexUpdate: ReindexUpdate
     @aws_subscribe(mutations: ["publishReindexUpdate"])
+    @aws_cognito_user_pools
 }
 
 # Real-time document update payload
-type DocumentUpdate {
+type DocumentUpdate @aws_iam @aws_cognito_user_pools {
   documentId: ID!
   filename: String!
   status: DocumentStatus!
@@ -182,7 +186,7 @@ type DocumentUpdate {
 }
 
 # Real-time scrape update payload
-type ScrapeUpdate {
+type ScrapeUpdate @aws_iam @aws_cognito_user_pools {
   jobId: ID!
   baseUrl: String!
   title: String
@@ -194,7 +198,7 @@ type ScrapeUpdate {
 }
 
 # Real-time image update payload
-type ImageUpdate {
+type ImageUpdate @aws_iam @aws_cognito_user_pools {
   imageId: ID!
   filename: String!
   status: ImageStatus!
@@ -212,13 +216,14 @@ enum ReindexStatus {
   PENDING
   CREATING_KB
   PROCESSING
+  UPDATING_LAMBDAS
   DELETING_OLD_KB
   COMPLETED
   FAILED
 }
 
 # Real-time reindex progress update payload
-type ReindexUpdate {
+type ReindexUpdate @aws_iam @aws_cognito_user_pools {
   status: ReindexStatus!
   totalDocuments: Int!
   processedCount: Int!

@@ -37,7 +37,7 @@ RESERVED_KEYS = frozenset(
 )
 
 # Maximum number of metadata fields to extract
-DEFAULT_MAX_KEYS = 8
+DEFAULT_MAX_KEYS = 20
 
 # Maximum length for metadata values
 MAX_VALUE_LENGTH = 100
@@ -49,23 +49,45 @@ and extract structured metadata useful for searching and filtering.
 IMPORTANT RULES:
 1. Return ONLY valid JSON - no explanations or markdown
 2. Use snake_case for all key names (lowercase with underscores)
-3. Reuse existing keys when the content clearly matches them
-4. Keep values concise (under 100 characters)
-5. Extract 3-8 metadata fields per document
-6. Focus on factual, objective metadata (not subjective interpretations)
+3. ALL VALUES MUST BE LOWERCASE - this is critical for filtering
+4. Reuse existing keys when the content clearly matches them
+5. Keep values concise (under 100 characters per value)
+6. Extract 5-15 metadata fields per document
+7. Focus on factual, objective metadata (not subjective interpretations)
+8. Extract ACTUAL content (names, places, dates) not abstract descriptions
+9. For ARRAY FIELDS: output as JSON arrays with max 10 items
 
 SUGGESTED METADATA TYPES:
 - topic: Main subject/theme (e.g., "genealogy", "immigration", "military_service")
 - document_type: Type of document (e.g., "certificate", "letter", "census_record")
-- date_range: Time period covered (e.g., "1900-1920", "19th_century")
-- location: Geographic location mentioned (e.g., "New York", "Ireland")
+- year: Primary year referenced as 4-digit number (e.g., "1892", "1945")
+- decade: Decade of document (e.g., "1890s", "1920s")
+- country: Country mentioned (e.g., "united_states", "ireland", "germany")
+- state_province: State or province (e.g., "new_york", "california", "bavaria")
+- city: City mentioned (e.g., "chicago", "dublin", "hamburg")
 - source_category: Origin category (e.g., "government_record", "personal_document")
 - language: Document language (e.g., "english", "german")
-- people_mentioned: Number of people referenced (e.g., "single", "multiple", "family")
+- people_mentioned: ARRAY of full names (e.g., ["john smith"] or ["john smith", "mary jones"])
+- surnames: ARRAY of family names (e.g., ["smith"] or ["smith", "jones"])
+- author: Document author if known (e.g., "john smith", "us census bureau")
+
+EXAMPLES:
+
+Input: "Letter from James Wilson to his daughter Sarah Wilson, dated March 15, 1892, \
+discussing the family farm in County Cork, Ireland."
+Output: {"document_type": "letter", "year": "1892", \
+"people_mentioned": ["james wilson", "sarah wilson"], "surnames": ["wilson"], \
+"country": "ireland", "topic": "family_correspondence"}
+
+Input: "1920 US Census record for the O'Brien household in Chicago, Illinois showing \
+Patrick O'Brien (head), Margaret O'Brien (wife), and three children."
+Output: {"document_type": "census_record", "year": "1920", "country": "united_states", \
+"state_province": "illinois", "city": "chicago", \
+"people_mentioned": ["patrick o'brien", "margaret o'brien"], \
+"surnames": ["o'brien"], "source_category": "government_record"}
 
 OUTPUT FORMAT:
-Return a JSON object with key-value pairs. Example:
-{"topic": "immigration", "document_type": "ship_manifest", "date_range": "1890-1910"}
+Return a JSON object with key-value pairs. Use arrays for multi-value fields. All values lowercase.
 
 DO NOT include any text outside the JSON object."""
 
@@ -81,10 +103,12 @@ RULES:
 3. If a field is not applicable to this document, omit it
 4. Keep values concise (under 100 characters)
 5. Use snake_case for all key names (lowercase with underscores)
+6. ALL VALUES MUST BE LOWERCASE - this is critical for filtering
+7. Extract ACTUAL content (names, places, dates) not abstract descriptions
 
 OUTPUT FORMAT:
 Return a JSON object with only the specified fields that are present in the document.
-Example: {{"topic": "immigration", "document_type": "letter"}}
+Example: {{"topic": "immigration", "document_type": "letter", "people_mentioned": "john smith"}}
 
 DO NOT include any text outside the JSON object."""
 
@@ -365,17 +389,29 @@ class MetadataExtractor:
                 logger.debug(f"Skipping key not in manual_keys: {normalized_key}")
                 continue
 
-            # Truncate long values
-            if isinstance(value, str) and len(value) > MAX_VALUE_LENGTH:
-                value = value[:MAX_VALUE_LENGTH]
-                logger.debug(f"Truncated value for key '{normalized_key}'")
-
-            # Convert lists to strings for filtering
+            # Handle different value types
             if isinstance(value, list):
-                value = ", ".join(str(v) for v in value[:5])  # Limit list items
-
-            # Skip empty values
-            if value is None or (isinstance(value, str) and not value.strip()):
+                # Preserve arrays - normalize elements to lowercase, limit to 10 items (AWS limit)
+                normalized_list = []
+                for item in value[:10]:
+                    if isinstance(item, str):
+                        item_str = item.lower().strip()
+                        if item_str and len(item_str) <= MAX_VALUE_LENGTH:
+                            normalized_list.append(item_str)
+                    elif item is not None:
+                        normalized_list.append(str(item).lower())
+                if not normalized_list:
+                    continue
+                value = normalized_list
+            elif isinstance(value, str):
+                # Truncate and normalize string values
+                if len(value) > MAX_VALUE_LENGTH:
+                    value = value[:MAX_VALUE_LENGTH]
+                    logger.debug(f"Truncated value for key '{normalized_key}'")
+                value = value.lower().strip()
+                if not value:
+                    continue
+            elif value is None:
                 continue
 
             filtered[normalized_key] = value

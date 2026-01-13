@@ -195,7 +195,9 @@ class KBMigrator:
                 )
                 return existing["index"]["indexArn"]
             except ClientError as e:
-                if e.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
+                error_code = e.response.get("Error", {}).get("Code", "")
+                # S3 Vectors returns NotFoundException, not ResourceNotFoundException
+                if error_code not in ("ResourceNotFoundException", "NotFoundException"):
                     raise
 
             # Create new index in vector bucket
@@ -271,7 +273,9 @@ class KBMigrator:
                 response = self.s3vectors.get_index(
                     vectorBucketName=self.vector_bucket, indexName=index_name
                 )
-                status = response["index"]["indexStatus"]
+                # S3 Vectors doesn't return indexStatus - if get_index succeeds, index is ready
+                # Check for status field (may not exist), default to READY if missing
+                status = response.get("index", {}).get("indexStatus", "READY")
 
                 if status == target_status:
                     logger.info(f"Index {index_name} reached status: {status}")
@@ -285,7 +289,9 @@ class KBMigrator:
 
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code")
-                if error_code == "ResourceNotFoundException" and target_status == "DELETED":
+                # S3 Vectors returns NotFoundException, not ResourceNotFoundException
+                not_found = error_code in ("ResourceNotFoundException", "NotFoundException")
+                if not_found and target_status == "DELETED":
                     return
                 raise
 
@@ -368,7 +374,8 @@ class KBMigrator:
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            if error_code == "ResourceNotFoundException":
+            # S3 Vectors returns NotFoundException, not ResourceNotFoundException
+            if error_code in ("ResourceNotFoundException", "NotFoundException"):
                 logger.info(f"Index already deleted: {index_arn}")
                 return
             logger.warning(f"Failed to delete index {index_arn}: {e}")

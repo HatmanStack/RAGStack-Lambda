@@ -36,6 +36,7 @@ from ragstack_common.appsync import publish_document_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
 from ragstack_common.storage import read_s3_text
 
 logger = logging.getLogger()
@@ -218,8 +219,11 @@ def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
     metadata_key = f"{key}.metadata.json"
     metadata_uri = f"s3://{bucket}/{metadata_key}"
 
+    # Normalize metadata for S3 Vectors (convert multi-value fields to arrays)
+    normalized_metadata = normalize_metadata_for_s3(metadata)
+
     # Build metadata JSON in Bedrock KB format
-    metadata_content = {"metadataAttributes": metadata}
+    metadata_content = {"metadataAttributes": normalized_metadata}
 
     # Write to S3
     s3_client.put_object(
@@ -332,11 +336,11 @@ def lambda_handler(event, context):
             llm_metadata = extract_document_metadata(output_s3_uri, document_id)
             llm_metadata_extracted = bool(llm_metadata)
 
-    # Add base metadata that's always included for filtering
-    # content_type distinguishes documents from images/web_pages
-    # Merge order ensures base_metadata wins (cannot be overwritten by LLM)
-    base_metadata = {"content_type": "document"}
-    llm_metadata = {**llm_metadata, **base_metadata}
+    # content_type is a system field - set based on processing pipeline, not LLM
+    # Scraped docs have authoritative content_type in existing_metadata (from scrape_process)
+    # Regular docs default to "document" (ignore any LLM-extracted content_type)
+    if not existing_metadata or "content_type" not in existing_metadata:
+        llm_metadata["content_type"] = "document"
 
     try:
         # Build the document object for ingestion
