@@ -32,18 +32,38 @@ S3 Vectors Filter Syntax:
 - Existence: $exists (true/false - check if field exists)
 - Logical operators: $and (all conditions must match), $or (any condition matches)
 
+ARRAY FIELDS (people_mentioned, surnames, locations, tags):
+- These fields store multiple values as arrays
+- Use $eq to match ANY element in the array
+- Example: {"people_mentioned": {"$eq": "jack"}} matches documents where "jack" is one of the people
+
 Example filters:
 1. Simple equality: {"topic": {"$eq": "genealogy"}}
-2. Multiple conditions: {"$and": [{"topic": {"$eq": "genealogy"}},
-   {"document_type": {"$eq": "pdf"}}]}
-3. In list: {"topic": {"$in": ["genealogy", "immigration"]}}
-4. Existence check: {"location": {"$exists": true}}
+2. Match person in array: {"people_mentioned": {"$eq": "jack wilson"}}
+3. Match surname in array: {"surnames": {"$eq": "wilson"}}
+4. Multiple conditions: {"$and": [{"topic": {"$eq": "genealogy"}},
+   {"document_type": {"$eq": "letter"}}]}
+5. Multiple possible values: {"topic": {"$in": ["genealogy", "immigration"]}}
+6. Existence check: {"location": {"$exists": true}}
 """
 
 # Valid filter operators
 VALID_OPERATORS = frozenset(
     {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin", "$exists", "$and", "$or"}
 )
+
+
+def _normalize_filter_value(value):
+    """
+    Normalize filter values to lowercase for consistent metadata matching.
+
+    Handles strings, lists of strings, and passes through other types unchanged.
+    """
+    if isinstance(value, str):
+        return value.lower()
+    if isinstance(value, list):
+        return [v.lower() if isinstance(v, str) else v for v in value]
+    return value
 
 # System prompt for filter generation
 FILTER_SYSTEM_PROMPT = f"""You are a metadata filter generator. Analyze user queries and generate
@@ -56,14 +76,18 @@ IMPORTANT RULES:
 2. Return "null" (without quotes) if the query has no clear filter intent
 3. Use only the available metadata keys provided
 4. Prefer simple filters over complex ones
-5. Use $eq for exact matches, $in for multiple possible values
-6. Do not guess or invent filter values not suggested by the query
+5. For ARRAY fields (people_mentioned, surnames, locations, tags): use $eq to match individual elements
+6. For non-array fields: use $eq for exact match, $in for multiple possible values
+7. Do not guess or invent filter values not suggested by the query
+8. ALL STRING VALUES MUST BE LOWERCASE - metadata is stored in lowercase
 
 OUTPUT FORMAT:
 Return a valid JSON filter object, or the literal string null if no filter applies.
 Examples of valid outputs:
 - {{"topic": {{"$eq": "genealogy"}}}}
-- {{"$and": [{{"document_type": {{"$eq": "pdf"}}}}, {{"topic": {{"$eq": "immigration"}}}}]}}
+- {{"people_mentioned": {{"$eq": "jack wilson"}}}} (matches if "jack wilson" is in the array)
+- {{"surnames": {{"$eq": "wilson"}}}} (matches if "wilson" is in the surnames array)
+- {{"$and": [{{"document_type": {{"$eq": "letter"}}}}, {{"surnames": {{"$eq": "wilson"}}}}]}}
 - null
 
 DO NOT include any text outside the JSON object or null."""
@@ -358,14 +382,15 @@ Return null if no filter applies."""
                     valid_ops = {}
                     for op, op_value in value.items():
                         if op in VALID_OPERATORS:
-                            valid_ops[op] = op_value
+                            # Normalize string values to lowercase for consistent filtering
+                            valid_ops[op] = _normalize_filter_value(op_value)
                         else:
                             logger.warning(f"Removing invalid operator: {op}")
                     if valid_ops:
                         result[key] = valid_ops
                 else:
                     # Direct value (implicit $eq)
-                    result[key] = {"$eq": value}
+                    result[key] = {"$eq": _normalize_filter_value(value)}
 
             return result if result else None
 

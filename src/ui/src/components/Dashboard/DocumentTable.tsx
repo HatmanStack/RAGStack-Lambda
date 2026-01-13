@@ -201,7 +201,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         <SpaceBetween direction="horizontal" size="xs">
           {getTypeIcon(item.type)}
           <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
-            <span style={{ wordBreak: 'break-word' }}>{item.filename}</span>
+            {item.filename}
           </Link>
         </SpaceBetween>
       ),

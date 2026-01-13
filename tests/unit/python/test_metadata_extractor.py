@@ -65,12 +65,15 @@ def sample_document_text():
 
 @pytest.fixture
 def sample_extraction_response():
-    """Sample LLM response with extracted metadata."""
+    """Sample LLM response with extracted metadata.
+
+    Note: Values are lowercase because _filter_metadata normalizes all string values.
+    """
     return {
         "topic": "immigration",
         "document_type": "ship_manifest",
         "date_range": "1900-1910",
-        "location": "Ellis Island",
+        "location": "ellis island",
         "source_category": "government_record",
     }
 
@@ -371,13 +374,14 @@ def test_filter_metadata_normalizes_key_names(extractor):
     assert "location_field" in result
 
 
-def test_filter_metadata_converts_lists(extractor):
-    """Test that list values are converted to strings."""
-    metadata = {"tags": ["a", "b", "c"]}
+def test_filter_metadata_preserves_lists(extractor):
+    """Test that list values are preserved as arrays with normalized elements."""
+    metadata = {"tags": ["A", "B", "C"]}
 
     result = extractor._filter_metadata(metadata)
 
-    assert result["tags"] == "a, b, c"
+    # Arrays are preserved, elements normalized to lowercase
+    assert result["tags"] == ["a", "b", "c"]
 
 
 def test_filter_metadata_skips_empty_values(extractor):
