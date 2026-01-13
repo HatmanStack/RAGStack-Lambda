@@ -386,7 +386,11 @@ def test_generate_filter_for_transcript_query(mock_bedrock_client, mock_key_libr
     """Test filter generation for transcript-specific queries."""
     # Add content_type to available keys
     mock_key_library.get_active_keys.return_value = [
-        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+        {
+            "key_name": "content_type",
+            "data_type": "string",
+            "sample_values": ["transcript", "visual"],
+        },
     ]
 
     generator = FilterGenerator(
@@ -409,7 +413,11 @@ def test_generate_filter_for_visual_query(mock_bedrock_client, mock_key_library)
     """Test filter generation for visual segment queries."""
     # Add content_type to available keys
     mock_key_library.get_active_keys.return_value = [
-        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+        {
+            "key_name": "content_type",
+            "data_type": "string",
+            "sample_values": ["transcript", "visual"],
+        },
     ]
 
     generator = FilterGenerator(
@@ -453,7 +461,11 @@ def test_generate_filter_for_timestamp_query(mock_bedrock_client, mock_key_libra
 def test_generate_filter_includes_media_keys_in_prompt(mock_bedrock_client, mock_key_library):
     """Test that media metadata keys are included in the prompt."""
     mock_key_library.get_active_keys.return_value = [
-        {"key_name": "content_type", "data_type": "string", "sample_values": ["transcript", "visual"]},
+        {
+            "key_name": "content_type",
+            "data_type": "string",
+            "sample_values": ["transcript", "visual"],
+        },
     ]
 
     generator = FilterGenerator(

@@ -63,9 +63,7 @@ def query_function_name(stack_outputs):
 class TestMediaSourceExtraction:
     """Integration tests for media source extraction in queries."""
 
-    def test_query_returns_media_fields_for_media_source(
-        self, lambda_client, query_function_name
-    ):
+    def test_query_returns_media_fields_for_media_source(self, lambda_client, query_function_name):
         """Test that queries about media content return proper media fields."""
         # This test requires actual media content in the knowledge base
         # It verifies the complete flow works end-to-end
@@ -108,9 +106,7 @@ class TestMediaSourceExtraction:
                 if source.get("timestampDisplay"):
                     assert ":" in source["timestampDisplay"]
 
-    def test_document_url_includes_timestamp_fragment(
-        self, lambda_client, query_function_name
-    ):
+    def test_document_url_includes_timestamp_fragment(self, lambda_client, query_function_name):
         """Test that media source URLs include timestamp fragments."""
         event = {
             "arguments": {
@@ -129,18 +125,19 @@ class TestMediaSourceExtraction:
         sources = result.get("sources", [])
 
         for source in sources:
-            if source.get("isMedia") and source.get("documentUrl"):
-                # If timestamps exist, URL should have fragment
-                if source.get("timestampStart") is not None:
-                    assert "#t=" in source["documentUrl"]
+            # If media source with URL and timestamps, URL should have fragment
+            if (
+                source.get("isMedia")
+                and source.get("documentUrl")
+                and source.get("timestampStart") is not None
+            ):
+                assert "#t=" in source["documentUrl"]
 
 
 class TestMediaSourceBackwardsCompatibility:
     """Ensure existing document/image sources still work correctly."""
 
-    def test_regular_document_sources_unchanged(
-        self, lambda_client, query_function_name
-    ):
+    def test_regular_document_sources_unchanged(self, lambda_client, query_function_name):
         """Test that regular document queries still work."""
         event = {
             "arguments": {

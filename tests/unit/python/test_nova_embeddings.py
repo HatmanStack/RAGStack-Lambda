@@ -163,9 +163,7 @@ class TestEmbedFromS3:
         }
         # Also mock S3 client for getting object
         mock_s3_client = MagicMock()
-        mock_s3_client.get_object.return_value = {
-            "Body": MagicMock(read=lambda: b"video content")
-        }
+        mock_s3_client.get_object.return_value = {"Body": MagicMock(read=lambda: b"video content")}
 
         def client_factory(service_name, **kwargs):
             if service_name == "bedrock-runtime":
@@ -213,8 +211,7 @@ class TestErrorHandling:
         """Test error handling for API failures."""
         mock_client = MagicMock()
         mock_client.invoke_model.side_effect = ClientError(
-            {"Error": {"Code": "ValidationException", "Message": "Invalid input"}},
-            "InvokeModel"
+            {"Error": {"Code": "ValidationException", "Message": "Invalid input"}}, "InvokeModel"
         )
         mock_boto3_client.return_value = mock_client
 
@@ -255,9 +252,9 @@ class TestRetryLogic:
         mock_client.invoke_model.side_effect = [
             ClientError(
                 {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}},
-                "InvokeModel"
+                "InvokeModel",
             ),
-            {"body": MagicMock(read=lambda: json.dumps(mock_response).encode())}
+            {"body": MagicMock(read=lambda: json.dumps(mock_response).encode())},
         ]
         mock_boto3_client.return_value = mock_client
 

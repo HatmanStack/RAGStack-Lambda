@@ -17,11 +17,7 @@ import pytest
 def load_process_media_module():
     """Load the process_media index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src"
-        / "lambda"
-        / "process_media"
-        / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "process_media" / "index.py"
     ).resolve()
 
     spec = importlib.util.spec_from_file_location("process_media_index", str(module_path))

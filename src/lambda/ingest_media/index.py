@@ -320,9 +320,7 @@ def lambda_handler(event, context):
         tracking_table.update_item(
             Key={"document_id": document_id},
             UpdateExpression=(
-                "SET #status = :status, "
-                "updated_at = :updated_at, "
-                "extracted_metadata = :metadata"
+                "SET #status = :status, updated_at = :updated_at, extracted_metadata = :metadata"
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
@@ -359,9 +357,7 @@ def lambda_handler(event, context):
             tracking_table.update_item(
                 Key={"document_id": document_id},
                 UpdateExpression=(
-                    "SET #status = :status, "
-                    "error_message = :error, "
-                    "updated_at = :updated_at"
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
                 ),
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
@@ -391,9 +387,7 @@ def lambda_handler(event, context):
             tracking_table.update_item(
                 Key={"document_id": document_id},
                 UpdateExpression=(
-                    "SET #status = :status, "
-                    "error_message = :error, "
-                    "updated_at = :updated_at"
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
                 ),
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={

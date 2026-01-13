@@ -15,6 +15,7 @@ import logging
 import os
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -95,8 +96,10 @@ class VisualSegmenter:
         try:
             cmd = [
                 self.ffprobe_path,
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
                 input_path,
             ]
@@ -109,17 +112,13 @@ class VisualSegmenter:
             )
 
             if result.returncode != 0:
-                raise MediaProcessingError(
-                    f"ffprobe failed: {result.stderr}"
-                )
+                raise MediaProcessingError(f"ffprobe failed: {result.stderr}")
 
             data = json.loads(result.stdout)
             duration = float(data.get("format", {}).get("duration", 0))
 
             if duration <= 0:
-                raise MediaProcessingError(
-                    f"Invalid duration: {duration}"
-                )
+                raise MediaProcessingError(f"Invalid duration: {duration}")
 
             logger.info(f"Media duration: {duration}s")
             return duration
@@ -149,11 +148,13 @@ class VisualSegmenter:
         while current_time < total_duration:
             end_time = min(current_time + self.segment_duration, total_duration)
 
-            segments.append({
-                "segment_index": index,
-                "timestamp_start": int(current_time),
-                "timestamp_end": int(end_time) if end_time == total_duration else int(end_time),
-            })
+            segments.append(
+                {
+                    "segment_index": index,
+                    "timestamp_start": int(current_time),
+                    "timestamp_end": int(end_time) if end_time == total_duration else int(end_time),
+                }
+            )
 
             current_time += self.segment_duration
             index += 1
@@ -190,24 +191,37 @@ class VisualSegmenter:
             cmd = [
                 self.ffmpeg_path,
                 "-y",  # Overwrite output
-                "-ss", str(start_time),  # Seek to start time
-                "-i", input_path,  # Input file
-                "-t", str(duration),  # Duration
+                "-ss",
+                str(start_time),  # Seek to start time
+                "-i",
+                input_path,  # Input file
+                "-t",
+                str(duration),  # Duration
             ]
 
             # Add format-specific options
             if media_type == "video":
-                cmd.extend([
-                    "-c:v", "libx264",  # Video codec
-                    "-c:a", "aac",  # Audio codec
-                    "-preset", "fast",
-                    "-crf", "23",  # Quality setting
-                ])
+                cmd.extend(
+                    [
+                        "-c:v",
+                        "libx264",  # Video codec
+                        "-c:a",
+                        "aac",  # Audio codec
+                        "-preset",
+                        "fast",
+                        "-crf",
+                        "23",  # Quality setting
+                    ]
+                )
             else:
-                cmd.extend([
-                    "-c:a", "aac",  # Audio codec
-                    "-b:a", "128k",
-                ])
+                cmd.extend(
+                    [
+                        "-c:a",
+                        "aac",  # Audio codec
+                        "-b:a",
+                        "128k",
+                    ]
+                )
 
             cmd.append(output_path)
 
@@ -219,9 +233,7 @@ class VisualSegmenter:
             )
 
             if result.returncode != 0:
-                raise MediaProcessingError(
-                    f"ffmpeg extraction failed: {result.stderr}"
-                )
+                raise MediaProcessingError(f"ffmpeg extraction failed: {result.stderr}")
 
             logger.debug(f"Extracted segment: {output_path}")
             return output_path
@@ -250,7 +262,7 @@ class VisualSegmenter:
             MediaProcessingError: If extraction fails.
         """
         # Create output directory if needed
-        os.makedirs(output_dir, exist_ok=True)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Get duration and calculate segments
         duration = self.get_duration(input_path)
@@ -261,10 +273,7 @@ class VisualSegmenter:
 
         # Extract each segment
         for segment in segments:
-            output_path = os.path.join(
-                output_dir,
-                f"segment_{segment['segment_index']:03d}{ext}"
-            )
+            output_path = str(Path(output_dir) / f"segment_{segment['segment_index']:03d}{ext}")
 
             # Calculate actual duration for this segment
             seg_duration = segment["timestamp_end"] - segment["timestamp_start"]
@@ -307,16 +316,16 @@ class VisualSegmenter:
         input_bucket, input_key = parse_s3_uri(input_s3_uri)
 
         # Determine extension from input
-        ext = os.path.splitext(input_key)[1] or (".mp4" if media_type == "video" else ".mp3")
+        ext = Path(input_key).suffix or (".mp4" if media_type == "video" else ".mp3")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Download input file
-            local_input = os.path.join(tmpdir, f"input{ext}")
+            local_input = str(Path(tmpdir) / f"input{ext}")
             logger.info(f"Downloading {input_s3_uri} to {local_input}")
             self.s3_client.download_file(input_bucket, input_key, local_input)
 
             # Extract segments locally
-            segments_dir = os.path.join(tmpdir, "segments")
+            segments_dir = str(Path(tmpdir) / "segments")
             segments = self.extract_segments(
                 input_path=local_input,
                 output_dir=segments_dir,
@@ -328,7 +337,7 @@ class VisualSegmenter:
 
             for segment in segments:
                 local_path = segment["output_path"]
-                filename = os.path.basename(local_path)
+                filename = Path(local_path).name
                 s3_key = f"{output_prefix}{document_id}/visual_segments/{filename}".replace(
                     "//", "/"
                 )

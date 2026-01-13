@@ -1,7 +1,7 @@
 """Unit tests for VisualSegmenter."""
 
-import os
 import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -116,7 +116,7 @@ class TestExtractSegment:
         segmenter = VisualSegmenter()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "segment_000.mp4")
+            output_path = str(Path(tmpdir) / "segment_000.mp4")
             result = segmenter.extract_segment(
                 input_path="/tmp/video.mp4",
                 output_path=output_path,
@@ -147,7 +147,7 @@ class TestExtractSegment:
         segmenter = VisualSegmenter()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "segment_000.mp3")
+            output_path = str(Path(tmpdir) / "segment_000.mp3")
             result = segmenter.extract_segment(
                 input_path="/tmp/audio.mp3",
                 output_path=output_path,
@@ -172,7 +172,7 @@ class TestExtractSegment:
         from ragstack_common.exceptions import MediaProcessingError
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "segment_000.mp4")
+            output_path = str(Path(tmpdir) / "segment_000.mp4")
             with pytest.raises(MediaProcessingError):
                 segmenter.extract_segment(
                     input_path="/tmp/video.mp4",
@@ -225,14 +225,14 @@ class TestExtractSegments:
         segmenter = VisualSegmenter()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_dir = os.path.join(tmpdir, "new_dir", "segments")
+            output_dir = str(Path(tmpdir) / "new_dir" / "segments")
             segmenter.extract_segments(
                 input_path="/tmp/video.mp4",
                 output_dir=output_dir,
                 media_type="video",
             )
 
-            assert os.path.exists(output_dir)
+            assert Path(output_dir).exists()
 
 
 class TestExtractSegmentsToS3:

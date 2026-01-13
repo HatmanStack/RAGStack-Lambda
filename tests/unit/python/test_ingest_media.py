@@ -18,11 +18,7 @@ import pytest
 def load_ingest_media_module():
     """Load the ingest_media index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src"
-        / "lambda"
-        / "ingest_media"
-        / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "ingest_media" / "index.py"
     ).resolve()
 
     spec = importlib.util.spec_from_file_location("ingest_media_index", str(module_path))
@@ -262,9 +258,7 @@ class TestIngestMediaValidation:
 
     @patch("boto3.resource")
     @patch("boto3.client")
-    def test_handler_requires_document_id(
-        self, mock_boto_client, mock_boto_resource
-    ):
+    def test_handler_requires_document_id(self, mock_boto_client, mock_boto_resource):
         """Test that handler requires document_id."""
         event = {"output_s3_uri": "s3://bucket/key"}
 
@@ -275,9 +269,7 @@ class TestIngestMediaValidation:
 
     @patch("boto3.resource")
     @patch("boto3.client")
-    def test_handler_requires_output_s3_uri(
-        self, mock_boto_client, mock_boto_resource
-    ):
+    def test_handler_requires_output_s3_uri(self, mock_boto_client, mock_boto_resource):
         """Test that handler requires output_s3_uri."""
         event = {"document_id": "media-123"}
 

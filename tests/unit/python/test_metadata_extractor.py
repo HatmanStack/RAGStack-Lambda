@@ -693,18 +693,24 @@ def sample_technical_metadata():
 
 
 def test_extract_media_metadata_success(
-    extractor, mock_bedrock_client, mock_key_library,
-    sample_media_transcript, sample_media_segments, sample_technical_metadata
+    extractor,
+    mock_bedrock_client,
+    mock_key_library,
+    sample_media_transcript,
+    sample_media_segments,
+    sample_technical_metadata,
 ):
     """Test successful media metadata extraction."""
     import json
 
-    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
-        "main_topic": "technology",
-        "content_type": "podcast",
-        "speakers": ["john smith", "jane doe"],
-        "sentiment": "informative",
-    })
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {
+            "main_topic": "technology",
+            "content_type": "podcast",
+            "speakers": ["john smith", "jane doe"],
+            "sentiment": "informative",
+        }
+    )
 
     result = extractor.extract_media_metadata(
         transcript=sample_media_transcript,
@@ -718,15 +724,20 @@ def test_extract_media_metadata_success(
 
 
 def test_extract_media_metadata_includes_technical(
-    extractor, mock_bedrock_client,
-    sample_media_transcript, sample_media_segments, sample_technical_metadata
+    extractor,
+    mock_bedrock_client,
+    sample_media_transcript,
+    sample_media_segments,
+    sample_technical_metadata,
 ):
     """Test that technical metadata is included in result."""
     import json
 
-    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
-        "main_topic": "technology",
-    })
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {
+            "main_topic": "technology",
+        }
+    )
 
     result = extractor.extract_media_metadata(
         transcript=sample_media_transcript,
@@ -756,15 +767,20 @@ def test_extract_media_metadata_empty_transcript(
 
 
 def test_extract_media_metadata_prompt_context(
-    extractor, mock_bedrock_client,
-    sample_media_transcript, sample_media_segments, sample_technical_metadata
+    extractor,
+    mock_bedrock_client,
+    sample_media_transcript,
+    sample_media_segments,
+    sample_technical_metadata,
 ):
     """Test that media prompt includes transcript context."""
     import json
 
-    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
-        "main_topic": "technology",
-    })
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps(
+        {
+            "main_topic": "technology",
+        }
+    )
 
     extractor.extract_media_metadata(
         transcript=sample_media_transcript,
@@ -781,8 +797,11 @@ def test_extract_media_metadata_prompt_context(
 
 
 def test_extract_media_metadata_handles_llm_error(
-    extractor, mock_bedrock_client,
-    sample_media_transcript, sample_media_segments, sample_technical_metadata
+    extractor,
+    mock_bedrock_client,
+    sample_media_transcript,
+    sample_media_segments,
+    sample_technical_metadata,
 ):
     """Test graceful handling of LLM errors in media extraction."""
     mock_bedrock_client.invoke_model.side_effect = Exception("API error")

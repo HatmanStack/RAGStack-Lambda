@@ -91,7 +91,9 @@ class TestMediaSourceExtraction:
                     {
                         "content": {"text": "The speaker mentioned the project deadline."},
                         "location": {
-                            "s3Location": {"uri": "s3://test-bucket/content/media123/transcript.txt"}
+                            "s3Location": {
+                                "uri": "s3://test-bucket/content/media123/transcript.txt"
+                            }
                         },
                         "metadata": {
                             "content_type": "transcript",
@@ -203,7 +205,9 @@ class TestMediaSourceExtraction:
                     {
                         "content": {"text": "Today we discuss machine learning trends."},
                         "location": {
-                            "s3Location": {"uri": "s3://test-bucket/content/audio789/transcript.txt"}
+                            "s3Location": {
+                                "uri": "s3://test-bucket/content/audio789/transcript.txt"
+                            }
                         },
                         "metadata": {
                             "content_type": "transcript",
@@ -259,7 +263,9 @@ class TestMediaSourceExtraction:
                     {
                         "content": {"text": "Test content"},
                         "location": {
-                            "s3Location": {"uri": "s3://test-bucket/content/media123/transcript.txt"}
+                            "s3Location": {
+                                "uri": "s3://test-bucket/content/media123/transcript.txt"
+                            }
                         },
                         "metadata": {
                             "content_type": "transcript",

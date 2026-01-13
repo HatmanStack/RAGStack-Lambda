@@ -38,14 +38,16 @@ DEFAULT_INITIAL_BACKOFF = 1  # seconds
 DEFAULT_MAX_BACKOFF = 60  # seconds
 
 # Retryable error codes
-RETRYABLE_ERRORS = frozenset({
-    "ThrottlingException",
-    "ServiceQuotaExceededException",
-    "RequestLimitExceeded",
-    "TooManyRequestsException",
-    "ServiceUnavailableException",
-    "ModelErrorException",
-})
+RETRYABLE_ERRORS = frozenset(
+    {
+        "ThrottlingException",
+        "ServiceQuotaExceededException",
+        "RequestLimitExceeded",
+        "TooManyRequestsException",
+        "ServiceUnavailableException",
+        "ModelErrorException",
+    }
+)
 
 
 class NovaEmbeddingsClient:
@@ -295,6 +297,6 @@ class NovaEmbeddingsClient:
         Returns:
             Backoff time in seconds.
         """
-        backoff = min(self.max_backoff, self.initial_backoff * (2 ** retry_count))
+        backoff = min(self.max_backoff, self.initial_backoff * (2**retry_count))
         jitter = random.random() * 0.5  # 0-50% jitter
         return backoff * (1 + jitter)
