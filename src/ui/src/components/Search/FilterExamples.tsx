@@ -226,11 +226,11 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
               <SpaceBetween direction="horizontal" size="xs">
                 <Box variant="awsui-key-label">Filter JSON</Box>
                 <CopyToClipboard
-                  variant="inline"
+                  variant="icon"
                   textToCopy={JSON.stringify(parseFilter(selectedFilter.filter), null, 2)}
                   copyButtonText="Copy"
                   copySuccessText="Copied!"
-                  copyErrorText="Failed"
+                  copyErrorText="Failed to copy"
                 />
               </SpaceBetween>
               <pre
