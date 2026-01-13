@@ -1,4 +1,9 @@
-"""RAGStack MCP Server - Knowledge base tools for AI assistants."""
+"""RAGStack MCP Server - Knowledge base tools for AI assistants.
+
+Provides tools to search, chat, upload documents/media, and scrape websites
+into a RAGStack knowledge base. Supports documents, images, video, and audio
+files with automatic transcription and semantic search.
+"""
 
 import os
 import json
@@ -43,10 +48,14 @@ def _graphql_request(query: str, variables: dict | None = None) -> dict:
 @mcp.tool()
 def search_knowledge_base(query: str, max_results: int = 5) -> str:
     """
-    Search the RAGStack knowledge base for relevant documents.
+    Search the RAGStack knowledge base for relevant documents and media.
+
+    Searches across all indexed content including documents, images, and
+    video/audio transcripts. For media files, results include timestamp
+    information for the matching segment.
 
     Args:
-        query: The search query (e.g., "authentication best practices", "API rate limits")
+        query: The search query (e.g., "authentication best practices", "what was discussed in the meeting")
         max_results: Maximum number of results to return (1-100, default: 5)
 
     Returns:
@@ -121,6 +130,7 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
         Multiline string with:
         - AI-generated answer text
         - "Sources:" section listing cited documents with titles and URLs
+          (for video/audio sources, includes timestamps like "1:30-2:00")
         - "[Conversation ID: xxx]" footer for continuing the conversation
         - Returns "No answer generated." if the AI couldn't generate a response
 
@@ -422,12 +432,19 @@ def list_scrape_jobs(limit: int = 10) -> str:
 @mcp.tool()
 def upload_document_url(filename: str) -> str:
     """
-    Get a presigned URL to upload a document to the knowledge base.
+    Get a presigned URL to upload a document or media file to the knowledge base.
 
-    Supported file types: PDF, TXT, MD, HTML, DOC, DOCX, CSV, JSON, XML
+    Supported file types:
+    - Documents: PDF, TXT, MD, HTML, DOC, DOCX, CSV, JSON, XML, EML, EPUB, XLSX
+    - Images: JPG, PNG, GIF, WebP, AVIF, BMP, TIFF
+    - Video: MP4, WebM (transcribed via AWS Transcribe)
+    - Audio: MP3, WAV, M4A, OGG, FLAC (transcribed via AWS Transcribe)
+
+    Video/audio files are automatically transcribed and segmented into 30-second
+    chunks for semantic search. Sources include timestamps for playback.
 
     Args:
-        filename: Name of the file to upload with extension (e.g., "report.pdf", "notes.md").
+        filename: Name of the file to upload with extension (e.g., "report.pdf", "meeting.mp4").
             The filename is used to determine content type and for display in the knowledge base.
 
     Returns:
@@ -451,6 +468,12 @@ def upload_document_url(filename: str) -> str:
 
         # Get upload URL for markdown
         upload_document_url("api-documentation.md")
+
+        # Get upload URL for video (will be transcribed)
+        upload_document_url("team-meeting.mp4")
+
+        # Get upload URL for audio (will be transcribed)
+        upload_document_url("podcast-episode.mp3")
 
     Note:
         After getting the URL, use a tool like curl to upload:
@@ -799,6 +822,11 @@ def get_configuration() -> str:
     - ocr_backend: "textract" or "bedrock" for OCR
     - image_caption_prompt: Prompt for AI image captioning
 
+    **Media Processing (Video/Audio):**
+    - transcribe_language_code: Language for AWS Transcribe (e.g., "en-US")
+    - speaker_diarization_enabled: Whether to identify speakers
+    - media_segment_duration_seconds: Chunk size for transcripts (default: 30)
+
     Returns:
         Formatted configuration organized by category showing:
         - Setting name
@@ -888,6 +916,10 @@ def get_configuration() -> str:
         ],
         "Document Processing": [
             "ocr_backend", "bedrock_ocr_model_id", "image_caption_prompt"
+        ],
+        "Media Processing": [
+            "transcribe_language_code", "speaker_diarization_enabled",
+            "media_segment_duration_seconds"
         ],
         "Budget": [
             "budget_alert_enabled", "budget_alert_threshold"

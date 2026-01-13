@@ -1,6 +1,6 @@
 # RAGStack MCP Server
 
-MCP (Model Context Protocol) server for RAGStack knowledge bases. Enables AI assistants to search, chat, upload, and scrape your knowledge base.
+MCP (Model Context Protocol) server for RAGStack knowledge bases. Enables AI assistants to search, chat, upload documents/media, and scrape your knowledge base.
 
 ## Installation
 
@@ -175,11 +175,19 @@ List recent scrape jobs.
 
 ### upload_document_url
 
-Get a presigned URL to upload a document.
+Get a presigned URL to upload a document or media file.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `filename` | string | Yes | Name of the file (e.g., 'report.pdf') |
+| `filename` | string | Yes | Name of the file (e.g., 'report.pdf', 'meeting.mp4') |
+
+**Supported formats:**
+- Documents: PDF, DOCX, XLSX, HTML, TXT, CSV, JSON, XML, EML, EPUB, Markdown
+- Images: JPG, PNG, GIF, WebP, AVIF, BMP, TIFF
+- Video: MP4, WebM
+- Audio: MP3, WAV, M4A, OGG, FLAC
+
+Video/audio files are transcribed using AWS Transcribe and segmented for search.
 
 ### upload_image_url
 
@@ -224,6 +232,7 @@ Returns settings for:
 - **Query-Time Filtering:** Filter generation, multi-slice retrieval settings
 - **Public Access:** Which endpoints allow unauthenticated access
 - **Document Processing:** OCR backend, image caption prompt
+- **Media Processing:** Transcribe language, speaker diarization, segment duration
 - **Budget:** Alert thresholds
 
 **Note:** Read-only. To modify settings, use the admin dashboard (Cognito auth required).
@@ -285,14 +294,16 @@ Once configured, just ask your AI assistant naturally:
 **Search & Chat:**
 - "Search my knowledge base for authentication best practices"
 - "What does our documentation say about API rate limits?"
+- "What was discussed in the team meeting about deadlines?" (searches video/audio transcripts)
 
 **Web Scraping:**
 - "Scrape the React docs at react.dev/reference"
 - "Check the status of my scrape job"
 
-**Document & Image Upload:**
+**Document, Image & Media Upload:**
 - "Upload a new document called quarterly-report.pdf"
 - "Upload this image and generate a caption for it"
+- "Upload the meeting recording meeting-2024-01.mp4"
 
 **Metadata Analysis:**
 - "What metadata keys are available for filtering?"
@@ -305,6 +316,7 @@ Once configured, just ask your AI assistant naturally:
 - "What model is being used for chat?"
 - "Is multi-slice retrieval enabled?"
 - "What are my quota limits?"
+- "What language is configured for transcription?"
 
 ## Environment Variables
 
