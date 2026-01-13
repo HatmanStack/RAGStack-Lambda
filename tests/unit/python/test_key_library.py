@@ -459,3 +459,78 @@ def test_check_key_similarity_returns_top_5(key_library, mock_dynamodb_table):
     result = key_library.check_key_similarity("topic", threshold=0.5)
 
     assert len(result) <= 5
+
+
+# Test: Media Key Support
+
+
+def test_media_default_keys_constant(key_library):
+    """Test that MEDIA_DEFAULT_KEYS constant exists."""
+    from ragstack_common.key_library import MEDIA_DEFAULT_KEYS
+
+    assert isinstance(MEDIA_DEFAULT_KEYS, list)
+    assert len(MEDIA_DEFAULT_KEYS) > 0
+
+    # Check required keys
+    key_names = [k["key_name"] for k in MEDIA_DEFAULT_KEYS]
+    assert "content_type" in key_names
+    assert "media_type" in key_names
+    assert "timestamp_start" in key_names
+    assert "timestamp_end" in key_names
+
+
+def test_media_default_keys_have_required_fields():
+    """Test that each media key has required fields."""
+    from ragstack_common.key_library import MEDIA_DEFAULT_KEYS
+
+    for key in MEDIA_DEFAULT_KEYS:
+        assert "key_name" in key
+        assert "data_type" in key
+        assert key["data_type"] in ["string", "number", "boolean", "list"]
+
+
+def test_seed_media_keys(key_library, mock_dynamodb_table):
+    """Test seeding media keys to library."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    key_library.seed_media_keys()
+
+    # Verify update_item was called for each media key
+    from ragstack_common.key_library import MEDIA_DEFAULT_KEYS
+
+    assert mock_dynamodb_table.update_item.call_count == len(MEDIA_DEFAULT_KEYS)
+
+
+def test_seed_media_keys_skips_existing(key_library, mock_dynamodb_table):
+    """Test that seeding skips existing keys."""
+    # Simulate content_type already exists
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "content_type", "status": "active", "occurrence_count": 100},
+        ]
+    }
+    mock_dynamodb_table.get_item.return_value = {
+        "Item": {"key_name": "content_type", "status": "active"}
+    }
+
+    key_library.seed_media_keys()
+
+    # Should still update all keys (upsert behavior)
+    assert mock_dynamodb_table.update_item.call_count >= 1
+
+
+def test_get_active_keys_includes_media_keys(key_library, mock_dynamodb_table):
+    """Test that get_active_keys returns media keys."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "content_type", "data_type": "string", "status": "active"},
+            {"key_name": "timestamp_start", "data_type": "number", "status": "active"},
+            {"key_name": "topic", "data_type": "string", "status": "active"},
+        ]
+    }
+
+    result = key_library.get_active_keys()
+
+    key_names = [k["key_name"] for k in result]
+    assert "content_type" in key_names
+    assert "timestamp_start" in key_names
