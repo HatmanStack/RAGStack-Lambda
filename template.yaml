@@ -1025,6 +1025,49 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
+  ProcessMediaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-process-media'
+      CodeUri: src/lambda/process_media/
+      Handler: index.lambda_handler
+      Description: Process video/audio files through AWS Transcribe
+      Layers:
+        - !Ref RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 960  # 16 minutes to handle transcription polling
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          VECTOR_BUCKET: !Ref VectorBucket
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - S3CrudPolicy:
+            BucketName: !Ref VectorBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
+        - Statement:
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
+        - Statement:
+            - Effect: Allow
+              Action:
+                - transcribe:StartTranscriptionJob
+                - transcribe:GetTranscriptionJob
+                - transcribe:DeleteTranscriptionJob
+              Resource: '*'
+
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1894,6 +1937,7 @@ Resources:
                   - !GetAtt EnqueueBatchesFunction.Arn
                   - !GetAtt DetectFileTypeFunction.Arn
                   - !GetAtt ProcessTextFunction.Arn
+                  - !GetAtt ProcessMediaFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -1923,6 +1967,7 @@ Resources:
         EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
         DetectFileTypeFunctionArn: !GetAtt DetectFileTypeFunction.Arn
         ProcessTextFunctionArn: !GetAtt ProcessTextFunction.Arn
+        ProcessMediaFunctionArn: !GetAtt ProcessMediaFunction.Arn
       Role: !GetAtt StateMachineExecutionRole.Arn
       Logging:
         Level: ALL
