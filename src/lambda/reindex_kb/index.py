@@ -37,6 +37,7 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource("dynamodb")
 bedrock_agent = boto3.client("bedrock-agent")
 s3_client = boto3.client("s3")
+lambda_client = boto3.client("lambda")
 
 # Lazy-initialized singletons
 _key_library = None
@@ -597,16 +598,81 @@ def process_image_item(
     return processed_count + 1, error_count, error_messages
 
 
+def update_lambda_kb_env_vars(
+    stack_name: str, new_kb_id: str, new_data_source_id: str | None = None
+) -> list[str]:
+    """
+    Update KNOWLEDGE_BASE_ID and DATA_SOURCE_ID environment variables in Lambdas.
+
+    Args:
+        stack_name: The CloudFormation stack name (used as Lambda name prefix)
+        new_kb_id: The new Knowledge Base ID
+        new_data_source_id: The new Data Source ID (optional)
+
+    Returns:
+        List of error messages (empty if all updates succeeded)
+    """
+    # Lambdas that need env var updates
+    # All Lambdas with KNOWLEDGE_BASE_ID (some also have DATA_SOURCE_ID)
+    lambda_suffixes = [
+        "query",
+        "search",
+        "ingest",
+        "reindex-kb",
+        "process-image",
+        "metadata-analyzer",
+        "process-zip",
+    ]
+    errors = []
+
+    for suffix in lambda_suffixes:
+        function_name = f"{stack_name}-{suffix}"
+        try:
+            # Get current configuration
+            response = lambda_client.get_function_configuration(FunctionName=function_name)
+            current_env = response.get("Environment", {}).get("Variables", {})
+
+            updated = False
+
+            # Update KNOWLEDGE_BASE_ID if present
+            if "KNOWLEDGE_BASE_ID" in current_env:
+                current_env["KNOWLEDGE_BASE_ID"] = new_kb_id
+                updated = True
+
+            # Update DATA_SOURCE_ID if present and we have a new one
+            if new_data_source_id and "DATA_SOURCE_ID" in current_env:
+                current_env["DATA_SOURCE_ID"] = new_data_source_id
+                updated = True
+
+            if not updated:
+                logger.info(f"Lambda {function_name} has no KB env vars, skipping")
+                continue
+
+            lambda_client.update_function_configuration(
+                FunctionName=function_name,
+                Environment={"Variables": current_env},
+            )
+            logger.info(f"Updated {function_name} KB_ID={new_kb_id}, DS_ID={new_data_source_id}")
+
+        except Exception as e:
+            error_msg = f"Failed to update {function_name}: {str(e)[:100]}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+
+    return errors
+
+
 def handle_finalize(event: dict) -> dict:
     """
     Finalize the reindex operation.
 
-    1. Update configuration with new KB ID
+    1. Update Lambda environment variables with new KB ID and Data Source ID
     2. Delete old KB
     3. Publish completion status
     """
     old_kb_id = event.get("old_kb_id")
     new_kb_id = event["new_kb_id"]
+    new_data_source_id = event.get("new_data_source_id")
     total_documents = event["total_documents"]
     processed_count = event["processed_count"]
     error_count = event["error_count"]
@@ -617,6 +683,22 @@ def handle_finalize(event: dict) -> dict:
     stack_name = os.environ.get("STACK_NAME")
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
+
+    # Update Lambda environment variables with new KB ID and Data Source ID
+    # Do this BEFORE deleting old KB so queries keep working if update fails
+    publish_reindex_update(
+        graphql_endpoint,
+        status="UPDATING_LAMBDAS",
+        total_documents=total_documents,
+        processed_count=processed_count,
+        error_count=error_count,
+        new_knowledge_base_id=new_kb_id,
+    )
+
+    lambda_errors = update_lambda_kb_env_vars(stack_name, new_kb_id, new_data_source_id)
+    if lambda_errors:
+        error_messages.extend(lambda_errors)
+        logger.warning(f"Some Lambda updates failed: {lambda_errors}")
 
     # Publish deleting old KB status
     publish_reindex_update(
