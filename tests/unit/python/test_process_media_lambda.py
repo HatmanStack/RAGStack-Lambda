@@ -263,9 +263,8 @@ class TestProcessMediaErrorHandling:
             module, "ConfigurationManager", mock_config_manager_class
         ), patch.object(
             module, "publish_document_update", mock_publish
-        ):
-            with pytest.raises(TranscriptionError):
-                module.lambda_handler(sample_event, None)
+        ), pytest.raises(TranscriptionError):
+            module.lambda_handler(sample_event, None)
 
         # Verify status was updated to failed
         mock_table.update_item.assert_called()
