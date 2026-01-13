@@ -9,14 +9,26 @@ import { deleteImage as deleteImageMutation } from '../graphql/mutations/deleteI
 import { getImage as getImageQuery } from '../graphql/queries/getImage';
 import type { GqlResponse } from '../types/graphql';
 
+export interface ImageUpload {
+  id: string;
+  imageId: string;
+  s3Uri: string;
+  file: File;
+  filename: string;
+  status: 'uploading' | 'uploaded' | 'submitted' | 'error';
+  progress: number;
+  error: string | null;
+  [key: string]: unknown;
+}
+
 const client = generateClient();
 
 export const useImage = () => {
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState<ImageUpload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState(null);
-  const imagesRef = useRef([]);
+  const [error, setError] = useState<string | null>(null);
+  const imagesRef = useRef<ImageUpload[]>([]);
 
   // Keep ref in sync with state
   imagesRef.current = images;
@@ -29,7 +41,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createImageUploadUrl as any,
+        query: createImageUploadUrl,
         variables: { filename }
       }) as GqlResponse;
 
@@ -40,7 +52,7 @@ export const useImage = () => {
       return response.data.createImageUploadUrl as { imageId: string; s3Uri: string };
     } catch (err) {
       console.error('Failed to create upload URL:', err);
-      setError(err.message || 'Failed to create upload URL');
+      setError(err instanceof Error ? err.message : 'Failed to create upload URL');
       throw err;
     }
   }, []);
@@ -72,7 +84,7 @@ export const useImage = () => {
         data: file,
         options: {
           onProgress: ({ transferredBytes, totalBytes }) => {
-            const progress = Math.round((transferredBytes / totalBytes) * 100);
+            const progress = totalBytes ? Math.round((transferredBytes / totalBytes) * 100) : 0;
             setImages(prev => prev.map(img =>
               img.imageId === imageId ? { ...img, progress } : img
             ));
@@ -96,7 +108,7 @@ export const useImage = () => {
 
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(err.message || 'Failed to upload image');
+      setError(err instanceof Error ? err.message : 'Failed to upload image');
       throw err;
     } finally {
       setUploading(false);
@@ -109,7 +121,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: generateCaptionMutation as any,
+        query: generateCaptionMutation,
         variables: { imageS3Uri }
       }) as GqlResponse;
 
@@ -121,7 +133,7 @@ export const useImage = () => {
       return captionResult?.caption || '';
     } catch (err) {
       console.error('Caption generation failed:', err);
-      setError(err.message || 'Failed to generate caption');
+      setError(err instanceof Error ? err.message : 'Failed to generate caption');
       throw err;
     } finally {
       setGenerating(false);
@@ -133,7 +145,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: submitImageMutation as any,
+        query: submitImageMutation,
         variables: {
           input: {
             imageId,
@@ -159,7 +171,7 @@ export const useImage = () => {
       return submitResult;
     } catch (err) {
       console.error('Submit failed:', err);
-      setError(err.message || 'Failed to submit image');
+      setError(err instanceof Error ? err.message : 'Failed to submit image');
       throw err;
     }
   }, []);
@@ -169,7 +181,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteImageMutation as any,
+        query: deleteImageMutation,
         variables: { imageId }
       }) as GqlResponse;
 
@@ -182,7 +194,7 @@ export const useImage = () => {
       return false;
     } catch (err) {
       console.error('Delete failed:', err);
-      setError(err.message || 'Failed to delete image');
+      setError(err instanceof Error ? err.message : 'Failed to delete image');
       throw err;
     }
   }, []);
@@ -192,19 +204,19 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: getImageQuery as any,
+        query: getImageQuery,
         variables: { imageId }
       }) as GqlResponse;
 
       return response.data?.getImage;
     } catch (err) {
       console.error('Failed to get image:', err);
-      setError(err.message || 'Failed to get image');
+      setError(err instanceof Error ? err.message : 'Failed to get image');
       throw err;
     }
   }, []);
 
-  const removeImage = useCallback((imageId) => {
+  const removeImage = useCallback((imageId: string) => {
     setImages(prev => prev.filter(img => img.imageId !== imageId));
   }, []);
 
@@ -216,7 +228,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createZipUploadUrlMutation as any,
+        query: createZipUploadUrlMutation,
         variables: { generateCaptions }
       }) as GqlResponse;
 
@@ -227,12 +239,12 @@ export const useImage = () => {
       return response.data.createZipUploadUrl as { uploadId: string };
     } catch (err) {
       console.error('Failed to create ZIP upload URL:', err);
-      setError(err.message || 'Failed to create ZIP upload URL');
+      setError(err instanceof Error ? err.message : 'Failed to create ZIP upload URL');
       throw err;
     }
   }, []);
 
-  const uploadZip = useCallback(async (file, generateCaptions = false, onProgress) => {
+  const uploadZip = useCallback(async (file: File, generateCaptions = false, onProgress?: (progress: number) => void) => {
     setUploading(true);
     setError(null);
 
@@ -246,7 +258,7 @@ export const useImage = () => {
         data: file,
         options: {
           onProgress: ({ transferredBytes, totalBytes }) => {
-            const progress = Math.round((transferredBytes / totalBytes) * 100);
+            const progress = totalBytes ? Math.round((transferredBytes / totalBytes) * 100) : 0;
             if (onProgress) {
               onProgress(progress);
             }
@@ -260,7 +272,7 @@ export const useImage = () => {
 
     } catch (err) {
       console.error('ZIP upload failed:', err);
-      setError(err.message || 'Failed to upload ZIP');
+      setError(err instanceof Error ? err.message : 'Failed to upload ZIP');
       throw err;
     } finally {
       setUploading(false);
