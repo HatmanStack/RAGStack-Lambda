@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, KeyboardEvent } from 'react';
 import {
   Container,
   SpaceBetween,
@@ -12,6 +12,7 @@ import { generateClient } from 'aws-amplify/api';
 import { queryKnowledgeBase } from '../../graphql/queries/queryKnowledgeBase';
 import type { GqlResponse } from '../../types/graphql';
 import { MessageBubble } from './MessageBubble';
+import type { ChatMessage } from './types';
 import './ChatPanel.css';
 
 interface ChatResponse {
@@ -23,14 +24,14 @@ interface ChatResponse {
 
 export function ChatPanel() {
   // State management
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [sessionId, setSessionId] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   // Refs
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const client = useMemo(() => generateClient(), []);
 
   // Auto-scroll to bottom when messages change
@@ -48,7 +49,7 @@ export function ChatPanel() {
     }
 
     // Create user message object
-    const userMessageObj = {
+    const userMessageObj: ChatMessage = {
       type: 'user',
       content: userMessage,
       timestamp: new Date().toISOString()
@@ -82,7 +83,7 @@ export function ChatPanel() {
       }
 
       // Create AI message object
-      const aiMessageObj = {
+      const aiMessageObj: ChatMessage = {
         type: 'assistant',
         content: data?.answer || '',
         sources: data?.sources || [],
@@ -95,14 +96,14 @@ export function ChatPanel() {
 
     } catch (err) {
       console.error('[ChatPanel] Chat error:', err);
-      setError(`Failed to get response: ${err.message || 'Unknown error'}`);
+      setError(`Failed to get response: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   // Handle Enter key press
-  const handleKeyPress = (event) => {
+  const handleKeyPress = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSend();

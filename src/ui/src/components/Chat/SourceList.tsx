@@ -2,8 +2,13 @@ import React from 'react';
 import { Box, ExpandableSection, Link, SpaceBetween, Icon } from '@cloudscape-design/components';
 import { ImageSource } from './ImageSource';
 import { MediaSource } from '../MediaSource';
+import type { ChatSource } from './types';
 
-export function SourceList({ sources }) {
+interface SourceListProps {
+  sources: ChatSource[];
+}
+
+export function SourceList({ sources }: SourceListProps) {
   // Early return if no sources
   if (!sources || sources.length === 0) {
     return null;
