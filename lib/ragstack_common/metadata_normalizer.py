@@ -93,15 +93,26 @@ def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
 
         if isinstance(value, list):
             # Already a list - expand each item and flatten
+            # Use consistent normalization: str().lower().strip()
             expanded = set()
             for item in value:
+                if item is None:
+                    continue
                 if isinstance(item, str):
                     expanded.update(expand_to_searchable_array(item))
-                elif item is not None:
-                    expanded.add(str(item).lower())
+                else:
+                    # Preserve falsy values like 0 or False
+                    expanded.add(str(item).lower().strip())
             if expanded:
                 # Keep original items first, then additional expansions
-                original_items = [str(v).lower().strip() for v in value if v]
+                # Preserve falsy values (0, False) - only skip None and empty strings
+                original_items = []
+                for v in value:
+                    if v is None:
+                        continue
+                    s = str(v).lower().strip()
+                    if s:  # Skip empty strings after normalization
+                        original_items.append(s)
                 additional = sorted(expanded - set(original_items))
                 result = original_items + additional
                 normalized[key] = result[:MAX_ARRAY_ITEMS]

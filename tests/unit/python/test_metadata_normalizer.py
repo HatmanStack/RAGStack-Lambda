@@ -1,7 +1,5 @@
 """Tests for metadata_normalizer module."""
 
-import pytest
-
 from ragstack_common.metadata_normalizer import (
     MAX_ARRAY_ITEMS,
     expand_to_searchable_array,
@@ -105,6 +103,34 @@ class TestNormalizeMetadataForS3:
         metadata = {"topic": "genealogy", "empty": None}
         result = normalize_metadata_for_s3(metadata)
         assert "empty" not in result
+
+    def test_list_with_falsy_values_preserved(self):
+        """Falsy values (0, False) in lists are preserved, not dropped."""
+        metadata = {"counts": [0, 1, 2], "flags": [False, True, "active"]}
+        result = normalize_metadata_for_s3(metadata)
+
+        # 0 should be preserved as "0"
+        assert "counts" in result
+        assert "0" in result["counts"]
+        assert "1" in result["counts"]
+        assert "2" in result["counts"]
+
+        # False should be preserved as "false"
+        assert "flags" in result
+        assert "false" in result["flags"]
+        assert "true" in result["flags"]
+        assert "active" in result["flags"]
+
+    def test_list_with_none_excluded(self):
+        """None values in lists are excluded, but other values preserved."""
+        metadata = {"items": ["valid", None, "also valid", ""]}
+        result = normalize_metadata_for_s3(metadata)
+
+        assert "items" in result
+        assert "valid" in result["items"]
+        assert "also valid" in result["items"]
+        # Empty string should be excluded after normalization
+        # None should not appear
 
     def test_complex_metadata(self):
         """Full metadata object is normalized correctly."""

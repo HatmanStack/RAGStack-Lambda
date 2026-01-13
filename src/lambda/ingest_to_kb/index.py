@@ -336,11 +336,11 @@ def lambda_handler(event, context):
             llm_metadata = extract_document_metadata(output_s3_uri, document_id)
             llm_metadata_extracted = bool(llm_metadata)
 
-    # Add base metadata that's always included for filtering
-    # content_type distinguishes documents from images/web_pages
-    # Merge order ensures base_metadata wins (cannot be overwritten by LLM)
-    base_metadata = {"content_type": "document"}
-    llm_metadata = {**llm_metadata, **base_metadata}
+    # content_type is a system field - set based on processing pipeline, not LLM
+    # Scraped docs have authoritative content_type in existing_metadata (from scrape_process)
+    # Regular docs default to "document" (ignore any LLM-extracted content_type)
+    if not existing_metadata or "content_type" not in existing_metadata:
+        llm_metadata["content_type"] = "document"
 
     try:
         # Build the document object for ingestion
