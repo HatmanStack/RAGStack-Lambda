@@ -134,8 +134,14 @@ const zipCurlExample = `curl -X POST 'ENDPOINT' \\
 
 # Then upload ZIP file using uploadUrl and fields from response`;
 
+interface ApiExampleSet {
+  title: string;
+  description: string;
+  examples: { id: string; label: string; code: string }[];
+}
+
 // Examples config per tab (consistent: GraphQL → JavaScript → cURL)
-const apiExamples = {
+const apiExamples: Record<string, ApiExampleSet> = {
   documents: {
     title: 'Document Upload API',
     description: 'Get presigned URL, upload to S3. Supports PDF, DOCX, TXT, HTML, MD.',
@@ -169,7 +175,7 @@ const DocumentUploadContent = () => {
   const { addUpload, uploadFile, uploading, error } = useUpload();
   const [successCount, setSuccessCount] = useState(0);
 
-  const handleFilesSelected = useCallback(async (files) => {
+  const handleFilesSelected = useCallback(async (files: File[]) => {
     let completed = 0;
     for (const file of files) {
       const uploadId = addUpload(file);

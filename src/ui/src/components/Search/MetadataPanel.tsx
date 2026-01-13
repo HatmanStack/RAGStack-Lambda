@@ -85,21 +85,23 @@ export const MetadataPanel: React.FC = () => {
       : disabledExamples.includes(name) ? disabledExamples : [...disabledExamples, name];
 
     // Save to configuration asynchronously
-    client.graphql({
-      query: updateConfiguration,
-      variables: {
-        customConfig: JSON.stringify({
-          metadata_filter_examples_disabled: newDisabled,
-        }),
-      },
-    }).then((response) => {
-      const gqlResponse = response as GqlResponse;
-      if (gqlResponse.errors?.length) {
-        console.error('Failed to save disabled examples:', gqlResponse.errors);
+    (async () => {
+      try {
+        const response = await client.graphql({
+          query: updateConfiguration,
+          variables: {
+            customConfig: JSON.stringify({
+              metadata_filter_examples_disabled: newDisabled,
+            }),
+          },
+        }) as GqlResponse;
+        if (response.errors?.length) {
+          console.error('Failed to save disabled examples:', response.errors);
+        }
+      } catch (err: unknown) {
+        console.error('Failed to save disabled examples:', err);
       }
-    }).catch((err: unknown) => {
-      console.error('Failed to save disabled examples:', err);
-    });
+    })();
   }, [client, disabledExamples]);
 
   const handleAnalysisComplete = useCallback(() => {

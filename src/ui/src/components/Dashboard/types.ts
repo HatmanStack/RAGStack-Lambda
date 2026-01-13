@@ -36,7 +36,7 @@ export interface ImageDetailData {
 // Scrape job detail
 export interface ScrapeJobDetailData {
   jobId: string;
-  baseUrl: string;
+  baseUrl?: string;
   title?: string;
   status: string;
   totalUrls?: number;

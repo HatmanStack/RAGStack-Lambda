@@ -40,7 +40,7 @@ describe('ZipUpload', () => {
   it('has file input with correct accept attribute', () => {
     render(<ZipUpload />);
 
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input).toHaveAttribute('accept', '.zip');
   });
 
@@ -48,7 +48,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -63,7 +63,7 @@ describe('ZipUpload', () => {
     const mockFile = new File(['test content'], 'my-images.zip', { type: 'application/zip' });
     Object.defineProperty(mockFile, 'size', { value: 1024 * 500 }); // 500 KB
 
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [mockFile] } });
 
     await waitFor(() => {
@@ -76,7 +76,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -89,7 +89,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'image.png', { type: 'image/png' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -102,7 +102,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -115,7 +115,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -135,7 +135,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -159,7 +159,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 
@@ -190,7 +190,7 @@ describe('ZipUpload', () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
-    const input = document.querySelector('input[type="file"]');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
 
     fireEvent.change(input, { target: { files: [mockFile] } });
 

@@ -1,10 +1,15 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, DragEvent, ChangeEvent } from 'react';
 import { Box, Container, Header, SpaceBetween, Alert } from '@cloudscape-design/components';
 
-export const UploadZone = ({ onFilesSelected, disabled }) => {
+interface UploadZoneProps {
+  onFilesSelected: (files: File[]) => void;
+  disabled?: boolean;
+}
+
+export const UploadZone = ({ onFilesSelected, disabled }: UploadZoneProps) => {
   const [dragActive, setDragActive] = React.useState(false);
 
-  const handleDrag = useCallback((e) => {
+  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -14,7 +19,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -24,7 +29,7 @@ export const UploadZone = ({ onFilesSelected, disabled }) => {
     }
   }, [onFilesSelected]);
 
-  const handleFileInput = useCallback((e) => {
+  const handleFileInput = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onFilesSelected(Array.from(e.target.files));
     }

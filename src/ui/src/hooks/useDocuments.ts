@@ -254,8 +254,8 @@ export const useDocuments = () => {
       const { data } = response;
       const listResult = data?.listDocuments as { items?: Record<string, unknown>[] } | undefined;
       const newDocs: DocumentItem[] = (listResult?.items || []).map(doc => ({
-        ...(doc as DocumentItem),
-        type: 'document'
+        ...(doc as unknown as DocumentItem),
+        type: 'document' as const
       }));
 
       setDocuments(newDocs);

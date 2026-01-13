@@ -3,6 +3,29 @@ import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import type { GqlResponse } from '../types/graphql';
 
+interface MetadataStatsResult {
+  keys?: MetadataKeyStats[];
+  totalKeys?: number;
+  lastAnalyzed?: string | null;
+  error?: string;
+}
+
+interface FilterExamplesResult {
+  examples?: FilterExample[];
+  totalExamples?: number;
+  lastGenerated?: string | null;
+  error?: string;
+}
+
+interface AnalyzeResult {
+  success?: boolean;
+  vectorsSampled?: number;
+  keysAnalyzed?: number;
+  examplesGenerated?: number;
+  executionTimeMs?: number;
+  error?: string;
+}
+
 const GET_METADATA_STATS = gql`
   query GetMetadataStats {
     getMetadataStats {
@@ -93,7 +116,7 @@ export const useMetadataStats = () => {
         query: GET_METADATA_STATS as unknown as string,
       })) as GqlResponse;
 
-      const result = response.data?.getMetadataStats;
+      const result = response.data?.getMetadataStats as MetadataStatsResult | undefined;
       if (result?.error) {
         setError(result.error);
         setStats([]);
@@ -141,7 +164,7 @@ export const useFilterExamples = () => {
         query: GET_FILTER_EXAMPLES as unknown as string,
       })) as GqlResponse;
 
-      const result = response.data?.getFilterExamples;
+      const result = response.data?.getFilterExamples as FilterExamplesResult | undefined;
       if (result?.error) {
         setError(result.error);
         setExamples([]);
@@ -188,14 +211,21 @@ export const useMetadataAnalyzer = () => {
         query: ANALYZE_METADATA as unknown as string,
       })) as GqlResponse;
 
-      const analysisResult = response.data?.analyzeMetadata;
+      const analysisResult = response.data?.analyzeMetadata as AnalyzeResult | undefined;
       if (analysisResult?.error) {
         setError(analysisResult.error);
         return null;
       }
 
-      setResult(analysisResult);
-      return analysisResult;
+      const typedResult: MetadataAnalysisResult = {
+        success: analysisResult?.success ?? false,
+        vectorsSampled: analysisResult?.vectorsSampled ?? 0,
+        keysAnalyzed: analysisResult?.keysAnalyzed ?? 0,
+        examplesGenerated: analysisResult?.examplesGenerated ?? 0,
+        executionTimeMs: analysisResult?.executionTimeMs ?? 0,
+      };
+      setResult(typedResult);
+      return typedResult;
     } catch (err) {
       console.error('Metadata analysis failed:', err);
       const errorMessage = (err as Error).message;

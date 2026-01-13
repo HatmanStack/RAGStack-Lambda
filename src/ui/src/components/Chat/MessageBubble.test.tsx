@@ -5,7 +5,7 @@ import { MessageBubble } from './MessageBubble';
 describe('MessageBubble', () => {
   it('renders user message with correct styling', () => {
     const message = {
-      type: 'user',
+      type: 'user' as const,
       content: 'What documents do we have?',
       timestamp: new Date().toISOString()
     };
@@ -20,7 +20,7 @@ describe('MessageBubble', () => {
 
   it('renders assistant message with correct styling', () => {
     const message = {
-      type: 'assistant',
+      type: 'assistant' as const,
       content: 'We have 5 invoices and 3 receipts.',
       timestamp: new Date().toISOString(),
       sources: []
@@ -37,7 +37,7 @@ describe('MessageBubble', () => {
   it('displays timestamp for message', () => {
     const timestamp = new Date('2024-01-01T12:00:00.000Z');
     const message = {
-      type: 'user',
+      type: 'user' as const,
       content: 'Test',
       timestamp: timestamp.toISOString()
     };
@@ -51,7 +51,7 @@ describe('MessageBubble', () => {
 
   it('renders SourceList for assistant messages with sources', () => {
     const message = {
-      type: 'assistant',
+      type: 'assistant' as const,
       content: 'Based on the documents...',
       timestamp: new Date().toISOString(),
       sources: [
@@ -71,7 +71,7 @@ describe('MessageBubble', () => {
 
   it('does not render SourceList for user messages', () => {
     const message = {
-      type: 'user',
+      type: 'user' as const,
       content: 'User question',
       timestamp: new Date().toISOString()
     };
@@ -87,7 +87,7 @@ describe('MessageBubble', () => {
 
   it('preserves line breaks in message content', () => {
     const message = {
-      type: 'assistant',
+      type: 'assistant' as const,
       content: 'Line 1\nLine 2\nLine 3',
       timestamp: new Date().toISOString(),
       sources: []
@@ -101,7 +101,7 @@ describe('MessageBubble', () => {
 
   it('handles empty sources array for assistant messages', () => {
     const message = {
-      type: 'assistant',
+      type: 'assistant' as const,
       content: 'Answer without sources',
       timestamp: new Date().toISOString(),
       sources: []
@@ -115,7 +115,7 @@ describe('MessageBubble', () => {
   it('displays both content and timestamp together', () => {
     const timestamp = new Date('2024-01-01T15:30:00.000Z');
     const message = {
-      type: 'user',
+      type: 'user' as const,
       content: 'Complete message',
       timestamp: timestamp.toISOString()
     };

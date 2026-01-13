@@ -5,7 +5,7 @@ import { MediaSource } from '../MediaSource';
 import type { ChatSource } from './types';
 
 interface SourceListProps {
-  sources: ChatSource[];
+  sources: ChatSource[] | null | undefined;
 }
 
 export function SourceList({ sources }: SourceListProps) {
