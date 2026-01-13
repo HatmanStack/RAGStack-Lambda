@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SourceList } from './SourceList';
+
+// Mock HTMLMediaElement methods for media source tests
+beforeEach(() => {
+  window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  window.HTMLMediaElement.prototype.pause = vi.fn();
+  window.HTMLMediaElement.prototype.load = vi.fn();
+});
 
 describe('SourceList', () => {
   it('renders nothing when sources array is empty', () => {
@@ -201,5 +208,90 @@ describe('SourceList', () => {
     // Caption may appear multiple times (preview and modal)
     const captionElements = screen.getAllByText('A beautiful landscape photograph');
     expect(captionElements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders media source with timestamp display', () => {
+    const sources = [
+      {
+        documentId: 'media-123',
+        isMedia: true,
+        mediaType: 'video',
+        contentType: 'transcript',
+        timestampStart: 60,
+        timestampEnd: 90,
+        timestampDisplay: '1:00-1:30',
+        speaker: 'speaker_0',
+        snippet: 'Test transcript content',
+        documentUrl: 'https://example.com/video.mp4?sig=abc#t=60,90'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show the sources count
+    expect(screen.getByText(/Sources \(1\)/i)).toBeInTheDocument();
+    // Should show the timestamp display
+    expect(screen.getByText('1:00-1:30')).toBeInTheDocument();
+  });
+
+  it('renders audio media source with audio icon', () => {
+    const sources = [
+      {
+        documentId: 'audio-123',
+        isMedia: true,
+        mediaType: 'audio',
+        contentType: 'transcript',
+        timestampStart: 0,
+        timestampEnd: 30,
+        timestampDisplay: '0:00-0:30',
+        snippet: 'Audio transcript',
+        documentUrl: 'https://example.com/audio.mp3'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show audio icon
+    expect(screen.getByText('🎵')).toBeInTheDocument();
+  });
+
+  it('renders video media source with video icon', () => {
+    const sources = [
+      {
+        documentId: 'video-123',
+        isMedia: true,
+        mediaType: 'video',
+        contentType: 'visual',
+        timestampStart: 30,
+        timestampEnd: 60,
+        timestampDisplay: '0:30-1:00',
+        documentUrl: 'https://example.com/video.mp4'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show video icon
+    expect(screen.getByText('🎬')).toBeInTheDocument();
+  });
+
+  it('shows speaker label for media source with transcript', () => {
+    const sources = [
+      {
+        documentId: 'media-123',
+        isMedia: true,
+        mediaType: 'video',
+        contentType: 'transcript',
+        timestampDisplay: '1:00-1:30',
+        speaker: 'speaker_1',
+        snippet: 'Test content',
+        documentUrl: 'https://example.com/video.mp4'
+      }
+    ];
+
+    render(<SourceList sources={sources} />);
+
+    // Should show speaker label (with _ replaced by space)
+    expect(screen.getByText('speaker 1')).toBeInTheDocument();
   });
 });
