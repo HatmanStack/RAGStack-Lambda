@@ -7,15 +7,17 @@ import { ImageDetail } from './ImageDetail';
 import { useDocuments } from '../../hooks/useDocuments';
 import { useScrape } from '../../hooks/useScrape';
 
+type ItemType = 'document' | 'scrape' | 'image' | null;
+
 export const Dashboard = () => {
   const { documents, loading, refreshDocuments, deleteDocuments } = useDocuments();
   const { fetchJobDetail, selectedJob, cancelScrape } = useScrape();
-  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
-  const [selectedType, setSelectedType] = useState(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<ItemType>(null);
 
-  const handleSelectItem = (id, type) => {
+  const handleSelectItem = (id: string, type: string) => {
     setSelectedDocumentId(id);
-    setSelectedType(type);
+    setSelectedType(type as ItemType);
     if (type === 'scrape') {
       fetchJobDetail(id);
     }
@@ -26,7 +28,7 @@ export const Dashboard = () => {
     setSelectedType(null);
   };
 
-  const handleCancelScrape = async (jobId) => {
+  const handleCancelScrape = async (jobId: string) => {
     try {
       await cancelScrape(jobId);
       refreshDocuments();
@@ -35,7 +37,7 @@ export const Dashboard = () => {
     }
   };
 
-  const handleDelete = async (documentIds) => {
+  const handleDelete = async (documentIds: string[]) => {
     try {
       const result = await deleteDocuments(documentIds);
       // Partial failures are returned in result.failedIds if any
@@ -73,19 +75,19 @@ export const Dashboard = () => {
         />
       )}
 
-      {selectedType === 'image' && (
+      {selectedType === 'image' && selectedDocumentId && (
         <ImageDetail
           imageId={selectedDocumentId}
           visible={!!selectedDocumentId && selectedType === 'image'}
           onDismiss={handleDismiss}
-          onDelete={() => {
+          onDelete={async () => {
             handleDismiss();
             refreshDocuments();
           }}
         />
       )}
 
-      {selectedType === 'document' && (
+      {selectedType === 'document' && selectedDocumentId && (
         <DocumentDetail
           documentId={selectedDocumentId}
           visible={!!selectedDocumentId && selectedType === 'document'}

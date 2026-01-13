@@ -8,6 +8,15 @@ import {
   Alert
 } from '@cloudscape-design/components';
 
+interface CaptionInputProps {
+  userCaption: string;
+  aiCaption: string;
+  onUserCaptionChange: (value: string) => void;
+  onGenerateCaption: () => void;
+  generating: boolean;
+  error: string | null;
+}
+
 export const CaptionInput = ({
   userCaption,
   aiCaption,
@@ -15,7 +24,7 @@ export const CaptionInput = ({
   onGenerateCaption,
   generating,
   error
-}) => {
+}: CaptionInputProps) => {
   const combinedCaption = [userCaption, aiCaption].filter(Boolean).join('. ');
 
   return (

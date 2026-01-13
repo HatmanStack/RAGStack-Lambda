@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, DragEvent, ChangeEvent } from 'react';
 import {
   Box,
   Button,
@@ -13,18 +13,24 @@ import {
 } from '@cloudscape-design/components';
 import { useImage } from '../../hooks/useImage';
 
+type UploadStatus = 'idle' | 'uploading' | 'complete' | 'error';
+
+interface UploadResult {
+  uploadId: string;
+}
+
 export const ZipUpload = () => {
   const { uploading, error, clearError, uploadZip } = useImage();
 
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [generateCaptions, setGenerateCaptions] = useState(true);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, complete, error
-  const [localError, setLocalError] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [localError, setLocalError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
 
-  const validateFile = useCallback((file) => {
+  const validateFile = useCallback((file: File): string | null => {
     const ext = file.name.toLowerCase().split('.').pop();
     if (ext !== 'zip') {
       return 'Only ZIP files are accepted. Please select a .zip archive.';
@@ -36,7 +42,7 @@ export const ZipUpload = () => {
     return null;
   }, []);
 
-  const handleFileSelect = useCallback((file) => {
+  const handleFileSelect = useCallback((file: File) => {
     const validationError = validateFile(file);
     if (validationError) {
       setLocalError(validationError);
@@ -51,7 +57,7 @@ export const ZipUpload = () => {
     setUploadResult(null);
   }, [validateFile, clearError]);
 
-  const handleDrag = useCallback((e) => {
+  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -61,7 +67,7 @@ export const ZipUpload = () => {
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -72,7 +78,7 @@ export const ZipUpload = () => {
     }
   }, [handleFileSelect]);
 
-  const handleFileInput = useCallback((e) => {
+  const handleFileInput = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       handleFileSelect(e.target.files[0]);
     }
@@ -86,7 +92,7 @@ export const ZipUpload = () => {
     setLocalError(null);
 
     try {
-      const result = await uploadZip(selectedFile, generateCaptions, (progress) => {
+      const result = await uploadZip(selectedFile, generateCaptions, (progress: number) => {
         setUploadProgress(progress);
       });
 
@@ -101,7 +107,7 @@ export const ZipUpload = () => {
       }, 5000);
     } catch (err) {
       setUploadStatus('error');
-      setLocalError(err.message || 'Failed to upload ZIP archive');
+      setLocalError(err instanceof Error ? err.message : 'Failed to upload ZIP archive');
     }
   }, [selectedFile, generateCaptions, uploadZip]);
 
@@ -114,7 +120,7 @@ export const ZipUpload = () => {
     clearError();
   }, [clearError]);
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
