@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import { Box, Spinner } from '@cloudscape-design/components';
 
-export const RequireAuth = ({ children }) => {
+interface RequireAuthProps {
+  children: ReactNode;
+}
+
+export const RequireAuth = ({ children }: RequireAuthProps) => {
   const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
