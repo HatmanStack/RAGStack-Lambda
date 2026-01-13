@@ -315,8 +315,8 @@ class VisualSegmenter:
         """
         input_bucket, input_key = parse_s3_uri(input_s3_uri)
 
-        # Determine extension from input
-        ext = Path(input_key).suffix or (".mp4" if media_type == "video" else ".mp3")
+        # Determine extension from input (use .m4a for audio to match extract_segments output)
+        ext = Path(input_key).suffix or (".mp4" if media_type == "video" else ".m4a")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Download input file

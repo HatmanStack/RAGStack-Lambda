@@ -37,7 +37,7 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_INITIAL_BACKOFF = 1  # seconds
 DEFAULT_MAX_BACKOFF = 60  # seconds
 
-# Retryable error codes
+# Retryable error codes (excluding ModelErrorException which needs targeted inspection)
 RETRYABLE_ERRORS = frozenset(
     {
         "ThrottlingException",
@@ -45,9 +45,48 @@ RETRYABLE_ERRORS = frozenset(
         "RequestLimitExceeded",
         "TooManyRequestsException",
         "ServiceUnavailableException",
-        "ModelErrorException",
     }
 )
+
+
+def is_transient_model_error(error: ClientError) -> bool:
+    """
+    Check if a ModelErrorException is transient and should be retried.
+
+    Only retries ModelErrorException when:
+    - The originalStatusCode is in the 5xx range (server error)
+    - The error message indicates a transient condition
+
+    Args:
+        error: The ClientError exception to check.
+
+    Returns:
+        True if the error appears transient and should be retried.
+    """
+    error_code = error.response.get("Error", {}).get("Code", "")
+    if error_code != "ModelErrorException":
+        return False
+
+    # Check for originalStatusCode in the error response
+    error_info = error.response.get("Error", {})
+    message = error_info.get("Message", "")
+
+    # Look for 5xx status codes in the error
+    original_status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
+    if 500 <= original_status < 600:
+        return True
+
+    # Check for transient indicators in the message
+    transient_indicators = [
+        "temporarily unavailable",
+        "service unavailable",
+        "internal server error",
+        "capacity",
+        "overloaded",
+        "try again",
+    ]
+    message_lower = message.lower()
+    return any(indicator in message_lower for indicator in transient_indicators)
 
 
 class NovaEmbeddingsClient:
@@ -220,8 +259,16 @@ class NovaEmbeddingsClient:
             response = self.s3_client.get_object(Bucket=bucket, Key=key)
             content = response["Body"].read()
 
-            # Determine media type from extension if not specified
-            if media_type == "video" or key.lower().endswith((".mp4", ".mov", ".webm")):
+            # Normalize and respect explicit media_type first
+            normalized_type = (media_type or "").lower().strip()
+
+            if normalized_type == "video":
+                return self.embed_video_segment(content)
+            if normalized_type == "audio":
+                return self.embed_audio_segment(content)
+
+            # Fall back to extension inference if media_type not specified
+            if key.lower().endswith((".mp4", ".mov", ".webm")):
                 return self.embed_video_segment(content)
             return self.embed_audio_segment(content)
 
@@ -273,7 +320,10 @@ class NovaEmbeddingsClient:
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
 
-            if error_code in RETRYABLE_ERRORS and retry_count < self.max_retries:
+            # Check if error is retryable (known retryable codes or transient model error)
+            is_retryable = error_code in RETRYABLE_ERRORS or is_transient_model_error(e)
+
+            if is_retryable and retry_count < self.max_retries:
                 # Calculate backoff with jitter
                 backoff = self._calculate_backoff(retry_count)
                 logger.warning(

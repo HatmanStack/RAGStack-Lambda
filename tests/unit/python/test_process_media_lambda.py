@@ -101,10 +101,8 @@ class TestProcessMediaValidation:
 
     def test_missing_tracking_table_raises_error(self, sample_event):
         """Test that missing TRACKING_TABLE raises error."""
-        with (
-            patch.dict(os.environ, {"TRACKING_TABLE": ""}, clear=False),
-            patch.dict(os.environ, {}, clear=True),
-        ):
+        # Keep AWS_REGION for boto3 client initialization at module import time
+        with patch.dict(os.environ, {"TRACKING_TABLE": "", "AWS_REGION": "us-east-1"}, clear=True):
             module = load_process_media_module()
             with pytest.raises(ValueError, match="TRACKING_TABLE"):
                 module.lambda_handler(sample_event, None)

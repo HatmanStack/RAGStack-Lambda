@@ -100,6 +100,9 @@ def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
         raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
 
     path = output_s3_uri[5:]
+    if "/" not in path:
+        raise ValueError(f"Invalid S3 URI: missing object key in {output_s3_uri}")
+
     bucket, key = path.split("/", 1)
 
     metadata_key = f"{key}.metadata.json"
