@@ -21,6 +21,10 @@ from ragstack_common.image import (
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.metadata_normalizer import (
+    expand_to_searchable_array,
+    normalize_metadata_for_s3,
+)
 from ragstack_common.multislice_retriever import MultiSliceRetriever
 
 __all__ = [
@@ -32,8 +36,10 @@ __all__ = [
     "MultiSliceRetriever",
     "check_public_access",
     "constants",
+    "expand_to_searchable_array",
     "is_supported_image",
     "log_summary",
+    "normalize_metadata_for_s3",
     "publish_document_update",
     "publish_image_update",
     "publish_scrape_update",

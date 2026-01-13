@@ -28,6 +28,7 @@ from ragstack_common.appsync import publish_reindex_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
 from ragstack_common.storage import read_s3_text
 
 logger = logging.getLogger()
@@ -1061,7 +1062,10 @@ def write_metadata_to_s3(output_s3_uri: str, metadata: dict, data_bucket: str) -
     metadata_key = f"{key}.metadata.json"
     metadata_uri = f"s3://{bucket}/{metadata_key}"
 
-    metadata_content = {"metadataAttributes": metadata}
+    # Normalize metadata for S3 Vectors (expand strings to searchable arrays)
+    normalized_metadata = normalize_metadata_for_s3(metadata)
+
+    metadata_content = {"metadataAttributes": normalized_metadata}
 
     s3_client.put_object(
         Bucket=bucket,
