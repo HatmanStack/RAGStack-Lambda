@@ -99,9 +99,20 @@ def sample_transcript_json():
 class TestProcessMediaValidation:
     """Tests for input validation."""
 
-    def test_missing_tracking_table_raises_error(self, sample_event):
+    @patch("boto3.resource")
+    @patch("boto3.client")
+    def test_missing_tracking_table_raises_error(
+        self, mock_boto3_client, mock_boto3_resource, sample_event
+    ):
         """Test that missing TRACKING_TABLE raises error."""
-        # Keep AWS_REGION for boto3 client initialization at module import time
+        # Mock boto3 before module load to avoid NoRegionError during import
+        mock_boto3_client.return_value = MagicMock()
+        mock_boto3_resource.return_value = MagicMock()
+
+        # Clear module from cache to force reload
+        if "process_media_index" in sys.modules:
+            del sys.modules["process_media_index"]
+
         with patch.dict(os.environ, {"TRACKING_TABLE": "", "AWS_REGION": "us-east-1"}, clear=True):
             module = load_process_media_module()
             with pytest.raises(ValueError, match="TRACKING_TABLE"):
