@@ -230,11 +230,11 @@ describe('FilterExamples', () => {
     const viewButtons = screen.getAllByText('View');
     fireEvent.click(viewButtons[0]);
 
-    // Filter JSON should be displayed in a code block
-    const codeBlock = screen.getByRole('dialog').querySelector('code');
-    expect(codeBlock).toBeInTheDocument();
-    expect(codeBlock?.textContent).toContain('topic');
-    expect(codeBlock?.textContent).toContain('$eq');
+    // Filter JSON should be displayed in a pre block
+    const preBlock = screen.getByRole('dialog').querySelector('pre');
+    expect(preBlock).toBeInTheDocument();
+    expect(preBlock?.textContent).toContain('topic');
+    expect(preBlock?.textContent).toContain('$eq');
   });
 
   it('closes modal when Close is clicked', () => {
