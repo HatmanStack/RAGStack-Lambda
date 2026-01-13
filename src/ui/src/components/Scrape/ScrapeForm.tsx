@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, FormEvent } from 'react';
 import {
   Form,
   FormField,
@@ -14,7 +14,33 @@ import {
 import type { SelectProps } from '@cloudscape-design/components';
 import { CookieHelp } from './CookieHelp';
 
-export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarning, onDismissWarning }) => {
+interface ScrapeFormData {
+  url: string;
+  maxPages: number;
+  maxDepth: number;
+  scope: string;
+  includePatterns: string[];
+  excludePatterns: string[];
+  scrapeMode: string;
+  cookies: string | null;
+  forceRescrape: boolean;
+}
+
+interface DuplicateWarning {
+  date: string;
+  jobId?: string;
+  title?: string;
+}
+
+interface ScrapeFormProps {
+  onSubmit: (data: ScrapeFormData) => void;
+  onProceedAnyway?: () => void;
+  loading: boolean;
+  duplicateWarning: DuplicateWarning | null;
+  onDismissWarning: () => void;
+}
+
+export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarning, onDismissWarning }: ScrapeFormProps) => {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState('100');
   const [maxDepth, setMaxDepth] = useState('3');
@@ -39,19 +65,19 @@ export const ScrapeForm = ({ onSubmit, onProceedAnyway, loading, duplicateWarnin
     { value: 'FULL', label: 'Full (with browser)', description: 'Slower, but handles all JavaScript' }
   ];
 
-  const getFormData = () => ({
+  const getFormData = (): ScrapeFormData => ({
     url,
     maxPages: parseInt(maxPages, 10),
     maxDepth: parseInt(maxDepth, 10),
-    scope: scope.value,
+    scope: scope.value || 'SUBPAGES',
     includePatterns: includePatterns.split('\n').filter(Boolean),
     excludePatterns: excludePatterns.split('\n').filter(Boolean),
-    scrapeMode: scrapeMode.value,
+    scrapeMode: scrapeMode.value || 'AUTO',
     cookies: cookies || null,
     forceRescrape
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit(getFormData());
   };

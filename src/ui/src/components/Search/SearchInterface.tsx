@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, KeyboardEvent } from 'react';
 import {
   Container,
   Header,
@@ -24,7 +24,7 @@ export const SearchInterface = () => {
     search(trimmedValue);
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
       handleSearch();
     }

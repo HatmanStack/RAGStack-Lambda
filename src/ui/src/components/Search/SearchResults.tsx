@@ -8,9 +8,17 @@ import {
   ExpandableSection,
   Badge
 } from '@cloudscape-design/components';
+import type { SearchResult } from '../../hooks/useSearch';
 
-export const SearchResults = ({ results, query }) => {
-  const getDocumentIdFromSource = (source) => {
+interface SearchResultsProps {
+  results: SearchResult[];
+  query: string;
+}
+
+type BadgeColor = 'blue' | 'grey' | 'green' | 'red';
+
+export const SearchResults = ({ results, query }: SearchResultsProps) => {
+  const getDocumentIdFromSource = (source: string): string => {
     // Extract document ID from S3 URI (format: s3://bucket/document-id/filename)
     if (!source || typeof source !== 'string') {
       return 'Unknown';
@@ -19,7 +27,7 @@ export const SearchResults = ({ results, query }) => {
     return match ? match[1] : 'Unknown';
   };
 
-  const getRelevanceColor = (score) => {
+  const getRelevanceColor = (score: number): BadgeColor => {
     if (score >= 0.8) return 'green';
     if (score >= 0.6) return 'blue';
     return 'grey';
