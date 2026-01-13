@@ -157,18 +157,22 @@ type Subscription {
   # Subscribe to document status updates
   onDocumentUpdate: DocumentUpdate
     @aws_subscribe(mutations: ["publishDocumentUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to scrape job status updates
   onScrapeUpdate: ScrapeUpdate
     @aws_subscribe(mutations: ["publishScrapeUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to image status updates
   onImageUpdate: ImageUpdate
     @aws_subscribe(mutations: ["publishImageUpdate"])
+    @aws_cognito_user_pools
 
   # Subscribe to reindex progress updates
   onReindexUpdate: ReindexUpdate
     @aws_subscribe(mutations: ["publishReindexUpdate"])
+    @aws_cognito_user_pools
 }
 
 # Real-time document update payload
