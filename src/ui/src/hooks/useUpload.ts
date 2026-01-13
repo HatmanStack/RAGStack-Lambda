@@ -41,7 +41,7 @@ export const useUpload = () => {
     try {
       // Get presigned URL
       const response = await client.graphql({
-        query: CREATE_UPLOAD_URL as ReturnType<typeof gql>,
+        query: CREATE_UPLOAD_URL as unknown as string,
         variables: { filename: file.name }
       }) as GqlResponse;
 

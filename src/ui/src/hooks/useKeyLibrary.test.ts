@@ -14,7 +14,7 @@ vi.mock('aws-amplify/api', () => {
 
 // Get reference to mock after module load
 import * as amplifyApi from 'aws-amplify/api';
-const mockGraphql = (amplifyApi as { __mockGraphql: ReturnType<typeof vi.fn> }).__mockGraphql;
+const mockGraphql = (amplifyApi as unknown as { __mockGraphql: ReturnType<typeof vi.fn> }).__mockGraphql;
 
 import { useKeyLibrary } from './useKeyLibrary';
 

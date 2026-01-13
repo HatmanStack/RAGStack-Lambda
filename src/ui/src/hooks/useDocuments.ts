@@ -162,7 +162,7 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listImages as ReturnType<typeof gql>,
+          query: listImages as unknown as string,
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -203,7 +203,7 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listScrapeJobs as ReturnType<typeof gql>,
+          query: listScrapeJobs as unknown as string,
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -244,7 +244,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: LIST_DOCUMENTS as ReturnType<typeof gql>
+        query: LIST_DOCUMENTS as unknown as string
       }) as GqlResponse;
 
       if (response.errors) {
@@ -278,7 +278,7 @@ export const useDocuments = () => {
   const fetchDocument = useCallback(async (documentId: string) => {
     try {
       const response = await client.graphql({
-        query: GET_DOCUMENT as ReturnType<typeof gql>,
+        query: GET_DOCUMENT as unknown as string,
         variables: { documentId }
       }) as GqlResponse;
 
@@ -378,7 +378,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteDocumentsMutation as ReturnType<typeof gql>,
+        query: deleteDocumentsMutation as unknown as string,
         variables: { documentIds }
       }) as GqlResponse;
 
@@ -420,7 +420,7 @@ export const useDocuments = () => {
       // Subscribe to document updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       docSubscription = (client.graphql({
-        query: ON_DOCUMENT_UPDATE as ReturnType<typeof gql>
+        query: ON_DOCUMENT_UPDATE as unknown as string
       }) as any).subscribe({
         next: ({ data }: { data?: { onDocumentUpdate?: DocumentUpdateEvent } }) => {
           if (data?.onDocumentUpdate) {
@@ -435,7 +435,7 @@ export const useDocuments = () => {
       // Subscribe to scrape updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       scrapeSubscription = (client.graphql({
-        query: ON_SCRAPE_UPDATE as ReturnType<typeof gql>
+        query: ON_SCRAPE_UPDATE as unknown as string
       }) as any).subscribe({
         next: ({ data }: { data?: { onScrapeUpdate?: ScrapeUpdateEvent } }) => {
           if (data?.onScrapeUpdate) {
@@ -450,7 +450,7 @@ export const useDocuments = () => {
       // Subscribe to image updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       imageSubscription = (client.graphql({
-        query: ON_IMAGE_UPDATE as ReturnType<typeof gql>
+        query: ON_IMAGE_UPDATE as unknown as string
       }) as any).subscribe({
         next: ({ data }: { data?: { onImageUpdate?: ImageUpdateEvent } }) => {
           if (data?.onImageUpdate) {

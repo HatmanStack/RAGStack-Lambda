@@ -44,7 +44,7 @@ export const useSearch = () => {
 
     try {
       const response = await client.graphql({
-        query: SEARCH_KB as ReturnType<typeof gql>,
+        query: SEARCH_KB as unknown as string,
         variables: {
           query: searchQuery,
           maxResults

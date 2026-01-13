@@ -41,7 +41,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createImageUploadUrl,
+        query: createImageUploadUrl as unknown as string,
         variables: { filename }
       }) as GqlResponse;
 
@@ -121,7 +121,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: generateCaptionMutation,
+        query: generateCaptionMutation as unknown as string,
         variables: { imageS3Uri }
       }) as GqlResponse;
 
@@ -145,7 +145,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: submitImageMutation,
+        query: submitImageMutation as unknown as string,
         variables: {
           input: {
             imageId,
@@ -181,7 +181,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteImageMutation,
+        query: deleteImageMutation as unknown as string,
         variables: { imageId }
       }) as GqlResponse;
 
@@ -204,7 +204,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: getImageQuery,
+        query: getImageQuery as unknown as string,
         variables: { imageId }
       }) as GqlResponse;
 
@@ -228,7 +228,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createZipUploadUrlMutation,
+        query: createZipUploadUrlMutation as unknown as string,
         variables: { generateCaptions }
       }) as GqlResponse;
 
