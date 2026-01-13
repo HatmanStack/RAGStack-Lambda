@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, KeyboardEvent } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Container,
   SpaceBetween,
@@ -12,12 +12,12 @@ import { generateClient } from 'aws-amplify/api';
 import { queryKnowledgeBase } from '../../graphql/queries/queryKnowledgeBase';
 import type { GqlResponse } from '../../types/graphql';
 import { MessageBubble } from './MessageBubble';
-import type { ChatMessage } from './types';
+import type { ChatMessage, ChatSource } from './types';
 import './ChatPanel.css';
 
 interface ChatResponse {
   answer: string;
-  sources?: unknown[];
+  sources?: ChatSource[];
   sessionId?: string;
   error?: string;
 }
@@ -103,8 +103,8 @@ export function ChatPanel() {
   };
 
   // Handle Enter key press
-  const handleKeyPress = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+  const handleKeyPress = (event: { detail: { key: string }; preventDefault: () => void }) => {
+    if (event.detail.key === 'Enter') {
       event.preventDefault();
       handleSend();
     }

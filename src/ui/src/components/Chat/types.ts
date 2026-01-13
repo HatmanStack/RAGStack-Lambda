@@ -12,7 +12,14 @@ export interface ChatSource {
   isMedia?: boolean;
   isScraped?: boolean;
   documentAccessAllowed?: boolean;
+  // Media-specific fields
+  mediaType?: 'video' | 'audio';
+  contentType?: 'transcript' | 'visual';
   timestampStart?: number;
+  timestampEnd?: number;
+  timestampDisplay?: string;
+  speaker?: string;
+  segmentIndex?: number;
 }
 
 export interface ChatMessage {

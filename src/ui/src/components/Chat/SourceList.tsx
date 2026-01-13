@@ -27,7 +27,7 @@ export function SourceList({ sources }: SourceListProps) {
           >
             {/* Route to appropriate source component based on type */}
             {source.isMedia ? (
-              <MediaSource source={source} />
+              <MediaSource source={{ documentId: source.documentId || '', ...source }} />
             ) : source.isImage ? (
               <ImageSource source={source} />
             ) : (
