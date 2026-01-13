@@ -639,3 +639,160 @@ def test_manual_mode_prompt_includes_specified_keys(
     # The system prompt should mention the keys to extract
     assert "topic" in system_prompt.lower()
     assert "document_type" in system_prompt.lower()
+
+
+# Test: Media Metadata Extraction
+
+
+@pytest.fixture
+def sample_media_transcript():
+    """Sample media transcript for testing."""
+    return """
+    Welcome everyone to today's podcast about technology trends.
+    My name is John Smith and I'm joined by Jane Doe.
+    We'll be discussing artificial intelligence and its impact on society.
+    First, let's talk about machine learning applications.
+    """
+
+
+@pytest.fixture
+def sample_media_segments():
+    """Sample media segments for testing."""
+    return [
+        {
+            "segment_index": 0,
+            "timestamp_start": 0,
+            "timestamp_end": 30,
+            "text": "Welcome everyone to today's podcast about technology trends.",
+            "word_count": 8,
+            "speaker": "spk_0",
+        },
+        {
+            "segment_index": 1,
+            "timestamp_start": 30,
+            "timestamp_end": 60,
+            "text": "My name is John Smith and I'm joined by Jane Doe.",
+            "word_count": 11,
+            "speaker": "spk_0",
+        },
+    ]
+
+
+@pytest.fixture
+def sample_technical_metadata():
+    """Sample technical metadata for testing."""
+    return {
+        "duration_seconds": 120,
+        "format": "mp4",
+        "resolution": "1920x1080",
+        "bitrate": "5000kbps",
+        "has_audio": True,
+        "language_detected": "en-US",
+        "speakers_count": 2,
+    }
+
+
+def test_extract_media_metadata_success(
+    extractor, mock_bedrock_client, mock_key_library,
+    sample_media_transcript, sample_media_segments, sample_technical_metadata
+):
+    """Test successful media metadata extraction."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
+        "main_topic": "technology",
+        "content_type": "podcast",
+        "speakers": ["john smith", "jane doe"],
+        "sentiment": "informative",
+    })
+
+    result = extractor.extract_media_metadata(
+        transcript=sample_media_transcript,
+        segments=sample_media_segments,
+        technical_metadata=sample_technical_metadata,
+        document_id="media-123",
+    )
+
+    assert "main_topic" in result
+    mock_bedrock_client.invoke_model.assert_called_once()
+
+
+def test_extract_media_metadata_includes_technical(
+    extractor, mock_bedrock_client,
+    sample_media_transcript, sample_media_segments, sample_technical_metadata
+):
+    """Test that technical metadata is included in result."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
+        "main_topic": "technology",
+    })
+
+    result = extractor.extract_media_metadata(
+        transcript=sample_media_transcript,
+        segments=sample_media_segments,
+        technical_metadata=sample_technical_metadata,
+        document_id="media-123",
+    )
+
+    # Technical metadata should be merged into result
+    assert result.get("duration_seconds") == 120
+    assert result.get("format") == "mp4"
+
+
+def test_extract_media_metadata_empty_transcript(
+    extractor, mock_bedrock_client, sample_media_segments, sample_technical_metadata
+):
+    """Test extraction with empty transcript returns technical metadata only."""
+    result = extractor.extract_media_metadata(
+        transcript="",
+        segments=sample_media_segments,
+        technical_metadata=sample_technical_metadata,
+        document_id="media-123",
+    )
+
+    # Should still return technical metadata
+    assert result.get("duration_seconds") == 120
+
+
+def test_extract_media_metadata_prompt_context(
+    extractor, mock_bedrock_client,
+    sample_media_transcript, sample_media_segments, sample_technical_metadata
+):
+    """Test that media prompt includes transcript context."""
+    import json
+
+    mock_bedrock_client.extract_text_from_response.return_value = json.dumps({
+        "main_topic": "technology",
+    })
+
+    extractor.extract_media_metadata(
+        transcript=sample_media_transcript,
+        segments=sample_media_segments,
+        technical_metadata=sample_technical_metadata,
+        document_id="media-123",
+    )
+
+    call_args = mock_bedrock_client.invoke_model.call_args
+    content = call_args.kwargs["content"][0]["text"]
+
+    # Should include transcript in prompt
+    assert "podcast" in content.lower()
+
+
+def test_extract_media_metadata_handles_llm_error(
+    extractor, mock_bedrock_client,
+    sample_media_transcript, sample_media_segments, sample_technical_metadata
+):
+    """Test graceful handling of LLM errors in media extraction."""
+    mock_bedrock_client.invoke_model.side_effect = Exception("API error")
+
+    result = extractor.extract_media_metadata(
+        transcript=sample_media_transcript,
+        segments=sample_media_segments,
+        technical_metadata=sample_technical_metadata,
+        document_id="media-123",
+    )
+
+    # Should still return technical metadata even if LLM fails
+    assert result.get("duration_seconds") == 120
