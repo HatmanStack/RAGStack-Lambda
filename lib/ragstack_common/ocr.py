@@ -11,6 +11,7 @@ import logging
 
 import boto3
 import fitz  # PyMuPDF
+from botocore.exceptions import ClientError
 
 from .bedrock import BedrockClient
 from .image import prepare_bedrock_image_attachment
@@ -132,7 +133,7 @@ class OcrService:
             )
             return is_text_native
 
-        except Exception:
+        except (fitz.FileDataError, RuntimeError, IndexError):
             logger.exception("Error checking PDF text content")
             return False
 
@@ -224,7 +225,7 @@ class OcrService:
                 logger.info(f"Extracted text from {total_pages} pages (text-native PDF)")
             return document
 
-        except Exception as e:
+        except (fitz.FileDataError, RuntimeError, IndexError) as e:
             logger.exception("Error extracting text from PDF")
             document.status = Status.FAILED
             document.error_message = str(e)
@@ -387,7 +388,7 @@ class OcrService:
             )
             return document
 
-        except Exception as e:
+        except (fitz.FileDataError, RuntimeError, ClientError) as e:
             logger.exception("Error processing with Textract")
             document.status = Status.FAILED
             document.error_message = str(e)
@@ -633,7 +634,7 @@ class OcrService:
 
             return document
 
-        except Exception as e:
+        except (fitz.FileDataError, RuntimeError, ClientError) as e:
             logger.exception("Error processing with Bedrock")
             document.status = Status.FAILED
             document.error_message = str(e)

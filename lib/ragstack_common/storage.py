@@ -40,16 +40,17 @@ def get_dynamodb():
 
 def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     """
-    Parse S3 URI into bucket and key.
+    Parse S3 URI or HTTPS S3 URL into bucket and key.
 
     Args:
-        s3_uri: S3 URI like "s3://bucket-name/path/to/file.txt"
+        s3_uri: S3 URI like "s3://bucket-name/path/to/file.txt" or
+                HTTPS URL like "https://s3.region.amazonaws.com/bucket/key"
 
     Returns:
         Tuple of (bucket, key)
 
     Raises:
-        ValueError: If s3_uri is empty, None, or not a valid S3 URI
+        ValueError: If s3_uri is empty, None, or not a valid S3 URI/URL
 
     Example:
         bucket, key = parse_s3_uri("s3://my-bucket/docs/file.pdf")
@@ -61,13 +62,26 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     # Type hint says str but callers may pass None from optional fields.
     if not s3_uri:
         raise ValueError("S3 URI cannot be empty or None")
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
 
-    parts = s3_uri[5:].split("/", 1)
-    bucket = parts[0]
-    key = parts[1] if len(parts) > 1 else ""
-    return bucket, key
+    # Handle s3:// URI format
+    if s3_uri.startswith("s3://"):
+        parts = s3_uri[5:].split("/", 1)
+        bucket = parts[0]
+        key = parts[1] if len(parts) > 1 else ""
+        return bucket, key
+
+    # Handle HTTPS S3 URL format (returned by AWS Transcribe, etc.)
+    # Format: https://s3.region.amazonaws.com/bucket/key
+    if s3_uri.startswith("https://s3.") and ".amazonaws.com/" in s3_uri:
+        # Extract path after amazonaws.com/
+        path_start = s3_uri.find(".amazonaws.com/") + len(".amazonaws.com/")
+        path = s3_uri[path_start:]
+        parts = path.split("/", 1)
+        bucket = parts[0]
+        key = parts[1] if len(parts) > 1 else ""
+        return bucket, key
+
+    raise ValueError(f"Invalid S3 URI: {s3_uri}")
 
 
 def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str:
