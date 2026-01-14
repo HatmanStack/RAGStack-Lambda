@@ -6,7 +6,8 @@ import {
   Box,
   SpaceBetween,
   ExpandableSection,
-  Badge
+  Badge,
+  Link
 } from '@cloudscape-design/components';
 import type { SearchResult } from '../../hooks/useSearch';
 
@@ -69,12 +70,41 @@ export const SearchResults = ({ results, query }: SearchResultsProps) => {
               {result.source && (
                 <Box>
                   <Box variant="awsui-key-label">Source</Box>
-                  <Box fontSize="body-s" color="text-body-secondary">
-                    Document: {getDocumentIdFromSource(result.source)}
-                  </Box>
-                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#5f6b7a', wordBreak: 'break-all' }}>
-                    {result.source}
-                  </div>
+                  <SpaceBetween direction="horizontal" size="s">
+                    <Box fontSize="body-s" color="text-body-secondary">
+                      {result.isSegment ? 'Video Segment' : (result.filename || `Document: ${result.documentId || getDocumentIdFromSource(result.source)}`)}
+                    </Box>
+                    {result.isSegment && result.timestampStart !== undefined && (
+                      <Badge color="blue">
+                        {Math.floor(result.timestampStart / 60)}:{String(Math.floor(result.timestampStart % 60)).padStart(2, '0')}
+                      </Badge>
+                    )}
+                    {result.isSegment && result.segmentUrl && (
+                      <Link href={result.segmentUrl} external fontSize="body-s">
+                        Jump to Clip
+                      </Link>
+                    )}
+                    {result.isSegment && result.documentUrl && (
+                      <Link href={result.documentUrl} external fontSize="body-s">
+                        Full Video
+                      </Link>
+                    )}
+                    {!result.isSegment && result.documentUrl && (
+                      <Link href={result.documentUrl} external fontSize="body-s">
+                        Download
+                      </Link>
+                    )}
+                    {result.isScraped && result.sourceUrl && (
+                      <Link href={result.sourceUrl} external fontSize="body-s">
+                        View Original
+                      </Link>
+                    )}
+                  </SpaceBetween>
+                  {!result.documentUrl && !result.segmentUrl && result.documentAccessAllowed === false && (
+                    <Box fontSize="body-s" color="text-status-inactive">
+                      Document download disabled
+                    </Box>
+                  )}
                 </Box>
               )}
             </SpaceBetween>

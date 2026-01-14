@@ -242,7 +242,7 @@ type ReindexJob @aws_cognito_user_pools {
 }
 
 # Document type
-type Document {
+type Document @aws_api_key @aws_cognito_user_pools {
   documentId: ID!
   filename: String!
   inputS3Uri: String!
@@ -256,6 +256,11 @@ type Document {
   updatedAt: String
   metadata: AWSJSON
   previewUrl: String
+  # Content type: document, media, image, scrape
+  type: String
+  # For media files
+  mediaType: String
+  durationSeconds: Int
 }
 
 # Document status enum
@@ -265,18 +270,20 @@ enum DocumentStatus {
   PROCESSING
   OCR_COMPLETE
   EMBEDDING_COMPLETE
+  TRANSCRIBING
+  TRANSCRIBED
   INDEXED
   FAILED
 }
 
 # Paginated document list
-type DocumentConnection {
+type DocumentConnection @aws_api_key @aws_cognito_user_pools {
   items: [Document!]!
   nextToken: String
 }
 
 # Delete documents result
-type DeleteDocumentsResult {
+type DeleteDocumentsResult @aws_api_key @aws_cognito_user_pools {
   deletedCount: Int!
   failedIds: [ID!]
   errors: [String!]
@@ -341,6 +348,22 @@ type KBResult @aws_iam @aws_api_key @aws_cognito_user_pools {
   content: String!
   source: String
   score: Float
+  # Source access fields (same as Source type for chat)
+  documentId: String
+  filename: String
+  documentUrl: String
+  documentAccessAllowed: Boolean
+  # Content type indicators
+  isScraped: Boolean
+  sourceUrl: String
+  isImage: Boolean
+  thumbnailUrl: String
+  isMedia: Boolean
+  mediaType: String
+  # Segment fields (for video/audio clips)
+  isSegment: Boolean
+  segmentUrl: String
+  timestampStart: Float
 }
 
 # Configuration response containing Schema, Default, and Custom configs
@@ -402,7 +425,7 @@ type Image @aws_api_key @aws_cognito_user_pools {
 }
 
 # Paginated image list
-type ImageConnection {
+type ImageConnection @aws_api_key @aws_cognito_user_pools {
   items: [Image!]!
   nextToken: String
 }

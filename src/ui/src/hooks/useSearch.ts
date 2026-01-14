@@ -7,6 +7,19 @@ export interface SearchResult {
   content: string;
   source: string;
   score: number;
+  documentId?: string;
+  filename?: string;
+  documentUrl?: string;
+  documentAccessAllowed?: boolean;
+  isScraped?: boolean;
+  sourceUrl?: string;
+  isImage?: boolean;
+  thumbnailUrl?: string;
+  isMedia?: boolean;
+  mediaType?: string;
+  isSegment?: boolean;
+  segmentUrl?: string;
+  timestampStart?: number;
 }
 
 const SEARCH_KB = gql`
@@ -17,6 +30,19 @@ const SEARCH_KB = gql`
         content
         source
         score
+        documentId
+        filename
+        documentUrl
+        documentAccessAllowed
+        isScraped
+        sourceUrl
+        isImage
+        thumbnailUrl
+        isMedia
+        mediaType
+        isSegment
+        segmentUrl
+        timestampStart
       }
       total
       error
