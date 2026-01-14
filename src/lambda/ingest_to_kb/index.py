@@ -450,7 +450,9 @@ def lambda_handler(event, context):
                 documents=[document],
             )
 
-            logger.info(f"Ingestion response (attempt {attempt + 1}): {json.dumps(response, default=str)}")
+            logger.info(
+                f"Ingestion response (attempt {attempt + 1}): {json.dumps(response, default=str)}"
+            )
 
             # Check actual ingestion status
             final_status = check_document_status(kb_id, ds_id, output_s3_uri)
