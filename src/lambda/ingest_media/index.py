@@ -159,10 +159,10 @@ def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[
             reduced[key] = value
             continue
 
-        # Level 2+: Truncate arrays to 3 items max
+        # Level 2+: Truncate arrays to 3 items max, preserve scalars
         if reduction_level >= 2 and isinstance(value, list):
             reduced[key] = value[:3]
-        elif reduction_level < 2:
+        else:
             reduced[key] = value
 
     return reduced

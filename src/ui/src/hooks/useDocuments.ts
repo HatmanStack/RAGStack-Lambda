@@ -226,6 +226,7 @@ export const useDocuments = () => {
       } while (nextToken);
 
       // Transform scrape jobs to match document structure for unified display
+      // Note: ScrapeJob type doesn't have updatedAt, so we leave it undefined
       const transformedJobs: DocumentItem[] = allItems.map(job => ({
         documentId: job.jobId as string,
         filename: (job.title as string) || (job.baseUrl as string),
@@ -234,7 +235,7 @@ export const useDocuments = () => {
         processedCount: job.processedCount as number | undefined,
         failedCount: job.failedCount as number | undefined,
         createdAt: job.createdAt as string | undefined,
-        updatedAt: job.createdAt as string | undefined,
+        updatedAt: undefined,
         type: 'scrape',
         baseUrl: job.baseUrl as string | undefined
       }));
