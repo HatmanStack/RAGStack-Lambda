@@ -106,7 +106,7 @@ CORE_METADATA_KEYS = {
 }
 
 
-def check_document_status(kb_id: str, ds_id: str, s3_uri: str) -> str:
+def check_document_status(kb_id: str, ds_id: str, s3_uri: str, sleep_first: bool = True) -> str:
     """
     Quick check for document ingestion status (single call, no polling).
 
@@ -114,13 +114,14 @@ def check_document_status(kb_id: str, ds_id: str, s3_uri: str) -> str:
         kb_id: Knowledge Base ID.
         ds_id: Data Source ID.
         s3_uri: S3 URI of the document.
+        sleep_first: Whether to sleep before checking (default True for single doc checks).
 
     Returns:
         Status string (INDEXED, FAILED, STARTING, etc.)
     """
     try:
-        # Brief pause to let Bedrock process
-        time.sleep(2)
+        if sleep_first:
+            time.sleep(2)
 
         response = bedrock_agent.get_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -134,6 +135,54 @@ def check_document_status(kb_id: str, ds_id: str, s3_uri: str) -> str:
         logger.warning(f"Error checking document status: {e}")
 
     return "UNKNOWN"
+
+
+# Batch limits for Bedrock KB APIs
+INGEST_BATCH_SIZE = 25
+STATUS_CHECK_BATCH_SIZE = 25
+
+
+def batch_check_document_statuses(
+    kb_id: str, ds_id: str, s3_uris: list[str]
+) -> dict[str, str]:
+    """
+    Check ingestion status for multiple documents in batches.
+
+    Args:
+        kb_id: Knowledge Base ID.
+        ds_id: Data Source ID.
+        s3_uris: List of S3 URIs to check.
+
+    Returns:
+        Dict mapping S3 URI to status string.
+    """
+    results = {}
+
+    for i in range(0, len(s3_uris), STATUS_CHECK_BATCH_SIZE):
+        batch = s3_uris[i : i + STATUS_CHECK_BATCH_SIZE]
+        doc_identifiers = [
+            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in batch
+        ]
+
+        try:
+            response = bedrock_agent.get_knowledge_base_documents(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+                documentIdentifiers=doc_identifiers,
+            )
+            doc_details = response.get("documentDetails", [])
+            for detail in doc_details:
+                uri = detail.get("identifier", {}).get("s3", {}).get("uri")
+                status = detail.get("status", "UNKNOWN")
+                if uri:
+                    results[uri] = status
+        except ClientError as e:
+            logger.warning(f"Error batch checking document statuses: {e}")
+            # Mark batch as unknown on error
+            for uri in batch:
+                results[uri] = "UNKNOWN"
+
+    return results
 
 
 def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
@@ -369,69 +418,98 @@ def extract_metadata_for_segment_group(
         return base_metadata.copy()
 
 
-def _ingest_segment_with_retry(
-    segment_uri: str,
-    segment_metadata: dict[str, Any],
+def _prepare_segment_data(
+    transcript_segments: list[dict[str, Any]],
+    base_metadata: dict[str, Any],
+    base_bucket: str,
+    content_dir: str,
+    document_id: str,
+) -> list[dict[str, Any]]:
+    """
+    Prepare segment data with metadata for batch ingestion.
+
+    Groups segments by time window for metadata extraction, then builds
+    segment-specific metadata with timestamps.
+
+    Returns list of dicts with: segment_uri, segment_metadata, segment_index
+    """
+    segment_data = []
+
+    # Group segments into 5-minute windows for metadata extraction
+    segment_groups = group_segments_by_time_window(transcript_segments, window_seconds=300)
+    logger.info(f"Grouped {len(transcript_segments)} segments into {len(segment_groups)} windows")
+
+    for group in segment_groups:
+        # Extract metadata for this time window
+        group_metadata = extract_metadata_for_segment_group(group, base_metadata, document_id)
+
+        for segment in group:
+            segment_index = segment.get("segment_index", 0)
+            timestamp_start = segment.get("timestamp_start", 0)
+            timestamp_end = segment.get("timestamp_end", 0)
+
+            # Flat segment path: content/<doc_id>/segment-000.txt
+            segment_key = f"{content_dir}/segment-{segment_index:03d}.txt"
+            segment_uri = f"s3://{base_bucket}/{segment_key}"
+
+            # Build segment-specific metadata with timestamps
+            segment_metadata = {
+                **group_metadata,
+                "segment_index": segment_index,
+                "timestamp_start": timestamp_start,
+                "timestamp_end": timestamp_end,
+            }
+
+            segment_data.append({
+                "segment_uri": segment_uri,
+                "segment_metadata": segment_metadata,
+                "segment_index": segment_index,
+            })
+
+    return segment_data
+
+
+def _batch_ingest_segments(
+    segment_data: list[dict[str, Any]],
     kb_id: str,
     ds_id: str,
-    segment_index: int,
-    max_retries: int = 2,
-) -> bool:
+) -> None:
     """
-    Ingest a single segment with retry on metadata failure.
+    Batch ingest segments (25 per API call).
 
-    Returns True if ingested successfully, False otherwise.
+    Writes metadata files and calls IngestKnowledgeBaseDocuments in batches.
     """
-    current_metadata = segment_metadata.copy()
+    for i in range(0, len(segment_data), INGEST_BATCH_SIZE):
+        batch = segment_data[i : i + INGEST_BATCH_SIZE]
+        documents = []
 
-    for attempt in range(max_retries):
-        # Write metadata file
-        metadata_uri = write_metadata_to_s3(segment_uri, current_metadata)
-
-        # Build document for direct API ingestion
-        document = {
-            "content": {
-                "dataSourceType": "S3",
-                "s3": {"s3Location": {"uri": segment_uri}},
-            },
-            "metadata": {
-                "type": "S3_LOCATION",
-                "s3Location": {"uri": metadata_uri},
-            },
-        }
-
-        # Ingest via direct API
-        response = bedrock_agent.ingest_knowledge_base_documents(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-            documents=[document],
-        )
-
-        doc_details = response.get("documentDetails", [])
-        initial_status = doc_details[0].get("status", "UNKNOWN") if doc_details else "UNKNOWN"
-
-        # Quick check for final status
-        final_status = check_document_status(kb_id, ds_id, segment_uri)
-        logger.debug(f"Segment {segment_index} status: {final_status}")
-
-        # Success or in-progress
-        if final_status in ("INDEXED", "STARTING", "IN_PROGRESS"):
-            return True
-
-        # Failed - try with reduced metadata
-        if final_status == "FAILED" and attempt < max_retries - 1:
-            reduction_level = attempt + 2  # Start at level 2 for segments
-            logger.warning(
-                f"Segment {segment_index} failed, retrying with reduced metadata (level {reduction_level})"
+        for item in batch:
+            # Write metadata file for this segment
+            metadata_uri = write_metadata_to_s3(
+                item["segment_uri"], item["segment_metadata"]
             )
-            current_metadata = reduce_metadata(segment_metadata, reduction_level)
-            continue
 
-        # Final attempt failed
-        logger.warning(f"Segment {segment_index} ingestion failed after {attempt + 1} attempts")
-        return False
+            documents.append({
+                "content": {
+                    "dataSourceType": "S3",
+                    "s3": {"s3Location": {"uri": item["segment_uri"]}},
+                },
+                "metadata": {
+                    "type": "S3_LOCATION",
+                    "s3Location": {"uri": metadata_uri},
+                },
+            })
 
-    return False
+        # Ingest batch via direct API
+        try:
+            bedrock_agent.ingest_knowledge_base_documents(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+                documents=documents,
+            )
+            logger.debug(f"Ingested batch of {len(documents)} segments")
+        except ClientError as e:
+            logger.error(f"Failed to ingest segment batch: {e}")
 
 
 def ingest_transcript_segments(
@@ -441,12 +519,16 @@ def ingest_transcript_segments(
     output_s3_uri: str,
     kb_id: str,
     ds_id: str,
+    max_retries: int = 3,
 ) -> int:
     """
-    Ingest transcript segments to KB using direct API.
+    Ingest transcript segments to KB using batched direct API.
 
-    Extracts metadata per 5-minute window for better topic coverage.
-    Each segment is ingested with timestamp metadata for deep linking.
+    Uses batched ingestion and status checks to minimize latency:
+    - Ingests all segments in batches of 25
+    - Single sleep after all batches
+    - Batch checks all statuses
+    - Retries only failed segments with reduced metadata
 
     Args:
         document_id: Document identifier.
@@ -455,9 +537,10 @@ def ingest_transcript_segments(
         output_s3_uri: Base S3 URI for the document content.
         kb_id: Knowledge Base ID.
         ds_id: Data Source ID.
+        max_retries: Maximum retry attempts with progressively reduced metadata.
 
     Returns:
-        Number of segments ingested.
+        Number of segments successfully ingested.
     """
     if not transcript_segments:
         logger.info(f"No transcript segments for {document_id}")
@@ -471,51 +554,77 @@ def ingest_transcript_segments(
 
     # Get the content directory (remove filename from prefix)
     content_dir = "/".join(base_prefix.split("/")[:-1])
-    ingested_count = 0
 
-    # Group segments into 5-minute windows for metadata extraction
-    segment_groups = group_segments_by_time_window(transcript_segments, window_seconds=300)
-    logger.info(f"Grouped {len(transcript_segments)} segments into {len(segment_groups)} windows")
+    # Prepare all segment data with metadata
+    try:
+        all_segment_data = _prepare_segment_data(
+            transcript_segments, base_metadata, base_bucket, content_dir, document_id
+        )
+    except Exception as e:
+        logger.error(f"Failed to prepare segment data: {e}")
+        return 0
 
-    for group in segment_groups:
-        # Extract metadata for this time window
-        group_metadata = extract_metadata_for_segment_group(group, base_metadata, document_id)
+    if not all_segment_data:
+        return 0
 
-        for segment in group:
-            try:
-                segment_index = segment.get("segment_index", 0)
-                timestamp_start = segment.get("timestamp_start", 0)
-                timestamp_end = segment.get("timestamp_end", 0)
+    total_segments = len(all_segment_data)
+    pending = all_segment_data.copy()
 
-                # Flat segment path: content/<doc_id>/segment-000.txt
-                segment_key = f"{content_dir}/segment-{segment_index:03d}.txt"
-                segment_uri = f"s3://{base_bucket}/{segment_key}"
+    for attempt in range(max_retries):
+        if not pending:
+            break
 
-                # Build segment-specific metadata with timestamps
-                segment_metadata = {
-                    **group_metadata,
-                    "segment_index": segment_index,
-                    "timestamp_start": timestamp_start,
-                    "timestamp_end": timestamp_end,
-                }
-
-                # Ingest with retry on metadata failure
-                # (write_metadata_to_s3 is called inside _ingest_segment_with_retry)
-                ingested = _ingest_segment_with_retry(
-                    segment_uri=segment_uri,
-                    segment_metadata=segment_metadata,
-                    kb_id=kb_id,
-                    ds_id=ds_id,
-                    segment_index=segment_index,
+        # Reduce metadata for retries (level 2+ for segments)
+        if attempt > 0:
+            reduction_level = attempt + 1
+            logger.warning(
+                f"Retry {attempt}: reducing metadata (level {reduction_level}) for "
+                f"{len(pending)} failed segments"
+            )
+            for item in pending:
+                item["segment_metadata"] = reduce_metadata(
+                    item["segment_metadata"], reduction_level
                 )
-                if ingested:
-                    ingested_count += 1
 
-            except Exception as e:
-                logger.warning(f"Failed to ingest segment {segment_index}: {e}")
-                continue
+        # Batch ingest all pending segments
+        logger.info(f"Attempt {attempt + 1}: ingesting {len(pending)} segments in batches")
+        _batch_ingest_segments(pending, kb_id, ds_id)
 
-    logger.info(f"Ingested {ingested_count} segments for {document_id}")
+        # Single sleep after all batches
+        time.sleep(2)
+
+        # Batch check all statuses
+        pending_uris = [item["segment_uri"] for item in pending]
+        statuses = batch_check_document_statuses(kb_id, ds_id, pending_uris)
+
+        # Filter to only failed segments for retry
+        still_pending = []
+        for item in pending:
+            status = statuses.get(item["segment_uri"], "UNKNOWN")
+            if status == "FAILED":
+                still_pending.append(item)
+            elif status not in ("INDEXED", "STARTING", "IN_PROGRESS"):
+                # Unknown status - assume it might have failed
+                still_pending.append(item)
+
+        succeeded_this_round = len(pending) - len(still_pending)
+        logger.info(
+            f"Attempt {attempt + 1}: {succeeded_this_round} succeeded, "
+            f"{len(still_pending)} failed/pending"
+        )
+
+        pending = still_pending
+
+    # Calculate final success count
+    ingested_count = total_segments - len(pending)
+    if pending:
+        failed_indices = [item["segment_index"] for item in pending]
+        logger.warning(
+            f"Failed to ingest {len(pending)} segments after {max_retries} attempts: "
+            f"{failed_indices[:10]}{'...' if len(failed_indices) > 10 else ''}"
+        )
+
+    logger.info(f"Ingested {ingested_count}/{total_segments} segments for {document_id}")
     return ingested_count
 
 
