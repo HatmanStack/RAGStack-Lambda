@@ -70,6 +70,9 @@ export const MetadataPanel: React.FC = () => {
   );
 
   const handleToggleExample = useCallback((name: string, enabled: boolean) => {
+    // Capture previous state for rollback on failure
+    const previousDisabled = [...disabledExamples];
+
     // Optimistic update using functional form to avoid stale closures
     setDisabledExamples(prev => {
       if (enabled) {
@@ -97,9 +100,13 @@ export const MetadataPanel: React.FC = () => {
         }) as GqlResponse;
         if (response.errors?.length) {
           console.error('Failed to save disabled examples:', response.errors);
+          // Rollback optimistic update on error
+          setDisabledExamples(previousDisabled);
         }
       } catch (err: unknown) {
         console.error('Failed to save disabled examples:', err);
+        // Rollback optimistic update on error
+        setDisabledExamples(previousDisabled);
       }
     })();
   }, [client, disabledExamples]);

@@ -63,10 +63,24 @@ def extract_kb_scalar(value: any) -> str | None:
 
 
 # Module-level initialization (reused across Lambda invocations)
-config_manager = ConfigurationManager()
 dynamodb = boto3.resource("dynamodb")
 bedrock_agent = boto3.client("bedrock-agent-runtime")
 s3_client = boto3.client("s3")
+
+# Lazy-initialized config manager (avoid raising at import time)
+_config_manager = None
+
+
+def get_config_manager():
+    """Get or create ConfigurationManager singleton (lazy initialization)."""
+    global _config_manager
+    if _config_manager is None:
+        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+        if table_name:
+            _config_manager = ConfigurationManager(table_name=table_name)
+        else:
+            _config_manager = ConfigurationManager()
+    return _config_manager
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
 _key_library = None
@@ -108,7 +122,7 @@ def _get_filter_examples():
         return _filter_examples_cache
 
     # Load from config
-    examples = config_manager.get_parameter("metadata_filter_examples", default=[])
+    examples = get_config_manager().get_parameter("metadata_filter_examples", default=[])
     _filter_examples_cache = examples if isinstance(examples, list) else []
     _filter_examples_cache_time = now
 
@@ -136,10 +150,14 @@ def lookup_original_source(document_id, tracking_table_name):
         response = table.get_item(Key={"document_id": document_id})
         item = response.get("Item")
         if item:
+            # Normalize type field (scrape -> scraped for consistency)
+            doc_type = item.get("type") or "document"
+            if doc_type == "scrape":
+                doc_type = "scraped"
             return {
                 "input_s3_uri": item.get("input_s3_uri"),
                 "filename": item.get("filename"),
-                "type": item.get("type"),  # document, image, media, scrape
+                "type": doc_type,
                 "media_type": item.get("media_type"),  # video, audio
                 "source_url": item.get("source_url"),  # for scraped content
             }
@@ -253,6 +271,7 @@ def lambda_handler(event, context):
         generated_filter = None
 
         # Check if filter generation is enabled
+        config_manager = get_config_manager()
         filter_enabled = config_manager.get_parameter("filter_generation_enabled", default=True)
         multislice_enabled = config_manager.get_parameter("multislice_enabled", default=True)
 
@@ -335,9 +354,9 @@ def lambda_handler(event, context):
                 if doc_info.get("input_s3_uri"):
                     source_uri = doc_info["input_s3_uri"]
 
-            # Determine content type
+            # Determine content type (type is already normalized by lookup_original_source)
             doc_type = doc_info.get("type", "document")
-            is_scraped = doc_type == "scrape"
+            is_scraped = doc_type == "scraped"
             is_image = doc_type == "image"
             is_media = doc_type == "media"
 

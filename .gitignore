@@ -52,3 +52,4 @@ ragstack-packaged.yaml
 
 # Generated files
 src/ragstack-chat/src/amplify-config.generated.ts
+.coverage

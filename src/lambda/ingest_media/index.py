@@ -499,22 +499,8 @@ def ingest_transcript_segments(
                     "timestamp_end": timestamp_end,
                 }
 
-                # Write metadata file
-                metadata_uri = write_metadata_to_s3(segment_uri, segment_metadata)
-
-                # Build document for direct API ingestion
-                document = {
-                    "content": {
-                        "dataSourceType": "S3",
-                        "s3": {"s3Location": {"uri": segment_uri}},
-                    },
-                    "metadata": {
-                        "type": "S3_LOCATION",
-                        "s3Location": {"uri": metadata_uri},
-                    },
-                }
-
                 # Ingest with retry on metadata failure
+                # (write_metadata_to_s3 is called inside _ingest_segment_with_retry)
                 ingested = _ingest_segment_with_retry(
                     segment_uri=segment_uri,
                     segment_metadata=segment_metadata,

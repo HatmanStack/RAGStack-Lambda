@@ -393,6 +393,12 @@ class OcrService:
             document.status = Status.FAILED
             document.error_message = str(e)
             return document
+        except Exception as e:
+            # Catch any other errors (including job failures/timeouts)
+            logger.exception("Unexpected error processing with Textract")
+            document.status = Status.FAILED
+            document.error_message = str(e)
+            return document
 
     def _render_page_to_image(self, pdf_page, max_size_bytes: int = 5 * 1024 * 1024) -> bytes:
         """
@@ -636,6 +642,12 @@ class OcrService:
 
         except (fitz.FileDataError, RuntimeError, ClientError) as e:
             logger.exception("Error processing with Bedrock")
+            document.status = Status.FAILED
+            document.error_message = str(e)
+            return document
+        except Exception as e:
+            # Catch any other errors
+            logger.exception("Unexpected error processing with Bedrock")
             document.status = Status.FAILED
             document.error_message = str(e)
             return document

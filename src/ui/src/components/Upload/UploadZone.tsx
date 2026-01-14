@@ -12,22 +12,26 @@ export const UploadZone = ({ onFilesSelected, disabled }: UploadZoneProps) => {
   const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    // Don't update drag state when disabled
+    if (disabled) return;
     if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
     } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
-  }, []);
+  }, [disabled]);
 
   const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+    // Don't process files when disabled
+    if (disabled) return;
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onFilesSelected(Array.from(e.dataTransfer.files));
     }
-  }, [onFilesSelected]);
+  }, [onFilesSelected, disabled]);
 
   const handleFileInput = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

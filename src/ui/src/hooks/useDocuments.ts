@@ -28,8 +28,8 @@ export interface DocumentItem {
   caption?: string;
   thumbnailUrl?: string;
   s3Uri?: string;
-  // Media-specific (video/audio)
-  mediaType?: 'video' | 'audio';
+  // Media-specific (video/audio) - string to handle MIME types from backend
+  mediaType?: string;
   durationSeconds?: number;
 }
 

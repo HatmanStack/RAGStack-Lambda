@@ -911,6 +911,10 @@ def extract_sources(citations):
                             tracking_input_uri = tracking_item.get("input_s3_uri")
                             tracking_source_url = tracking_item.get("source_url")
                             original_filename = tracking_item.get("filename")
+                            # Get document type for media detection (normalize scrape -> scraped)
+                            doc_type = tracking_item.get("type") or "document"
+                            if doc_type == "scrape":
+                                doc_type = "scraped"
                             logger.info(
                                 f"[SOURCE] Tracking lookup SUCCESS: "
                                 f"input_s3_uri={tracking_input_uri}, "
@@ -920,13 +924,16 @@ def extract_sources(citations):
                                 f"type={tracking_item.get('type')}"
                             )
                         else:
+                            doc_type = "document"  # Default when no tracking item
                             logger.warning(
                                 f"[SOURCE] Tracking lookup EMPTY: "
                                 f"No item found for document_id={document_id}"
                             )
                     except Exception as e:
+                        doc_type = "document"  # Default on error
                         logger.error(f"[SOURCE] Tracking lookup FAILED: {e}", exc_info=True)
                 else:
+                    doc_type = "document"  # Default when no tracking table
                     logger.warning("[SOURCE] TRACKING_TABLE env var not set!")
 
                 # Construct document URI
@@ -1048,12 +1055,22 @@ def extract_sources(citations):
                         document_url = source_url
                         logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
-                    # Check for media sources (video/audio content types or tracking type)
+                    # Check for media sources (video/audio/transcript/visual content types or tracking type)
                     # KB metadata comes as lists with quoted strings, extract scalars
                     metadata = ref.get("metadata", {})
                     content_type = extract_kb_scalar(metadata.get("content_type"))
-                    is_media = content_type in ("video", "audio") or doc_type == "media"
-                    media_type = content_type if is_media and content_type in ("video", "audio") else None
+                    is_media = content_type in ("video", "audio", "transcript", "visual") or doc_type == "media"
+                    # Get media_type - prefer explicit media_type from metadata, else derive from content_type
+                    if is_media:
+                        media_type_raw = extract_kb_scalar(metadata.get("media_type"))
+                        if media_type_raw in ("video", "audio"):
+                            media_type = media_type_raw
+                        elif content_type in ("video", "audio"):
+                            media_type = content_type
+                        else:
+                            media_type = None
+                    else:
+                        media_type = None
 
                     # Extract timestamp fields (convert to int for URL generation)
                     timestamp_start = None
@@ -1073,7 +1090,14 @@ def extract_sources(citations):
                                 pass
 
                     speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
-                    segment_index = extract_kb_scalar(metadata.get("segment_index")) if is_media else None
+                    segment_index = None
+                    if is_media:
+                        seg_idx_str = extract_kb_scalar(metadata.get("segment_index"))
+                        if seg_idx_str is not None:
+                            try:
+                                segment_index = int(seg_idx_str)
+                            except (ValueError, TypeError):
+                                pass
 
                     # For media sources, generate URL with timestamp fragment
                     if is_media and allow_document_access and document_s3_uri:
