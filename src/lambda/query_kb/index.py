@@ -26,12 +26,14 @@ Output (ChatResponse):
 }
 """
 
+import contextlib
 import json
 import logging
 import os
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from urllib.parse import unquote
 
 import boto3
@@ -39,7 +41,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
@@ -54,8 +56,39 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Module-level initialization (reused across Lambda invocations in same container)
-config_manager = ConfigurationManager()
+
+def extract_kb_scalar(value: Any) -> str | None:
+    """Extract scalar value from KB metadata which returns lists with quoted strings.
+
+    KB returns metadata like: ['"0"'] or ['value1', 'value2']
+    This extracts the first value and strips extra quotes.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if not value:
+            return None
+        value = value[0]
+    if isinstance(value, str):
+        return value.strip('"')
+    return str(value)
+
+
+# Module-level lazy initialization (reused across Lambda invocations in same container)
+_config_manager = None
+
+
+def get_config_manager():
+    """Lazy-load ConfigurationManager to avoid import-time failures."""
+    global _config_manager
+    if _config_manager is None:
+        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+        if table_name:
+            _config_manager = ConfigurationManager(table_name=table_name)
+        else:
+            _config_manager = ConfigurationManager()
+    return _config_manager
+
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
 _key_library = None
@@ -75,7 +108,7 @@ def _get_filter_components():
 
     if _filter_generator is None:
         # Read configured model, falling back to default if not set
-        filter_model = config_manager.get_parameter("filter_generation_model", default=None)
+        filter_model = get_config_manager().get_parameter("filter_generation_model", default=None)
         _filter_generator = FilterGenerator(key_library=_key_library, model_id=filter_model)
 
     if _multislice_retriever is None:
@@ -101,7 +134,7 @@ def _get_filter_examples():
         return _filter_examples_cache
 
     # Load from config
-    examples = config_manager.get_parameter("metadata_filter_examples", default=[])
+    examples = get_config_manager().get_parameter("metadata_filter_examples", default=[])
     _filter_examples_cache = examples if isinstance(examples, list) else []
     _filter_examples_cache_time = now
 
@@ -134,14 +167,18 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         str: Model ID to use (primary or fallback)
     """
     # Load quota configuration
-    primary_model = config_manager.get_parameter(
+    primary_model = get_config_manager().get_parameter(
         "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
     )
-    fallback_model = config_manager.get_parameter(
+    fallback_model = get_config_manager().get_parameter(
         "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
     )
-    global_quota_daily = config_manager.get_parameter("chat_global_quota_daily", default=10000)
-    per_user_quota_daily = config_manager.get_parameter("chat_per_user_quota_daily", default=100)
+    global_quota_daily = get_config_manager().get_parameter(
+        "chat_global_quota_daily", default=10000
+    )
+    per_user_quota_daily = get_config_manager().get_parameter(
+        "chat_per_user_quota_daily", default=100
+    )
 
     # Ensure quotas are integers
     if isinstance(global_quota_daily, Decimal):
@@ -893,6 +930,10 @@ def extract_sources(citations):
                             tracking_input_uri = tracking_item.get("input_s3_uri")
                             tracking_source_url = tracking_item.get("source_url")
                             original_filename = tracking_item.get("filename")
+                            # Get document type for media detection (normalize scrape -> scraped)
+                            doc_type = tracking_item.get("type") or "document"
+                            if doc_type == "scrape":
+                                doc_type = "scraped"
                             logger.info(
                                 f"[SOURCE] Tracking lookup SUCCESS: "
                                 f"input_s3_uri={tracking_input_uri}, "
@@ -902,13 +943,16 @@ def extract_sources(citations):
                                 f"type={tracking_item.get('type')}"
                             )
                         else:
+                            doc_type = "document"  # Default when no tracking item
                             logger.warning(
                                 f"[SOURCE] Tracking lookup EMPTY: "
                                 f"No item found for document_id={document_id}"
                             )
                     except Exception as e:
+                        doc_type = "document"  # Default on error
                         logger.error(f"[SOURCE] Tracking lookup FAILED: {e}", exc_info=True)
                 else:
+                    doc_type = "document"  # Default when no tracking table
                     logger.warning("[SOURCE] TRACKING_TABLE env var not set!")
 
                 # Construct document URI
@@ -977,7 +1021,7 @@ def extract_sources(citations):
                 source_key = f"{document_id}:{page_num}"
                 if source_key not in seen:
                     # Check if document access is allowed
-                    allow_document_access = config_manager.get_parameter(
+                    allow_document_access = get_config_manager().get_parameter(
                         "chat_allow_document_access", default=False
                     )
                     logger.info(f"[SOURCE] Document access allowed: {allow_document_access}")
@@ -1030,15 +1074,44 @@ def extract_sources(citations):
                         document_url = source_url
                         logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
-                    # Check for media sources (transcript or visual content types)
+                    # Check for media sources (video/audio content types or tracking type)
+                    # KB metadata comes as lists with quoted strings, extract scalars
                     metadata = ref.get("metadata", {})
-                    content_type = metadata.get("content_type")
-                    is_media = content_type in ("transcript", "visual")
-                    media_type = metadata.get("media_type") if is_media else None
-                    timestamp_start = metadata.get("timestamp_start") if is_media else None
-                    timestamp_end = metadata.get("timestamp_end") if is_media else None
-                    speaker = metadata.get("speaker") if is_media else None
-                    segment_index = metadata.get("segment_index") if is_media else None
+                    content_type = extract_kb_scalar(metadata.get("content_type"))
+                    media_content_types = ("video", "audio", "transcript", "visual")
+                    is_media = content_type in media_content_types or doc_type == "media"
+                    # Get media_type from metadata or derive from content_type
+                    if is_media:
+                        media_type_raw = extract_kb_scalar(metadata.get("media_type"))
+                        if media_type_raw in ("video", "audio"):
+                            media_type = media_type_raw
+                        elif content_type in ("video", "audio"):
+                            media_type = content_type
+                        else:
+                            media_type = None
+                    else:
+                        media_type = None
+
+                    # Extract timestamp fields (convert to int for URL generation)
+                    timestamp_start = None
+                    timestamp_end = None
+                    if is_media:
+                        ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
+                        ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
+                        if ts_start_str is not None:
+                            with contextlib.suppress(ValueError, TypeError):
+                                timestamp_start = int(ts_start_str)
+                        if ts_end_str is not None:
+                            with contextlib.suppress(ValueError, TypeError):
+                                timestamp_end = int(ts_end_str)
+
+                    speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
+                    segment_index = None
+                    if is_media:
+                        seg_idx_str = extract_kb_scalar(metadata.get("segment_index"))
+                        if seg_idx_str is not None:
+                            with contextlib.suppress(ValueError, TypeError):
+                                segment_index = int(seg_idx_str)
 
                     # For media sources, generate URL with timestamp fragment
                     if is_media and allow_document_access and document_s3_uri:
@@ -1122,7 +1195,7 @@ def lambda_handler(event, context):
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
     # Check public access control
-    allowed, error_msg = check_public_access(event, "chat", config_manager)
+    allowed, error_msg = check_public_access(event, "chat", get_config_manager())
     if not allowed:
         return {
             "answer": "",
@@ -1131,14 +1204,15 @@ def lambda_handler(event, context):
             "error": error_msg,
         }
 
-    # Get environment variables (moved here for testability)
-    knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    if not knowledge_base_id:
+    # Get KB config from config table (with env var fallback)
+    try:
+        knowledge_base_id, _ = get_knowledge_base_config(get_config_manager())
+    except ValueError as e:
         return {
             "answer": "",
             "conversationId": None,
             "sources": [],
-            "error": "KNOWLEDGE_BASE_ID environment variable is required",
+            "error": str(e),
         }
 
     region = os.environ.get("AWS_REGION", "us-east-1")
@@ -1247,8 +1321,10 @@ def lambda_handler(event, context):
         generated_filter = None
 
         # Check if filter generation is enabled
-        filter_enabled = config_manager.get_parameter("filter_generation_enabled", default=True)
-        multislice_enabled = config_manager.get_parameter("multislice_enabled", default=True)
+        filter_enabled = get_config_manager().get_parameter(
+            "filter_generation_enabled", default=True
+        )
+        multislice_enabled = get_config_manager().get_parameter("multislice_enabled", default=True)
 
         # Generate metadata filter if enabled (includes content_type filtering)
         if filter_enabled:
@@ -1348,7 +1424,9 @@ def lambda_handler(event, context):
             "clearly state that and provide what relevant information you can. "
             "Be concise but thorough."
         )
-        system_prompt = config_manager.get_parameter("chat_system_prompt", default=default_prompt)
+        system_prompt = get_config_manager().get_parameter(
+            "chat_system_prompt", default=default_prompt
+        )
 
         # Call Converse API
         converse_response = bedrock_runtime.converse(

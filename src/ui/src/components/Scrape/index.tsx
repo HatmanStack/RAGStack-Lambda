@@ -16,6 +16,31 @@ interface ScrapeJob {
   jobId: string;
 }
 
+interface ScrapeConfig {
+  url: string;
+  maxPages: number;
+  maxDepth: number;
+  scope: string;
+  includePatterns: string[];
+  excludePatterns: string[];
+  scrapeMode: string;
+  cookies: string | null;
+  forceRescrape: boolean;
+  force?: boolean;
+}
+
+interface DuplicateWarning {
+  date: string;
+  jobId?: string;
+  title?: string;
+}
+
+interface ApiExample {
+  id: string;
+  label: string;
+  code: string;
+}
+
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
 const graphqlExample = `# Start a scrape job
@@ -69,10 +94,10 @@ const curlExample = `curl -X POST 'ENDPOINT' \\
 export const Scrape = () => {
   const navigate = useNavigate();
   const { startScrape, checkDuplicate, loading: hookLoading, error: hookError, clearError } = useScrape();
-  const [duplicateWarning, setDuplicateWarning] = useState(null);
-  const [pendingConfig, setPendingConfig] = useState(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateWarning | null>(null);
+  const [pendingConfig, setPendingConfig] = useState<ScrapeConfig | null>(null);
 
-  const handleSubmit = async (config) => {
+  const handleSubmit = async (config: ScrapeConfig) => {
     if (!config.force) {
       const duplicate = await checkDuplicate(config.url) as DuplicateCheck | null;
       if (duplicate?.exists) {
@@ -121,6 +146,12 @@ export const Scrape = () => {
     setPendingConfig(null);
   };
 
+  const examples: ApiExample[] = [
+    { id: 'graphql', label: 'GraphQL', code: graphqlExample },
+    { id: 'js', label: 'JavaScript', code: jsExample },
+    { id: 'curl', label: 'cURL', code: curlExample },
+  ];
+
   return (
     <SpaceBetween size="l">
       {hookError && (
@@ -143,11 +174,7 @@ export const Scrape = () => {
           title="Scrape API"
           description="Start scrapes programmatically. Configure maxPages, maxDepth, scope (SUBPAGES|HOSTNAME|DOMAIN), include/exclude patterns, and scrapeMode (AUTO|FAST|FULL)."
           endpoint={graphqlEndpoint}
-          examples={[
-            { id: 'graphql', label: 'GraphQL', code: graphqlExample },
-            { id: 'js', label: 'JavaScript', code: jsExample },
-            { id: 'curl', label: 'cURL', code: curlExample },
-          ]}
+          examples={examples}
         />
       )}
     </SpaceBetween>

@@ -64,8 +64,27 @@ const sampleApiKeyResponse = {
   error: null
 };
 
+interface MockClient {
+  graphql: Mock;
+}
+
+interface ConfigResponse {
+  getConfiguration?: {
+    Schema: string;
+    Default: string;
+    Custom: string;
+  };
+}
+
+interface ApiKeyResponse {
+  apiKey: string;
+  id: string;
+  expires: string;
+  error: string | null;
+}
+
 describe('Settings Component', () => {
-  let mockClient;
+  let mockClient: MockClient;
 
   beforeEach(() => {
     mockClient = {
@@ -75,8 +94,8 @@ describe('Settings Component', () => {
   });
 
   // Helper to set up mock that handles both getConfiguration and getApiKey
-  const setupMockGraphql = (configResponse, apiKeyResponse = sampleApiKeyResponse) => {
-    mockClient.graphql.mockImplementation(({ query }) => {
+  const setupMockGraphql = (configResponse: ConfigResponse, apiKeyResponse: ApiKeyResponse = sampleApiKeyResponse) => {
+    mockClient.graphql.mockImplementation(({ query }: { query: string }) => {
       if (query.includes('GetApiKey')) {
         return Promise.resolve({ data: { getApiKey: apiKeyResponse } });
       }

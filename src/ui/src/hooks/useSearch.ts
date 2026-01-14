@@ -3,6 +3,25 @@ import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import type { GqlResponse } from '../types/graphql';
 
+export interface SearchResult {
+  content: string;
+  source: string;
+  score: number;
+  documentId?: string;
+  filename?: string;
+  documentUrl?: string;
+  documentAccessAllowed?: boolean;
+  isScraped?: boolean;
+  sourceUrl?: string;
+  isImage?: boolean;
+  thumbnailUrl?: string;
+  isMedia?: boolean;
+  mediaType?: string;
+  isSegment?: boolean;
+  segmentUrl?: string;
+  timestampStart?: number;
+}
+
 const SEARCH_KB = gql`
   query SearchKnowledgeBase($query: String!, $maxResults: Int) {
     searchKnowledgeBase(query: $query, maxResults: $maxResults) {
@@ -11,6 +30,19 @@ const SEARCH_KB = gql`
         content
         source
         score
+        documentId
+        filename
+        documentUrl
+        documentAccessAllowed
+        isScraped
+        sourceUrl
+        isImage
+        thumbnailUrl
+        isMedia
+        mediaType
+        isSegment
+        segmentUrl
+        timestampStart
       }
       total
       error
@@ -21,12 +53,12 @@ const SEARCH_KB = gql`
 const client = generateClient();
 
 export const useSearch = () => {
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  const search = useCallback(async (searchQuery, maxResults = 5) => {
+  const search = useCallback(async (searchQuery: string, maxResults = 5) => {
     if (!searchQuery.trim()) {
       setError('Please enter a search query');
       return;
@@ -38,14 +70,14 @@ export const useSearch = () => {
 
     try {
       const response = await client.graphql({
-        query: SEARCH_KB as any,
+        query: SEARCH_KB as unknown as string,
         variables: {
           query: searchQuery,
           maxResults
         }
       }) as GqlResponse;
 
-      const searchResult = response.data?.searchKnowledgeBase as { error?: string; results?: unknown[] } | undefined;
+      const searchResult = response.data?.searchKnowledgeBase as { error?: string; results?: SearchResult[] } | undefined;
       if (searchResult?.error) {
         setError(searchResult.error);
         setResults([]);
@@ -55,7 +87,7 @@ export const useSearch = () => {
 
     } catch (err) {
       console.error('Search failed:', err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
     } finally {
       setLoading(false);

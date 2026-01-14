@@ -239,7 +239,7 @@ class TestProcessImage:
             "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
         }
 
-        with pytest.raises(ValueError, match="required"):
+        with pytest.raises(ValueError, match="Knowledge Base configuration not found"):
             module.lambda_handler(event, None)
 
 

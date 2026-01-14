@@ -8,6 +8,63 @@ import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations
 // Type helper for GraphQL responses - Amplify returns a union type but we know queries return this shape
 type GqlResponse<T = Record<string, unknown>> = { data?: T; errors?: Array<{ message: string }> };
 
+// Document item type
+export interface DocumentItem {
+  documentId: string;
+  filename: string;
+  status: string;
+  totalPages?: number;
+  isTextNative?: boolean;
+  fileType?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  errorMessage?: string;
+  type: 'document' | 'scrape' | 'image' | 'media';
+  // Scrape-specific
+  processedCount?: number;
+  failedCount?: number;
+  baseUrl?: string;
+  // Image-specific
+  caption?: string;
+  thumbnailUrl?: string;
+  s3Uri?: string;
+  // Media-specific (video/audio) - string to handle MIME types from backend
+  mediaType?: string;
+  durationSeconds?: number;
+}
+
+// Update event types
+interface DocumentUpdateEvent {
+  documentId: string;
+  filename?: string;
+  status?: string;
+  totalPages?: number;
+  errorMessage?: string;
+  updatedAt?: string;
+}
+
+interface ScrapeUpdateEvent {
+  jobId: string;
+  baseUrl?: string;
+  title?: string;
+  status?: string;
+  totalUrls?: number;
+  processedCount?: number;
+  failedCount?: number;
+  updatedAt?: string;
+}
+
+interface ImageUpdateEvent {
+  imageId: string;
+  filename?: string;
+  caption?: string;
+  status?: string;
+  s3Uri?: string;
+  thumbnailUrl?: string;
+  errorMessage?: string;
+  updatedAt?: string;
+}
+
 const LIST_DOCUMENTS = gql`
   query ListDocuments {
     listDocuments {
@@ -21,6 +78,9 @@ const LIST_DOCUMENTS = gql`
         createdAt
         updatedAt
         errorMessage
+        type
+        mediaType
+        durationSeconds
       }
     }
   }
@@ -95,20 +155,20 @@ const ON_IMAGE_UPDATE = gql`
 const client = generateClient();
 
 export const useDocuments = () => {
-  const [documents, setDocuments] = useState([]);
-  const [scrapeJobs, setScrapeJobs] = useState([]);
-  const [images, setImages] = useState([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [scrapeJobs, setScrapeJobs] = useState<DocumentItem[]>([]);
+  const [images, setImages] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchImages = useCallback(async () => {
     try {
-      let allItems = [];
-      let nextToken = null;
+      let allItems: Record<string, unknown>[] = [];
+      let nextToken: string | null = null;
 
       do {
         const response = await client.graphql({
-          query: listImages as any,
+          query: listImages as unknown as string,
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -118,23 +178,23 @@ export const useDocuments = () => {
         }
 
         const { data } = response;
-        const listResult = data?.listImages as { items?: unknown[]; nextToken?: string } | undefined;
+        const listResult = data?.listImages as { items?: Record<string, unknown>[]; nextToken?: string } | undefined;
         const items = listResult?.items || [];
         allItems = [...allItems, ...items];
-        nextToken = listResult?.nextToken;
+        nextToken = listResult?.nextToken || null;
       } while (nextToken);
 
       // Transform images to match document structure for unified display
-      const transformedImages = allItems.map(img => ({
-        documentId: img.imageId,
-        filename: img.filename,
-        status: img.status,
-        caption: img.caption,
-        createdAt: img.createdAt,
-        updatedAt: img.updatedAt,
+      const transformedImages: DocumentItem[] = allItems.map(img => ({
+        documentId: img.imageId as string,
+        filename: img.filename as string,
+        status: img.status as string,
+        caption: img.caption as string | undefined,
+        createdAt: img.createdAt as string | undefined,
+        updatedAt: img.updatedAt as string | undefined,
         type: 'image',
-        thumbnailUrl: img.thumbnailUrl,
-        s3Uri: img.s3Uri
+        thumbnailUrl: img.thumbnailUrl as string | undefined,
+        s3Uri: img.s3Uri as string | undefined
       }));
       setImages(transformedImages);
     } catch (err) {
@@ -144,12 +204,12 @@ export const useDocuments = () => {
 
   const fetchScrapeJobs = useCallback(async () => {
     try {
-      let allItems = [];
-      let nextToken = null;
+      let allItems: Record<string, unknown>[] = [];
+      let nextToken: string | null = null;
 
       do {
         const response = await client.graphql({
-          query: listScrapeJobs as any,
+          query: listScrapeJobs as unknown as string,
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -159,24 +219,25 @@ export const useDocuments = () => {
         }
 
         const { data } = response;
-        const listResult = data?.listScrapeJobs as { items?: unknown[]; nextToken?: string } | undefined;
+        const listResult = data?.listScrapeJobs as { items?: Record<string, unknown>[]; nextToken?: string } | undefined;
         const items = listResult?.items || [];
         allItems = [...allItems, ...items];
-        nextToken = listResult?.nextToken;
+        nextToken = listResult?.nextToken || null;
       } while (nextToken);
 
       // Transform scrape jobs to match document structure for unified display
-      const transformedJobs = allItems.map(job => ({
-        documentId: job.jobId,
-        filename: job.title || job.baseUrl,
-        status: job.status,
-        totalPages: job.totalUrls,
-        processedCount: job.processedCount,
-        failedCount: job.failedCount,
-        createdAt: job.createdAt,
-        updatedAt: job.createdAt,
+      // Note: ScrapeJob type doesn't have updatedAt, so we leave it undefined
+      const transformedJobs: DocumentItem[] = allItems.map(job => ({
+        documentId: job.jobId as string,
+        filename: (job.title as string) || (job.baseUrl as string),
+        status: job.status as string,
+        totalPages: job.totalUrls as number | undefined,
+        processedCount: job.processedCount as number | undefined,
+        failedCount: job.failedCount as number | undefined,
+        createdAt: job.createdAt as string | undefined,
+        updatedAt: undefined,
         type: 'scrape',
-        baseUrl: job.baseUrl
+        baseUrl: job.baseUrl as string | undefined
       }));
       setScrapeJobs(transformedJobs);
     } catch (err) {
@@ -190,7 +251,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: LIST_DOCUMENTS as any
+        query: LIST_DOCUMENTS as unknown as string
       }) as GqlResponse;
 
       if (response.errors) {
@@ -198,11 +259,19 @@ export const useDocuments = () => {
       }
 
       const { data } = response;
-      const listResult = data?.listDocuments as { items?: unknown[] } | undefined;
-      const newDocs = (listResult?.items || []).map(doc => ({
-        ...(doc as Record<string, unknown>),
-        type: 'document'
-      }));
+      const listResult = data?.listDocuments as { items?: Record<string, unknown>[] } | undefined;
+      const newDocs: DocumentItem[] = (listResult?.items || []).map(doc => {
+        const item = doc as Record<string, unknown>;
+        // Use backend type with fallback to 'document'
+        const backendType = item.type as string | undefined;
+        const docType = (backendType === 'media' || backendType === 'image' || backendType === 'scrape')
+          ? backendType
+          : 'document';
+        return {
+          ...(item as unknown as DocumentItem),
+          type: docType as 'document' | 'scrape' | 'image' | 'media',
+        };
+      });
 
       setDocuments(newDocs);
 
@@ -211,7 +280,7 @@ export const useDocuments = () => {
 
     } catch (err) {
       console.error('Failed to fetch documents:', err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -224,7 +293,7 @@ export const useDocuments = () => {
   const fetchDocument = useCallback(async (documentId: string) => {
     try {
       const response = await client.graphql({
-        query: GET_DOCUMENT as any,
+        query: GET_DOCUMENT as unknown as string,
         variables: { documentId }
       }) as GqlResponse;
 
@@ -236,7 +305,7 @@ export const useDocuments = () => {
   }, []);
 
   // Handle real-time document update
-  const handleDocumentUpdate = useCallback((update) => {
+  const handleDocumentUpdate = useCallback((update: DocumentUpdateEvent) => {
     setDocuments(prev => {
       const idx = prev.findIndex(d => d.documentId === update.documentId);
       if (idx >= 0) {
@@ -246,12 +315,12 @@ export const useDocuments = () => {
         return updated;
       }
       // New document - add to list
-      return [{ ...update, type: 'document' }, ...prev];
+      return [{ ...update, type: 'document' } as DocumentItem, ...prev];
     });
   }, []);
 
   // Handle real-time scrape update
-  const handleScrapeUpdate = useCallback((update) => {
+  const handleScrapeUpdate = useCallback((update: ScrapeUpdateEvent) => {
     setScrapeJobs(prev => {
       const idx = prev.findIndex(j => j.documentId === update.jobId);
       if (idx >= 0) {
@@ -259,11 +328,11 @@ export const useDocuments = () => {
         const updated = [...prev];
         updated[idx] = {
           ...updated[idx],
-          status: update.status,
+          status: update.status || updated[idx].status,
           totalPages: update.totalUrls,
           processedCount: update.processedCount,
           failedCount: update.failedCount,
-          filename: update.title || update.baseUrl,
+          filename: update.title || update.baseUrl || updated[idx].filename,
           updatedAt: update.updatedAt
         };
         return updated;
@@ -271,8 +340,8 @@ export const useDocuments = () => {
       // New job - add to list
       return [{
         documentId: update.jobId,
-        filename: update.title || update.baseUrl,
-        status: update.status,
+        filename: update.title || update.baseUrl || '',
+        status: update.status || '',
         totalPages: update.totalUrls,
         processedCount: update.processedCount,
         failedCount: update.failedCount,
@@ -285,7 +354,7 @@ export const useDocuments = () => {
   }, []);
 
   // Handle real-time image update
-  const handleImageUpdate = useCallback((update) => {
+  const handleImageUpdate = useCallback((update: ImageUpdateEvent) => {
     setImages(prev => {
       const idx = prev.findIndex(img => img.documentId === update.imageId);
       if (idx >= 0) {
@@ -293,7 +362,7 @@ export const useDocuments = () => {
         const updated = [...prev];
         updated[idx] = {
           ...updated[idx],
-          status: update.status,
+          status: update.status || updated[idx].status,
           caption: update.caption || updated[idx].caption,
           thumbnailUrl: update.thumbnailUrl || updated[idx].thumbnailUrl,
           errorMessage: update.errorMessage,
@@ -304,8 +373,8 @@ export const useDocuments = () => {
       // New image - add to list
       return [{
         documentId: update.imageId,
-        filename: update.filename,
-        status: update.status,
+        filename: update.filename || '',
+        status: update.status || '',
         caption: update.caption,
         thumbnailUrl: update.thumbnailUrl,
         s3Uri: update.s3Uri,
@@ -324,7 +393,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteDocumentsMutation as any,
+        query: deleteDocumentsMutation as unknown as string,
         variables: { documentIds }
       }) as GqlResponse;
 
@@ -358,17 +427,17 @@ export const useDocuments = () => {
     fetchDocuments();
 
     // Set up subscriptions for real-time updates
-    let docSubscription = null;
-    let scrapeSubscription = null;
-    let imageSubscription = null;
+    let docSubscription: { unsubscribe: () => void } | null = null;
+    let scrapeSubscription: { unsubscribe: () => void } | null = null;
+    let imageSubscription: { unsubscribe: () => void } | null = null;
 
     try {
       // Subscribe to document updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       docSubscription = (client.graphql({
-        query: ON_DOCUMENT_UPDATE as any
+        query: ON_DOCUMENT_UPDATE as unknown as string
       }) as any).subscribe({
-        next: ({ data }: { data?: { onDocumentUpdate?: unknown } }) => {
+        next: ({ data }: { data?: { onDocumentUpdate?: DocumentUpdateEvent } }) => {
           if (data?.onDocumentUpdate) {
             handleDocumentUpdate(data.onDocumentUpdate);
           }
@@ -381,9 +450,9 @@ export const useDocuments = () => {
       // Subscribe to scrape updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       scrapeSubscription = (client.graphql({
-        query: ON_SCRAPE_UPDATE as any
+        query: ON_SCRAPE_UPDATE as unknown as string
       }) as any).subscribe({
-        next: ({ data }: { data?: { onScrapeUpdate?: unknown } }) => {
+        next: ({ data }: { data?: { onScrapeUpdate?: ScrapeUpdateEvent } }) => {
           if (data?.onScrapeUpdate) {
             handleScrapeUpdate(data.onScrapeUpdate);
           }
@@ -396,9 +465,9 @@ export const useDocuments = () => {
       // Subscribe to image updates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       imageSubscription = (client.graphql({
-        query: ON_IMAGE_UPDATE as any
+        query: ON_IMAGE_UPDATE as unknown as string
       }) as any).subscribe({
-        next: ({ data }: { data?: { onImageUpdate?: unknown } }) => {
+        next: ({ data }: { data?: { onImageUpdate?: ImageUpdateEvent } }) => {
           if (data?.onImageUpdate) {
             handleImageUpdate(data.onImageUpdate);
           }
@@ -420,10 +489,10 @@ export const useDocuments = () => {
     };
   }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
-  // Merge and deduplicate by documentId with type precedence: image > scrape > document
+  // Merge and deduplicate by documentId with type precedence: media > image > scrape > document
   const allItems = useMemo(() => {
-    const typePriority = { image: 3, scrape: 2, document: 1 };
-    const itemMap = new Map();
+    const typePriority: Record<string, number> = { media: 4, image: 3, scrape: 2, document: 1 };
+    const itemMap = new Map<string, DocumentItem>();
 
     [...documents, ...scrapeJobs, ...images].forEach(item => {
       const existing = itemMap.get(item.documentId);

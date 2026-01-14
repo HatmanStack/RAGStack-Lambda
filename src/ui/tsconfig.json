@@ -14,10 +14,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Lenient settings for gradual migration */
-    "strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
+    /* Strict mode enabled */
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,

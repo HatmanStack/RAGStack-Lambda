@@ -9,7 +9,7 @@ const mockUploadDataFn = vi.fn();
 vi.mock('aws-amplify/api', () => {
   return {
     generateClient: () => ({
-      graphql: (...args) => mockGraphqlFn(...args)
+      graphql: (...args: unknown[]) => mockGraphqlFn(...args)
     })
   };
 });
@@ -17,7 +17,7 @@ vi.mock('aws-amplify/api', () => {
 // Mock aws-amplify/storage
 vi.mock('aws-amplify/storage', () => {
   return {
-    uploadData: (...args) => mockUploadDataFn(...args)
+    uploadData: (...args: unknown[]) => mockUploadDataFn(...args)
   };
 });
 
@@ -99,7 +99,7 @@ describe('useImage', () => {
     });
 
     it('sets generating state during API call', async () => {
-      let resolvePromise;
+      let resolvePromise: ((value: unknown) => void) | undefined;
       const promise = new Promise(resolve => {
         resolvePromise = resolve;
       });
@@ -114,7 +114,7 @@ describe('useImage', () => {
       expect(result.current.generating).toBe(true);
 
       await act(async () => {
-        resolvePromise({
+        resolvePromise?.({
           data: {
             generateCaption: { caption: 'Test caption', error: null }
           }
@@ -166,7 +166,7 @@ describe('useImage', () => {
 
       const { result } = renderHook(() => useImage());
 
-      let response;
+      let response: Record<string, unknown> | undefined;
       await act(async () => {
         response = await result.current.submitImage(
           'img-123',
@@ -176,8 +176,8 @@ describe('useImage', () => {
         );
       });
 
-      expect(response.imageId).toBe('img-123');
-      expect(response.caption).toBe('User caption. AI generated description.');
+      expect(response?.imageId).toBe('img-123');
+      expect(response?.caption).toBe('User caption. AI generated description.');
       expect(mockGraphqlFn).toHaveBeenCalledWith({
         query: expect.anything(),
         variables: {
@@ -374,7 +374,7 @@ describe('useImage', () => {
         }
       });
 
-      let resolveUpload;
+      let resolveUpload: ((value: unknown) => void) | undefined;
       mockUploadDataFn.mockImplementation(() => ({
         result: new Promise(resolve => {
           resolveUpload = resolve;
@@ -394,7 +394,7 @@ describe('useImage', () => {
       });
 
       await act(async () => {
-        resolveUpload({});
+        resolveUpload?.({});
       });
 
       expect(result.current.uploading).toBe(false);

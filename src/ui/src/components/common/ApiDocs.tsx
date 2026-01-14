@@ -8,7 +8,21 @@ import {
   Container,
 } from '@cloudscape-design/components';
 
-const codeStyle = {
+interface ApiExample {
+  id: string;
+  label: string;
+  code: string;
+}
+
+interface ApiDocsProps {
+  title?: string;
+  description?: string;
+  endpoint?: string;
+  examples?: ApiExample[];
+  footer?: string;
+}
+
+const codeStyle: React.CSSProperties = {
   display: 'block',
   whiteSpace: 'pre-wrap',
   padding: '12px',
@@ -23,7 +37,7 @@ const codeStyle = {
   maxHeight: '300px',
 };
 
-const CodeBlock = ({ code }) => (
+const CodeBlock = ({ code }: { code: string }) => (
   <Box>
     <code style={codeStyle}>{code}</code>
     <Box padding={{ top: 'xs' }}>
@@ -44,7 +58,7 @@ export const ApiDocs = ({
   endpoint,
   examples = [],
   footer = 'Server-side only. Never expose API keys in frontend code.',
-}) => {
+}: ApiDocsProps) => {
   const [activeTab, setActiveTab] = useState(examples[0]?.id || 'graphql');
 
   const tabs = examples.map((ex) => ({

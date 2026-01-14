@@ -24,8 +24,8 @@ export const SearchInterface = () => {
     search(trimmedValue);
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !loading) {
+  const handleKeyPress = (e: { detail: { key: string } }) => {
+    if (e.detail.key === 'Enter' && !loading) {
       handleSearch();
     }
   };

@@ -33,7 +33,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_document_update
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
@@ -288,13 +288,10 @@ def extract_document_metadata(
 
 def lambda_handler(event, context):
     """Ingest document into Knowledge Base via Bedrock Agent API."""
-    # Get environment variables
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    ds_id = os.environ.get("DATA_SOURCE_ID")
+    # Get KB config from config table (with env var fallback)
+    config = get_config_manager()
+    kb_id, ds_id = get_knowledge_base_config(config)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
-
-    if not kb_id or not ds_id:
-        raise ValueError("KNOWLEDGE_BASE_ID and DATA_SOURCE_ID environment variables are required")
 
     if not tracking_table_name:
         raise ValueError("TRACKING_TABLE environment variable is required")

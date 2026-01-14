@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, NavigateFunction } from 'react-router-dom';
 import { Box, Container, Header, SpaceBetween, Spinner } from '@cloudscape-design/components';
 import { useAuth } from './AuthProvider';
 
+interface RedirectOnAuthProps {
+  user: unknown;
+  from: string;
+  navigate: NavigateFunction;
+}
+
 // Component to handle redirect after authentication
 // Extracted to comply with Rules of Hooks (hooks must be at top level)
-const RedirectOnAuth = ({ user, from, navigate }) => {
+const RedirectOnAuth = ({ user, from, navigate }: RedirectOnAuthProps) => {
   const { checkUser } = useAuth();
   const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState(null);
+  const [syncError, setSyncError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (user && !syncing && !syncError) {
@@ -18,9 +24,9 @@ const RedirectOnAuth = ({ user, from, navigate }) => {
       // Update AuthProvider state before navigating
       checkUser().then(() => {
         navigate(from, { replace: true });
-      }).catch((err) => {
+      }).catch((err: unknown) => {
         console.error('[Login] Failed to sync AuthProvider:', err);
-        setSyncError(err);  // Prevent infinite retry loop
+        setSyncError(err instanceof Error ? err : new Error('Unknown error'));
         setSyncing(false);
       });
     }
@@ -59,7 +65,7 @@ export const Login = () => {
   const location = useLocation();
 
   // Get the page they were trying to access, or default to dashboard
-  const from = location.state?.from?.pathname || '/';
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
 
   return (
     <Box textAlign="center" padding={{ top: 'xxl' }}>

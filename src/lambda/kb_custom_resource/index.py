@@ -204,6 +204,9 @@ def create_knowledge_base(properties):
                         "bedrockEmbeddingModelConfiguration": {
                             "dimensions": 1024,  # Nova Multimodal Embeddings
                             "embeddingDataType": "FLOAT32",
+                            # Video/audio segmentation: 30-sec chunks align with transcript segments
+                            "audio": [{"segmentationConfiguration": {"fixedLengthDuration": 30}}],
+                            "video": [{"segmentationConfiguration": {"fixedLengthDuration": 30}}],
                         }
                     },
                     "embeddingModelArn": embed_model_arn,

@@ -5,6 +5,8 @@ import {
   ContentLayout,
   Header,
   Alert,
+  ProgressBar,
+  Box,
 } from '@cloudscape-design/components';
 import { UploadZone } from './UploadZone';
 import { ImageUpload } from '../ImageUpload';
@@ -134,8 +136,14 @@ const zipCurlExample = `curl -X POST 'ENDPOINT' \\
 
 # Then upload ZIP file using uploadUrl and fields from response`;
 
+interface ApiExampleSet {
+  title: string;
+  description: string;
+  examples: { id: string; label: string; code: string }[];
+}
+
 // Examples config per tab (consistent: GraphQL → JavaScript → cURL)
-const apiExamples = {
+const apiExamples: Record<string, ApiExampleSet> = {
   documents: {
     title: 'Document Upload API',
     description: 'Get presigned URL, upload to S3. Supports PDF, DOCX, TXT, HTML, MD.',
@@ -166,10 +174,10 @@ const apiExamples = {
 };
 
 const DocumentUploadContent = () => {
-  const { addUpload, uploadFile, uploading, error } = useUpload();
+  const { addUpload, uploadFile, uploading, error, currentUpload } = useUpload();
   const [successCount, setSuccessCount] = useState(0);
 
-  const handleFilesSelected = useCallback(async (files) => {
+  const handleFilesSelected = useCallback(async (files: File[]) => {
     let completed = 0;
     for (const file of files) {
       const uploadId = addUpload(file);
@@ -197,6 +205,27 @@ const DocumentUploadContent = () => {
         <Alert type="error">
           {error}
         </Alert>
+      )}
+      {currentUpload && (
+        <Box padding="m">
+          <SpaceBetween size="xs">
+            <Box fontSize="body-s" color="text-body-secondary">
+              {currentUpload.status === 'complete' ? 'Upload complete!' : `Uploading: ${currentUpload.filename}`}
+            </Box>
+            <ProgressBar
+              value={currentUpload.progress}
+              status={
+                currentUpload.status === 'error' ? 'error' :
+                currentUpload.status === 'complete' ? 'success' : 'in-progress'
+              }
+              additionalInfo={
+                currentUpload.status === 'error' ? currentUpload.error :
+                currentUpload.status === 'complete' ? 'Processing will begin shortly' :
+                `${currentUpload.progress}%`
+              }
+            />
+          </SpaceBetween>
+        </Box>
       )}
       <UploadZone onFilesSelected={handleFilesSelected} disabled={uploading} />
     </SpaceBetween>

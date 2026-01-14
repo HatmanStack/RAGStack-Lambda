@@ -461,11 +461,13 @@ class TestLambdaHandler:
         assert result["executionTimeMs"] >= 0
 
     def test_handler_missing_kb_id(self, metadata_analyzer_module, monkeypatch):
-        """Test handler returns error when KNOWLEDGE_BASE_ID not set."""
+        """Test handler returns error when KB config not available."""
         index = metadata_analyzer_module
 
-        # Manually override the module's environment variable access
+        # Remove both env var and config table to trigger error
         monkeypatch.delenv("KNOWLEDGE_BASE_ID", raising=False)
+        monkeypatch.delenv("DATA_SOURCE_ID", raising=False)
+        monkeypatch.delenv("CONFIGURATION_TABLE_NAME", raising=False)
 
         # Reload to pick up env change
         import importlib
@@ -475,4 +477,4 @@ class TestLambdaHandler:
         result = index.lambda_handler({}, None)
 
         assert result["success"] is False
-        assert "KNOWLEDGE_BASE_ID" in result["error"]
+        assert "Knowledge Base configuration not found" in result["error"]

@@ -22,6 +22,54 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 
+def get_knowledge_base_config(
+    config_manager: "ConfigurationManager | None" = None,
+) -> tuple[str, str]:
+    """
+    Get Knowledge Base ID and Data Source ID from config with env var fallback.
+
+    This function provides a migration path: reads from config table first,
+    falls back to environment variables if not found in config.
+
+    Args:
+        config_manager: Optional ConfigurationManager instance. If not provided,
+                       will attempt to create one from CONFIGURATION_TABLE_NAME env var.
+
+    Returns:
+        Tuple of (knowledge_base_id, data_source_id)
+
+    Raises:
+        ValueError: If neither config nor env vars provide the IDs
+    """
+    kb_id = None
+    ds_id = None
+
+    # Try config table first
+    if config_manager:
+        try:
+            kb_id = config_manager.get_parameter("knowledge_base_id")
+            ds_id = config_manager.get_parameter("data_source_id")
+            if kb_id and ds_id:
+                logger.info(f"Using KB config from table: kb_id={kb_id}, ds_id={ds_id}")
+                return kb_id, ds_id
+        except Exception as e:
+            logger.warning(f"Failed to get KB config from table: {e}")
+
+    # Fall back to environment variables
+    kb_id = kb_id or os.environ.get("KNOWLEDGE_BASE_ID")
+    ds_id = ds_id or os.environ.get("DATA_SOURCE_ID")
+
+    if kb_id and ds_id:
+        logger.info(f"Using KB config from env vars: kb_id={kb_id}, ds_id={ds_id}")
+        return kb_id, ds_id
+
+    raise ValueError(
+        "Knowledge Base configuration not found. "
+        "Set knowledge_base_id/data_source_id in config table or "
+        "KNOWLEDGE_BASE_ID/DATA_SOURCE_ID environment variables."
+    )
+
+
 class ConfigurationManager:
     """
     Manages configuration retrieval and updates for document pipeline.

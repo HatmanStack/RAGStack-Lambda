@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { Box, Link, SpaceBetween, Modal, Button } from '@cloudscape-design/components';
+import type { ChatSource } from './types';
 
-export const ImageSource = ({ source }) => {
+interface ImageSourceProps {
+  source: ChatSource;
+}
+
+export const ImageSource = ({ source }: ImageSourceProps) => {
   const [showFullImage, setShowFullImage] = useState(false);
 
   return (

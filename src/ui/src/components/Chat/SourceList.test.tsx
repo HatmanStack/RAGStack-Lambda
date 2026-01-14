@@ -55,7 +55,7 @@ describe('SourceList', () => {
 
   it('handles missing page numbers gracefully', () => {
     const sources = [
-      { documentId: 'doc.pdf', pageNumber: null, s3Uri: 's3://...', snippet: 'Text' }
+      { documentId: 'doc.pdf', pageNumber: undefined, s3Uri: 's3://...', snippet: 'Text' }
     ];
 
     render(<SourceList sources={sources} />);
@@ -93,7 +93,7 @@ describe('SourceList', () => {
 
   it('handles sources with missing snippets', () => {
     const sources = [
-      { documentId: 'doc.pdf', pageNumber: 1, s3Uri: 's3://...', snippet: null }
+      { documentId: 'doc.pdf', pageNumber: 1, s3Uri: 's3://...', snippet: undefined }
     ];
 
     render(<SourceList sources={sources} />);
@@ -157,7 +157,7 @@ describe('SourceList', () => {
       {
         documentId: 'abc123',
         isScraped: true,
-        sourceUrl: null,
+        sourceUrl: undefined,
         snippet: 'Content'
       }
     ];
@@ -215,8 +215,8 @@ describe('SourceList', () => {
       {
         documentId: 'media-123',
         isMedia: true,
-        mediaType: 'video',
-        contentType: 'transcript',
+        mediaType: 'video' as const,
+        contentType: 'transcript' as const,
         timestampStart: 60,
         timestampEnd: 90,
         timestampDisplay: '1:00-1:30',
@@ -239,8 +239,8 @@ describe('SourceList', () => {
       {
         documentId: 'audio-123',
         isMedia: true,
-        mediaType: 'audio',
-        contentType: 'transcript',
+        mediaType: 'audio' as const,
+        contentType: 'transcript' as const,
         timestampStart: 0,
         timestampEnd: 30,
         timestampDisplay: '0:00-0:30',
@@ -260,8 +260,8 @@ describe('SourceList', () => {
       {
         documentId: 'video-123',
         isMedia: true,
-        mediaType: 'video',
-        contentType: 'visual',
+        mediaType: 'video' as const,
+        contentType: 'visual' as const,
         timestampStart: 30,
         timestampEnd: 60,
         timestampDisplay: '0:30-1:00',
@@ -280,8 +280,8 @@ describe('SourceList', () => {
       {
         documentId: 'media-123',
         isMedia: true,
-        mediaType: 'video',
-        contentType: 'transcript',
+        mediaType: 'video' as const,
+        contentType: 'transcript' as const,
         timestampDisplay: '1:00-1:30',
         speaker: 'speaker_1',
         snippet: 'Test content',

@@ -43,7 +43,7 @@ describe('ImageDetail', () => {
   });
 
   it('shows loading state while fetching', async () => {
-    let resolvePromise;
+    let resolvePromise: ((value: typeof mockImage) => void) | undefined;
     mockGetImage.mockReturnValue(new Promise(resolve => {
       resolvePromise = resolve;
     }));
@@ -56,7 +56,7 @@ describe('ImageDetail', () => {
     expect(screen.getByText('Image Details')).toBeInTheDocument();
 
     // Resolve the promise
-    resolvePromise(mockImage);
+    resolvePromise?.(mockImage);
   });
 
   it('displays image details when loaded', async () => {

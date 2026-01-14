@@ -170,6 +170,10 @@ Resources:
               - HEAD
             AllowedOrigins:
               - !Sub 'https://${CloudFrontDistribution.DomainName}'
+            ExposedHeaders:
+              - ETag
+              - x-amz-meta-auto-process
+              - x-amz-meta-user-caption
             MaxAge: 3000
       Tags:
         - Key: Project
@@ -1035,7 +1039,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 960  # 16 minutes to handle transcription polling
+      Timeout: 900  # 15 minutes (Lambda max) to handle transcription polling
       MemorySize: 512
       Environment:
         Variables:
@@ -1318,6 +1322,7 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:GetKnowledgeBaseDocuments
                 - bedrock:StartIngestionJob
                 - bedrock:GetKnowledgeBase
                 - bedrock:GetDataSource
@@ -1484,7 +1489,7 @@ Resources:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
         - DynamoDBReadPolicy:
             TableName: !Ref ScrapeJobsTable
@@ -1709,6 +1714,13 @@ Resources:
                 - !GetAtt ConfigurationTable.Arn
                 - !GetAtt TrackingTable.Arn
                 - !GetAtt MetadataKeyLibraryTable.Arn
+        # S3 permissions for generating presigned URLs
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:s3:::${DataBucket}/*'
 
   ##########################################################################
   # Configuration Resolver Lambda
@@ -1993,6 +2005,7 @@ Resources:
                 Resource:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
+                  - !GetAtt IngestMediaFunction.Arn
                   - !GetAtt GetPageInfoFunction.Arn
                   - !GetAtt EnqueueBatchesFunction.Arn
                   - !GetAtt DetectFileTypeFunction.Arn
@@ -2023,6 +2036,7 @@ Resources:
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
+        IngestMediaFunctionArn: !GetAtt IngestMediaFunction.Arn
         GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
         EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
         DetectFileTypeFunctionArn: !GetAtt DetectFileTypeFunction.Arn
@@ -2184,7 +2198,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${AWS::StackName}-S3UploadTrigger'
-      Description: Trigger processing pipeline on S3 upload to input/ prefix (excludes scraped content)
+      Description: Trigger processing pipeline on S3 upload to input/ prefix
       EventPattern:
         source:
           - aws.s3
@@ -2196,8 +2210,7 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              # Match only input/ prefix
-              # Generated files (extracted_text.txt, etc.) are filtered in Lambda
+              # Match only input/ prefix (array elements are OR, so only use one)
               - prefix: 'input/'
       State: ENABLED
       Targets:
@@ -2281,7 +2294,7 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              # Match only files in content/ prefix (Lambda validates file type)
+              # Match only files in content/ prefix (Lambda skips media artifacts)
               - prefix: 'content/'
       State: ENABLED
       Targets:
@@ -3707,6 +3720,8 @@ Resources:
         Variables:
           TABLE_NAME: !Ref ConfigurationTable
           WC_CDN_URL: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -3933,6 +3948,18 @@ Resources:
                     'description': 'Keys to extract in manual mode',
                     'default': [],
                     'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}
+                },
+                'knowledge_base_id': {
+                    'type': 'string',
+                    'order': 100,
+                    'description': 'Active Bedrock Knowledge Base ID (updated by reindex)',
+                    'readOnly': True
+                },
+                'data_source_id': {
+                    'type': 'string',
+                    'order': 101,
+                    'description': 'Active Data Source ID (updated by reindex)',
+                    'readOnly': True
                 }
             }
         }
@@ -3949,6 +3976,8 @@ Resources:
                         if 'default' in prop:
                             defaults[key] = prop['default']
                     defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')
+                    defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID', '')
+                    defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID', '')
 
                     # Seed Schema (stored as dict, not JSON string)
                     table.put_item(Item={
@@ -3991,7 +4020,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "3"  # v3: added metadata_filter_examples_disabled and _updated_at
+      SchemaVersion: "4"  # v4: added knowledge_base_id and data_source_id
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

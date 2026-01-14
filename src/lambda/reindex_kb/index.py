@@ -188,11 +188,12 @@ def handle_init(event: dict) -> dict:
     doc_count = sum(1 for item in all_content if not item.get("type"))
     image_count = sum(1 for item in all_content if item.get("type") == "image")
     scraped_count = sum(1 for item in all_content if item.get("type") == "scraped")
+    media_count = sum(1 for item in all_content if item.get("type") == "media")
 
     total_documents = len(all_content)
     logger.info(
         f"Found {total_documents} items to reindex: "
-        f"{doc_count} documents, {image_count} images, {scraped_count} scraped pages"
+        f"{doc_count} documents, {image_count} images, {scraped_count} scraped, {media_count} media"
     )
 
     # Publish creating KB status
@@ -280,7 +281,18 @@ def handle_process_batch(event: dict) -> dict:
         )
 
         try:
-            if item_type == "image":
+            if item_type == "media":
+                # Media (video/audio): ingest video file + transcript
+                processed_count, error_count, error_messages = process_media_item(
+                    item,
+                    new_kb_id,
+                    new_ds_id,
+                    data_bucket,
+                    processed_count,
+                    error_count,
+                    error_messages,
+                )
+            elif item_type == "image":
                 # Images: read text from caption_s3_uri, ingest both image and caption
                 processed_count, error_count, error_messages = process_image_item(
                     item,
@@ -492,6 +504,131 @@ def process_scraped_item(
     return processed_count + 1, error_count, error_messages
 
 
+def process_media_item(
+    item: dict,
+    kb_id: str,
+    ds_id: str,
+    data_bucket: str,
+    processed_count: int,
+    error_count: int,
+    error_messages: list,
+) -> tuple[int, int, list]:
+    """
+    Process a media item (video/audio).
+
+    Media is ingested as multiple documents:
+    1. The source video file (for visual embeddings via Nova Multimodal)
+    2. The transcript text (for semantic text search)
+    3. Individual transcript segments with timestamps (for deep linking)
+
+    Args:
+        item: DynamoDB tracking record
+        kb_id: Knowledge Base ID
+        ds_id: Data Source ID
+        data_bucket: S3 bucket name
+        processed_count: Current processed count
+        error_count: Current error count
+        error_messages: List of error messages
+
+    Returns:
+        Tuple of (processed_count, error_count, error_messages)
+    """
+    import re
+
+    doc_id = item.get("document_id")
+    filename = item.get("filename", "unknown")
+    input_s3_uri = item.get("input_s3_uri")  # Source video file
+    output_s3_uri = item.get("output_s3_uri")  # Transcript text
+    media_type = item.get("media_type", "video")
+
+    # Extract metadata from transcript
+    metadata = {}
+    if output_s3_uri:
+        try:
+            transcript_text = read_s3_text(output_s3_uri)
+            if transcript_text and transcript_text.strip():
+                extractor = get_metadata_extractor()
+                metadata = extractor.extract_metadata(transcript_text, doc_id)
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata for media {doc_id}: {e}")
+
+    # Add base metadata
+    metadata["content_type"] = "media"
+    metadata["media_type"] = media_type
+    metadata["file_type"] = media_type  # For filtering: "video" or "audio"
+    metadata["document_id"] = doc_id
+    metadata["filename"] = filename
+
+    # Ingest source video file for visual embeddings (if video)
+    if input_s3_uri and media_type == "video":
+        try:
+            video_metadata_uri = write_metadata_to_s3(input_s3_uri, metadata, data_bucket)
+            ingest_document(kb_id, ds_id, input_s3_uri, video_metadata_uri)
+            logger.info(f"Reindexed video file {doc_id}: {filename}")
+        except Exception as e:
+            logger.warning(f"Failed to ingest video file for {doc_id}: {e}")
+
+    # Ingest full transcript for text search
+    if output_s3_uri:
+        try:
+            transcript_metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+            ingest_document(kb_id, ds_id, output_s3_uri, transcript_metadata_uri)
+            logger.info(f"Reindexed transcript {doc_id}: {filename}")
+        except Exception as e:
+            logger.warning(f"Failed to ingest transcript for {doc_id}: {e}")
+
+    # Ingest transcript segments with timestamps for deep linking
+    # Segments are stored at content/<doc_id>/segment-000.txt, etc.
+    if output_s3_uri:
+        try:
+            # Parse bucket and get content directory
+            path = output_s3_uri[5:]  # Remove 's3://'
+            bucket, key = path.split("/", 1)
+            content_dir = "/".join(key.split("/")[:-1])
+
+            # List segment files (flat structure in content dir)
+            response = s3_client.list_objects_v2(
+                Bucket=bucket,
+                Prefix=f"{content_dir}/segment-",
+            )
+
+            segment_count = 0
+            for obj in response.get("Contents", []):
+                segment_key = obj["Key"]
+                # Extract segment index from filename (segment-000.txt -> 0)
+                match = re.search(r"segment-(\d+)\.txt$", segment_key)
+                if not match:
+                    continue
+
+                segment_index = int(match.group(1))
+                # Calculate timestamps (30-sec segments)
+                timestamp_start = segment_index * 30
+                timestamp_end = (segment_index + 1) * 30
+
+                # Build segment metadata with timestamps
+                segment_metadata = {
+                    **metadata,
+                    "segment_index": segment_index,
+                    "timestamp_start": timestamp_start,
+                    "timestamp_end": timestamp_end,
+                }
+
+                segment_uri = f"s3://{bucket}/{segment_key}"
+                segment_metadata_uri = write_metadata_to_s3(
+                    segment_uri, segment_metadata, data_bucket
+                )
+                ingest_document(kb_id, ds_id, segment_uri, segment_metadata_uri)
+                segment_count += 1
+
+            if segment_count > 0:
+                logger.info(f"Reindexed {segment_count} transcript segments for {doc_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to ingest transcript segments for {doc_id}: {e}")
+
+    return processed_count + 1, error_count, error_messages
+
+
 def process_image_item(
     item: dict,
     kb_id: str,
@@ -622,6 +759,7 @@ def update_lambda_kb_env_vars(
         "query",
         "search",
         "ingest",
+        "ingest-media",
         "reindex-kb",
         "process-image",
         "metadata-analyzer",
@@ -666,13 +804,56 @@ def update_lambda_kb_env_vars(
     return errors
 
 
+def update_config_kb_ids(new_kb_id: str, new_data_source_id: str) -> list[str]:
+    """
+    Update Knowledge Base ID and Data Source ID in the configuration table.
+
+    This is the primary way Lambdas get KB config - env vars are now just fallback.
+
+    Args:
+        new_kb_id: The new Knowledge Base ID
+        new_data_source_id: The new Data Source ID
+
+    Returns:
+        List of error messages (empty if update succeeded)
+    """
+    errors = []
+    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+
+    if not config_table_name:
+        logger.warning("CONFIGURATION_TABLE_NAME not set, skipping config update")
+        return ["CONFIGURATION_TABLE_NAME not set"]
+
+    try:
+        config_manager = ConfigurationManager(table_name=config_table_name)
+
+        # Update Custom config with new KB IDs
+        # This uses atomic UpdateItem so it merges with existing custom config
+        config_manager.update_custom_config(
+            {
+                "knowledge_base_id": new_kb_id,
+                "data_source_id": new_data_source_id,
+            }
+        )
+
+        logger.info(f"Updated config table with KB_ID={new_kb_id}, DS_ID={new_data_source_id}")
+
+    except Exception as e:
+        error_msg = f"Failed to update config table: {str(e)[:100]}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+
+    return errors
+
+
 def handle_finalize(event: dict) -> dict:
     """
     Finalize the reindex operation.
 
-    1. Update Lambda environment variables with new KB ID and Data Source ID
-    2. Delete old KB
-    3. Publish completion status
+    1. Update config table with new KB ID and Data Source ID (primary source)
+    2. Update Lambda environment variables (fallback, for backwards compatibility)
+    3. Delete old KB
+    4. Publish completion status
     """
     old_kb_id = event.get("old_kb_id")
     new_kb_id = event["new_kb_id"]
@@ -688,21 +869,27 @@ def handle_finalize(event: dict) -> dict:
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
 
-    # Update Lambda environment variables with new KB ID and Data Source ID
+    # Update config table first (primary source for KB IDs)
     # Do this BEFORE deleting old KB so queries keep working if update fails
     publish_reindex_update(
         graphql_endpoint,
-        status="UPDATING_LAMBDAS",
+        status="UPDATING_CONFIG",
         total_documents=total_documents,
         processed_count=processed_count,
         error_count=error_count,
         new_knowledge_base_id=new_kb_id,
     )
 
+    config_errors = update_config_kb_ids(new_kb_id, new_data_source_id)
+    if config_errors:
+        error_messages.extend(config_errors)
+        logger.warning(f"Config table update issues: {config_errors}")
+
+    # Also update Lambda env vars as fallback (for backwards compatibility)
     lambda_errors = update_lambda_kb_env_vars(stack_name, new_kb_id, new_data_source_id)
     if lambda_errors:
         error_messages.extend(lambda_errors)
-        logger.warning(f"Some Lambda updates failed: {lambda_errors}")
+        logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
 
     # Publish deleting old KB status
     publish_reindex_update(
@@ -1001,7 +1188,7 @@ def list_all_content(tracking_table) -> list[dict]:
             break
         scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
-    # Sort by type for consistent processing order: documents first, then images, then scraped
+    # Sort by type for consistent processing order: documents, images, scraped, media
     def sort_key(item):
         item_type = item.get("type", "")
         if not item_type:
@@ -1010,7 +1197,9 @@ def list_all_content(tracking_table) -> list[dict]:
             return (1, item.get("document_id", ""))
         if item_type == "scraped":
             return (2, item.get("document_id", ""))
-        return (3, item.get("document_id", ""))
+        if item_type == "media":
+            return (3, item.get("document_id", ""))
+        return (4, item.get("document_id", ""))
 
     return sorted(items, key=sort_key)
 

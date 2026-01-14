@@ -2,8 +2,13 @@ import React from 'react';
 import { Box, ExpandableSection, Link, SpaceBetween, Icon } from '@cloudscape-design/components';
 import { ImageSource } from './ImageSource';
 import { MediaSource } from '../MediaSource';
+import type { ChatSource } from './types';
 
-export function SourceList({ sources }) {
+interface SourceListProps {
+  sources: ChatSource[] | null | undefined;
+}
+
+export function SourceList({ sources }: SourceListProps) {
   // Early return if no sources
   if (!sources || sources.length === 0) {
     return null;
@@ -22,7 +27,7 @@ export function SourceList({ sources }) {
           >
             {/* Route to appropriate source component based on type */}
             {source.isMedia ? (
-              <MediaSource source={source} />
+              <MediaSource source={{ documentId: source.documentId || '', ...source }} />
             ) : source.isImage ? (
               <ImageSource source={source} />
             ) : (

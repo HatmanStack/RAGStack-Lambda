@@ -78,7 +78,7 @@ export function Settings() {
   // State for loading and errors
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   // State for configuration data
@@ -93,7 +93,7 @@ export function Settings() {
   // State for API key management
   const [apiKeyData, setApiKeyData] = useState<{ apiKey: string; expires: string } | null>(null);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
-  const [apiKeyError, setApiKeyError] = useState(null);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -202,7 +202,7 @@ export function Settings() {
     }
   };
 
-  const saveConfiguration = async (values) => {
+  const saveConfiguration = async (values: Record<string, unknown>) => {
     try {
       setSaving(true);
       setError(null);
@@ -210,7 +210,7 @@ export function Settings() {
 
       // Only save values that differ from current merged config (Default + Custom)
       const currentMergedValues = { ...defaultConfig, ...customConfig };
-      const changedValues = {};
+      const changedValues: Record<string, unknown> = {};
       Object.keys(values).forEach(key => {
         const currentValue = currentMergedValues[key];
         const newValue = values[key];
@@ -239,9 +239,10 @@ export function Settings() {
         setSuccess(false);
       }, 2000);
 
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('[Settings] Error saving configuration:', err);
-      console.error('[Settings] Error details:', err.errors || err.message || err);
+      const errorObj = err as { errors?: unknown; message?: string };
+      console.error('[Settings] Error details:', errorObj.errors || errorObj.message || err);
       setError('Failed to save configuration. Please try again.');
       setSaving(false);
     }
@@ -349,14 +350,14 @@ export function Settings() {
 
     // Render input for number fields
     if (property.type === 'number') {
-      const handleNumberChange = (newValue) => {
+      const handleNumberChange = (newValue: string) => {
         const parsedValue = parseInt(newValue, 10);
         setFormValues({ ...formValues, [key]: parsedValue });
 
         // Validate quota fields
         if (key.includes('quota')) {
           const validation = validateQuota(parsedValue);
-          if (!validation.valid) {
+          if (!validation.valid && validation.error) {
             setValidationErrors({ ...validationErrors, [key]: validation.error });
           } else {
             const newErrors = { ...validationErrors };
@@ -368,7 +369,7 @@ export function Settings() {
         // Validate budget threshold fields
         if (key === 'budget_alert_threshold') {
           const validation = validateBudgetThreshold(parsedValue);
-          if (!validation.valid) {
+          if (!validation.valid && validation.error) {
             setValidationErrors({ ...validationErrors, [key]: validation.error });
           } else {
             const newErrors = { ...validationErrors };
@@ -847,7 +848,7 @@ export function Settings() {
             </Toggle>
           </FormField>
 
-          {formValues.multislice_enabled && formValues.filter_generation_enabled && (
+          {formValues.multislice_enabled === true && formValues.filter_generation_enabled === true && (
             <>
               <FormField
                 label="Number of Slices"
@@ -886,13 +887,13 @@ export function Settings() {
 
       <Container header={<Header variant="h2">Runtime Configuration</Header>}>
         <SpaceBetween size="l">
-          {schema.properties &&
-            Object.entries(schema.properties)
+          {(schema as { properties?: Record<string, SchemaProperty> }).properties &&
+            Object.entries((schema as { properties: Record<string, SchemaProperty> }).properties)
               .filter(([key]) => !key.includes('theme'))
-              .sort((a, b) => (a[1].order || 999) - (b[1].order || 999))
+              .sort((a, b) => ((a[1] as SchemaProperty).order || 999) - ((b[1] as SchemaProperty).order || 999))
               .map(([key, property]) => (
                 <React.Fragment key={key}>
-                  {renderField(key, property)}
+                  {renderField(key, property as SchemaProperty)}
                 </React.Fragment>
               ))}
         </SpaceBetween>

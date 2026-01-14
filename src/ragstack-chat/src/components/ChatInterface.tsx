@@ -26,6 +26,11 @@ const QUERY_KB_QUERY = `
         snippet
         documentUrl
         documentAccessAllowed
+        isMedia
+        mediaType
+        timestampStart
+        timestampEnd
+        timestampDisplay
       }
       error
     }
@@ -55,6 +60,11 @@ async function queryKnowledgeBase(
     snippet?: string;
     documentUrl?: string;
     documentAccessAllowed?: boolean;
+    isMedia?: boolean;
+    mediaType?: string;
+    timestampStart?: number;
+    timestampEnd?: number;
+    timestampDisplay?: string;
   }>;
   error?: string;
 }> {
@@ -201,6 +211,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           snippet: s.snippet || '',
           documentUrl: s.documentUrl,
           documentAccessAllowed: s.documentAccessAllowed,
+          isMedia: s.isMedia,
+          mediaType: s.mediaType as 'video' | 'audio' | undefined,
+          timestampStart: s.timestampStart,
+          timestampEnd: s.timestampEnd,
+          timestampDisplay: s.timestampDisplay,
         }));
 
         // Create assistant message from response

@@ -520,12 +520,13 @@ class MetadataExtractor:
             full_prompt = self._build_extraction_prompt(prompt, existing_keys)
 
             # Media-specific system prompt
+            # Note: Use media_category NOT content_type - technical metadata sets content_type
             system_prompt = """You are a metadata extraction system for audio/video content.
 Extract structured metadata from the transcript to enable search and filtering.
 
 Focus on:
 - main_topic: Primary subject matter
-- content_type: Type of content (podcast, interview, lecture, conversation, etc.)
+- media_category: Format of media (podcast, interview, lecture, conversation, etc.)
 - speakers: List of identified speakers
 - key_themes: Major themes discussed
 - sentiment: Overall tone (informative, entertaining, serious, casual, etc.)
@@ -550,8 +551,18 @@ Return ONLY valid JSON with lowercase values. No explanations."""
             if update_library:
                 self._update_key_library(filtered)
 
-            # Merge with technical metadata
+            # Merge extracted metadata, preserving critical technical fields
+            # Technical fields like content_type and media_type must not be overwritten
+            preserve_keys = (
+                "content_type",
+                "media_type",
+                "file_type",
+                "duration_seconds",
+                "total_segments",
+            )
+            preserved_fields = {k: v for k, v in technical_metadata.items() if k in preserve_keys}
             result.update(filtered)
+            result.update(preserved_fields)  # Restore technical fields
             logger.info(f"Extracted media metadata for {document_id}: {list(result.keys())}")
 
         except Exception as e:

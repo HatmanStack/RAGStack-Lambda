@@ -1,10 +1,26 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
 
-const AuthContext = createContext(null);
+interface User {
+  username: string;
+  userId: string;
+  signInDetails?: unknown;
+  tokens?: unknown;
+}
+
+interface AuthContextValue {
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+  isAuthenticated: boolean;
+  checkUser: () => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
+export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within AuthProvider');
@@ -12,10 +28,14 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const checkUser = useCallback(async () => {
     try {
@@ -30,14 +50,14 @@ export const AuthProvider = ({ children }) => {
       });
     } catch (err) {
       // Distinguish between expected "not authenticated" vs actual errors
-      const errorName = err?.name || 'Unknown';
+      const errorName = (err as { name?: string })?.name || 'Unknown';
       const isAuthError = errorName.includes('NotAuthorizedException') ||
                          errorName.includes('UserUnAuthenticatedException') ||
                          errorName === 'UserNotFoundException';
 
       // Only log unexpected errors (network, config issues)
       if (!isAuthError) {
-        console.error('[AuthProvider] Error checking auth status:', errorName, err.message || err);
+        console.error('[AuthProvider] Error checking auth status:', errorName, err instanceof Error ? err.message : err);
       }
 
       // Always set user to null on any error (same UI behavior)
@@ -57,7 +77,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
     } catch (err) {
       console.error('Error signing out:', err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }, []);
 

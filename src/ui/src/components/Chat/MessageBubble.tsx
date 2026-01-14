@@ -1,8 +1,13 @@
 import React from 'react';
 import { Box, SpaceBetween } from '@cloudscape-design/components';
 import { SourceList } from './SourceList';
+import type { ChatMessage } from './types';
 
-export function MessageBubble({ message }) {
+interface MessageBubbleProps {
+  message: ChatMessage;
+}
+
+export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.type === 'user';
   const timestamp = new Date(message.timestamp).toLocaleTimeString();
 

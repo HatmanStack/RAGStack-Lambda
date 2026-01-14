@@ -35,7 +35,7 @@ describe('ImageSource', () => {
   });
 
   it('displays placeholder when no thumbnailUrl', () => {
-    render(<ImageSource source={{ ...mockSource, thumbnailUrl: null }} />);
+    render(<ImageSource source={{ ...mockSource, thumbnailUrl: undefined }} />);
 
     // Should not have an img tag in the main view
     // There may still be a modal with no preview
@@ -99,7 +99,7 @@ describe('ImageSource', () => {
   });
 
   it('handles source without caption', () => {
-    render(<ImageSource source={{ ...mockSource, caption: null }} />);
+    render(<ImageSource source={{ ...mockSource, caption: undefined }} />);
 
     expect(screen.getByRole('img')).toBeInTheDocument();
     expect(screen.queryByText('A beautiful sunset')).not.toBeInTheDocument();

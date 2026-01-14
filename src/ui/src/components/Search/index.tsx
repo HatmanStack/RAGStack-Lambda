@@ -3,6 +3,12 @@ import { ContentLayout, Header, SpaceBetween } from '@cloudscape-design/componen
 import { SearchInterface } from './SearchInterface';
 import { ApiDocs } from '../common/ApiDocs';
 
+interface ApiExample {
+  id: string;
+  label: string;
+  code: string;
+}
+
 const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
 
 const graphqlQuery = `query SearchKnowledgeBase($query: String!, $maxResults: Int) {
@@ -27,6 +33,12 @@ const curlExample = `curl -X POST 'ENDPOINT' \\
   -d '{"query": "...", "variables": {"query": "search text"}}'`;
 
 export const Search = () => {
+  const examples: ApiExample[] = [
+    { id: 'graphql', label: 'GraphQL', code: graphqlQuery },
+    { id: 'js', label: 'JavaScript', code: jsExample },
+    { id: 'curl', label: 'cURL', code: curlExample },
+  ];
+
   return (
     <ContentLayout
       header={
@@ -43,11 +55,7 @@ export const Search = () => {
             title="Search API (Server-side)"
             description="For backend integrations, MCP servers, and scripts."
             endpoint={graphqlEndpoint}
-            examples={[
-              { id: 'graphql', label: 'GraphQL', code: graphqlQuery },
-              { id: 'js', label: 'JavaScript', code: jsExample },
-              { id: 'curl', label: 'cURL', code: curlExample },
-            ]}
+            examples={examples}
           />
         )}
       </SpaceBetween>

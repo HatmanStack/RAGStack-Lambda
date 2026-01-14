@@ -72,7 +72,7 @@ export function useReindex() {
 
     try {
       const response = await client.graphql({
-        query: startReindexMutation,
+        query: startReindexMutation as unknown as string,
       }) as GqlResponse<{ startReindex: ReindexJob }>;
 
       if (response.errors?.length) {
@@ -111,7 +111,7 @@ export function useReindex() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       subscription = (client.graphql({
-        query: ON_REINDEX_UPDATE,
+        query: ON_REINDEX_UPDATE as unknown as string,
       }) as any).subscribe({
         next: ({ data }: { data?: { onReindexUpdate?: ReindexUpdate } }) => {
           if (data?.onReindexUpdate) {

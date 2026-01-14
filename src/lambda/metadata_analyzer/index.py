@@ -32,7 +32,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.key_library import KeyLibrary
 
 logger = logging.getLogger()
@@ -526,11 +526,13 @@ def lambda_handler(event: dict, context) -> dict:
 
     try:
         # Get configuration
-        knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
-        if not knowledge_base_id:
+        config = get_config_manager()
+        try:
+            knowledge_base_id, data_source_id = get_knowledge_base_config(config)
+        except ValueError as e:
             return {
                 "success": False,
-                "error": "KNOWLEDGE_BASE_ID environment variable not set",
+                "error": str(e),
                 "vectorsSampled": 0,
                 "keysAnalyzed": 0,
                 "examplesGenerated": 0,
@@ -538,7 +540,6 @@ def lambda_handler(event: dict, context) -> dict:
             }
 
         data_bucket = os.environ.get("DATA_BUCKET")
-        data_source_id = os.environ.get("DATA_SOURCE_ID")
         key_library_table = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
         # Get configuration options
