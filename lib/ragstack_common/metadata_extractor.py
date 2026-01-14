@@ -36,8 +36,8 @@ RESERVED_KEYS = frozenset(
     }
 )
 
-# Maximum number of metadata fields to extract
-DEFAULT_MAX_KEYS = 20
+# Maximum number of metadata fields to extract (8 is sweet spot for S3 Vectors 2KB limit)
+DEFAULT_MAX_KEYS = 8
 
 # Maximum length for metadata values
 MAX_VALUE_LENGTH = 100

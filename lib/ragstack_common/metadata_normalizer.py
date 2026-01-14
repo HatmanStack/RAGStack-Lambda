@@ -17,6 +17,9 @@ from typing import Any
 # AWS STRING_LIST maximum items
 MAX_ARRAY_ITEMS = 10
 
+# Maximum length for individual string values (S3 Vectors limit protection)
+MAX_VALUE_LENGTH = 100
+
 
 def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str]:
     """
@@ -30,12 +33,13 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
         min_word_length: Minimum length for word components (default 3 to skip initials).
 
     Returns:
-        List of searchable terms, limited to 10 items.
+        List of searchable terms, limited to 10 items, each truncated to MAX_VALUE_LENGTH.
     """
     if not value or not value.strip():
         return []
 
-    value = value.strip().lower()
+    # Truncate input value to prevent excessively long strings
+    value = value.strip().lower()[:MAX_VALUE_LENGTH]
     items = {value}  # Always include original
 
     # Split on commas first (highest priority after original)
