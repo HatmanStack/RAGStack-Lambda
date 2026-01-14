@@ -35,7 +35,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
@@ -43,10 +43,30 @@ from ragstack_common.multislice_retriever import MultiSliceRetriever
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+def extract_kb_scalar(value: any) -> str | None:
+    """Extract scalar value from KB metadata which returns lists with quoted strings.
+
+    KB returns metadata like: ['"0"'] or ['value1', 'value2']
+    This extracts the first value and strips extra quotes.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if not value:
+            return None
+        value = value[0]
+    if isinstance(value, str):
+        # Strip extra quotes that KB adds (e.g., '"0"' -> '0')
+        return value.strip('"')
+    return str(value)
+
+
 # Module-level initialization (reused across Lambda invocations)
 config_manager = ConfigurationManager()
 dynamodb = boto3.resource("dynamodb")
 bedrock_agent = boto3.client("bedrock-agent-runtime")
+s3_client = boto3.client("s3")
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
 _key_library = None
@@ -108,18 +128,46 @@ def extract_document_id_from_uri(uri):
 
 
 def lookup_original_source(document_id, tracking_table_name):
-    """Look up the original input_s3_uri from tracking table."""
+    """Look up document details from tracking table."""
     if not document_id or not tracking_table_name:
-        return None, None
+        return {}
     try:
         table = dynamodb.Table(tracking_table_name)
         response = table.get_item(Key={"document_id": document_id})
         item = response.get("Item")
         if item:
-            return item.get("input_s3_uri"), item.get("filename")
+            return {
+                "input_s3_uri": item.get("input_s3_uri"),
+                "filename": item.get("filename"),
+                "type": item.get("type"),  # document, image, media, scrape
+                "media_type": item.get("media_type"),  # video, audio
+                "source_url": item.get("source_url"),  # for scraped content
+            }
     except Exception as e:
         logger.warning(f"Failed to lookup document {document_id}: {e}")
-    return None, None
+    return {}
+
+
+def generate_presigned_url(bucket, key, expiration=3600):
+    """Generate presigned URL for S3 object."""
+    try:
+        return s3_client.generate_presigned_url(
+            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL: {e}")
+        return None
+
+
+def parse_s3_uri(s3_uri):
+    """Parse S3 URI into bucket and key."""
+    if not s3_uri or not s3_uri.startswith("s3://"):
+        return None, None
+    path = s3_uri[5:]
+    if "/" not in path:
+        return path, ""
+    bucket, key = path.split("/", 1)
+    return bucket, key
 
 
 def lambda_handler(event, context):
@@ -143,15 +191,16 @@ def lambda_handler(event, context):
             "error": error_msg,
         }
 
-    # Get environment variables
-    knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
+    # Get KB config from config table (with env var fallback)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
-    if not knowledge_base_id:
+    try:
+        knowledge_base_id, _ = get_knowledge_base_config(config_manager)
+    except ValueError as e:
         return {
             "query": "",
             "results": [],
             "total": 0,
-            "error": "KNOWLEDGE_BASE_ID environment variable is required",
+            "error": str(e),
         }
 
     # Extract inputs from AppSync event
@@ -256,25 +305,101 @@ def lambda_handler(event, context):
         except Exception as e:
             logger.warning(f"Search failed: {e}")
 
-        # Parse results
+        # Check if document access is enabled
+        allow_document_access = config_manager.get_parameter(
+            "chat_allow_document_access", default=False
+        )
+
+        # Parse results with deduplication
         results = []
+        seen_sources = set()
         for item in retrieval_results:
             kb_uri = item.get("location", {}).get("s3Location", {}).get("uri", "")
+            document_id = extract_document_id_from_uri(kb_uri)
 
-            # Look up original source from tracking table
-            source_uri = kb_uri  # Default to KB URI
-            if tracking_table_name:
-                document_id = extract_document_id_from_uri(kb_uri)
-                if document_id:
-                    original_uri, _ = lookup_original_source(document_id, tracking_table_name)
-                    if original_uri:
-                        source_uri = original_uri
+            # Get metadata from KB result (includes timestamp_start for segments)
+            kb_metadata = item.get("metadata", {})
+
+            # Check if this is a segment (transcript segment or video with timestamp)
+            # Transcript segments: content/<doc_id>/segment-000.txt
+            # Video segments: Nova provides timestamp in metadata for auto-segmented video
+            is_transcript_segment = "/segment-" in kb_uri
+            has_timestamp_metadata = kb_metadata.get("timestamp_start") is not None
+            is_segment = is_transcript_segment or has_timestamp_metadata
+
+            # Look up document details from tracking table
+            doc_info = {}
+            source_uri = kb_uri
+            if tracking_table_name and document_id:
+                doc_info = lookup_original_source(document_id, tracking_table_name)
+                if doc_info.get("input_s3_uri"):
+                    source_uri = doc_info["input_s3_uri"]
+
+            # Determine content type
+            doc_type = doc_info.get("type", "document")
+            is_scraped = doc_type == "scrape"
+            is_image = doc_type == "image"
+            is_media = doc_type == "media"
+
+            # Get timestamp from segment metadata (KB returns as list with quoted strings)
+            timestamp_start = None
+            if is_segment:
+                ts_raw = kb_metadata.get("timestamp_start")
+                ts_str = extract_kb_scalar(ts_raw)
+                if ts_str is not None:
+                    try:
+                        timestamp_start = int(ts_str)
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid timestamp_start value: {ts_raw}")
+
+            # Generate presigned URL if access is enabled
+            document_url = None
+            segment_url = None
+            input_s3_uri = doc_info.get("input_s3_uri")
+            if allow_document_access:
+                # For scraped content, use source_url (original web URL)
+                if is_scraped and doc_info.get("source_url"):
+                    document_url = doc_info["source_url"]
+                elif is_segment and input_s3_uri:
+                    # For segments, create video URL with timestamp parameter
+                    bucket, key = parse_s3_uri(input_s3_uri)
+                    if bucket and key:
+                        base_url = generate_presigned_url(bucket, key)
+                        if base_url and timestamp_start is not None:
+                            # Append timestamp for deep linking (works with HTML5 video)
+                            segment_url = f"{base_url}#t={timestamp_start}"
+                        document_url = base_url  # Full video without timestamp
+                elif input_s3_uri:
+                    bucket, key = parse_s3_uri(input_s3_uri)
+                    if bucket and key:
+                        document_url = generate_presigned_url(bucket, key)
+
+            # Deduplicate - for segments, use full KB URI; for others, use document_id
+            dedup_key = kb_uri if is_segment else document_id
+            if dedup_key:
+                if dedup_key in seen_sources:
+                    logger.debug(f"Skipping duplicate source: {dedup_key}")
+                    continue
+                seen_sources.add(dedup_key)
 
             results.append(
                 {
                     "content": item.get("content", {}).get("text", ""),
                     "source": source_uri,
                     "score": item.get("score", 0.0),
+                    "documentId": document_id,
+                    "filename": doc_info.get("filename"),
+                    "documentUrl": document_url,
+                    "documentAccessAllowed": allow_document_access,
+                    "isScraped": is_scraped,
+                    "sourceUrl": doc_info.get("source_url") if is_scraped else None,
+                    "isImage": is_image,
+                    "thumbnailUrl": document_url if is_image else None,
+                    "isMedia": is_media,
+                    "mediaType": doc_info.get("media_type") if is_media else None,
+                    "isSegment": is_segment,
+                    "segmentUrl": segment_url,
+                    "timestampStart": timestamp_start,
                 }
             )
 

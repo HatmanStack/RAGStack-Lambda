@@ -39,7 +39,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
@@ -53,6 +53,24 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def extract_kb_scalar(value: any) -> str | None:
+    """Extract scalar value from KB metadata which returns lists with quoted strings.
+
+    KB returns metadata like: ['"0"'] or ['value1', 'value2']
+    This extracts the first value and strips extra quotes.
+    """
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if not value:
+            return None
+        value = value[0]
+    if isinstance(value, str):
+        return value.strip('"')
+    return str(value)
+
 
 # Module-level initialization (reused across Lambda invocations in same container)
 config_manager = ConfigurationManager()
@@ -1030,15 +1048,32 @@ def extract_sources(citations):
                         document_url = source_url
                         logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
-                    # Check for media sources (transcript or visual content types)
+                    # Check for media sources (video/audio content types or tracking type)
+                    # KB metadata comes as lists with quoted strings, extract scalars
                     metadata = ref.get("metadata", {})
-                    content_type = metadata.get("content_type")
-                    is_media = content_type in ("transcript", "visual")
-                    media_type = metadata.get("media_type") if is_media else None
-                    timestamp_start = metadata.get("timestamp_start") if is_media else None
-                    timestamp_end = metadata.get("timestamp_end") if is_media else None
-                    speaker = metadata.get("speaker") if is_media else None
-                    segment_index = metadata.get("segment_index") if is_media else None
+                    content_type = extract_kb_scalar(metadata.get("content_type"))
+                    is_media = content_type in ("video", "audio") or doc_type == "media"
+                    media_type = content_type if is_media and content_type in ("video", "audio") else None
+
+                    # Extract timestamp fields (convert to int for URL generation)
+                    timestamp_start = None
+                    timestamp_end = None
+                    if is_media:
+                        ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
+                        ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
+                        if ts_start_str is not None:
+                            try:
+                                timestamp_start = int(ts_start_str)
+                            except (ValueError, TypeError):
+                                pass
+                        if ts_end_str is not None:
+                            try:
+                                timestamp_end = int(ts_end_str)
+                            except (ValueError, TypeError):
+                                pass
+
+                    speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
+                    segment_index = extract_kb_scalar(metadata.get("segment_index")) if is_media else None
 
                     # For media sources, generate URL with timestamp fragment
                     if is_media and allow_document_access and document_s3_uri:
@@ -1131,14 +1166,15 @@ def lambda_handler(event, context):
             "error": error_msg,
         }
 
-    # Get environment variables (moved here for testability)
-    knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    if not knowledge_base_id:
+    # Get KB config from config table (with env var fallback)
+    try:
+        knowledge_base_id, _ = get_knowledge_base_config(config_manager)
+    except ValueError as e:
         return {
             "answer": "",
             "conversationId": None,
             "sources": [],
-            "error": "KNOWLEDGE_BASE_ID environment variable is required",
+            "error": str(e),
         }
 
     region = os.environ.get("AWS_REGION", "us-east-1")
