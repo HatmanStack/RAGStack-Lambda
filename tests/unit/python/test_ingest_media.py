@@ -130,31 +130,21 @@ class TestIngestMediaLambda:
 
     @patch("ragstack_common.appsync.publish_document_update")
     @patch("ragstack_common.storage.read_s3_text")
-    @patch("ragstack_common.nova_embeddings.NovaEmbeddingsClient")
     @patch("boto3.resource")
     @patch("boto3.client")
-    def test_handler_creates_visual_embeddings(
+    def test_handler_ingests_transcript_segments_to_kb(
         self,
         mock_boto_client,
         mock_boto_resource,
-        mock_nova_client_class,
         mock_read_s3,
         mock_publish,
         sample_media_event,
     ):
-        """Test that handler creates embeddings for visual segments."""
+        """Test that handler writes metadata files and triggers KB sync."""
         mock_read_s3.return_value = "Test content"
-
-        # Mock Nova embeddings client
-        mock_nova_client = MagicMock()
-        mock_nova_client.embed_from_s3.return_value = {"embedding": [0.1] * 1024}
-        mock_nova_client_class.return_value = mock_nova_client
 
         mock_s3 = MagicMock()
         mock_bedrock_agent = MagicMock()
-        mock_bedrock_agent.ingest_knowledge_base_documents.return_value = {
-            "documentDetails": [{"status": "STARTING"}]
-        }
 
         mock_table = MagicMock()
         mock_boto_resource.return_value.Table.return_value = mock_table
@@ -172,7 +162,9 @@ class TestIngestMediaLambda:
         module = load_ingest_media_module()
         result = module.lambda_handler(sample_media_event, None)
 
-        assert "visual_segments_indexed" in result
+        assert "segments_indexed" in result
+        # Metadata files written to S3 (transcript + segments)
+        assert mock_s3.put_object.call_count >= 2
 
     @patch("ragstack_common.appsync.publish_document_update")
     @patch("ragstack_common.storage.read_s3_text")
