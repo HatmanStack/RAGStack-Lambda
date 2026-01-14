@@ -212,7 +212,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           documentUrl: s.documentUrl,
           documentAccessAllowed: s.documentAccessAllowed,
           isMedia: s.isMedia,
-          mediaType: s.mediaType,
+          mediaType: s.mediaType as 'video' | 'audio' | undefined,
           timestampStart: s.timestampStart,
           timestampEnd: s.timestampEnd,
           timestampDisplay: s.timestampDisplay,
