@@ -505,7 +505,7 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
     # Base parameter overrides
     param_overrides = [
         f"AdminEmail={admin_email}",
-        "BedrockOcrModelId=meta.llama3-2-90b-instruct-v1:0",
+        "BedrockOcrModelId=us.anthropic.claude-haiku-4-5-20251001-v1:0",
     ]
 
     # Add UI parameters if building UI
@@ -532,6 +532,7 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
     run_command(cmd)
 
     # Enable termination protection on the stack to prevent accidental deletion
+    cf_client = boto3.client('cloudformation', region_name=region)
     try:
         log_info("Enabling stack termination protection...")
         cf_client.update_termination_protection(
