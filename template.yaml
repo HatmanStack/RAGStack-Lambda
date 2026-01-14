@@ -1261,6 +1261,7 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:GetKnowledgeBaseDocuments
                 - bedrock:StartIngestionJob
                 - bedrock:GetKnowledgeBase
                 - bedrock:GetDataSource
