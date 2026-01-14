@@ -99,6 +99,13 @@ class KBMigrator:
                             "bedrockEmbeddingModelConfiguration": {
                                 "dimensions": 1024,
                                 "embeddingDataType": "FLOAT32",
+                                # 30-sec segments align with transcript chunks
+                                "audio": [
+                                    {"segmentationConfiguration": {"fixedLengthDuration": 30}}
+                                ],
+                                "video": [
+                                    {"segmentationConfiguration": {"fixedLengthDuration": 30}}
+                                ],
                             }
                         },
                         "embeddingModelArn": self.embedding_model_arn,

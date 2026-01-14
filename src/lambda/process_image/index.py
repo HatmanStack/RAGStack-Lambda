@@ -38,7 +38,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_image_update
-from ragstack_common.config import ConfigurationManager
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.image import ImageStatus
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
@@ -59,6 +59,21 @@ CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 # Lazy-initialized singletons
 _key_library = None
 _metadata_extractor = None
+_config_manager = None
+
+
+def get_config_manager() -> ConfigurationManager | None:
+    """Get or create ConfigurationManager singleton."""
+    global _config_manager
+    if _config_manager is None:
+        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+        if table_name:
+            try:
+                _config_manager = ConfigurationManager(table_name=table_name)
+            except Exception as e:
+                logger.warning(f"Failed to initialize ConfigurationManager: {e}")
+                return None
+    return _config_manager
 
 
 def get_key_library() -> KeyLibrary:
@@ -233,14 +248,11 @@ def is_valid_uuid(value: str) -> bool:
 
 def lambda_handler(event, context):
     """Process image and ingest into Knowledge Base."""
-    # Get environment variables
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    ds_id = os.environ.get("DATA_SOURCE_ID")
+    # Get KB config from config table (with env var fallback)
+    config = get_config_manager()
+    kb_id, ds_id = get_knowledge_base_config(config)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-
-    if not kb_id or not ds_id:
-        raise ValueError("KNOWLEDGE_BASE_ID and DATA_SOURCE_ID environment variables are required")
 
     if not tracking_table_name:
         raise ValueError("TRACKING_TABLE environment variable is required")

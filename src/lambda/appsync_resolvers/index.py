@@ -90,6 +90,33 @@ bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AW
 MAX_FILENAME_LENGTH = 255
 MAX_DOCUMENTS_LIMIT = 100
 FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\-\s()]+$")
+# Pattern to match invalid characters for sanitization
+INVALID_CHARS_PATTERN = re.compile(r"[^a-zA-Z0-9._\-\s()]")
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename by replacing invalid characters with underscores.
+
+    Preserves the file extension and replaces any characters not in the
+    allowed set (alphanumeric, dots, dashes, underscores, spaces, parentheses).
+    """
+    if not filename:
+        return filename
+
+    # Replace invalid characters with underscores
+    sanitized = INVALID_CHARS_PATTERN.sub("_", filename)
+
+    # Collapse multiple consecutive underscores
+    while "__" in sanitized:
+        sanitized = sanitized.replace("__", "_")
+
+    # Strip leading/trailing underscores (but preserve extension)
+    name, ext = os.path.splitext(sanitized)
+    name = name.strip("_")
+    sanitized = f"{name}{ext}" if name else sanitized
+
+    return sanitized
 
 
 def lambda_handler(event, context):
@@ -328,23 +355,25 @@ def create_upload_url(args):
         filename = args["filename"]
         logger.info(f"Creating upload URL for file: {filename}")
 
-        # Validate filename
-        if not filename or len(filename) > MAX_FILENAME_LENGTH:
-            logger.warning(f"Invalid filename length: {len(filename) if filename else 0}")
-            raise ValueError(f"Filename must be between 1 and {MAX_FILENAME_LENGTH} characters")
+        # Validate filename exists
+        if not filename:
+            raise ValueError("Filename is required")
 
-        # Check for path traversal and invalid characters
+        # Check for path traversal (security - must reject)
         if "/" in filename or "\\" in filename or ".." in filename:
-            logger.warning(f"Filename contains invalid characters: {filename}")
+            logger.warning(f"Filename contains path traversal characters: {filename}")
             raise ValueError("Filename contains invalid path characters")
 
-        # Ensure filename has valid characters
-        if not FILENAME_PATTERN.match(filename):
-            logger.warning(f"Filename contains invalid characters: {filename}")
-            raise ValueError(
-                "Filename contains invalid characters "
-                "(use alphanumeric, dots, dashes, underscores, spaces, parentheses only)"
-            )
+        # Sanitize filename - replace invalid characters instead of rejecting
+        sanitized_filename = sanitize_filename(filename)
+        if sanitized_filename != filename:
+            logger.info(f"Sanitized filename: '{filename}' -> '{sanitized_filename}'")
+            filename = sanitized_filename
+
+        # Validate length after sanitization
+        if len(filename) > MAX_FILENAME_LENGTH:
+            logger.warning(f"Invalid filename length: {len(filename)}")
+            raise ValueError(f"Filename must be at most {MAX_FILENAME_LENGTH} characters")
 
         document_id = str(uuid4())
         logger.info(f"Generated document ID: {document_id}")
@@ -512,6 +541,10 @@ def format_document(item):
         "updatedAt": item.get("updated_at"),
         "metadata": item.get("extracted_metadata"),
         "previewUrl": preview_url,
+        # Media fields
+        "type": item.get("type"),  # document, media, image, scrape
+        "mediaType": item.get("media_type"),  # video, audio
+        "durationSeconds": item.get("duration_seconds"),
     }
 
 

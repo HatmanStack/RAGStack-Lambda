@@ -97,6 +97,14 @@ def lambda_handler(event, context):
         output_s3_prefix = event["output_s3_prefix"]
         detected_type = event.get("detectedType", "video")
 
+        # Fix output_s3_prefix - EventBridge template produces wrong format
+        # Received: s3://bucket/content/input/{doc_id}/{filename}/
+        # Expected: s3://bucket/content/{doc_id}/
+        if "/content/input/" in output_s3_prefix:
+            bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
+            output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
+            logger.info(f"Fixed output_s3_prefix to: {output_s3_prefix}")
+
         filename = _extract_filename(input_s3_uri)
         logger.info(f"Processing media file: {filename} (type: {detected_type})")
 
@@ -116,6 +124,7 @@ def lambda_handler(event, context):
                 "SET #status = :status, "
                 "#type = :type, "
                 "media_type = :media_type, "
+                "file_type = :file_type, "
                 "updated_at = :updated_at, "
                 "created_at = if_not_exists(created_at, :created_at), "
                 "filename = if_not_exists(filename, :filename), "
@@ -126,6 +135,7 @@ def lambda_handler(event, context):
                 ":status": "transcribing",
                 ":type": "media",
                 ":media_type": detected_type,
+                ":file_type": detected_type,  # video or audio
                 ":updated_at": now,
                 ":created_at": now,
                 ":filename": filename,
@@ -222,10 +232,13 @@ def lambda_handler(event, context):
         full_transcript_uri = f"s3://{output_bucket}/{transcript_key}"
         logger.info(f"Wrote full transcript to: {full_transcript_uri}")
 
-        # Write segment files to S3
-        segments_prefix = f"{output_prefix}segments/".replace("//", "/")
+        # Video stays in input/ - KB will sync it from there
+        video_uri = input_s3_uri
+
+        # Write segment files to S3 (flat structure, no /segments/ subfolder)
         for segment in segments:
-            segment_key = f"{segments_prefix}segment_{segment['segment_index']:03d}.txt"
+            seg_name = f"segment-{segment['segment_index']:03d}.txt"
+            segment_key = f"{output_prefix}{seg_name}".replace("//", "/")
             segment_content = segment["text"]
 
             s3_client.put_object(
@@ -240,34 +253,6 @@ def lambda_handler(event, context):
                     "segment_index": str(segment["segment_index"]),
                 },
             )
-
-        # Write media metadata
-        metadata = {
-            "document_id": document_id,
-            "media_type": detected_type,
-            "duration_seconds": int(estimated_duration),
-            "total_segments": len(segments),
-            "language_code": language_code,
-            "transcribe_job_id": job_name,
-            "segments": [
-                {
-                    "segment_index": s["segment_index"],
-                    "timestamp_start": s["timestamp_start"],
-                    "timestamp_end": s["timestamp_end"],
-                    "word_count": s["word_count"],
-                    "speaker": s.get("speaker"),
-                }
-                for s in segments
-            ],
-        }
-
-        metadata_key = f"{output_prefix}media_metadata.json".replace("//", "/")
-        s3_client.put_object(
-            Bucket=output_bucket,
-            Key=metadata_key,
-            Body=json.dumps(metadata, indent=2).encode("utf-8"),
-            ContentType="application/json",
-        )
 
         # Update DynamoDB tracking
         table.update_item(
@@ -337,6 +322,7 @@ def lambda_handler(event, context):
             "document_id": document_id,
             "status": "transcribed",
             "output_s3_uri": full_transcript_uri,
+            "video_s3_uri": video_uri,
             "total_segments": len(segments),
             "duration_seconds": int(estimated_duration),
             "media_type": detected_type,
