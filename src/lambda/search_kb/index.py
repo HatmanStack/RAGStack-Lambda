@@ -82,6 +82,7 @@ def get_config_manager():
             _config_manager = ConfigurationManager()
     return _config_manager
 
+
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
 _key_library = None
 _filter_generator = None
@@ -200,7 +201,7 @@ def lambda_handler(event, context):
         dict: KBQueryResult with query, results, total, and optional error
     """
     # Check public access control
-    allowed, error_msg = check_public_access(event, "search", config_manager)
+    allowed, error_msg = check_public_access(event, "search", get_config_manager())
     if not allowed:
         return {
             "query": "",
@@ -212,7 +213,7 @@ def lambda_handler(event, context):
     # Get KB config from config table (with env var fallback)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     try:
-        knowledge_base_id, _ = get_knowledge_base_config(config_manager)
+        knowledge_base_id, _ = get_knowledge_base_config(get_config_manager())
     except ValueError as e:
         return {
             "query": "",

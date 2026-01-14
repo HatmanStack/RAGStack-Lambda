@@ -553,10 +553,14 @@ Return ONLY valid JSON with lowercase values. No explanations."""
 
             # Merge extracted metadata, preserving critical technical fields
             # Technical fields like content_type and media_type must not be overwritten
-            preserved_fields = {
-                k: v for k, v in technical_metadata.items()
-                if k in ("content_type", "media_type", "file_type", "duration_seconds", "total_segments")
-            }
+            preserve_keys = (
+                "content_type",
+                "media_type",
+                "file_type",
+                "duration_seconds",
+                "total_segments",
+            )
+            preserved_fields = {k: v for k, v in technical_metadata.items() if k in preserve_keys}
             result.update(filtered)
             result.update(preserved_fields)  # Restore technical fields
             logger.info(f"Extracted media metadata for {document_id}: {list(result.keys())}")

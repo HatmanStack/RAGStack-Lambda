@@ -26,6 +26,7 @@ Output (ChatResponse):
 }
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -86,6 +87,7 @@ def get_config_manager():
         else:
             _config_manager = ConfigurationManager()
     return _config_manager
+
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
 _key_library = None
@@ -170,8 +172,12 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     fallback_model = get_config_manager().get_parameter(
         "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
     )
-    global_quota_daily = get_config_manager().get_parameter("chat_global_quota_daily", default=10000)
-    per_user_quota_daily = get_config_manager().get_parameter("chat_per_user_quota_daily", default=100)
+    global_quota_daily = get_config_manager().get_parameter(
+        "chat_global_quota_daily", default=10000
+    )
+    per_user_quota_daily = get_config_manager().get_parameter(
+        "chat_per_user_quota_daily", default=100
+    )
 
     # Ensure quotas are integers
     if isinstance(global_quota_daily, Decimal):
@@ -1067,12 +1073,13 @@ def extract_sources(citations):
                         document_url = source_url
                         logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
-                    # Check for media sources (video/audio/transcript/visual content types or tracking type)
+                    # Check for media sources (video/audio content types or tracking type)
                     # KB metadata comes as lists with quoted strings, extract scalars
                     metadata = ref.get("metadata", {})
                     content_type = extract_kb_scalar(metadata.get("content_type"))
-                    is_media = content_type in ("video", "audio", "transcript", "visual") or doc_type == "media"
-                    # Get media_type - prefer explicit media_type from metadata, else derive from content_type
+                    media_content_types = ("video", "audio", "transcript", "visual")
+                    is_media = content_type in media_content_types or doc_type == "media"
+                    # Get media_type from metadata or derive from content_type
                     if is_media:
                         media_type_raw = extract_kb_scalar(metadata.get("media_type"))
                         if media_type_raw in ("video", "audio"):
@@ -1091,25 +1098,19 @@ def extract_sources(citations):
                         ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
                         ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
                         if ts_start_str is not None:
-                            try:
+                            with contextlib.suppress(ValueError, TypeError):
                                 timestamp_start = int(ts_start_str)
-                            except (ValueError, TypeError):
-                                pass
                         if ts_end_str is not None:
-                            try:
+                            with contextlib.suppress(ValueError, TypeError):
                                 timestamp_end = int(ts_end_str)
-                            except (ValueError, TypeError):
-                                pass
 
                     speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
                     segment_index = None
                     if is_media:
                         seg_idx_str = extract_kb_scalar(metadata.get("segment_index"))
                         if seg_idx_str is not None:
-                            try:
+                            with contextlib.suppress(ValueError, TypeError):
                                 segment_index = int(seg_idx_str)
-                            except (ValueError, TypeError):
-                                pass
 
                     # For media sources, generate URL with timestamp fragment
                     if is_media and allow_document_access and document_s3_uri:
@@ -1193,7 +1194,7 @@ def lambda_handler(event, context):
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
     # Check public access control
-    allowed, error_msg = check_public_access(event, "chat", config_manager)
+    allowed, error_msg = check_public_access(event, "chat", get_config_manager())
     if not allowed:
         return {
             "answer": "",
@@ -1204,7 +1205,7 @@ def lambda_handler(event, context):
 
     # Get KB config from config table (with env var fallback)
     try:
-        knowledge_base_id, _ = get_knowledge_base_config(config_manager)
+        knowledge_base_id, _ = get_knowledge_base_config(get_config_manager())
     except ValueError as e:
         return {
             "answer": "",
@@ -1319,7 +1320,9 @@ def lambda_handler(event, context):
         generated_filter = None
 
         # Check if filter generation is enabled
-        filter_enabled = get_config_manager().get_parameter("filter_generation_enabled", default=True)
+        filter_enabled = get_config_manager().get_parameter(
+            "filter_generation_enabled", default=True
+        )
         multislice_enabled = get_config_manager().get_parameter("multislice_enabled", default=True)
 
         # Generate metadata filter if enabled (includes content_type filtering)
@@ -1420,7 +1423,9 @@ def lambda_handler(event, context):
             "clearly state that and provide what relevant information you can. "
             "Be concise but thorough."
         )
-        system_prompt = get_config_manager().get_parameter("chat_system_prompt", default=default_prompt)
+        system_prompt = get_config_manager().get_parameter(
+            "chat_system_prompt", default=default_prompt
+        )
 
         # Call Converse API
         converse_response = bedrock_runtime.converse(

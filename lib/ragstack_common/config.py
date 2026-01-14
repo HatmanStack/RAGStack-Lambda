@@ -22,7 +22,9 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 
-def get_knowledge_base_config(config_manager: "ConfigurationManager | None" = None) -> tuple[str, str]:
+def get_knowledge_base_config(
+    config_manager: "ConfigurationManager | None" = None,
+) -> tuple[str, str]:
     """
     Get Knowledge Base ID and Data Source ID from config with env var fallback.
 

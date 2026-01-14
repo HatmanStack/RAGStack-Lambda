@@ -30,6 +30,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -112,11 +113,10 @@ def sanitize_filename(filename: str) -> str:
         sanitized = sanitized.replace("__", "_")
 
     # Strip leading/trailing underscores (but preserve extension)
-    name, ext = os.path.splitext(sanitized)
-    name = name.strip("_")
-    sanitized = f"{name}{ext}" if name else sanitized
-
-    return sanitized
+    path = Path(sanitized)
+    name = path.stem.strip("_")
+    ext = path.suffix
+    return f"{name}{ext}" if name else sanitized
 
 
 def lambda_handler(event, context):

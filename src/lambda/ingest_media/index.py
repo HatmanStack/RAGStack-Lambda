@@ -95,14 +95,14 @@ def get_metadata_extractor() -> MetadataExtractor:
 # Core metadata keys (~8) to preserve when reducing metadata
 # content_type covers media_type/file_type (they were redundant)
 CORE_METADATA_KEYS = {
-    "content_type",      # "video" or "audio"
+    "content_type",  # "video" or "audio"
     "document_id",
     "filename",
-    "timestamp_start",   # For segment deep linking
+    "timestamp_start",  # For segment deep linking
     "timestamp_end",
     "segment_index",
     "duration_seconds",
-    "main_topic",        # Primary topic for search
+    "main_topic",  # Primary topic for search
 }
 
 
@@ -142,9 +142,7 @@ INGEST_BATCH_SIZE = 25
 STATUS_CHECK_BATCH_SIZE = 25
 
 
-def batch_check_document_statuses(
-    kb_id: str, ds_id: str, s3_uris: list[str]
-) -> dict[str, str]:
+def batch_check_document_statuses(kb_id: str, ds_id: str, s3_uris: list[str]) -> dict[str, str]:
     """
     Check ingestion status for multiple documents in batches.
 
@@ -160,9 +158,7 @@ def batch_check_document_statuses(
 
     for i in range(0, len(s3_uris), STATUS_CHECK_BATCH_SIZE):
         batch = s3_uris[i : i + STATUS_CHECK_BATCH_SIZE]
-        doc_identifiers = [
-            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in batch
-        ]
+        doc_identifiers = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in batch]
 
         try:
             response = bedrock_agent.get_knowledge_base_documents(
@@ -406,13 +402,12 @@ def extract_metadata_for_segment_group(
 
     try:
         extractor = get_metadata_extractor()
-        extracted = extractor.extract_media_metadata(
+        return extractor.extract_media_metadata(
             transcript=combined_text,
             segments=segments,
             technical_metadata=base_metadata,
             document_id=document_id,
         )
-        return extracted
     except Exception as e:
         logger.warning(f"Failed to extract metadata for segment group: {e}")
         return base_metadata.copy()
@@ -460,11 +455,13 @@ def _prepare_segment_data(
                 "timestamp_end": timestamp_end,
             }
 
-            segment_data.append({
-                "segment_uri": segment_uri,
-                "segment_metadata": segment_metadata,
-                "segment_index": segment_index,
-            })
+            segment_data.append(
+                {
+                    "segment_uri": segment_uri,
+                    "segment_metadata": segment_metadata,
+                    "segment_index": segment_index,
+                }
+            )
 
     return segment_data
 
@@ -485,20 +482,20 @@ def _batch_ingest_segments(
 
         for item in batch:
             # Write metadata file for this segment
-            metadata_uri = write_metadata_to_s3(
-                item["segment_uri"], item["segment_metadata"]
-            )
+            metadata_uri = write_metadata_to_s3(item["segment_uri"], item["segment_metadata"])
 
-            documents.append({
-                "content": {
-                    "dataSourceType": "S3",
-                    "s3": {"s3Location": {"uri": item["segment_uri"]}},
-                },
-                "metadata": {
-                    "type": "S3_LOCATION",
-                    "s3Location": {"uri": metadata_uri},
-                },
-            })
+            documents.append(
+                {
+                    "content": {
+                        "dataSourceType": "S3",
+                        "s3": {"s3Location": {"uri": item["segment_uri"]}},
+                    },
+                    "metadata": {
+                        "type": "S3_LOCATION",
+                        "s3Location": {"uri": metadata_uri},
+                    },
+                }
+            )
 
         # Ingest batch via direct API
         try:
@@ -691,7 +688,8 @@ def lambda_handler(event, context):
         # Ensure content_type is set correctly for filtering
         extracted_metadata["content_type"] = media_type  # "video" or "audio"
 
-        logger.info(f"Extracted metadata keys ({len(extracted_metadata)}): {list(extracted_metadata.keys())}")
+        meta_keys = list(extracted_metadata.keys())
+        logger.info(f"Extracted metadata keys ({len(meta_keys)}): {meta_keys}")
 
         # Ingest text transcript to KB (full transcript for context)
         text_result = ingest_text_to_kb(
@@ -717,7 +715,6 @@ def lambda_handler(event, context):
             kb_id=kb_id,
             ds_id=ds_id,
         )
-
 
         # Update tracking table with actually ingested metadata
         tracking_table.update_item(

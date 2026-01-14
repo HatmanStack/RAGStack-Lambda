@@ -829,10 +829,12 @@ def update_config_kb_ids(new_kb_id: str, new_data_source_id: str) -> list[str]:
 
         # Update Custom config with new KB IDs
         # This uses atomic UpdateItem so it merges with existing custom config
-        config_manager.update_custom_config({
-            "knowledge_base_id": new_kb_id,
-            "data_source_id": new_data_source_id,
-        })
+        config_manager.update_custom_config(
+            {
+                "knowledge_base_id": new_kb_id,
+                "data_source_id": new_data_source_id,
+            }
+        )
 
         logger.info(f"Updated config table with KB_ID={new_kb_id}, DS_ID={new_data_source_id}")
 
