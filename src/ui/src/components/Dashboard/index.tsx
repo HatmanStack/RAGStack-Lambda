@@ -7,7 +7,7 @@ import { ImageDetail } from './ImageDetail';
 import { useDocuments } from '../../hooks/useDocuments';
 import { useScrape } from '../../hooks/useScrape';
 
-type ItemType = 'document' | 'scrape' | 'image' | null;
+type ItemType = 'document' | 'scrape' | 'image' | 'media' | null;
 
 export const Dashboard = () => {
   const { documents, loading, refreshDocuments, deleteDocuments } = useDocuments();
@@ -87,10 +87,10 @@ export const Dashboard = () => {
         />
       )}
 
-      {selectedType === 'document' && selectedDocumentId && (
+      {(selectedType === 'document' || selectedType === 'media') && selectedDocumentId && (
         <DocumentDetail
           documentId={selectedDocumentId}
-          visible={!!selectedDocumentId && selectedType === 'document'}
+          visible={!!selectedDocumentId && (selectedType === 'document' || selectedType === 'media')}
           onDismiss={handleDismiss}
         />
       )}

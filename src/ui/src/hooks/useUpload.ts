@@ -16,9 +16,17 @@ const CREATE_UPLOAD_URL = gql`
 
 const client = generateClient();
 
+export interface UploadProgress {
+  filename: string;
+  progress: number; // 0-100
+  status: 'pending' | 'uploading' | 'complete' | 'error';
+  error?: string;
+}
+
 export const useUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentUpload, setCurrentUpload] = useState<UploadProgress | null>(null);
   const pendingUploads = useRef(new Map<string, File>());
 
   const addUpload = useCallback((file: File) => {
@@ -37,9 +45,11 @@ export const useUpload = () => {
 
     setUploading(true);
     setError(null);
+    setCurrentUpload({ filename: file.name, progress: 0, status: 'pending' });
 
     try {
       // Get presigned URL
+      setCurrentUpload({ filename: file.name, progress: 5, status: 'uploading' });
       const response = await client.graphql({
         query: CREATE_UPLOAD_URL as unknown as string,
         variables: { filename: file.name }
@@ -48,28 +58,50 @@ export const useUpload = () => {
       const uploadResult = response.data?.createUploadUrl as { documentId?: string } | undefined;
       const { documentId } = uploadResult || {};
 
-      // Upload to S3 using Amplify Storage (input/ prefix for DataBucket)
+      // Upload to S3 using Amplify Storage with progress tracking
+      setCurrentUpload({ filename: file.name, progress: 10, status: 'uploading' });
       const operation = uploadData({
         path: `input/${documentId}/${file.name}`,
-        data: file
+        data: file,
+        options: {
+          onProgress: ({ transferredBytes, totalBytes }) => {
+            if (totalBytes) {
+              // Scale progress from 10-95% (5% for URL, 5% for completion)
+              const uploadProgress = Math.round((transferredBytes / totalBytes) * 85) + 10;
+              setCurrentUpload({ filename: file.name, progress: uploadProgress, status: 'uploading' });
+            }
+          }
+        }
       });
 
       await operation.result;
+      setCurrentUpload({ filename: file.name, progress: 100, status: 'complete' });
       pendingUploads.current.delete(uploadId);
+
+      // Clear after brief delay to show completion
+      setTimeout(() => setCurrentUpload(null), 1500);
 
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      const errorMsg = err instanceof Error ? err.message : 'Upload failed';
+      setError(errorMsg);
+      setCurrentUpload({ filename: file.name, progress: 0, status: 'error', error: errorMsg });
       throw err;
     } finally {
       setUploading(false);
     }
   }, []);
 
+  const clearUploadProgress = useCallback(() => {
+    setCurrentUpload(null);
+  }, []);
+
   return {
     uploading,
     error,
+    currentUpload,
     addUpload,
-    uploadFile
+    uploadFile,
+    clearUploadProgress
   };
 };

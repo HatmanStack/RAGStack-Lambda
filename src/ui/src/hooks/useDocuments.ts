@@ -19,7 +19,7 @@ export interface DocumentItem {
   createdAt?: string;
   updatedAt?: string;
   errorMessage?: string;
-  type: 'document' | 'scrape' | 'image';
+  type: 'document' | 'scrape' | 'image' | 'media';
   // Scrape-specific
   processedCount?: number;
   failedCount?: number;
@@ -28,6 +28,9 @@ export interface DocumentItem {
   caption?: string;
   thumbnailUrl?: string;
   s3Uri?: string;
+  // Media-specific (video/audio)
+  mediaType?: 'video' | 'audio';
+  durationSeconds?: number;
 }
 
 // Update event types
@@ -75,6 +78,9 @@ const LIST_DOCUMENTS = gql`
         createdAt
         updatedAt
         errorMessage
+        type
+        mediaType
+        durationSeconds
       }
     }
   }
@@ -253,10 +259,18 @@ export const useDocuments = () => {
 
       const { data } = response;
       const listResult = data?.listDocuments as { items?: Record<string, unknown>[] } | undefined;
-      const newDocs: DocumentItem[] = (listResult?.items || []).map(doc => ({
-        ...(doc as unknown as DocumentItem),
-        type: 'document' as const
-      }));
+      const newDocs: DocumentItem[] = (listResult?.items || []).map(doc => {
+        const item = doc as Record<string, unknown>;
+        // Use backend type with fallback to 'document'
+        const backendType = item.type as string | undefined;
+        const docType = (backendType === 'media' || backendType === 'image' || backendType === 'scrape')
+          ? backendType
+          : 'document';
+        return {
+          ...(item as unknown as DocumentItem),
+          type: docType as 'document' | 'scrape' | 'image' | 'media',
+        };
+      });
 
       setDocuments(newDocs);
 
@@ -474,9 +488,9 @@ export const useDocuments = () => {
     };
   }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
-  // Merge and deduplicate by documentId with type precedence: image > scrape > document
+  // Merge and deduplicate by documentId with type precedence: media > image > scrape > document
   const allItems = useMemo(() => {
-    const typePriority: Record<string, number> = { image: 3, scrape: 2, document: 1 };
+    const typePriority: Record<string, number> = { media: 4, image: 3, scrape: 2, document: 1 };
     const itemMap = new Map<string, DocumentItem>();
 
     [...documents, ...scrapeJobs, ...images].forEach(item => {

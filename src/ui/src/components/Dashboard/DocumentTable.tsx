@@ -119,6 +119,7 @@ const getTypeLabel = (type: string): string => {
   switch (type) {
     case 'scrape': return 'Website';
     case 'image': return 'Image';
+    case 'media': return 'Media';
     default: return 'Document';
   }
 };

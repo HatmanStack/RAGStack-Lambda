@@ -5,6 +5,8 @@ import {
   ContentLayout,
   Header,
   Alert,
+  ProgressBar,
+  Box,
 } from '@cloudscape-design/components';
 import { UploadZone } from './UploadZone';
 import { ImageUpload } from '../ImageUpload';
@@ -172,7 +174,7 @@ const apiExamples: Record<string, ApiExampleSet> = {
 };
 
 const DocumentUploadContent = () => {
-  const { addUpload, uploadFile, uploading, error } = useUpload();
+  const { addUpload, uploadFile, uploading, error, currentUpload } = useUpload();
   const [successCount, setSuccessCount] = useState(0);
 
   const handleFilesSelected = useCallback(async (files: File[]) => {
@@ -203,6 +205,27 @@ const DocumentUploadContent = () => {
         <Alert type="error">
           {error}
         </Alert>
+      )}
+      {currentUpload && (
+        <Box padding="m">
+          <SpaceBetween size="xs">
+            <Box fontSize="body-s" color="text-body-secondary">
+              {currentUpload.status === 'complete' ? 'Upload complete!' : `Uploading: ${currentUpload.filename}`}
+            </Box>
+            <ProgressBar
+              value={currentUpload.progress}
+              status={
+                currentUpload.status === 'error' ? 'error' :
+                currentUpload.status === 'complete' ? 'success' : 'in-progress'
+              }
+              additionalInfo={
+                currentUpload.status === 'error' ? currentUpload.error :
+                currentUpload.status === 'complete' ? 'Processing will begin shortly' :
+                `${currentUpload.progress}%`
+              }
+            />
+          </SpaceBetween>
+        </Box>
       )}
       <UploadZone onFilesSelected={handleFilesSelected} disabled={uploading} />
     </SpaceBetween>
