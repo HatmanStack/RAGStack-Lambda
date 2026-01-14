@@ -30,6 +30,7 @@ import logging
 import os
 import re
 import time
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -44,7 +45,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def extract_kb_scalar(value: any) -> str | None:
+def extract_kb_scalar(value: Any) -> str | None:
     """Extract scalar value from KB metadata which returns lists with quoted strings.
 
     KB returns metadata like: ['"0"'] or ['value1', 'value2']
@@ -66,6 +67,7 @@ def extract_kb_scalar(value: any) -> str | None:
 dynamodb = boto3.resource("dynamodb")
 bedrock_agent = boto3.client("bedrock-agent-runtime")
 s3_client = boto3.client("s3")
+DATA_BUCKET = os.environ.get("DATA_BUCKET")
 
 # Lazy-initialized config manager (avoid raising at import time)
 _config_manager = None
@@ -168,7 +170,15 @@ def lookup_original_source(document_id, tracking_table_name):
 
 
 def generate_presigned_url(bucket, key, expiration=3600):
-    """Generate presigned URL for S3 object."""
+    """Generate presigned URL for S3 object.
+
+    Only generates URLs for the configured DATA_BUCKET to prevent
+    unauthorized access to other buckets.
+    """
+    # Security: Only allow presigned URLs for the configured data bucket
+    if bucket != DATA_BUCKET:
+        logger.warning(f"Attempted presigned URL for unauthorized bucket: {bucket}")
+        return None
     try:
         return s3_client.generate_presigned_url(
             "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration

@@ -33,6 +33,7 @@ import os
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from urllib.parse import unquote
 
 import boto3
@@ -56,7 +57,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def extract_kb_scalar(value: any) -> str | None:
+def extract_kb_scalar(value: Any) -> str | None:
     """Extract scalar value from KB metadata which returns lists with quoted strings.
 
     KB returns metadata like: ['"0"'] or ['value1', 'value2']

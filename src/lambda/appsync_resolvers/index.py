@@ -90,9 +90,9 @@ bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AW
 # Validation constants
 MAX_FILENAME_LENGTH = 255
 MAX_DOCUMENTS_LIMIT = 100
-FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\-\s()]+$")
-# Pattern to match invalid characters for sanitization
-INVALID_CHARS_PATTERN = re.compile(r"[^a-zA-Z0-9._\-\s()]")
+FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\- ()]+$")
+# Pattern to match invalid characters for sanitization (literal space only, not \s)
+INVALID_CHARS_PATTERN = re.compile(r"[^a-zA-Z0-9._\- ()]")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -101,9 +101,10 @@ def sanitize_filename(filename: str) -> str:
 
     Preserves the file extension and replaces any characters not in the
     allowed set (alphanumeric, dots, dashes, underscores, spaces, parentheses).
+    Returns "unnamed" + extension if the sanitized name would be empty or unsafe.
     """
     if not filename:
-        return filename
+        return "unnamed"
 
     # Replace invalid characters with underscores
     sanitized = INVALID_CHARS_PATTERN.sub("_", filename)
@@ -112,11 +113,16 @@ def sanitize_filename(filename: str) -> str:
     while "__" in sanitized:
         sanitized = sanitized.replace("__", "_")
 
-    # Strip leading/trailing underscores (but preserve extension)
+    # Strip leading/trailing spaces and underscores (but preserve extension)
     path = Path(sanitized)
-    name = path.stem.strip("_")
+    name = path.stem.strip(" _")
     ext = path.suffix
-    return f"{name}{ext}" if name else sanitized
+
+    # Check if name is empty or consists only of dots/underscores
+    if not name or all(c in "._" for c in name):
+        name = "unnamed"
+
+    return f"{name}{ext}"
 
 
 def lambda_handler(event, context):
