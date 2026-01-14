@@ -401,16 +401,6 @@ def test_filter_metadata_skips_empty_values(extractor):
     assert "whitespace" not in result
 
 
-def test_filter_metadata_respects_max_keys(extractor):
-    """Test that max_keys limit is enforced."""
-    extractor.max_keys = 3
-    metadata = {f"key_{i}": f"value_{i}" for i in range(10)}
-
-    result = extractor._filter_metadata(metadata)
-
-    assert len(result) == 3
-
-
 # Test: _update_key_library
 
 

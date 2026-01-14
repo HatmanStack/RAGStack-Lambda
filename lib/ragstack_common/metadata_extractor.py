@@ -302,7 +302,10 @@ class MetadataExtractor:
                 "Only create a new key if no existing key captures the same concept."
             )
 
-        prompt_parts.append(f"\n\nExtract up to {self.max_keys} relevant metadata fields.")
+        prompt_parts.append(
+            f"\n\nAim for around {self.max_keys} metadata fields - a few more or less is fine, "
+            "but focus on the most relevant and searchable attributes."
+        )
 
         return "\n".join(prompt_parts)
 
@@ -353,7 +356,6 @@ class MetadataExtractor:
 
         - Removes reserved keys
         - Truncates long values
-        - Enforces max_keys limit
         - Normalizes key names
         - In manual mode, only keeps keys from manual_keys list
 
@@ -372,10 +374,6 @@ class MetadataExtractor:
             allowed_keys = {k.lower().replace(" ", "_").replace("-", "_") for k in self.manual_keys}
 
         for key, value in metadata.items():
-            # Stop at max_keys
-            if count >= self.max_keys:
-                break
-
             # Skip reserved keys
             if key.lower() in RESERVED_KEYS:
                 logger.debug(f"Skipping reserved key: {key}")
