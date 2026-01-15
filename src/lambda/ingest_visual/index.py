@@ -1,13 +1,17 @@
 """
-Ingest Visual Lambda
+Ingest Visual Content Lambda
 
-Triggers Bedrock KB StartIngestionJob when video files are uploaded to content/{docId}/.
-This enables visual embeddings to be created from video content.
+Triggers Bedrock KB StartIngestionJob when video content is uploaded
+to content/{docId}/video.mp4. Creates visual embeddings from video content.
 
-Triggered by S3 EventBridge events when video.mp4 files are created in the content/ prefix.
+Triggered by S3 EventBridge events when video.mp4 files are created
+in the content/ prefix.
+
+Note: Images are handled by ProcessImageFunction which calls StartIngestionJob
+directly after processing, ensuring caption/metadata is ready before ingestion.
 
 Key behavior:
-- Only processes content/*/video.mp4 files
+- Processes content/*/video.mp4 only
 - Skips metadata files (.metadata.json)
 - Uses StartIngestionJob which handles incremental sync
 - Logs ingestion statistics to monitor if text is being re-processed
@@ -21,11 +25,26 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
+
+
+def get_config_manager() -> ConfigurationManager | None:
+    """Get ConfigurationManager if table name is configured."""
+    table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not table_name:
+        return None
+    try:
+        return ConfigurationManager(table_name)
+    except Exception as e:
+        logger.warning(f"Failed to initialize ConfigurationManager: {e}")
+        return None
 
 
 def parse_s3_event(event: dict) -> dict:
@@ -50,12 +69,71 @@ def parse_s3_event(event: dict) -> dict:
     }
 
 
+def start_ingestion_with_retry(
+    kb_id: str,
+    ds_id: str,
+    max_retries: int = 5,
+    base_delay: float = 5.0,
+) -> dict:
+    """
+    Start ingestion job with retry for concurrent API conflicts.
+
+    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
+    data source. This function retries with exponential backoff when a conflict
+    is detected.
+
+    Args:
+        kb_id: Knowledge base ID
+        ds_id: Data source ID
+        max_retries: Maximum retry attempts (default 5)
+        base_delay: Base delay in seconds (default 5.0)
+
+    Returns:
+        StartIngestionJob response
+
+    Raises:
+        ClientError: If all retries exhausted or non-retryable error
+    """
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return bedrock_agent.start_ingestion_job(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", "")
+
+            # Check if this is a retryable concurrent API conflict
+            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
+                last_error = e
+                if attempt < max_retries:
+                    delay = base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
+                        f"after {delay}s: {error_msg}"
+                    )
+                    time.sleep(delay)
+                    continue
+
+            # Non-retryable error, raise immediately
+            raise
+
+    # All retries exhausted
+    logger.error(f"All {max_retries} retries exhausted for ingestion job")
+    raise last_error
+
+
 def is_valid_video_path(key: str) -> bool:
     """
-    Check if the S3 key is a valid video file path for visual embeddings.
+    Check if the S3 key is a valid video path for embeddings.
 
     Valid pattern: content/{docId}/video.mp4
-    Skip: metadata files, non-video files, files not in content/
+
+    Note: Images are handled by ProcessImageFunction which calls StartIngestionJob
+    directly, ensuring caption/metadata is ready before ingestion.
     """
     if not key:
         return False
@@ -64,12 +142,12 @@ def is_valid_video_path(key: str) -> bool:
     if not key.startswith("content/"):
         return False
 
-    # Must be video.mp4 (not metadata or other files)
-    if not key.endswith("/video.mp4"):
+    # Skip metadata files
+    if ".metadata.json" in key:
         return False
 
-    # Skip metadata files
-    return ".metadata.json" not in key
+    # Only video files
+    return key.endswith("/video.mp4")
 
 
 def lambda_handler(event: dict, context) -> dict:
@@ -85,12 +163,10 @@ def lambda_handler(event: dict, context) -> dict:
     """
     logger.info(f"Processing event: {json.dumps(event)}")
 
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    ds_id = os.environ.get("DATA_SOURCE_ID")
+    # Get KB config from config table (Custom overrides Default), with env var fallback
+    config_manager = get_config_manager()
+    kb_id, ds_id = get_knowledge_base_config(config_manager)
     wait_for_completion = os.environ.get("WAIT_FOR_COMPLETION", "false").lower() == "true"
-
-    if not kb_id or not ds_id:
-        raise ValueError("KNOWLEDGE_BASE_ID and DATA_SOURCE_ID environment variables required")
 
     # Parse S3 event
     s3_info = parse_s3_event(event)
@@ -104,7 +180,7 @@ def lambda_handler(event: dict, context) -> dict:
         logger.info(f"Skipping metadata file: {key}")
         return {"status": "skipped", "message": "Metadata file, skipping"}
 
-    # Validate path pattern
+    # Validate path pattern (videos only - images handled by ProcessImageFunction)
     if not is_valid_video_path(key):
         logger.info(f"Skipping non-video file or invalid path: {key}")
         return {"status": "skipped", "message": f"Not a valid video path: {key}"}
@@ -115,11 +191,8 @@ def lambda_handler(event: dict, context) -> dict:
     logger.info(f"Starting ingestion for document: {doc_id}")
 
     try:
-        # Start ingestion job
-        response = bedrock_agent.start_ingestion_job(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-        )
+        # Start ingestion job with retry for concurrent API conflicts
+        response = start_ingestion_with_retry(kb_id, ds_id)
 
         job_info = response.get("ingestionJob", {})
         job_id = job_info.get("ingestionJobId")

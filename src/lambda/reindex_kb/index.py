@@ -852,8 +852,9 @@ def handle_finalize(event: dict) -> dict:
 
     1. Update config table with new KB ID and Data Source ID (primary source)
     2. Update Lambda environment variables (fallback, for backwards compatibility)
-    3. Delete old KB
-    4. Publish completion status
+    3. Start initial sync to establish tracking baseline (prevents re-sync on first video upload)
+    4. Delete old KB
+    5. Publish completion status
     """
     old_kb_id = event.get("old_kb_id")
     new_kb_id = event["new_kb_id"]
@@ -890,6 +891,21 @@ def handle_finalize(event: dict) -> dict:
     if lambda_errors:
         error_messages.extend(lambda_errors)
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
+
+    # Establish sync tracking baseline on new KB
+    # This prevents full re-sync when first StartIngestionJob runs (e.g., video upload)
+    if new_data_source_id:
+        try:
+            logger.info(f"Starting initial sync to establish tracking baseline for {new_kb_id}")
+            bedrock_agent.start_ingestion_job(
+                knowledgeBaseId=new_kb_id,
+                dataSourceId=new_data_source_id,
+            )
+            logger.info("Initial sync started successfully")
+        except Exception as e:
+            # Don't fail reindex if baseline sync fails - it's not critical
+            logger.warning(f"Failed to start initial sync for baseline: {e}")
+            error_messages.append(f"Initial sync baseline failed: {str(e)[:100]}")
 
     # Publish deleting old KB status
     publish_reindex_update(

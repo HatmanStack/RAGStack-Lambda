@@ -315,6 +315,10 @@ type Source @aws_iam @aws_api_key @aws_cognito_user_pools {
   snippet: String
   documentUrl: String
   documentAccessAllowed: Boolean
+  # Relevance score from KB (0-1)
+  score: Float
+  # Original filename
+  filename: String
   # Scraped content fields
   isScraped: Boolean
   sourceUrl: String
@@ -324,6 +328,8 @@ type Source @aws_iam @aws_api_key @aws_cognito_user_pools {
   caption: String
   # Media-specific fields (video/audio)
   isMedia: Boolean
+  isSegment: Boolean  # true if this is a transcript segment
+  segmentUrl: String  # URL with #t=start,end for deep linking
   mediaType: String  # "video" | "audio"
   contentType: String  # "transcript" | "visual"
   timestampStart: Int  # seconds
@@ -420,6 +426,12 @@ type Image @aws_api_key @aws_cognito_user_pools {
   contentType: String
   fileSize: Int
   errorMessage: String
+  # Extracted text from OCR (if extractText was enabled)
+  extractedText: String
+  # Extracted metadata from image analysis
+  extractedMetadata: AWSJSON
+  # Presigned URL to caption.txt for preview
+  captionUrl: String
   createdAt: AWSDateTime!
   updatedAt: AWSDateTime!
 }
@@ -457,6 +469,8 @@ input SubmitImageInput {
   caption: String
   userCaption: String
   aiCaption: String
+  # If true, extract visible text from image using vision model (OCR)
+  extractText: Boolean
 }
 
 # =========================================================================

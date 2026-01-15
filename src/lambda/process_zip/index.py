@@ -364,22 +364,8 @@ def create_image_record(
         ContentType=content_type,
     )
 
-    # Create metadata.json
-    metadata = {
-        "caption": caption,
-        "userCaption": user_caption or "",
-        "aiCaption": ai_caption or "",
-        "filename": filename,
-        "sourceUploadId": upload_id,
-        "createdAt": timestamp,
-    }
-    metadata_key = f"content/{image_id}/metadata.json"
-    s3.put_object(
-        Bucket=data_bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata),
-        ContentType="application/json",
-    )
+    # Note: metadata.json no longer written to S3 - all data stored in DynamoDB
+    # This prevents KB from incorrectly indexing the metadata file
 
     # Create tracking record
     tracking_item = {

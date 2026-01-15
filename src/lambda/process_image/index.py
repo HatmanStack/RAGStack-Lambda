@@ -1,9 +1,9 @@
 """
 Process Image Lambda
 
-Processes uploaded images using Nova Multimodal Embeddings. Ingests BOTH:
-1. The actual image file - for visual similarity search
-2. Caption text - for semantic text search
+Processes uploaded images and creates files for KB ingestion. Creates:
+1. caption.txt + metadata - for semantic text search
+2. {filename}.metadata.json - for visual embedding (triggers StartIngestionJob)
 
 Both vectors share the same image_id, enabling cross-modal retrieval.
 
@@ -22,8 +22,8 @@ Output:
 {
     "image_id": "abc123",
     "status": "INDEXED",
-    "image_ingestion_status": "STARTING",
-    "caption_ingestion_status": "STARTING"
+    "llm_metadata_extracted": true,
+    "metadata_keys": ["document_id", "filename", ...]
 }
 """
 
@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -47,8 +48,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
-bedrock_agent = boto3.client("bedrock-agent")
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
+bedrock_agent = boto3.client("bedrock-agent", region_name=os.environ.get("AWS_REGION"))
 
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
@@ -247,10 +248,7 @@ def is_valid_uuid(value: str) -> bool:
 
 
 def lambda_handler(event, context):
-    """Process image and ingest into Knowledge Base."""
-    # Get KB config from config table (with env var fallback)
-    config = get_config_manager()
-    kb_id, ds_id = get_knowledge_base_config(config)
+    """Process image and create files for KB ingestion via StartIngestionJob."""
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
@@ -259,6 +257,7 @@ def lambda_handler(event, context):
 
     # Extract image info from event
     # EventBridge passes image_id as path like "content/{imageId}/file.ext"
+    # submitImage passes image_id as direct UUID
     raw_image_id = event.get("image_id", "")
     input_s3_uri = event.get("input_s3_uri", "")
     trigger_type = event.get("trigger_type", "")
@@ -269,23 +268,27 @@ def lambda_handler(event, context):
     # Parse imageId from the key path
     image_id = None
     if raw_image_id:
-        # Skip non-image files (metadata.json, caption.txt, etc.)
-        ext = raw_image_id.lower().rsplit(".", 1)[-1] if "." in raw_image_id else ""
-        if f".{ext}" not in IMAGE_EXTENSIONS:
-            logger.info(f"Skipping non-image file: {raw_image_id}")
-            return {"status": "SKIPPED", "message": "Not an image file"}
-
-        # Handle paths like "content/abc123/image.jpg"
-        match = re.match(r"content/([^/]+)/", raw_image_id)
-        if match:
-            image_id = match.group(1)
-        elif "/" not in raw_image_id:
-            # Direct image ID (UUID format)
+        # For submit_image trigger, the image_id is already a UUID
+        if trigger_type == "submit_image":
             image_id = raw_image_id
         else:
-            # Path doesn't match expected format - skip silently
-            logger.info(f"Ignoring non-content path: {raw_image_id}")
-            return {"status": "SKIPPED", "message": "Not a content/ path"}
+            # Skip non-image files (metadata.json, caption.txt, etc.)
+            ext = raw_image_id.lower().rsplit(".", 1)[-1] if "." in raw_image_id else ""
+            if f".{ext}" not in IMAGE_EXTENSIONS:
+                logger.info(f"Skipping non-image file: {raw_image_id}")
+                return {"status": "SKIPPED", "message": "Not an image file"}
+
+            # Handle paths like "content/abc123/image.jpg"
+            match = re.match(r"content/([^/]+)/", raw_image_id)
+            if match:
+                image_id = match.group(1)
+            elif "/" not in raw_image_id:
+                # Direct image ID (UUID format)
+                image_id = raw_image_id
+            else:
+                # Path doesn't match expected format - skip silently
+                logger.info(f"Ignoring non-content path: {raw_image_id}")
+                return {"status": "SKIPPED", "message": "Not a content/ path"}
 
     if not image_id:
         raise ValueError("image_id is required in event (either as path or direct ID)")
@@ -306,53 +309,22 @@ def lambda_handler(event, context):
         if item.get("type") != "image":
             raise ValueError(f"Record is not an image type: {image_id}")
 
+        # For auto_process triggers (EventBridge on raw image upload),
+        # only process if auto_process=true in DynamoDB (API/MCP uploads).
+        # UI uploads should wait for submitImage to trigger processing.
+        if trigger_type == "auto_process" and not item.get("auto_process"):
+            logger.info(
+                f"Skipping image {image_id}: auto_process not enabled, waiting for submitImage"
+            )
+            return {
+                "image_id": image_id,
+                "status": "SKIPPED",
+                "message": "auto_process not enabled, waiting for submitImage",
+            }
+
         filename = item.get("filename", "unknown")
         caption = item.get("caption", "")
-        auto_process = item.get("auto_process", False)
-        user_caption = item.get("user_caption", "")
-
-        # Handle auto_process trigger (API/MCP uploads)
-        if trigger_type == "auto_process":
-            if not auto_process:
-                # Image uploaded but auto-process not requested - skip
-                logger.info(f"Skipping image {image_id}: auto_process not enabled")
-                return {
-                    "image_id": image_id,
-                    "status": "SKIPPED",
-                    "message": "auto_process not enabled, waiting for submitImage",
-                }
-
-            # Auto-process enabled - always generate AI caption
-            ai_caption = item.get("ai_caption", "")
-            if not ai_caption:
-                logger.info(f"Generating AI caption for image {image_id}")
-                input_s3_uri = item.get("input_s3_uri", "")
-                ai_caption = generate_ai_caption(input_s3_uri) or ""
-                if ai_caption:
-                    logger.info(f"Generated AI caption for {image_id}: {ai_caption[:100]}...")
-
-            # Combine user caption + AI caption
-            if user_caption and ai_caption:
-                caption = f"{user_caption}. {ai_caption}"
-            elif ai_caption:
-                caption = ai_caption
-            elif user_caption:
-                caption = user_caption
-
-            # Update DynamoDB with captions
-            if caption or ai_caption:
-                update_expr = (
-                    "SET caption = :caption, ai_caption = :ai_caption, updated_at = :updated_at"
-                )
-                tracking_table.update_item(
-                    Key={"document_id": image_id},
-                    UpdateExpression=update_expr,
-                    ExpressionAttributeValues={
-                        ":caption": caption,
-                        ":ai_caption": ai_caption,
-                        ":updated_at": datetime.now(UTC).isoformat(),
-                    },
-                )
+        extract_text = item.get("extract_text", False)
 
         # Get actual image S3 URI from tracking record (not from event, which has metadata.json)
         input_s3_uri = item.get("input_s3_uri", "")
@@ -377,35 +349,44 @@ def lambda_handler(event, context):
                 raise ValueError(f"Image not found in S3: {input_s3_uri}") from e
             raise
 
-        # Get or create metadata file
-        # Metadata key: content/{imageId}/metadata.json
+        # Extract text from image if requested (OCR)
+        extracted_text = ""
+        if extract_text:
+            logger.info(f"Extracting text from image {image_id}")
+            extracted_text = extract_text_from_image(input_s3_uri)
+            if extracted_text:
+                # Append extracted text to caption
+                if caption:
+                    caption = f"{caption}\n\nExtracted text:\n{extracted_text}"
+                else:
+                    caption = f"Extracted text:\n{extracted_text}"
+                logger.info(f"Added extracted text to caption for {image_id}")
+
+                # Update DynamoDB with extracted text
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression="SET caption = :caption, extracted_text = :ext_text, "
+                    "updated_at = :updated_at",
+                    ExpressionAttributeValues={
+                        ":caption": caption,
+                        ":ext_text": extracted_text,
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+
+        # Get base path for content files
         key_parts = image_key.rsplit("/", 1)
         base_path = key_parts[0] if len(key_parts) > 1 else image_key
-        metadata_key = f"{base_path}/metadata.json"
 
-        metadata = {}
-        try:
-            metadata_response = s3.get_object(Bucket=bucket, Key=metadata_key)
-            metadata = json.loads(metadata_response["Body"].read().decode("utf-8"))
-            logger.info(f"Found existing metadata: {metadata_key}")
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            if error_code in ("404", "NoSuchKey"):
-                # Create default metadata if not exists
-                logger.info(f"Creating default metadata for image: {image_id}")
-                metadata = {
-                    "caption": caption,
-                    "filename": filename,
-                    "createdAt": datetime.now(UTC).isoformat(),
-                }
-                s3.put_object(
-                    Bucket=bucket,
-                    Key=metadata_key,
-                    Body=json.dumps(metadata),
-                    ContentType="application/json",
-                )
-            else:
-                raise
+        # Build metadata dict from DynamoDB record (no longer using metadata.json file)
+        # This prevents KB from incorrectly indexing a standalone metadata.json file
+        metadata = {
+            "caption": caption,
+            "userCaption": item.get("user_caption", ""),
+            "aiCaption": item.get("ai_caption", ""),
+            "filename": filename,
+            "createdAt": item.get("created_at", datetime.now(UTC).isoformat()),
+        }
 
         # Create caption text file for semantic text search
         text_content = build_ingestion_text(image_id, filename, caption, metadata)
@@ -435,54 +416,43 @@ def lambda_handler(event, context):
         caption_metadata_uri = write_metadata_to_s3(text_s3_uri, combined_metadata)
         logger.info(f"Wrote {len(combined_metadata)} metadata fields to: {caption_metadata_uri}")
 
-        # Ingest BOTH the image and caption into KB
-        # Nova Multimodal Embeddings will:
-        # 1. Generate visual embedding from the image file
-        # 2. Generate text embedding from the caption
-        # Both vectors are in the same semantic space for cross-modal search
-        image_document = {
-            "content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": input_s3_uri}}}
+        # Create image metadata file for KB visual embedding
+        # This triggers StartIngestionJob via EventBridge when the image file lands in content/
+        # The metadata file must be alongside the image file for KB to pick it up
+        visual_metadata = {
+            "metadataAttributes": {
+                "content_type": "visual",
+                "document_id": image_id,
+                "media_type": "image",
+                "filename": filename,
+            }
         }
-        caption_document = {
-            "content": {"dataSourceType": "S3", "s3": {"s3Location": {"uri": text_s3_uri}}}
-        }
-
-        # Add metadata reference to caption document for KB filtering
-        # Image document ingests without metadata (visual embedding only)
-        caption_document["metadata"] = {
-            "type": "S3_LOCATION",
-            "s3Location": {"uri": caption_metadata_uri},
-        }
-        logger.info("Adding metadata reference to caption ingestion")
-
-        documents_to_ingest = [image_document, caption_document]
-
-        ingest_response = bedrock_agent.ingest_knowledge_base_documents(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-            documents=documents_to_ingest,
+        image_metadata_key = f"{base_path}/{filename}.metadata.json"
+        s3.put_object(
+            Bucket=bucket,
+            Key=image_metadata_key,
+            Body=json.dumps(visual_metadata),
+            ContentType="application/json",
         )
+        logger.info(f"Created image metadata at s3://{bucket}/{image_metadata_key}")
 
-        logger.info(f"Ingestion response: {json.dumps(ingest_response, default=str)}")
+        # Start KB ingestion job for visual embeddings
+        config_manager = get_config_manager()
+        kb_id, ds_id = get_knowledge_base_config(config_manager)
+        logger.info(f"Starting ingestion for image {image_id}: kb={kb_id}, ds={ds_id}")
 
-        # Extract status for both documents
-        doc_details = ingest_response.get("documentDetails", [])
-        image_ingestion_status = "UNKNOWN"
-        caption_ingestion_status = "UNKNOWN"
-        if len(doc_details) >= 1:
-            image_ingestion_status = doc_details[0].get("status", "UNKNOWN")
-        if len(doc_details) >= 2:
-            caption_ingestion_status = doc_details[1].get("status", "UNKNOWN")
-
-        # Log warning if any ingestion didn't start as expected
-        expected_statuses = ("STARTING", "IN_PROGRESS", "INDEXED")
-        if image_ingestion_status not in expected_statuses:
-            logger.warning(f"Image ingestion status unexpected: {image_ingestion_status}")
-        if caption_ingestion_status not in expected_statuses:
-            logger.warning(f"Caption ingestion status unexpected: {caption_ingestion_status}")
+        try:
+            ingestion_response = start_ingestion_with_retry(kb_id, ds_id)
+            job_info = ingestion_response.get("ingestionJob", {})
+            job_id = job_info.get("ingestionJobId")
+            logger.info(f"Started ingestion job {job_id} for image {image_id}")
+        except ClientError as e:
+            logger.error(f"Failed to start ingestion for image {image_id}: {e}")
+            # Don't fail the whole process - files are created, ingestion can be retried
+            job_id = None
 
         # Update image status in DynamoDB
-        # Store both URIs and extracted metadata
+        # Store URIs and extracted metadata
         update_expr = (
             "SET #status = :status, updated_at = :updated_at, "
             "output_s3_uri = :output_uri, caption_s3_uri = :caption_uri, "
@@ -518,9 +488,6 @@ def lambda_handler(event, context):
         return {
             "image_id": image_id,
             "status": ImageStatus.INDEXED.value,
-            "image_ingestion_status": image_ingestion_status,
-            "caption_ingestion_status": caption_ingestion_status,
-            "knowledge_base_id": kb_id,
             "llm_metadata_extracted": bool(llm_metadata),
             "metadata_keys": list(combined_metadata.keys()),
         }
@@ -649,22 +616,25 @@ def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: d
     return "\n".join(lines)
 
 
-def generate_ai_caption(s3_uri: str) -> str:
+def extract_text_from_image(s3_uri: str) -> str:
     """
-    Generate an AI caption for an image using Bedrock vision model.
+    Extract visible text from an image using Bedrock vision model (OCR).
+
+    This is focused purely on text extraction, not image description.
+    Used when user checks "Extract text from image" option.
 
     Args:
         s3_uri: S3 URI of the image (s3://bucket/key)
 
     Returns:
-        Generated caption text, or empty string on failure
+        Extracted text, or empty string if no text found or on failure
     """
     try:
         # Parse S3 URI
         uri_path = s3_uri.replace("s3://", "")
         parts = uri_path.split("/", 1)
         if len(parts) != 2:
-            logger.error(f"Invalid S3 URI for caption generation: {s3_uri}")
+            logger.error(f"Invalid S3 URI for text extraction: {s3_uri}")
             return ""
 
         bucket, key = parts
@@ -678,19 +648,18 @@ def generate_ai_caption(s3_uri: str) -> str:
         if ext == "jpg":
             ext = "jpeg"  # Normalize for Bedrock API
 
-        # Get caption model from config - use same model as chat/query
-        caption_model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        # Get OCR model from config - use same model as chat/query
+        ocr_model = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_mgr = ConfigurationManager(CONFIGURATION_TABLE_NAME)
-                caption_model = config_mgr.get_parameter("chat_primary_model", caption_model)
+                ocr_model = config_mgr.get_parameter("chat_primary_model", ocr_model)
             except Exception as e:
-                logger.warning(f"Failed to get caption model from config: {e}")
+                logger.warning(f"Failed to get OCR model from config: {e}")
 
-        # Call Bedrock Converse API with vision
-
+        # Call Bedrock Converse API with OCR-focused prompt
         converse_response = bedrock_runtime.converse(
-            modelId=caption_model,
+            modelId=ocr_model,
             messages=[
                 {
                     "role": "user",
@@ -703,29 +672,95 @@ def generate_ai_caption(s3_uri: str) -> str:
                         },
                         {
                             "text": (
-                                "Describe this image in detail for semantic search indexing. "
-                                "Include: main subjects, setting, colors, mood, any text visible, "
-                                "and notable details. Be thorough but concise (2-4 sentences)."
+                                "Extract and transcribe ALL visible text from this image. "
+                                "Include: signs, labels, captions, memes, documents, "
+                                "handwriting, logos, buttons, menus, etc.\n\n"
+                                "Output ONLY the extracted text, preserving the layout "
+                                "where possible. If no text is visible, respond with 'NO_TEXT'."
                             )
                         },
                     ],
                 }
             ],
-            inferenceConfig={"maxTokens": 300, "temperature": 0.3},
+            inferenceConfig={"maxTokens": 1000, "temperature": 0.1},
         )
 
-        # Extract caption from response
+        # Extract text from response
         output = converse_response.get("output", {})
         message = output.get("message", {})
         content = message.get("content", [])
 
         for block in content:
             if "text" in block:
-                return block["text"].strip()
+                extracted = block["text"].strip()
+                if extracted == "NO_TEXT":
+                    logger.info("No text found in image")
+                    return ""
+                logger.info(f"Extracted text from image: {extracted[:100]}...")
+                return extracted
 
-        logger.warning("No text content in caption response")
+        logger.warning("No text content in OCR response")
         return ""
 
     except Exception as e:
-        logger.error(f"Failed to generate AI caption: {e}", exc_info=True)
+        logger.error(f"Failed to extract text from image: {e}", exc_info=True)
         return ""
+
+
+def start_ingestion_with_retry(
+    kb_id: str,
+    ds_id: str,
+    max_retries: int = 5,
+    base_delay: float = 5.0,
+) -> dict:
+    """
+    Start ingestion job with retry for concurrent API conflicts.
+
+    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
+    data source. This function retries with exponential backoff when a conflict
+    is detected.
+
+    Args:
+        kb_id: Knowledge base ID
+        ds_id: Data source ID
+        max_retries: Maximum retry attempts (default 5)
+        base_delay: Base delay in seconds (default 5.0)
+
+    Returns:
+        StartIngestionJob response
+
+    Raises:
+        ClientError: If all retries exhausted or non-retryable error
+    """
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return bedrock_agent.start_ingestion_job(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", "")
+
+            # Check if this is a retryable concurrent API conflict
+            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
+                last_error = e
+                if attempt < max_retries:
+                    delay = base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
+                        f"after {delay}s: {error_msg}"
+                    )
+                    time.sleep(delay)
+                    continue
+
+            # Non-retryable error, raise immediately
+            raise
+
+    # All retries exhausted
+    logger.error(f"All {max_retries} retries exhausted for ingestion job")
+    if last_error:
+        raise last_error
+    raise RuntimeError("Ingestion job failed with no error captured")

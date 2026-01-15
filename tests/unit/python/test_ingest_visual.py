@@ -1,7 +1,10 @@
-"""Unit tests for IngestVisualFunction Lambda.
+"""Unit tests for IngestVisualContentFunction Lambda.
 
 Tests the visual embedding ingestion process that triggers StartIngestionJob
-when video files are uploaded to content/{docId}/.
+when video content is uploaded to content/{docId}/video.mp4.
+
+Note: Images are handled by ProcessImageFunction which calls StartIngestionJob
+directly, ensuring caption/metadata is ready before ingestion.
 """
 
 import importlib.util
@@ -67,11 +70,11 @@ def s3_put_event():
     }
 
 
-class TestIngestVisualLambda:
-    """Tests for the IngestVisualFunction Lambda handler."""
+class TestIngestVisualContentLambda:
+    """Tests for the IngestVisualContentFunction Lambda handler."""
 
     @patch("boto3.client")
-    def test_handler_starts_ingestion_job(self, mock_boto_client, s3_put_event):
+    def test_handler_starts_ingestion_job_for_video(self, mock_boto_client, s3_put_event):
         """Test that handler starts ingestion job for video file."""
         mock_bedrock_agent = MagicMock()
         mock_boto_client.return_value = mock_bedrock_agent
@@ -110,8 +113,8 @@ class TestIngestVisualLambda:
         mock_bedrock_agent.start_ingestion_job.assert_not_called()
 
     @patch("boto3.client")
-    def test_handler_skips_non_video_files(self, mock_boto_client, s3_put_event):
-        """Test that handler skips non-video files."""
+    def test_handler_skips_non_visual_files(self, mock_boto_client, s3_put_event):
+        """Test that handler skips non-visual files (text, etc)."""
         s3_put_event["detail"]["object"]["key"] = "content/doc-123/transcript_full.txt"
 
         mock_bedrock_agent = MagicMock()
@@ -172,8 +175,7 @@ class TestIngestVisualLambda:
 
     @patch("boto3.client")
     def test_handler_validates_video_path_pattern(self, mock_boto_client, s3_put_event):
-        """Test that handler only processes content/{docId}/video.mp4 pattern."""
-        # Valid pattern
+        """Test that handler processes content/{docId}/video.mp4 pattern."""
         s3_put_event["detail"]["object"]["key"] = "content/abc-123/video.mp4"
 
         mock_bedrock_agent = MagicMock()
@@ -188,6 +190,48 @@ class TestIngestVisualLambda:
         assert result["status"] == "success"
 
     @patch("boto3.client")
+    def test_handler_skips_jpg_images(self, mock_boto_client, s3_put_event):
+        """Test that handler skips .jpg image files (handled by ProcessImageFunction)."""
+        s3_put_event["detail"]["object"]["key"] = "content/abc-123/photo.jpg"
+
+        mock_bedrock_agent = MagicMock()
+        mock_boto_client.return_value = mock_bedrock_agent
+
+        module = load_ingest_visual_module()
+        result = module.lambda_handler(s3_put_event, None)
+
+        assert result["status"] == "skipped"
+        mock_bedrock_agent.start_ingestion_job.assert_not_called()
+
+    @patch("boto3.client")
+    def test_handler_skips_png_images(self, mock_boto_client, s3_put_event):
+        """Test that handler skips .png image files (handled by ProcessImageFunction)."""
+        s3_put_event["detail"]["object"]["key"] = "content/abc-123/screenshot.png"
+
+        mock_bedrock_agent = MagicMock()
+        mock_boto_client.return_value = mock_bedrock_agent
+
+        module = load_ingest_visual_module()
+        result = module.lambda_handler(s3_put_event, None)
+
+        assert result["status"] == "skipped"
+        mock_bedrock_agent.start_ingestion_job.assert_not_called()
+
+    @patch("boto3.client")
+    def test_handler_skips_webp_images(self, mock_boto_client, s3_put_event):
+        """Test that handler skips .webp image files (handled by ProcessImageFunction)."""
+        s3_put_event["detail"]["object"]["key"] = "content/abc-123/image.webp"
+
+        mock_bedrock_agent = MagicMock()
+        mock_boto_client.return_value = mock_bedrock_agent
+
+        module = load_ingest_visual_module()
+        result = module.lambda_handler(s3_put_event, None)
+
+        assert result["status"] == "skipped"
+        mock_bedrock_agent.start_ingestion_job.assert_not_called()
+
+    @patch("boto3.client")
     def test_handler_skips_input_folder(self, mock_boto_client, s3_put_event):
         """Test that handler skips files in input/ folder."""
         s3_put_event["detail"]["object"]["key"] = "input/doc-123/video.mp4"
@@ -200,3 +244,37 @@ class TestIngestVisualLambda:
 
         assert result["status"] == "skipped"
         mock_bedrock_agent.start_ingestion_job.assert_not_called()
+
+    @patch("time.sleep")
+    @patch("boto3.client")
+    def test_handler_retries_on_concurrent_api_conflict(
+        self, mock_boto_client, mock_sleep, s3_put_event
+    ):
+        """Test that handler retries when IngestDocuments is still running."""
+        from botocore.exceptions import ClientError
+
+        mock_bedrock_agent = MagicMock()
+        mock_boto_client.return_value = mock_bedrock_agent
+
+        # First call raises conflict, second succeeds
+        conflict_error = ClientError(
+            {
+                "Error": {
+                    "Code": "ValidationException",
+                    "Message": "There is an ongoing KnowledgeBaseDocuments API request",
+                }
+            },
+            "StartIngestionJob",
+        )
+        mock_bedrock_agent.start_ingestion_job.side_effect = [
+            conflict_error,
+            {"ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}},
+        ]
+
+        module = load_ingest_visual_module()
+        result = module.lambda_handler(s3_put_event, None)
+
+        assert result["status"] == "success"
+        assert result["job_id"] == "job-123"
+        assert mock_bedrock_agent.start_ingestion_job.call_count == 2
+        mock_sleep.assert_called_once()  # Should have slept once between retries

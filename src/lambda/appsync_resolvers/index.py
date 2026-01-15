@@ -75,6 +75,9 @@ SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 # Metadata analyzer function (optional)
 METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN")
 
+# Process image function for submitImage
+PROCESS_IMAGE_FUNCTION_ARN = os.environ.get("PROCESS_IMAGE_FUNCTION_ARN")
+
 # Metadata key library table (optional)
 METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
@@ -356,7 +359,13 @@ def create_upload_url(args):
     Create presigned URL for S3 upload.
 
     Returns upload URL and document ID for tracking.
+
+    Media files (video/audio) upload directly to content/ folder.
+    Documents upload to input/ folder for Step Functions processing.
     """
+    # Media extensions that upload directly to content/ (skip Step Functions)
+    MEDIA_EXTENSIONS = {".mp4", ".webm", ".mp3", ".wav", ".m4a", ".ogg"}
+
     try:
         filename = args["filename"]
         logger.info(f"Creating upload URL for file: {filename}")
@@ -384,11 +393,21 @@ def create_upload_url(args):
         document_id = str(uuid4())
         logger.info(f"Generated document ID: {document_id}")
 
-        # Generate S3 key with input/ prefix for DataBucket
-        s3_key = f"input/{document_id}/{filename}"
+        # Check if file is media (video/audio) - these go directly to content/
+        ext = Path(filename).suffix.lower()
+        is_media = ext in MEDIA_EXTENSIONS
+
+        # Media files upload directly to content/ (processed by EventBridge → ProcessMedia)
+        # Documents upload to input/ (processed by Step Functions)
+        if is_media:
+            s3_key = f"content/{document_id}/{filename}"
+            doc_type = "media"
+        else:
+            s3_key = f"input/{document_id}/{filename}"
+            doc_type = "document"
 
         # Create presigned POST
-        logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        logger.info(f"Generating presigned POST for S3 key: {s3_key} (type={doc_type})")
         presigned = s3.generate_presigned_post(
             Bucket=DATA_BUCKET,
             Key=s3_key,
@@ -405,6 +424,7 @@ def create_upload_url(args):
                 "filename": filename,
                 "input_s3_uri": f"s3://{DATA_BUCKET}/{s3_key}",
                 "status": "uploaded",
+                "type": doc_type,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -1184,8 +1204,9 @@ def submit_image(args):
     caption = input_data.get("caption")
     user_caption = input_data.get("userCaption")
     ai_caption = input_data.get("aiCaption")
+    extract_text = input_data.get("extractText", False)
 
-    logger.info(f"Submitting image: {image_id}")
+    logger.info(f"Submitting image: {image_id}, extractText={extract_text}")
 
     try:
         # Validate imageId
@@ -1246,31 +1267,8 @@ def submit_image(args):
         elif caption:
             combined_caption = caption
 
-        # Write metadata.json to S3
-        metadata = {
-            "caption": combined_caption,
-            "userCaption": user_caption,
-            "aiCaption": ai_caption,
-            "filename": item.get("filename", ""),
-            "contentType": content_type,
-            "fileSize": file_size,
-            "createdAt": item.get("created_at", datetime.now(UTC).isoformat()),
-        }
-
-        # Derive metadata key from image key
-        # Image key: content/{imageId}/{filename}
-        # Metadata key: content/{imageId}/metadata.json
-        key_parts = key.rsplit("/", 1)
-        base_path = key_parts[0] if len(key_parts) > 1 else key
-        metadata_key = f"{base_path}/metadata.json"
-
-        logger.info(f"Writing metadata to: s3://{bucket}/{metadata_key}")
-        s3.put_object(
-            Bucket=bucket,
-            Key=metadata_key,
-            Body=json.dumps(metadata),
-            ContentType="application/json",
-        )
+        # Note: metadata.json no longer written to S3 - all data stored in DynamoDB
+        # This prevents KB from incorrectly indexing the metadata file
 
         # Update tracking record
         now = datetime.now(UTC).isoformat()
@@ -1278,8 +1276,8 @@ def submit_image(args):
             Key={"document_id": image_id},
             UpdateExpression=(
                 "SET #status = :status, caption = :caption, user_caption = :user_caption, "
-                "ai_caption = :ai_caption, content_type = :content_type, file_size = :file_size, "
-                "updated_at = :updated_at"
+                "ai_caption = :ai_caption, extract_text = :extract_text, "
+                "content_type = :content_type, file_size = :file_size, updated_at = :updated_at"
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
@@ -1287,11 +1285,29 @@ def submit_image(args):
                 ":caption": combined_caption,
                 ":user_caption": user_caption,
                 ":ai_caption": ai_caption,
+                ":extract_text": extract_text,
                 ":content_type": content_type,
                 ":file_size": file_size,
                 ":updated_at": now,
             },
         )
+
+        # Invoke process_image Lambda asynchronously
+        if PROCESS_IMAGE_FUNCTION_ARN:
+            process_event = {
+                "image_id": image_id,
+                "s3_key": key,
+                "bucket": bucket,
+                "trigger_type": "submit_image",
+            }
+            logger.info(f"Invoking process_image for {image_id}")
+            lambda_client.invoke(
+                FunctionName=PROCESS_IMAGE_FUNCTION_ARN,
+                InvocationType="Event",  # Async invocation
+                Payload=json.dumps(process_event),
+            )
+        else:
+            logger.warning("PROCESS_IMAGE_FUNCTION_ARN not configured, skipping invocation")
 
         # Get updated item
         response = table.get_item(Key={"document_id": image_id})
@@ -1316,12 +1332,23 @@ def format_image(item):
         return None
 
     input_s3_uri = item.get("input_s3_uri", "")
+    caption_s3_uri = item.get("caption_s3_uri", "")
     status = item.get("status", ImageStatus.PENDING.value)
 
     # Generate thumbnail URL for images
     thumbnail_url = None
     if input_s3_uri and input_s3_uri.startswith("s3://"):
         thumbnail_url = generate_presigned_download_url(input_s3_uri)
+
+    # Generate presigned URL for caption.txt preview
+    caption_url = None
+    if caption_s3_uri and caption_s3_uri.startswith("s3://"):
+        caption_url = generate_presigned_download_url(caption_s3_uri)
+
+    # Format extracted_metadata as JSON if it exists
+    extracted_metadata = item.get("extracted_metadata")
+    if extracted_metadata and isinstance(extracted_metadata, dict):
+        extracted_metadata = json.dumps(extracted_metadata)
 
     return {
         "imageId": item.get("document_id"),
@@ -1335,6 +1362,9 @@ def format_image(item):
         "contentType": item.get("content_type"),
         "fileSize": item.get("file_size"),
         "errorMessage": item.get("error_message"),
+        "extractedText": item.get("extracted_text"),
+        "extractedMetadata": extracted_metadata,
+        "captionUrl": caption_url,
         "createdAt": item.get("created_at"),
         "updatedAt": item.get("updated_at"),
     }

@@ -829,6 +829,8 @@ def extract_sources(citations):
             location = ref.get("location") or {}
             s3_location = location.get("s3Location") or {}
             uri = s3_location.get("uri", "")
+            # Extract relevance score from KB response (0-1 range)
+            relevance_score = ref.get("score")
 
             if not uri:
                 logger.debug(f"No URI found in reference. Location: {location}")
@@ -1020,8 +1022,19 @@ def extract_sources(citations):
                     preview = image_caption[:50] if image_caption else None
                     logger.debug(f"Image content detected, caption: {preview}...")
 
-                # Deduplicate by document + page
-                source_key = f"{document_id}:{page_num}"
+                # Deduplicate sources:
+                # - Video/media segments: use full URI (each timestamp is unique)
+                # - PDF pages: use document_id:page_num
+                # - Other content: use document_id
+                is_segment = doc_type == "media" or "segment-" in uri or uri.endswith("/video.mp4")
+                if is_segment:
+                    # Each video segment is a unique source (different timestamps)
+                    source_key = uri
+                elif page_num is not None:
+                    source_key = f"{document_id}:{page_num}"
+                else:
+                    source_key = document_id
+
                 if source_key not in seen:
                     # Check if document access is allowed
                     allow_document_access = get_config_manager().get_parameter(
@@ -1098,6 +1111,7 @@ def extract_sources(citations):
                     timestamp_start = None
                     timestamp_end = None
                     if is_media:
+                        # Check custom metadata first (transcripts use seconds)
                         ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
                         ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
                         if ts_start_str is not None:
@@ -1106,6 +1120,21 @@ def extract_sources(citations):
                         if ts_end_str is not None:
                             with contextlib.suppress(ValueError, TypeError):
                                 timestamp_end = int(ts_end_str)
+                        # Fall back to native KB keys for visual embeddings (milliseconds)
+                        if timestamp_start is None:
+                            ts_millis = extract_kb_scalar(
+                                metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                            )
+                            if ts_millis is not None:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    timestamp_start = int(ts_millis) // 1000
+                        if timestamp_end is None:
+                            ts_millis = extract_kb_scalar(
+                                metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                            )
+                            if ts_millis is not None:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    timestamp_end = int(ts_millis) // 1000
 
                     speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
                     segment_index = None
@@ -1115,20 +1144,27 @@ def extract_sources(citations):
                             with contextlib.suppress(ValueError, TypeError):
                                 segment_index = int(seg_idx_str)
 
-                    # For media sources, generate URL with timestamp fragment
+                    # For media sources, generate both full URL and segment URL with timestamp
+                    segment_url = None
                     if is_media and allow_document_access and document_s3_uri:
                         s3_path = document_s3_uri.replace("s3://", "")
                         s3_match = s3_path.split("/", 1)
                         if len(s3_match) == 2 and s3_match[1]:
                             media_bucket = s3_match[0]
                             media_key = s3_match[1]
-                            document_url = generate_media_url(
-                                media_bucket, media_key, timestamp_start, timestamp_end
-                            )
-                            logger.info(
-                                f"[SOURCE] Media URL generated with timestamps: "
-                                f"#t={timestamp_start},{timestamp_end}"
-                            )
+                            # Full video URL (no timestamp)
+                            document_url = generate_presigned_url(media_bucket, media_key)
+                            # Segment URL with timestamp fragment for deep linking
+                            if document_url and timestamp_start is not None:
+                                if timestamp_end is not None:
+                                    ts_frag = f"#t={timestamp_start},{timestamp_end}"
+                                else:
+                                    ts_frag = f"#t={timestamp_start}"
+                                segment_url = f"{document_url}{ts_frag}"
+                                logger.info(
+                                    f"[SOURCE] Media URLs: full={document_url[:50]}..., "
+                                    f"segment=#t={timestamp_start},{timestamp_end}"
+                                )
 
                     # Format timestamp display for media sources
                     timestamp_display = None
@@ -1144,14 +1180,18 @@ def extract_sources(citations):
                         "snippet": snippet,
                         "documentUrl": document_url,
                         "documentAccessAllowed": allow_document_access,
+                        "score": relevance_score,  # KB relevance score (0-1)
+                        "filename": original_filename,  # Original filename
                         "isScraped": is_scraped,
                         "sourceUrl": source_url,  # Original web URL for scraped content
                         # Image-specific fields
                         "isImage": is_image,
                         "thumbnailUrl": thumbnail_url,
                         "caption": image_caption,
-                        # Media-specific fields
+                        # Media-specific fields (matches search_kb structure)
                         "isMedia": is_media if is_media else None,
+                        "isSegment": is_segment,
+                        "segmentUrl": segment_url,  # URL with #t=start,end for deep linking
                         "mediaType": media_type,
                         "contentType": content_type if is_media else None,
                         "timestampStart": timestamp_start,
@@ -1390,17 +1430,87 @@ def lambda_handler(event, context):
         citations = []  # Build citations in the format expected by extract_sources
         for result in retrieval_results:
             content = result.get("content") or {}
+            metadata = result.get("metadata") or {}
+            location = result.get("location") or {}
+
+            # Extract metadata for context enrichment
+            content_type = extract_kb_scalar(metadata.get("content_type"))
+            filename = extract_kb_scalar(metadata.get("filename"))
+
+            # Get timestamps (custom keys in seconds, native KB keys in milliseconds)
+            ts_start = None
+            ts_end = None
+            ts_raw = metadata.get("timestamp_start")
+            if ts_raw is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    ts_start = int(extract_kb_scalar(ts_raw))
+            else:
+                ts_millis = metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                if ts_millis is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_start = int(extract_kb_scalar(ts_millis)) // 1000
+
+            ts_raw = metadata.get("timestamp_end")
+            if ts_raw is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    ts_end = int(extract_kb_scalar(ts_raw))
+            else:
+                ts_millis = metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                if ts_millis is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_end = int(extract_kb_scalar(ts_millis)) // 1000
+
+            # Format timestamp for display (M:SS format)
+            ts_display = ""
+            if ts_start is not None:
+                start_fmt = f"{ts_start // 60}:{ts_start % 60:02d}"
+                if ts_end is not None:
+                    end_fmt = f"{ts_end // 60}:{ts_end % 60:02d}"
+                    ts_display = f", {start_fmt}-{end_fmt}"
+                else:
+                    ts_display = f", {start_fmt}"
+
+            # Build source header for context enrichment
+            source_header = f"[Source: {filename}{ts_display}]\n" if filename else ""
+
             content_text = content.get("text", "") if isinstance(content, dict) else ""
-            if content_text:
-                retrieved_chunks.append(content_text)
-                # Build citation structure for source extraction
+            is_visual = content_type == "visual" or content.get("type") == "VIDEO"
+
+            if is_visual:
+                # Visual segment - explain to LLM that video frames matched the query
+                # This tells the LLM that the VIDEO CONTENT is relevant, not just metadata
+                visual_hint = (
+                    f"{source_header}"
+                    f"VIDEO VISUAL MATCH: This video segment's visual content matches the query "
+                    f'"{query}". The video frames were analyzed and found to be semantically '
+                    f"relevant. Direct the user to watch this video source to see what they're "
+                    f"looking for."
+                )
+                retrieved_chunks.append(visual_hint)
+                # For sources display, use shorter text
+                source_text = f'Video visual match for: "{query}"'
+                citations.append(
+                    {
+                        "retrievedReferences": [
+                            {
+                                "content": {"text": source_text},
+                                "location": location,
+                                "metadata": metadata,
+                            }
+                        ]
+                    }
+                )
+            elif content_text:
+                # Text content - enrich with source metadata
+                enriched_text = f"{source_header}{content_text}"
+                retrieved_chunks.append(enriched_text)
                 citations.append(
                     {
                         "retrievedReferences": [
                             {
                                 "content": {"text": content_text},
-                                "location": result.get("location") or {},
-                                "metadata": result.get("metadata") or {},
+                                "location": location,
+                                "metadata": metadata,
                             }
                         ]
                     }
@@ -1424,7 +1534,11 @@ def lambda_handler(event, context):
             "from a knowledge base. Always base your answers on the provided knowledge "
             "base information. If the provided information doesn't contain the answer, "
             "clearly state that and provide what relevant information you can. "
-            "Be concise but thorough."
+            "Be concise but thorough.\n\n"
+            "IMPORTANT: When you see 'VIDEO VISUAL MATCH' in the context, this means "
+            "the video's visual frames were analyzed and matched the user's query. "
+            "This is relevant information - tell the user the video contains what "
+            "they're looking for and direct them to watch the linked source."
         )
         system_prompt = get_config_manager().get_parameter(
             "chat_system_prompt", default=default_prompt

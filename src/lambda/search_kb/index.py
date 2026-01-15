@@ -25,6 +25,7 @@ Output (KBQueryResult):
 }
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -353,8 +354,12 @@ def lambda_handler(event, context):
             # Check if this is a segment (transcript segment or video with timestamp)
             # Transcript segments: content/<doc_id>/segment-000.txt
             # Video segments: Nova provides timestamp in metadata for auto-segmented video
+            # Visual embeddings: Use native KB timestamp keys (x-amz-bedrock-kb-chunk-*)
             is_transcript_segment = "/segment-" in kb_uri
-            has_timestamp_metadata = kb_metadata.get("timestamp_start") is not None
+            has_timestamp_metadata = (
+                kb_metadata.get("timestamp_start") is not None
+                or kb_metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis") is not None
+            )
             is_segment = is_transcript_segment or has_timestamp_metadata
 
             # Look up document details from tracking table
@@ -376,7 +381,9 @@ def lambda_handler(event, context):
 
             # Get timestamp from segment metadata (KB returns as list with quoted strings)
             timestamp_start = None
-            if is_segment:
+            timestamp_end = None
+            if is_segment or is_media:
+                # Check custom metadata first (transcripts use seconds)
                 ts_raw = kb_metadata.get("timestamp_start")
                 ts_str = extract_kb_scalar(ts_raw)
                 if ts_str is not None:
@@ -384,6 +391,20 @@ def lambda_handler(event, context):
                         timestamp_start = int(ts_str)
                     except (ValueError, TypeError):
                         logger.warning(f"Invalid timestamp_start value: {ts_raw}")
+                # Fall back to native KB keys for visual embeddings (milliseconds)
+                if timestamp_start is None:
+                    ts_millis = extract_kb_scalar(
+                        kb_metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                    )
+                    if ts_millis is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            timestamp_start = int(ts_millis) // 1000
+                    ts_millis_end = extract_kb_scalar(
+                        kb_metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                    )
+                    if ts_millis_end is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            timestamp_end = int(ts_millis_end) // 1000
 
             # Generate presigned URL if access is enabled
             document_url = None
@@ -393,14 +414,17 @@ def lambda_handler(event, context):
                 # For scraped content, use source_url (original web URL)
                 if is_scraped and doc_info.get("source_url"):
                     document_url = doc_info["source_url"]
-                elif is_segment and input_s3_uri:
-                    # For segments, create video URL with timestamp parameter
+                elif (is_segment or is_media) and input_s3_uri:
+                    # For segments/media, create video URL with timestamp parameter
                     bucket, key = parse_s3_uri(input_s3_uri)
                     if bucket and key:
                         base_url = generate_presigned_url(bucket, key)
                         if base_url and timestamp_start is not None:
                             # Append timestamp for deep linking (works with HTML5 video)
-                            segment_url = f"{base_url}#t={timestamp_start}"
+                            if timestamp_end is not None:
+                                segment_url = f"{base_url}#t={timestamp_start},{timestamp_end}"
+                            else:
+                                segment_url = f"{base_url}#t={timestamp_start}"
                         document_url = base_url  # Full video without timestamp
                 elif input_s3_uri:
                     bucket, key = parse_s3_uri(input_s3_uri)
