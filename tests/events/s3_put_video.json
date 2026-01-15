@@ -15,7 +15,7 @@
       "name": "ragstack-test-data"
     },
     "object": {
-      "key": "content/visual_segments/abc123-def4-5678-ghij-klmnopqrstuv.mp4",
+      "key": "content/abc123-def4-5678-ghij-klmnopqrstuv/video.mp4",
       "size": 15728640,
       "etag": "d41d8cd98f00b204e9800998ecf8427e",
       "sequencer": "00A1B2C3D4E5F67890"
