@@ -1,5 +1,12 @@
 """Visual Segmenter for extracting media segments for Nova embedding.
 
+.. deprecated::
+    This module is deprecated as of visual embeddings implementation.
+    Bedrock KB now handles video chunking natively during StartIngestionJob.
+    Kept for potential future custom chunking requirements.
+
+Original purpose: FFmpeg-based 30-second segment extraction for Nova embeddings.
+
 This module provides a segmenter that extracts 30-second segments from
 video and audio files for use with Nova Multimodal Embeddings.
 
