@@ -309,28 +309,30 @@ class TestVisualContentTypeDetection:
                 yield
 
     def test_visual_content_type_is_recognized_as_media(self):
-        """Verify that 'visual' content_type is in the media_content_types tuple."""
+        """Verify that 'visual' content_type is in MEDIA_CONTENT_TYPES."""
         import importlib
 
         import index
 
         importlib.reload(index)
 
-        # The media_content_types tuple should include 'visual'
-        # This verifies the existing implementation handles visual content
-        media_content_types = ("video", "audio", "transcript", "visual")
-        assert "visual" in media_content_types
+        # Verify the real module-level constant includes 'visual'
+        assert "visual" in index.MEDIA_CONTENT_TYPES
 
     def test_video_path_document_id_extraction(self):
         """Verify document ID is extracted correctly from content/{docId}/video.mp4 path."""
-        # For path content/{docId}/video.mp4:
-        # parts = ['bucket', 'content', '{docId}', 'video.mp4']
-        # parts[2] = '{docId}'
-        parts = ["test-bucket", "content", "doc-123", "video.mp4"]
-        assert len(parts) > 2
-        assert parts[1] == "content"
-        document_id = parts[2]
-        assert document_id == "doc-123"
+        from urllib.parse import unquote
+
+        # Use a valid UUID format as the code expects
+        test_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        s3_uri = f"s3://test-bucket/content/{test_uuid}/video.mp4"
+
+        # Parse URI the same way the code does (split and extract parts[2])
+        parts = s3_uri.replace("s3://", "").split("/")
+        assert len(parts) > 2 and parts[1] == "content"
+        document_id = unquote(parts[2])
+
+        assert document_id == test_uuid
 
 
 if __name__ == "__main__":
