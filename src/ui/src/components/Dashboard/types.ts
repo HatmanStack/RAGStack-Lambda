@@ -31,6 +31,12 @@ export interface ImageDetailData {
   fileSize?: number;
   createdAt?: string;
   errorMessage?: string;
+  // OCR extracted text
+  extractedText?: string;
+  // Extracted metadata from image analysis
+  extractedMetadata?: string | Record<string, unknown>;
+  // Presigned URL to caption.txt
+  captionUrl?: string;
 }
 
 // Scrape job detail

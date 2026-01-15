@@ -10,7 +10,6 @@ import {
   Link,
   Box,
   CollectionPreferences,
-  Icon,
   ProgressBar
 } from '@cloudscape-design/components';
 import { useCollection } from '@cloudscape-design/collection-hooks';
@@ -175,14 +174,6 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       }
     });
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'scrape': return <Icon name="external" size="small" />;
-      case 'image': return <Icon name="file" size="small" />;
-      default: return null;
-    }
-  };
-
   const handleDelete = async () => {
     if (selectedItems.length === 0 || !onDelete) return;
 
@@ -208,12 +199,9 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       id: 'filename',
       header: 'Name',
       cell: (item: DocumentItem) => (
-        <SpaceBetween direction="horizontal" size="xs">
-          {getTypeIcon(item.type)}
-          <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
-            {item.filename}
-          </Link>
-        </SpaceBetween>
+        <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
+          {item.filename}
+        </Link>
       ),
       sortingField: 'filename',
       isRowHeader: true,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, DragEvent, ChangeEvent } from 'react';
+import React, { useState, useCallback, useEffect, DragEvent, ChangeEvent } from 'react';
 import {
   Box,
   Button,
@@ -8,24 +8,11 @@ import {
   Alert,
   ProgressBar,
   StatusIndicator,
-  Textarea,
-  FormField,
-  ExpandableSection,
+  Popover,
 } from '@cloudscape-design/components';
-import { generateClient } from 'aws-amplify/api';
 import { ImagePreview } from './ImagePreview';
 import { CaptionInput } from './CaptionInput';
 import { useImage } from '../../hooks/useImage';
-import { getConfiguration } from '../../graphql/queries/getConfiguration';
-import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
-import type { GqlResponse } from '../../types/graphql';
-
-const DEFAULT_IMAGE_CAPTION_PROMPT = 'You are an image captioning assistant. Generate concise, descriptive captions that are suitable for use as search keywords. Focus on the main subject, setting, and any notable visual elements. Keep captions under 200 characters.';
-
-interface ConfigData {
-  Default: string;
-  Custom: string;
-}
 
 type UploadStatus = 'idle' | 'uploading' | 'uploaded' | 'submitting' | 'complete' | 'error';
 
@@ -35,71 +22,21 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const ImageUpload = () => {
   const {
     uploading,
-    generating,
     error,
     clearError,
     uploadImage,
-    generateCaption,
     submitImage
   } = useImage();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageId, setImageId] = useState<string | null>(null);
-  const [imageS3Uri, setImageS3Uri] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [userCaption, setUserCaption] = useState('');
-  const [aiCaption, setAiCaption] = useState('');
+  const [extractText, setExtractText] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-
-  // Caption prompt configuration state
-  const [captionPrompt, setCaptionPrompt] = useState(DEFAULT_IMAGE_CAPTION_PROMPT);
-  const [originalCaptionPrompt, setOriginalCaptionPrompt] = useState(DEFAULT_IMAGE_CAPTION_PROMPT);
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
-  const [promptSaveStatus, setPromptSaveStatus] = useState<'success' | 'error' | null>(null);
-  const client = useMemo(() => generateClient(), []);
-
-  // Load caption prompt from config
-  useEffect(() => {
-    async function loadConfig() {
-      try {
-        const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
-        const config = response.data?.getConfiguration as ConfigData | undefined;
-        const parsedDefault = JSON.parse(config?.Default || '{}');
-        const parsedCustom = JSON.parse(config?.Custom || '{}');
-        const merged = { ...parsedDefault, ...parsedCustom };
-        const prompt = merged.image_caption_prompt || DEFAULT_IMAGE_CAPTION_PROMPT;
-        setCaptionPrompt(prompt);
-        setOriginalCaptionPrompt(prompt);
-      } catch (err) {
-        console.error('Error loading config:', err);
-      }
-    }
-    loadConfig();
-  }, [client]);
-
-  const handleSaveCaptionPrompt = async () => {
-    setIsSavingPrompt(true);
-    setPromptSaveStatus(null);
-    try {
-      await client.graphql({
-        query: updateConfiguration,
-        variables: { customConfig: JSON.stringify({ image_caption_prompt: captionPrompt }) }
-      });
-      setOriginalCaptionPrompt(captionPrompt);
-      setPromptSaveStatus('success');
-      setTimeout(() => setPromptSaveStatus(null), 3000);
-    } catch (err) {
-      console.error('Error saving config:', err);
-      setPromptSaveStatus('error');
-    } finally {
-      setIsSavingPrompt(false);
-    }
-  };
-
-  const hasCaptionPromptChanged = captionPrompt !== originalCaptionPrompt;
 
   // Create preview URL when file is selected
   useEffect(() => {
@@ -133,7 +70,7 @@ export const ImageUpload = () => {
     clearError();
     setSelectedFile(file);
     setUserCaption('');
-    setAiCaption('');
+    setExtractText(false);
     setUploadStatus('uploading');
     setUploadProgress(0);
 
@@ -142,7 +79,6 @@ export const ImageUpload = () => {
         setUploadProgress(progress);
       });
       setImageId(result.imageId);
-      setImageS3Uri(result.s3Uri);
       setUploadStatus('uploaded');
     } catch (err) {
       setUploadStatus('error');
@@ -177,35 +113,21 @@ export const ImageUpload = () => {
     }
   }, [handleFileSelect]);
 
-  const handleGenerateCaption = useCallback(async () => {
-    if (!imageS3Uri) return;
-
-    try {
-      setLocalError(null);
-      const caption = await generateCaption(imageS3Uri);
-      setAiCaption(caption);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'Failed to generate caption');
-    }
-  }, [imageS3Uri, generateCaption]);
-
   const handleSubmit = useCallback(async () => {
     if (!imageId) return;
 
     setUploadStatus('submitting');
-    const combinedCaption = [userCaption, aiCaption].filter(Boolean).join('. ');
 
     try {
-      await submitImage(imageId, combinedCaption, userCaption, aiCaption);
+      await submitImage(imageId, userCaption, userCaption, '', extractText);
       setUploadStatus('complete');
 
       // Reset form after short delay
       setTimeout(() => {
         setSelectedFile(null);
         setImageId(null);
-        setImageS3Uri(null);
         setUserCaption('');
-        setAiCaption('');
+        setExtractText(false);
         setUploadStatus('idle');
         setUploadProgress(0);
       }, 2000);
@@ -213,14 +135,13 @@ export const ImageUpload = () => {
       setUploadStatus('error');
       setLocalError(err instanceof Error ? err.message : 'Failed to submit image');
     }
-  }, [imageId, userCaption, aiCaption, submitImage]);
+  }, [imageId, userCaption, extractText, submitImage]);
 
   const handleRemoveImage = useCallback(() => {
     setSelectedFile(null);
     setImageId(null);
-    setImageS3Uri(null);
     setUserCaption('');
-    setAiCaption('');
+    setExtractText(false);
     setUploadStatus('idle');
     setUploadProgress(0);
     setLocalError(null);
@@ -228,18 +149,31 @@ export const ImageUpload = () => {
   }, [clearError]);
 
   const displayError = localError || error;
-  const canSubmit = uploadStatus === 'uploaded' && (userCaption || aiCaption);
+  const canSubmit = uploadStatus === 'uploaded';
   const isDisabled = uploading || uploadStatus === 'submitting';
 
   return (
     <Container>
       <SpaceBetween size="l">
-        <Header variant="h2">Upload Image</Header>
-
-        <Alert type="info">
-          <strong>How it works:</strong> Upload an image → Add a caption (type your own or generate with AI) → Submit to index in your knowledge base.
-          Supported formats: PNG, JPG, GIF, WebP (max 10 MB).
-        </Alert>
+        <Header variant="h2">
+          Upload Image{' '}
+          <Popover
+            header="How it works"
+            content={
+              <Box variant="small">
+                Upload an image, optionally add a caption for context (names, dates, events),
+                and check &quot;Extract text&quot; if the image contains readable text.
+                Visual search works automatically via AI embeddings.
+                <br /><br />
+                <strong>Supported formats:</strong> PNG, JPG, GIF, WebP (max 10 MB)
+              </Box>
+            }
+            triggerType="custom"
+            size="medium"
+          >
+            <Button variant="inline-icon" iconName="status-info" ariaLabel="How it works" />
+          </Popover>
+        </Header>
 
         {displayError && (
           <Alert type="error" dismissible onDismiss={() => { setLocalError(null); clearError(); }}>
@@ -249,7 +183,7 @@ export const ImageUpload = () => {
 
         {uploadStatus === 'complete' && (
           <Alert type="success">
-            Image uploaded and submitted successfully! It will be processed and indexed shortly.
+            Image uploaded successfully! It will be processed and indexed shortly.
           </Alert>
         )}
 
@@ -315,10 +249,9 @@ export const ImageUpload = () => {
 
                 <CaptionInput
                   userCaption={userCaption}
-                  aiCaption={aiCaption}
+                  extractText={extractText}
                   onUserCaptionChange={setUserCaption}
-                  onGenerateCaption={handleGenerateCaption}
-                  generating={generating}
+                  onExtractTextChange={setExtractText}
                   error={null}
                 />
 
@@ -329,14 +262,16 @@ export const ImageUpload = () => {
                     disabled={!canSubmit || isDisabled}
                     loading={uploadStatus === 'submitting'}
                   >
-                    {uploadStatus === 'submitting' ? 'Submitting...' : 'Submit Image'}
+                    {uploadStatus === 'submitting' ? 'Processing...' : 'Submit Image'}
                   </Button>
                 </Box>
               </>
             )}
 
             {uploadStatus === 'submitting' && (
-              <StatusIndicator type="in-progress">Submitting image...</StatusIndicator>
+              <StatusIndicator type="in-progress">
+                {extractText ? 'Extracting text and processing...' : 'Processing image...'}
+              </StatusIndicator>
             )}
 
             {uploadStatus === 'error' && (
@@ -348,49 +283,6 @@ export const ImageUpload = () => {
             )}
           </SpaceBetween>
         )}
-
-        <ExpandableSection headerText="Caption Generation Prompt" variant="footer">
-          <SpaceBetween size="m">
-            <FormField
-              label="AI Caption System Prompt"
-              description="This prompt defines how the AI generates captions for uploaded images. Changes take effect immediately for new uploads."
-            >
-              <Textarea
-                value={captionPrompt}
-                onChange={({ detail }) => setCaptionPrompt(detail.value)}
-                rows={4}
-                placeholder="Enter the system prompt for image caption generation..."
-              />
-            </FormField>
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button
-                variant="primary"
-                onClick={handleSaveCaptionPrompt}
-                loading={isSavingPrompt}
-                disabled={!hasCaptionPromptChanged}
-              >
-                Save
-              </Button>
-              <Button
-                variant="link"
-                onClick={() => setCaptionPrompt(originalCaptionPrompt)}
-                disabled={!hasCaptionPromptChanged || isSavingPrompt}
-              >
-                Cancel
-              </Button>
-            </SpaceBetween>
-            {promptSaveStatus === 'success' && (
-              <Alert type="success" dismissible onDismiss={() => setPromptSaveStatus(null)}>
-                Caption prompt saved successfully.
-              </Alert>
-            )}
-            {promptSaveStatus === 'error' && (
-              <Alert type="error" dismissible onDismiss={() => setPromptSaveStatus(null)}>
-                Failed to save caption prompt. Please try again.
-              </Alert>
-            )}
-          </SpaceBetween>
-        </ExpandableSection>
       </SpaceBetween>
     </Container>
   );

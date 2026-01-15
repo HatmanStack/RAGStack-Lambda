@@ -78,9 +78,9 @@ export const useImage = () => {
         error: null
       }]);
 
-      // Upload to S3 using Amplify Storage (images/ prefix for DataBucket)
+      // Upload to S3 using Amplify Storage (content/ prefix for DataBucket)
       const operation = uploadData({
-        path: `images/${imageId}/${file.name}`,
+        path: `content/${imageId}/${file.name}`,
         data: file,
         options: {
           onProgress: ({ transferredBytes, totalBytes }) => {
@@ -140,7 +140,13 @@ export const useImage = () => {
     }
   }, []);
 
-  const submitImageWithCaption = useCallback(async (imageId: string, caption: string, userCaption?: string, aiCaption?: string) => {
+  const submitImageWithCaption = useCallback(async (
+    imageId: string,
+    caption: string,
+    userCaption?: string,
+    aiCaption?: string,
+    extractText?: boolean
+  ) => {
     setError(null);
 
     try {
@@ -151,7 +157,8 @@ export const useImage = () => {
             imageId,
             caption,
             userCaption,
-            aiCaption
+            aiCaption,
+            extractText: extractText || false
           }
         }
       }) as GqlResponse;

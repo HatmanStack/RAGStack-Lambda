@@ -14,6 +14,9 @@ export const getImage = gql`
       contentType
       fileSize
       errorMessage
+      extractedText
+      extractedMetadata
+      captionUrl
       createdAt
       updatedAt
     }

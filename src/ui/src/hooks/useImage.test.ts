@@ -355,7 +355,7 @@ describe('useImage', () => {
       });
 
       expect(mockUploadDataFn).toHaveBeenCalledWith({
-        path: 'images/img-456/test.png',
+        path: 'content/img-456/test.png',
         data: mockFile,
         options: expect.objectContaining({
           onProgress: expect.any(Function)
