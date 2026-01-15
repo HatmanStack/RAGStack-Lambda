@@ -367,6 +367,14 @@
   color: var(--chat-color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  padding: var(--chat-spacing-xs) 0;
+  user-select: none;
+  transition: color var(--chat-transition-fast);
+}
+
+.sourcesHeader:hover {
+  color: var(--chat-color-source-accent);
 }
 
 .sourcesIcon {
@@ -480,6 +488,102 @@
   font-size: var(--chat-font-size-xs);
   font-style: italic;
   opacity: 0.6;
+}
+
+/* ============================================================================
+   EXPANDABLE SOURCE ITEMS (matches search UI pattern)
+   ============================================================================ */
+
+.sourcesHeaderStatic {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  margin-bottom: var(--chat-spacing-md);
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  color: var(--chat-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sourceHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  cursor: pointer;
+  padding: var(--chat-spacing-xs) 0;
+  user-select: none;
+}
+
+.sourceHeader:hover {
+  color: var(--chat-color-source-accent);
+}
+
+.expandIcon {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text-secondary);
+  transition: transform var(--chat-transition-fast);
+  min-width: 12px;
+}
+
+.sourceLabel {
+  font-weight: 600;
+  font-size: var(--chat-font-size-sm);
+  color: var(--chat-color-text);
+}
+
+.sourceContent {
+  margin-top: var(--chat-spacing-sm);
+  padding-left: var(--chat-spacing-lg);
+}
+
+.sourceInfo {
+  display: flex;
+  gap: var(--chat-spacing-sm);
+  align-items: baseline;
+  margin-top: var(--chat-spacing-sm);
+  font-size: var(--chat-font-size-xs);
+}
+
+.sourceInfoLabel {
+  font-weight: 600;
+  color: var(--chat-color-text-secondary);
+}
+
+.sourceInfoText {
+  color: var(--chat-color-text-secondary);
+  word-break: break-all;
+}
+
+.sourceLinks {
+  display: flex;
+  gap: var(--chat-spacing-md);
+  margin-top: var(--chat-spacing-sm);
+  flex-wrap: wrap;
+}
+
+.sourceLink {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-source-accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color var(--chat-transition-fast);
+}
+
+.sourceLink:hover {
+  text-decoration: underline;
+}
+
+.sourceLinkDisabled {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text-secondary);
+  font-style: italic;
+}
+
+/* Badge colors */
+.badgeGreen {
+  background-color: #e6f4ea;
+  color: #1e8e3e;
 }
 
 /* ============================================================================
@@ -665,6 +769,18 @@
   gap: var(--chat-spacing-sm);
   margin-bottom: var(--chat-spacing-xs);
   flex-wrap: wrap;
+}
+
+.mediaLinks {
+  display: flex;
+  gap: var(--chat-spacing-md);
+  flex-wrap: wrap;
+  margin-top: var(--chat-spacing-xs);
+  margin-bottom: var(--chat-spacing-sm);
+}
+
+.mediaLinks .documentLink {
+  margin-top: 0;
 }
 
 .mediaIcon {
