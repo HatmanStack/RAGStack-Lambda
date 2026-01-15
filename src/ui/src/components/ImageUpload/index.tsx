@@ -169,6 +169,7 @@ export const ImageUpload = () => {
               </Box>
             }
             triggerType="custom"
+            dismissButton={false}
             size="medium"
           >
             <Button variant="inline-icon" iconName="status-info" ariaLabel="How it works" />

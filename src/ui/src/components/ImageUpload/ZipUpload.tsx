@@ -150,6 +150,7 @@ export const ZipUpload = () => {
               </Box>
             }
             triggerType="custom"
+            dismissButton={false}
             size="large"
           >
             <Button variant="inline-icon" iconName="status-info" ariaLabel="How to use" />

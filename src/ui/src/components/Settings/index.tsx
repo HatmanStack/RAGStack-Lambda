@@ -670,6 +670,7 @@ export function Settings() {
           <Popover
             header="About Metadata Extraction"
             content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
+            triggerType="custom"
             dismissButton={false}
             position="right"
             size="medium"
@@ -787,6 +788,7 @@ export function Settings() {
           <Popover
             header="About Metadata Query"
             content="Configure how metadata filters are generated and applied during knowledge base queries. Multi-slice retrieval runs parallel queries with different filters for better recall."
+            triggerType="custom"
             dismissButton={false}
             position="right"
             size="medium"

@@ -674,22 +674,8 @@
 }
 
 /* ============================================================================
-   DARK MODE SUPPORT (Prefers color scheme)
+   LIGHT MODE ONLY - Dark mode disabled for consistency
    ============================================================================ */
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --chat-color-bg: #1a1a1a;
-    --chat-color-bg-secondary: #2a2a2a;
-    --chat-color-text: #ffffff;
-    --chat-color-text-secondary: #999999;
-    --chat-color-border: #333333;
-    --chat-color-border-light: #2a2a2a;
-    --chat-color-assistant-bg: #2a2a2a;
-    --chat-color-assistant-text: #ffffff;
-    --chat-color-source-bg: #252525;
-  }
-}
 
 /* ============================================================================
    MOBILE OPTIMIZATION - iOS Safe Area Support
@@ -859,27 +845,3 @@
   font-size: var(--chat-font-size-xs);
 }
 
-/* Dark mode media styles */
-@media (prefers-color-scheme: dark) {
-  .timestampButton {
-    background-color: #0972d3;
-  }
-
-  .timestampButton:hover {
-    background-color: #1086ed;
-  }
-
-  .badgeBlue {
-    background-color: rgba(9, 114, 211, 0.3);
-    color: #6bb3f5;
-  }
-
-  .badgeGray {
-    background-color: rgba(153, 153, 153, 0.3);
-    color: #cccccc;
-  }
-
-  .mediaPlayerContainer {
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-}
