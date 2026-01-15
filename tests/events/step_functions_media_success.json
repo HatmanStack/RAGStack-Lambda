@@ -1,0 +1,28 @@
+{
+  "version": "0",
+  "id": "12345678-abcd-1234-efgh-123456789012",
+  "detail-type": "Step Functions Execution Status Change",
+  "source": "aws.states",
+  "account": "123456789012",
+  "time": "2024-01-15T10:30:00Z",
+  "region": "us-east-1",
+  "resources": [
+    "arn:aws:states:us-east-1:123456789012:execution:ragstack-test-ProcessingPipeline:test-execution-id"
+  ],
+  "detail": {
+    "executionArn": "arn:aws:states:us-east-1:123456789012:execution:ragstack-test-ProcessingPipeline:test-execution-id",
+    "stateMachineArn": "arn:aws:states:us-east-1:123456789012:stateMachine:ragstack-test-ProcessingPipeline",
+    "name": "test-execution-id",
+    "status": "SUCCEEDED",
+    "startDate": 1705313400000,
+    "stopDate": 1705313460000,
+    "input": "{\"document_id\":\"input/abc123-def4-5678-ghij-klmnopqrstuv/sample-video.mp4\",\"input_s3_uri\":\"s3://ragstack-test-data/input/abc123-def4-5678-ghij-klmnopqrstuv/sample-video.mp4\",\"output_s3_prefix\":\"s3://ragstack-test-data/content/abc123-def4-5678-ghij-klmnopqrstuv\"}",
+    "output": "{\"document_id\":\"abc123-def4-5678-ghij-klmnopqrstuv\",\"status\":\"completed\",\"message\":\"Document successfully processed and ingested into Knowledge Base\"}",
+    "inputDetails": {
+      "included": true
+    },
+    "outputDetails": {
+      "included": true
+    }
+  }
+}
