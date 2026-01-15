@@ -2425,6 +2425,70 @@ Resources:
       SourceArn: !GetAtt ZipUploadRule.Arn
 
   # =========================================================================
+  # Visual Embeddings Pipeline - EventBridge Rules
+  # =========================================================================
+
+  # Rule 1: Trigger MoveVideoFunction when Step Functions media pipeline completes
+  MediaProcessingCompleteRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-MediaProcessingComplete'
+      Description: Trigger video move after media processing completes
+      EventPattern:
+        source:
+          - aws.states
+        detail-type:
+          - Step Functions Execution Status Change
+        detail:
+          status:
+            - SUCCEEDED
+          stateMachineArn:
+            - !Ref ProcessingStateMachine
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MoveVideoFunction.Arn
+          Id: TriggerMoveVideo
+
+  MoveVideoFunctionEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MoveVideoFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MediaProcessingCompleteRule.Arn
+
+  # Rule 2: Trigger IngestVisualFunction when video.mp4 lands in content/{docId}/
+  VideoUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-VideoUploadTrigger'
+      Description: Trigger visual embedding ingestion on video upload
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - suffix: /video.mp4
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt IngestVisualFunction.Arn
+          Id: TriggerVisualIngestion
+
+  IngestVisualFunctionEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestVisualFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt VideoUploadRule.Arn
+
+  # =========================================================================
   # Bedrock Knowledge Base
   # =========================================================================
 
