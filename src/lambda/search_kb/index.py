@@ -369,7 +369,10 @@ def lambda_handler(event, context):
             doc_type = doc_info.get("type", "document")
             is_scraped = doc_type == "scraped"
             is_image = doc_type == "image"
-            is_media = doc_type == "media"
+            # Check both tracking table type and KB metadata content_type for consistency
+            content_type = extract_kb_scalar(kb_metadata.get("content_type"))
+            media_content_types = ("video", "audio", "transcript", "visual")
+            is_media = doc_type == "media" or content_type in media_content_types
 
             # Get timestamp from segment metadata (KB returns as list with quoted strings)
             timestamp_start = None
