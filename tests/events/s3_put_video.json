@@ -1,0 +1,28 @@
+{
+  "version": "0",
+  "id": "87654321-dcba-4321-hgfe-210987654321",
+  "detail-type": "Object Created",
+  "source": "aws.s3",
+  "account": "123456789012",
+  "time": "2024-01-15T10:31:00Z",
+  "region": "us-east-1",
+  "resources": [
+    "arn:aws:s3:::ragstack-test-data"
+  ],
+  "detail": {
+    "version": "0",
+    "bucket": {
+      "name": "ragstack-test-data"
+    },
+    "object": {
+      "key": "content/abc123-def4-5678-ghij-klmnopqrstuv/video.mp4",
+      "size": 15728640,
+      "etag": "d41d8cd98f00b204e9800998ecf8427e",
+      "sequencer": "00A1B2C3D4E5F67890"
+    },
+    "request-id": "REQUEST123456789",
+    "requester": "123456789012",
+    "source-ip-address": "10.0.0.1",
+    "reason": "PutObject"
+  }
+}

@@ -56,6 +56,9 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# Content types recognized as media for source attribution
+MEDIA_CONTENT_TYPES = ("video", "audio", "transcript", "visual")
+
 
 def extract_kb_scalar(value: Any) -> str | None:
     """Extract scalar value from KB metadata which returns lists with quoted strings.
@@ -1078,8 +1081,7 @@ def extract_sources(citations):
                     # KB metadata comes as lists with quoted strings, extract scalars
                     metadata = ref.get("metadata", {})
                     content_type = extract_kb_scalar(metadata.get("content_type"))
-                    media_content_types = ("video", "audio", "transcript", "visual")
-                    is_media = content_type in media_content_types or doc_type == "media"
+                    is_media = content_type in MEDIA_CONTENT_TYPES or doc_type == "media"
                     # Get media_type from metadata or derive from content_type
                     if is_media:
                         media_type_raw = extract_kb_scalar(metadata.get("media_type"))

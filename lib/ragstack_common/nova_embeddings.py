@@ -1,5 +1,12 @@
 """Nova Multimodal Embeddings client for video/audio segment embedding.
 
+.. deprecated::
+    This module is deprecated as of visual embeddings implementation.
+    Bedrock KB creates embeddings automatically during ingestion sync.
+    Kept for potential future direct embedding use cases.
+
+Original purpose: Direct Nova Multimodal Embedding API calls.
+
 This module provides a client for Amazon Nova Multimodal Embeddings, which
 creates embeddings from video and audio content for similarity search.
 

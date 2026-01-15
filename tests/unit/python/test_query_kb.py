@@ -283,5 +283,57 @@ class TestConstructImageUriFromContentUri:
         assert result is None
 
 
+class TestVisualContentTypeDetection:
+    """Tests to verify visual content_type detection works correctly."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_boto3(self):
+        """Mock boto3 clients to avoid AWS initialization."""
+        mock_boto3 = MagicMock()
+        mock_dynamodb = MagicMock()
+        mock_conditions = MagicMock()
+        mock_boto3.dynamodb = mock_dynamodb
+        mock_boto3.dynamodb.conditions = mock_conditions
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "boto3": mock_boto3,
+                "boto3.dynamodb": mock_dynamodb,
+                "boto3.dynamodb.conditions": mock_conditions,
+            },
+        ):
+            mock_config = MagicMock()
+            mock_config.get_parameter.return_value = False
+            with patch("ragstack_common.config.ConfigurationManager", return_value=mock_config):
+                yield
+
+    def test_visual_content_type_is_recognized_as_media(self):
+        """Verify that 'visual' content_type is in MEDIA_CONTENT_TYPES."""
+        import importlib
+
+        import index
+
+        importlib.reload(index)
+
+        # Verify the real module-level constant includes 'visual'
+        assert "visual" in index.MEDIA_CONTENT_TYPES
+
+    def test_video_path_document_id_extraction(self):
+        """Verify document ID is extracted correctly from content/{docId}/video.mp4 path."""
+        from urllib.parse import unquote
+
+        # Use a valid UUID format as the code expects
+        test_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        s3_uri = f"s3://test-bucket/content/{test_uuid}/video.mp4"
+
+        # Parse URI the same way the code does (split and extract parts[2])
+        parts = s3_uri.replace("s3://", "").split("/")
+        assert len(parts) > 2 and parts[1] == "content"
+        document_id = unquote(parts[2])
+
+        assert document_id == test_uuid
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

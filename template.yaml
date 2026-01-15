@@ -1344,6 +1344,65 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
+  # MoveVideo Lambda - moves video from input/ to content/{docId}/ for visual embeddings
+  MoveVideoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-move-video'
+      CodeUri: src/lambda/move_video/
+      Handler: index.lambda_handler
+      Description: Move video files for visual embedding ingestion
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for large video copy
+      MemorySize: 256  # S3 operations are not memory intensive
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+
+  # IngestVisual Lambda - triggers StartIngestionJob for visual embeddings
+  IngestVisualFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ingest-visual'
+      CodeUri: src/lambda/ingest_visual/
+      Handler: index.lambda_handler
+      Description: Trigger visual embedding ingestion via StartIngestionJob
+      Runtime: python3.13
+      Timeout: 600  # 10 minutes if polling enabled
+      MemorySize: 128  # Minimal - just API calls
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -2364,6 +2423,70 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt ZipUploadRule.Arn
+
+  # =========================================================================
+  # Visual Embeddings Pipeline - EventBridge Rules
+  # =========================================================================
+
+  # Rule 1: Trigger MoveVideoFunction when Step Functions media pipeline completes
+  MediaProcessingCompleteRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-MediaProcessingComplete'
+      Description: Trigger video move after media processing completes
+      EventPattern:
+        source:
+          - aws.states
+        detail-type:
+          - Step Functions Execution Status Change
+        detail:
+          status:
+            - SUCCEEDED
+          stateMachineArn:
+            - !Ref ProcessingStateMachine
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MoveVideoFunction.Arn
+          Id: TriggerMoveVideo
+
+  MoveVideoFunctionEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MoveVideoFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MediaProcessingCompleteRule.Arn
+
+  # Rule 2: Trigger IngestVisualFunction when video.mp4 lands in content/{docId}/
+  VideoUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-VideoUploadTrigger'
+      Description: Trigger visual embedding ingestion on video upload
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - suffix: /video.mp4
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt IngestVisualFunction.Arn
+          Id: TriggerVisualIngestion
+
+  IngestVisualFunctionEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestVisualFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt VideoUploadRule.Arn
 
   # =========================================================================
   # Bedrock Knowledge Base

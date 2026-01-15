@@ -1,15 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working with this repository.
 
 ## Project Overview
 
 RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS. Documents are uploaded → OCR processed (Textract/Bedrock) → vectorized → stored in Bedrock Knowledge Base → queryable via chat interface.
 
-**Single SAM stack architecture:**
-- Document processing pipeline (Lambda, Step Functions, S3, DynamoDB, Bedrock KB)
-- Chat API (AppSync GraphQL, Cognito auth)
-- `<ragstack-chat>` web component (CloudFront CDN)
+**Single SAM stack:** Document processing pipeline (Lambda, Step Functions, S3, DynamoDB, Bedrock KB), Chat API (AppSync GraphQL, Cognito auth), `<ragstack-chat>` web component (CloudFront CDN)
 
 ## Prerequisites
 
@@ -20,68 +17,29 @@ RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS
 
 ## Common Commands
 
-### Testing
-
 ```bash
+# Testing
 npm run test              # All tests (backend + frontend)
 npm run test:backend      # Python tests (pytest -n auto)
 npm run test:frontend     # UI + ragstack-chat tests (vitest)
 npm run test:integration  # Integration tests (requires deployed stack)
-npm run test:coverage     # Python coverage report
+uv run pytest tests/unit/python/test_config.py -v  # Single test file
 
-# Single test file
-uv run pytest tests/unit/python/test_config.py -v
-
-# Watch mode
-cd src/ui && npm run test:watch
-```
-
-### Linting
-
-```bash
+# Linting
 npm run lint              # Python (ruff check + format --check)
 npm run lint:fix          # Python autofix
 npm run lint:frontend     # TypeScript (ESLint --max-warnings 0)
-npm run lint:all          # All linting
 npm run check             # Lint + test (CI equivalent)
-```
 
-### Deployment
+# Deployment (defaults to us-east-1 for Nova Multimodal Embeddings)
+python publish.py --project-name my-docs --admin-email admin@example.com
+python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
+python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
 
-```bash
-# Full deployment (defaults to us-east-1 for Nova Multimodal Embeddings)
-python publish.py \
-  --project-name my-docs \
-  --admin-email admin@example.com
-
-# Skip dashboard build (still builds web component)
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui
-
-# Skip ALL UI builds (dashboard and web component)
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all
-
-# Publish to AWS Marketplace (update one-click deploy template)
-python publish.py --publish-marketplace
-```
-
-> **Region Note:** Currently requires us-east-1 (Nova Multimodal Embeddings). When available elsewhere, use `--region <region>`.
-
-### Development
-
-```bash
-# Install dependencies
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-npm install
-
-# SAM local testing
+# Development
 sam build
 sam local invoke ProcessDocumentFunction --event tests/events/s3-put.json
-sam local start-api
-
-# Frontend dev server
-cd src/ui && npm run dev
+cd src/ui && npm run dev  # Frontend dev server
 ```
 
 ## Architecture
@@ -103,11 +61,10 @@ cd src/ui && npm run dev
 │   └── statemachine/             # Step Functions state machine definition
 ├── tests/
 │   ├── unit/python/              # Python unit tests (pytest)
-│   ├── integration/              # Integration tests (marked with @pytest.mark.integration)
+│   ├── integration/              # Integration tests (@pytest.mark.integration)
 │   └── events/                   # Lambda test event JSON files
 ├── template.yaml                 # SAM template (infrastructure as code)
-├── publish.py                    # Deployment orchestration script
-└── test.py                       # Test runner (installs deps, runs all tests)
+└── publish.py                    # Deployment orchestration script
 ```
 
 ### Data Flow
@@ -115,125 +72,33 @@ cd src/ui && npm run dev
 1. **Upload:** User uploads to S3 → EventBridge triggers ProcessDocument Lambda
 2. **Processing:** ProcessDocument (OCR) → IngestToKB → Bedrock Knowledge Base
 3. **Query:** User queries via AppSync → QueryKB Lambda → Bedrock KB → results with source attribution
-4. **Chat:** Web component (`<ragstack-chat>`) → SAM AppSync GraphQL API → QueryKB Lambda
+4. **Chat:** Web component (`<ragstack-chat>`) → AppSync GraphQL API → QueryKB Lambda
 
 ### Key Components
 
-- **lib/ragstack_common/:** Shared library used by all Lambdas (OCR, embeddings, config, storage)
-- **ProcessDocument Lambda:** Extracts text from documents using Textract or Bedrock vision models
-- **IngestToKB Lambda:** Creates embeddings (Nova Multimodal) and syncs to Bedrock Knowledge Base
-- **QueryKB Lambda:** Retrieves relevant documents from KB with source attribution, handles chat with quota management
+- **lib/ragstack_common/:** Shared library (OCR, embeddings, config, storage)
+- **ProcessDocument Lambda:** Extracts text using Textract or Bedrock vision models
+- **IngestToKB Lambda:** Creates embeddings (Nova Multimodal) and syncs to Bedrock KB
+- **QueryKB Lambda:** Retrieves documents from KB with source attribution, handles chat with quota management
 - **Step Functions:** Orchestrates document processing workflow
-- **AppSync:** GraphQL API for UI and chat (queries, mutations, subscriptions)
+- **AppSync:** GraphQL API for UI and chat
 
-## Testing Architecture
+## Testing
 
-**Python tests (pytest):**
-- Unit tests: `tests/unit/python/` (run by default)
-- Integration tests: `tests/integration/` (marked with `@pytest.mark.integration`, skipped by default)
-- Test config: `pytest.ini` (adds `lib/` to Python path, defines markers)
-- Mock events: `tests/events/` (S3, EventBridge, AppSync event JSON files)
-
-**Frontend tests (Vitest):**
-- UI tests: `src/ui/src/**/*.test.{ts,tsx}`
-- RagStackChat tests: `src/ragstack-chat/src/**/*.test.{ts,tsx}`
-
-**Coverage:** `npm run test:coverage` generates HTML coverage report in `htmlcov/`
+- **Python:** `tests/unit/python/` (pytest), integration tests marked with `@pytest.mark.integration`
+- **Frontend:** `src/ui/src/**/*.test.{ts,tsx}`, `src/ragstack-chat/src/**/*.test.{ts,tsx}` (Vitest)
+- **Coverage:** `npm run test:coverage` generates HTML report in `htmlcov/`
 
 ## Python Code Standards
 
-**Always use `uv` for Python package management:**
-- Install: `uv pip install <package>`
-- Run tools: `uvx ruff`, `uvx pytest`
-- Never use `pip` directly
-
-**Ruff configuration (pyproject.toml):**
-- Line length: 100 chars
-- Target: Python 3.13
-- Enabled rules: pycodestyle, pyflakes, isort, pep8-naming, pyupgrade, flake8-bugbear, etc.
-- Ignored: ARG001 (Lambda handlers), DTZ003/DTZ005 (internal datetime), N803/N806 (AWS SDK conventions)
-
-**Import structure:**
-```python
-from ragstack_common import ConfigurationManager
-from ragstack_common.ocr import extract_text
-from ragstack_common.bedrock import generate_embeddings
-```
-
-## Deployment Process (publish.py)
-
-The `publish.py` script orchestrates:
-
-1. **Validation:** Email format, project name (2-32 chars, lowercase alphanumeric + hyphens)
-2. **SAM build/deploy:** Builds Lambda layers (Docker), packages, deploys via CloudFormation
-3. **UI build/upload:** Builds React UI (Vite), uploads to S3, invalidates CloudFront cache
-4. **Web component build:** Triggers CodeBuild to build and deploy `<ragstack-chat>` to CDN
-5. **Outputs:** Knowledge Base ID, GraphQL API endpoint, CloudFront URLs, Cognito user pool
-
-**Parameters:**
-- `--project-name`: Unique project identifier (used in resource names)
-- `--admin-email`: Admin user email (Cognito, CloudWatch alerts)
-- `--region`: AWS region (default: us-east-1, required for Nova Multimodal Embeddings)
-- `--skip-ui`: Skip React UI dashboard build (still builds web component)
-- `--skip-ui-all`: Skip all UI builds (dashboard and web component)
+- Always use `uv`: `uv pip install <package>`, `uvx ruff`, `uvx pytest`
+- Ruff config in `pyproject.toml`: 100 char line length, Python 3.13
 
 ## Important Notes
 
-### Worktree Usage
-This project uses git worktrees for branch isolation. Always verify you're in the correct worktree before making changes:
-```bash
-git worktree list
-pwd
-```
-
-### Configuration Management
-Runtime configuration is stored in DynamoDB (table: `{ProjectName}-config-{Suffix}`). Changes apply immediately without redeployment. Access via `ConfigurationManager` class in `lib/ragstack_common/config.py`.
-
-**Chat Configuration Options:**
-- `chat_require_auth` - Enable/disable authentication (default: false)
-- `chat_primary_model` - Primary chat model ARN
-- `chat_fallback_model` - Fallback chat model ARN
-- `chat_global_quota_daily` - Daily query limit for all users (default: 10000)
-- `chat_per_user_quota_daily` - Daily query limit per user (default: 100)
-- `chat_allow_document_access` - Enable/disable source document downloads (default: false)
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed configuration guide.
-
-### OCR Backends
-- **textract (default):** AWS Textract ($1.50/1000 pages), faster, better for forms/tables
-- **bedrock:** Bedrock vision models (variable cost), slower, better for complex layouts
-
-Configured via `OcrBackend` parameter in `template.yaml` or `--ocr-backend` in `publish.py`.
-
-### Web Component
-`src/ragstack-chat/` exports both React component and web component (custom element `<ragstack-chat>`). Web component is built and deployed to CloudFront CDN via CodeBuild project defined in `template.yaml`.
-
-**Usage:**
-```html
-<script src="https://YOUR_CLOUDFRONT_DOMAIN/ragstack-chat.js"></script>
-<ragstack-chat conversation-id="my-site"></ragstack-chat>
-```
-
-### Lambda Layer
-Shared Python library (`lib/ragstack_common/`) is packaged as Lambda layer during SAM build. Docker is required for building layer with native dependencies (Pillow, etc.).
-
-## Troubleshooting
-
-**"Docker not running"**: Start Docker daemon before running `python publish.py` or `sam build`
-
-**"ModuleNotFoundError: ragstack_common"**: Run `pip install -e lib/` or ensure Lambda layer is built correctly
-
-**"Test discovery: no tests found"**: Ensure test files match pattern `test_*.py` and are in `tests/` directory
-
-**Web component not loading**: Check CloudFront distribution status, verify CodeBuild project completed successfully
-
-## Documentation
-
-- [README.md](README.md) - Quick start and deployment
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Local development
-- [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) - Chat component API
-- [docs/IMAGE_UPLOAD.md](docs/IMAGE_UPLOAD.md) - Image upload API
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Runtime configuration
-- [docs/WEB_SCRAPING.md](docs/WEB_SCRAPING.md) - Web scraping
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues
+- **Worktrees:** Verify location with `git worktree list` and `pwd` before changes
+- **Configuration:** Runtime config in DynamoDB. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- **OCR Backends:** textract (default) or bedrock. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Web Component:** See [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) for `<ragstack-chat>` usage
+- **Lambda Layer:** `lib/ragstack_common/` packaged as Lambda layer (Docker required for build)
+- **Troubleshooting:** See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
