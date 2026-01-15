@@ -1344,6 +1344,31 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
+  # MoveVideo Lambda - moves video from input/ to content/{docId}/ for visual embeddings
+  MoveVideoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-move-video'
+      CodeUri: src/lambda/move_video/
+      Handler: index.lambda_handler
+      Description: Move video files for visual embedding ingestion
+      Runtime: python3.13
+      Timeout: 300  # 5 minutes for large video copy
+      MemorySize: 256  # S3 operations are not memory intensive
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
