@@ -951,18 +951,18 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
-  GetPageInfoFunction:
+  DetectFileTypeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-getpageinfo'
-      CodeUri: src/lambda/get_page_info/
+      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
+      CodeUri: src/lambda/detect_file_type/
       Handler: index.lambda_handler
-      Description: Count PDF pages and determine processing strategy
+      Description: Detect file type and get page info for OCR routing
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 120  # 2 minutes to download and count pages
-      MemorySize: 512  # Needs memory for PDF parsing
+      Timeout: 120  # 2 minutes for PDF downloads and page counting
+      MemorySize: 512  # Needs memory for PDF parsing with PyMuPDF
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -975,28 +975,6 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
-
-  DetectFileTypeFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
-      CodeUri: src/lambda/detect_file_type/
-      Handler: index.lambda_handler
-      Description: Detect file type for routing (ocr/text/passthrough)
-      Layers:
-        - !Ref RagstackCommonLayer
-      Runtime: python3.13
-      Timeout: 60
-      MemorySize: 256
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataBucket
 
   ProcessTextFunction:
     Type: AWS::Serverless::Function
@@ -2014,7 +1992,6 @@ Resources:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
                   - !GetAtt IngestMediaFunction.Arn
-                  - !GetAtt GetPageInfoFunction.Arn
                   - !GetAtt EnqueueBatchesFunction.Arn
                   - !GetAtt DetectFileTypeFunction.Arn
                   - !GetAtt ProcessTextFunction.Arn
@@ -2045,7 +2022,6 @@ Resources:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
         IngestMediaFunctionArn: !GetAtt IngestMediaFunction.Arn
-        GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
         EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
         DetectFileTypeFunctionArn: !GetAtt DetectFileTypeFunction.Arn
         ProcessTextFunctionArn: !GetAtt ProcessTextFunction.Arn
