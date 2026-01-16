@@ -1472,13 +1472,13 @@ def lambda_handler(event, context):
                     knowledge_base_id=knowledge_base_id,
                     data_source_id=None,  # No data source filtering with unified content/
                     metadata_filter=generated_filter,
-                    num_results=10,
+                    num_results=5,
                 )
             else:
                 # Standard single-query retrieval
                 retrieval_config = {
                     "vectorSearchConfiguration": {
-                        "numberOfResults": 10,
+                        "numberOfResults": 5,
                     }
                 }
                 # Apply generated filter if available
