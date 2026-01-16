@@ -797,11 +797,6 @@ export function Settings() {
             </FormField>
           )}
 
-          <Alert type="info">
-            Changes apply to newly uploaded documents only. To update existing documents with new
-            extraction settings, use the Reindex feature below.
-          </Alert>
-
           {/* Divider */}
           <Box margin={{ top: 'm' }}>
             <hr style={{ border: 'none', borderTop: '1px solid #e9ebed' }} />
