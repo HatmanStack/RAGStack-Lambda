@@ -753,6 +753,20 @@ export function Settings() {
           <FormField
             label="Extraction Mode"
             description="Auto lets LLM decide keys, Manual uses your specified list"
+            info={
+              <Popover
+                header="About Extraction Mode"
+                content="Auto mode: LLM analyzes each document and decides which keys to extract. Manual mode: Only extracts the specific keys you specify. Changes only affect newly uploaded documents - to update existing documents, use the Reindex feature below."
+                triggerType="custom"
+                dismissButton={false}
+                position="right"
+                size="medium"
+              >
+                <span style={{ position: 'relative', top: '-2px' }}>
+                  <Button variant="inline-icon" iconName="status-info" ariaLabel="About Extraction Mode" />
+                </span>
+              </Popover>
+            }
           >
             <Select
               selectedOption={{
@@ -784,8 +798,8 @@ export function Settings() {
           )}
 
           <Alert type="info">
-            Changes apply to newly uploaded documents only. Previously indexed documents retain their
-            existing metadata.
+            Changes apply to newly uploaded documents only. To update existing documents with new
+            extraction settings, use the Reindex feature below.
           </Alert>
 
           {/* Divider */}
