@@ -1659,7 +1659,7 @@ def lambda_handler(event, context):
                 )
                 retrieved_chunks.append(visual_hint)
                 # For sources display, use shorter text
-                source_text = media_type
+                source_text = f'{media_type} visual match for: "{query}"'
                 result_score = result.get("score")
                 citations.append(
                     {
