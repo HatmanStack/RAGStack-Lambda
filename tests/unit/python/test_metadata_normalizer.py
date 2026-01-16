@@ -1,9 +1,11 @@
 """Tests for metadata_normalizer module."""
 
 from ragstack_common.metadata_normalizer import (
+    DEFAULT_CORE_METADATA_KEYS,
     MAX_ARRAY_ITEMS,
     expand_to_searchable_array,
     normalize_metadata_for_s3,
+    reduce_metadata,
 )
 
 
@@ -153,3 +155,75 @@ class TestNormalizeMetadataForS3:
         assert "chicago" in result["location"]
         assert "illinois" in result["location"]
         assert "2016" in result["date"]
+
+
+class TestReduceMetadata:
+    """Tests for reduce_metadata function."""
+
+    def test_level_1_preserves_all(self):
+        """Level 1 preserves all metadata unchanged."""
+        metadata = {
+            "content_type": "document",
+            "author": "John Smith",
+            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+        }
+        result = reduce_metadata(metadata, reduction_level=1)
+        assert result == metadata
+
+    def test_level_2_truncates_lists(self):
+        """Level 2 truncates lists to 3 items but keeps scalars."""
+        metadata = {
+            "content_type": "document",
+            "author": "John Smith",
+            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+        }
+        result = reduce_metadata(metadata, reduction_level=2)
+        assert result["content_type"] == "document"
+        assert result["author"] == "John Smith"  # Scalar preserved
+        assert result["tags"] == ["tag1", "tag2", "tag3"]  # Truncated to 3
+
+    def test_level_2_preserves_scalars(self):
+        """Level 2 preserves scalar values (regression test for bug fix)."""
+        metadata = {
+            "content_type": "document",
+            "title": "My Document",
+            "year": 2024,
+            "is_public": True,
+        }
+        result = reduce_metadata(metadata, reduction_level=2)
+        assert result["content_type"] == "document"
+        assert result["title"] == "My Document"
+        assert result["year"] == 2024
+        assert result["is_public"] is True
+
+    def test_level_3_keeps_only_core_keys(self):
+        """Level 3 keeps only core metadata keys."""
+        metadata = {
+            "content_type": "document",
+            "document_id": "abc123",
+            "author": "John Smith",
+            "custom_field": "should be dropped",
+        }
+        result = reduce_metadata(metadata, reduction_level=3)
+        assert "content_type" in result
+        assert "document_id" in result
+        assert "author" not in result
+        assert "custom_field" not in result
+
+    def test_default_core_keys(self):
+        """Default core keys are used when not specified."""
+        assert "content_type" in DEFAULT_CORE_METADATA_KEYS
+        assert "document_id" in DEFAULT_CORE_METADATA_KEYS
+        assert "filename" in DEFAULT_CORE_METADATA_KEYS
+
+    def test_custom_core_keys(self):
+        """Custom core keys can be specified."""
+        metadata = {
+            "content_type": "document",
+            "my_key": "important",
+            "other_key": "also important",
+        }
+        custom_core = frozenset({"my_key"})
+        result = reduce_metadata(metadata, reduction_level=3, core_keys=custom_core)
+        assert "my_key" in result
+        assert "content_type" not in result  # Not in custom core keys

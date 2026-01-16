@@ -92,8 +92,41 @@ extraction was the right consolidation approach.
 
 ## Actual Impact
 
-- **~650 lines of duplicate code eliminated** (exceeded estimate)
+- **~1100 lines eliminated** across all phases
 - Centralized retry/backoff tuning for Bedrock APIs
 - Smaller Lambda packages → faster cold starts
 - Single maintenance point for S3/metadata operations
-- 4 commits total (89f1f1f, 06d6f11, 9fefc0f, 7ab1dea)
+- 2 Lambdas removed (ingest_visual, get_page_info)
+- 29 Lambdas remaining (from 31)
+
+---
+
+## Lambda Merge Phase (Completed)
+
+### Completed Merges
+- [x] Deleted dead `ingest_visual` Lambda (234 lines, no EventBridge trigger)
+- [x] Merged `get_page_info` → `detect_file_type` (218 lines eliminated)
+  - detect_file_type now returns pageInfo for OCR files
+  - Removed GetPageInfo state from Step Functions
+  - Single Lambda handles file type detection + PDF page counting
+
+### Evaluated and Rejected
+- **enqueue_batches + batch_processor**: Different triggers (Step Functions vs SQS), intentional separation
+- **scrape_discover + scrape_process**: Different queues/DLQ policies/scaling, intentional separation
+- **process_text + process_document**: Different backends (text_extractors vs OCR), no benefit
+
+### Tier 3: appsync_resolvers Split - NOT RECOMMENDED
+- File: 2,069 lines, 21 operations in 5 groups (documents, scrape, images, metadata, other)
+- Current router pattern is idiomatic for AppSync
+- Shared utilities and AWS clients across all operations
+- Split would require AppSync configuration changes
+- Only consider splitting if cold start issues arise for specific operations
+
+### Commits
+- 89f1f1f: P0.1 ingestion.py
+- 06d6f11: P0.2-P0.4 storage utilities
+- 9fefc0f: P1.1-P1.2 validation/filename utils
+- 7ab1dea: P1.3 reduce_metadata
+- d75a02b: docs - mark consolidation plan complete
+- 0e3e5a4: remove dead ingest_visual Lambda
+- 44c09de: merge get_page_info into detect_file_type

@@ -196,10 +196,13 @@ def reduce_metadata(
             reduced[key] = value
             continue
 
-        # Level 2+: Truncate arrays to 3 items
-        if reduction_level >= 2 and isinstance(value, list):
-            reduced[key] = value[:3]
-        elif reduction_level < 2:
+        # Level 2+: Truncate arrays to 3 items, keep scalars
+        if reduction_level >= 2:
+            if isinstance(value, list):
+                reduced[key] = value[:3]
+            else:
+                reduced[key] = value  # Preserve scalar values
+        else:
             reduced[key] = value
 
     return reduced

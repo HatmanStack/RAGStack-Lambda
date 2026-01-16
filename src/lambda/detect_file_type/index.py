@@ -322,7 +322,10 @@ def lambda_handler(event, context):
 
     # Check for PDF/image files first (direct to OCR)
     if _is_pdf_or_image(filename, content):
-        detected_type = "pdf" if content.startswith(b"%PDF") else "image"
+        # Detect PDF by extension first (most reliable), then by magic bytes in content
+        # Some PDFs may have whitespace/BOM before the %PDF header
+        is_pdf = filename.lower().endswith(".pdf") or b"%PDF" in content[:1024]
+        detected_type = "pdf" if is_pdf else "image"
         logger.info(f"PDF/image detected: {filename} -> ocr ({detected_type})")
 
         # For PDFs: get page count and determine batching strategy

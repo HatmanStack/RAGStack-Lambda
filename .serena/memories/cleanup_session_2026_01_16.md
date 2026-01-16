@@ -23,7 +23,7 @@
 See `consolidation_plan.md` for the code deduplication plan.
 
 ## Files Changed (uncommitted)
-```
+```text
 .github/workflows/ci.yml
 package.json
 src/ragstack-chat/package.json
