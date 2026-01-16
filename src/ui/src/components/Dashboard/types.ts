@@ -61,14 +61,10 @@ export interface ScrapeUrlItem {
   error?: string;
 }
 
-// Status map types
+// Status config for status indicators
 export interface StatusConfig {
   type: string;
   label: string;
-}
-
-export interface StatusMapType {
-  [key: string]: StatusConfig;
 }
 
 // Table preferences

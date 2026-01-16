@@ -32,7 +32,10 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.config import (
+    get_config_manager_or_none,
+    get_knowledge_base_config,
+)
 from ragstack_common.key_library import KeyLibrary
 
 logger = logging.getLogger()
@@ -45,27 +48,12 @@ s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 
 # Lazy-initialized singletons
-_config_manager = None
 _key_library = None
 
 # Configuration
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 MAX_SAMPLE_VALUES = 10
-
-
-def get_config_manager() -> ConfigurationManager | None:
-    """Get or create ConfigurationManager singleton."""
-    global _config_manager
-    if _config_manager is None:
-        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
-        if table_name:
-            try:
-                _config_manager = ConfigurationManager(table_name=table_name)
-            except Exception as e:
-                logger.warning(f"Failed to initialize ConfigurationManager: {e}")
-                return None
-    return _config_manager
 
 
 def get_key_library() -> KeyLibrary | None:
@@ -481,7 +469,7 @@ def update_config_with_examples(examples: list[dict], clear_disabled: bool = Fal
     """
     from datetime import datetime
 
-    config_manager = get_config_manager()
+    config_manager = get_config_manager_or_none()
     if config_manager:
         try:
             update_data = {
@@ -514,7 +502,7 @@ def lambda_handler(event: dict, context) -> dict:
 
     try:
         # Get configuration
-        config = get_config_manager()
+        config = get_config_manager_or_none()
         try:
             knowledge_base_id, data_source_id = get_knowledge_base_config(config)
         except ValueError as e:
@@ -531,7 +519,7 @@ def lambda_handler(event: dict, context) -> dict:
         key_library_table = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
         # Get configuration options
-        config = get_config_manager()
+        config = get_config_manager_or_none()
         max_samples = DEFAULT_MAX_SAMPLES
         if config:
             max_samples = config.get_parameter(

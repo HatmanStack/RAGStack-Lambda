@@ -18,6 +18,16 @@ def pytest_configure(config):
     os.environ.setdefault("REGION", "us-east-1")
 
 
+@pytest.fixture(autouse=True)
+def reset_config_singleton():
+    """Reset ConfigurationManager singleton before each test."""
+    from ragstack_common.config import reset_config_manager_singleton
+
+    reset_config_manager_singleton()
+    yield
+    reset_config_manager_singleton()
+
+
 # Import sample data (available after pytest collection)
 
 

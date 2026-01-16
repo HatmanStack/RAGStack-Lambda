@@ -31,10 +31,10 @@ class TestMarkdownPassthrough:
     """Tests for scraped markdown passthrough logic."""
 
     def test_parse_s3_uri(self, _mock_env):
-        """Test S3 URI parsing."""
+        """Test S3 URI parsing via module import."""
         module = _load_process_document_module()
 
-        bucket, key = module._parse_s3_uri("s3://my-bucket/path/to/file.txt")
+        bucket, key = module.parse_s3_uri("s3://my-bucket/path/to/file.txt")
         assert bucket == "my-bucket"
         assert key == "path/to/file.txt"
 
@@ -43,7 +43,7 @@ class TestMarkdownPassthrough:
         module = _load_process_document_module()
 
         with pytest.raises(ValueError, match="Invalid S3 URI"):
-            module._parse_s3_uri("http://not-s3/path/file.txt")
+            module.parse_s3_uri("http://not-s3/path/file.txt")
 
     def test_scraped_md_passthrough(self, _mock_env):
         """Test that .scraped.md files skip OCR."""
@@ -104,7 +104,7 @@ class TestS3UriParsing:
         """Test parsing URI with deeply nested path."""
         module = _load_process_document_module()
 
-        bucket, key = module._parse_s3_uri("s3://bucket/a/b/c/d/file.txt")
+        bucket, key = module.parse_s3_uri("s3://bucket/a/b/c/d/file.txt")
         assert bucket == "bucket"
         assert key == "a/b/c/d/file.txt"
 
@@ -112,6 +112,6 @@ class TestS3UriParsing:
         """Test parsing URI with special characters."""
         module = _load_process_document_module()
 
-        bucket, key = module._parse_s3_uri("s3://my-bucket/path/file-name_v2.txt")
+        bucket, key = module.parse_s3_uri("s3://my-bucket/path/file-name_v2.txt")
         assert bucket == "my-bucket"
         assert key == "path/file-name_v2.txt"

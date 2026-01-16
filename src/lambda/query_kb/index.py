@@ -45,6 +45,9 @@ from ragstack_common.config import ConfigurationManager, get_knowledge_base_conf
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.sources import (
+    construct_image_uri_from_content_uri,  # noqa: F401 - re-exported for tests
+)
 from ragstack_common.storage import parse_s3_uri
 
 # Initialize AWS clients (reused across warm invocations)
@@ -824,47 +827,6 @@ def extract_image_caption_from_content(content_text):
             return stripped[:200] if len(stripped) > 200 else stripped
 
     return None
-
-
-def construct_image_uri_from_content_uri(content_s3_uri, content_text=None):
-    """
-    Convert caption/content.txt S3 URI to the actual image file URI.
-
-    The caption file is stored at: content/{imageId}/caption.txt
-    The actual image is at: content/{imageId}/{filename}.ext
-
-    We extract the filename from the frontmatter in the caption text.
-
-    Args:
-        content_s3_uri (str): S3 URI of the caption.txt or content.txt file
-        content_text (str): Optional content text to extract filename from frontmatter
-
-    Returns:
-        str or None: S3 URI of the image file, or None if not determinable
-    """
-    if not content_s3_uri:
-        return None
-
-    # Check for caption.txt or content.txt
-    is_caption_file = "caption.txt" in content_s3_uri or "content.txt" in content_s3_uri
-    if not is_caption_file:
-        return None
-
-    try:
-        # Try to extract filename from frontmatter in content
-        if content_text:
-            # Look for "filename: xxx" in YAML frontmatter
-            filename_match = re.search(r"^filename:\s*(.+)$", content_text, re.MULTILINE)
-            if filename_match:
-                filename = filename_match.group(1).strip()
-                # Replace caption.txt or content.txt with the actual filename
-                base_uri = content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
-                return f"{base_uri}/{filename}"
-
-        # Fallback: return base path (folder)
-        return content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
-    except Exception:
-        return None
 
 
 def extract_sources(citations):

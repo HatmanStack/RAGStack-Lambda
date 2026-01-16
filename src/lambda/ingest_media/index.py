@@ -1,9 +1,9 @@
 """
 Ingest Media Lambda
 
-Handles ingestion of media (video/audio) content with dual embedding support:
-1. Text embeddings from transcript (via Bedrock KB)
-2. Visual embeddings from video segments (via Nova Multimodal)
+Handles ingestion of media (video/audio) content to Bedrock Knowledge Base.
+Creates text embeddings from transcript and triggers visual ingestion via
+StartIngestionJob (Bedrock KB handles video chunking natively).
 
 Input event:
 {
@@ -12,14 +12,6 @@ Input event:
     "media_type": "video",
     "duration_seconds": 120,
     "total_segments": 4,
-    "visual_segments": [
-        {
-            "segment_index": 0,
-            "timestamp_start": 0,
-            "timestamp_end": 30,
-            "s3_uri": "s3://bucket/segments/abc123/segment_000.mp4"
-        }
-    ],
     "transcript_segments": [
         {
             "segment_index": 0,
@@ -36,7 +28,7 @@ Output:
     "document_id": "abc123",
     "status": "indexed",
     "text_indexed": true,
-    "visual_segments_indexed": 4,
+    "segments_indexed": 4,
     "metadata_keys": ["main_topic", "speakers", ...]
 }
 """
@@ -52,7 +44,10 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_document_update
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.config import (
+    get_config_manager_or_none,
+    get_knowledge_base_config,
+)
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
 from ragstack_common.storage import parse_s3_uri, read_s3_text
@@ -127,21 +122,6 @@ def start_ingestion_with_retry(
 
 # Lazy-initialized singletons
 _metadata_extractor = None
-_config_manager = None
-
-
-def get_config_manager() -> ConfigurationManager | None:
-    """Get or create ConfigurationManager singleton."""
-    global _config_manager
-    if _config_manager is None:
-        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
-        if table_name:
-            try:
-                _config_manager = ConfigurationManager(table_name=table_name)
-            except Exception as e:
-                logger.warning(f"Failed to initialize ConfigurationManager: {e}")
-                return None
-    return _config_manager
 
 
 def get_metadata_extractor() -> MetadataExtractor:
@@ -688,7 +668,7 @@ def ingest_transcript_segments(
 def lambda_handler(event, context):
     """Ingest media content with dual embeddings."""
     # Get KB config from config table (with env var fallback)
-    config = get_config_manager()
+    config = get_config_manager_or_none()
     kb_id, ds_id = get_knowledge_base_config(config)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")

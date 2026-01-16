@@ -34,7 +34,10 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_document_update
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.config import (
+    get_config_manager_or_none,
+    get_knowledge_base_config,
+)
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
@@ -51,7 +54,6 @@ s3_client = boto3.client("s3")
 # Lazy-initialized singletons (reused across invocations)
 _key_library = None
 _metadata_extractor = None
-_config_manager = None
 
 # Core metadata keys to preserve when reducing metadata for documents
 CORE_METADATA_KEYS = {
@@ -144,7 +146,7 @@ def get_metadata_extractor() -> MetadataExtractor:
     global _metadata_extractor
     if _metadata_extractor is None:
         # Get configuration options
-        config = get_config_manager()
+        config = get_config_manager_or_none()
         model_id = None
         max_keys = None
         extraction_mode = "auto"
@@ -171,23 +173,9 @@ def get_metadata_extractor() -> MetadataExtractor:
     return _metadata_extractor
 
 
-def get_config_manager() -> ConfigurationManager | None:
-    """Get or create ConfigurationManager singleton."""
-    global _config_manager
-    if _config_manager is None:
-        table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
-        if table_name:
-            try:
-                _config_manager = ConfigurationManager(table_name=table_name)
-            except Exception as e:
-                logger.warning(f"Failed to initialize ConfigurationManager: {e}")
-                return None
-    return _config_manager
-
-
 def is_metadata_extraction_enabled() -> bool:
     """Check if metadata extraction is enabled in configuration."""
-    config = get_config_manager()
+    config = get_config_manager_or_none()
     if config is None:
         return True  # Default to enabled if config not available
 
@@ -358,7 +346,7 @@ def extract_document_metadata(
 def lambda_handler(event, context):
     """Ingest document into Knowledge Base via Bedrock Agent API."""
     # Get KB config from config table (with env var fallback)
-    config = get_config_manager()
+    config = get_config_manager_or_none()
     kb_id, ds_id = get_knowledge_base_config(config)
     tracking_table_name = os.environ.get("TRACKING_TABLE")
 

@@ -5,6 +5,9 @@
 handler
 lambda_handler
 
+# Re-exports for test access (imported by tests from Lambda modules)
+construct_image_uri_from_content_uri
+
 # CloudFormation custom resource helper decorators (crhelper)
 # These functions are invoked by the CfnResource framework via decorator registration
 create_or_update  # @helper.create and @helper.update

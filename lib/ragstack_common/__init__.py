@@ -10,7 +10,11 @@ from ragstack_common.appsync import (
     publish_scrape_update,
 )
 from ragstack_common.auth import check_public_access
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.config import (
+    ConfigurationManager,
+    get_config_manager_or_none,
+    get_knowledge_base_config,
+)
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.image import (
     ImageStatus,
@@ -30,6 +34,7 @@ from ragstack_common.multislice_retriever import MultiSliceRetriever
 __all__ = [
     "ConfigurationManager",
     "FilterGenerator",
+    "get_config_manager_or_none",
     "get_knowledge_base_config",
     "ImageStatus",
     "KeyLibrary",

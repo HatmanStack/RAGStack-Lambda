@@ -7,12 +7,13 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "vitest --run",
     "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "check": "npm run lint && npm run test"
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.13.1",

@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 import boto3
 import fitz  # PyMuPDF
 
-from ragstack_common.storage import read_s3_binary
+from ragstack_common.storage import parse_s3_uri, read_s3_binary
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -90,15 +90,6 @@ def _update_tracking_table(
     logger.info(f"Updated tracking table for {document_id}: {filename}, {total_pages} pages")
 
 
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]
-    bucket, key = path.split("/", 1)
-    return bucket, key
-
-
 def _is_text_native_pdf(pdf_bytes: bytes) -> bool:
     """
     Check if PDF has extractable text (text-native vs scanned).
@@ -146,7 +137,7 @@ def lambda_handler(event, context):
     output_s3_prefix = event["output_s3_prefix"]
 
     # Get filename from S3 URI
-    _, key = _parse_s3_uri(input_s3_uri)
+    _, key = parse_s3_uri(input_s3_uri)
     filename = key.split("/")[-1]
 
     # Check if this is a PDF

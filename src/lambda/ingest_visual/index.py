@@ -25,7 +25,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.config import get_config_manager_or_none, get_knowledge_base_config
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -33,18 +33,6 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 bedrock_agent = boto3.client("bedrock-agent")
-
-
-def get_config_manager() -> ConfigurationManager | None:
-    """Get ConfigurationManager if table name is configured."""
-    table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
-    if not table_name:
-        return None
-    try:
-        return ConfigurationManager(table_name)
-    except Exception as e:
-        logger.warning(f"Failed to initialize ConfigurationManager: {e}")
-        return None
 
 
 def parse_s3_event(event: dict) -> dict:
@@ -166,7 +154,7 @@ def lambda_handler(event: dict, context) -> dict:
     logger.info(f"Processing event: {json.dumps(event)}")
 
     # Get KB config from config table (Custom overrides Default), with env var fallback
-    config_manager = get_config_manager()
+    config_manager = get_config_manager_or_none()
     kb_id, ds_id = get_knowledge_base_config(config_manager)
     wait_for_completion = os.environ.get("WAIT_FOR_COMPLETION", "false").lower() == "true"
 
