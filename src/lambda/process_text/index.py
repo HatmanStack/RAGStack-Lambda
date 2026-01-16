@@ -32,7 +32,11 @@ import boto3
 
 from ragstack_common.appsync import publish_document_update
 from ragstack_common.models import Status
-from ragstack_common.storage import update_item
+from ragstack_common.storage import (
+    extract_filename_from_s3_uri,
+    parse_s3_uri,
+    update_item,
+)
 from ragstack_common.text_extractors import extract_text
 
 logger = logging.getLogger()
@@ -41,23 +45,6 @@ logger.setLevel(logging.INFO)
 # Module-level AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
-
-
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]  # Remove 's3://'
-    parts = path.split("/", 1)
-    if len(parts) < 2 or not parts[1]:
-        raise ValueError(f"S3 URI must include a key/path: {s3_uri}")
-    return parts[0], parts[1]
-
-
-def _extract_filename(input_s3_uri: str) -> str:
-    """Extract filename from S3 URI."""
-    parts = input_s3_uri.split("/")
-    return parts[-1] if parts else "document"
 
 
 def lambda_handler(event, context):
@@ -82,7 +69,7 @@ def lambda_handler(event, context):
         output_s3_prefix = event["output_s3_prefix"]
         detected_type = event.get("detectedType", "txt")
 
-        filename = _extract_filename(input_s3_uri)
+        filename = extract_filename_from_s3_uri(input_s3_uri)
         logger.info(f"Processing text file: {filename} (type: {detected_type})")
 
         # Update status to processing
@@ -96,7 +83,7 @@ def lambda_handler(event, context):
         publish_document_update(graphql_endpoint, document_id, filename, "PROCESSING")
 
         # Download file from S3
-        input_bucket, input_key = _parse_s3_uri(input_s3_uri)
+        input_bucket, input_key = parse_s3_uri(input_s3_uri)
         response = s3_client.get_object(Bucket=input_bucket, Key=input_key)
         content = response["Body"].read()
 
@@ -114,7 +101,7 @@ def lambda_handler(event, context):
             logger.warning(f"Parse warning: {result.parse_warning}")
 
         # Write markdown output to S3
-        output_bucket, output_prefix = _parse_s3_uri(output_s3_prefix)
+        output_bucket, output_prefix = parse_s3_uri(output_s3_prefix)
         output_key = f"{output_prefix}full_text.txt".replace("//", "/")
 
         s3_client.put_object(

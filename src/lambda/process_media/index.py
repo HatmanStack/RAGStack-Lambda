@@ -37,7 +37,7 @@ from ragstack_common.appsync import publish_document_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.exceptions import TranscriptionError
 from ragstack_common.media_segmenter import MediaSegmenter
-from ragstack_common.storage import parse_s3_uri
+from ragstack_common.storage import extract_filename_from_s3_uri, parse_s3_uri
 from ragstack_common.transcribe_client import TranscribeClient
 
 logger = logging.getLogger()
@@ -47,12 +47,6 @@ logger.setLevel(logging.INFO)
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 lambda_client = boto3.client("lambda")
-
-
-def _extract_filename(input_s3_uri: str) -> str:
-    """Extract filename from S3 URI."""
-    parts = input_s3_uri.split("/")
-    return parts[-1] if parts else "media"
 
 
 # Media file extensions
@@ -184,7 +178,7 @@ def lambda_handler(event, context):
                 output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
                 logger.info(f"Fixed output_s3_prefix to: {output_s3_prefix}")
 
-        filename = _extract_filename(input_s3_uri)
+        filename = extract_filename_from_s3_uri(input_s3_uri, default="media")
         logger.info(f"Processing media file: {filename} (type: {detected_type})")
 
         # Get configuration

@@ -951,18 +951,18 @@ Resources:
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
-  GetPageInfoFunction:
+  DetectFileTypeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-getpageinfo'
-      CodeUri: src/lambda/get_page_info/
+      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
+      CodeUri: src/lambda/detect_file_type/
       Handler: index.lambda_handler
-      Description: Count PDF pages and determine processing strategy
+      Description: Detect file type and get page info for OCR routing
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 120  # 2 minutes to download and count pages
-      MemorySize: 512  # Needs memory for PDF parsing
+      Timeout: 120  # 2 minutes for PDF downloads and page counting
+      MemorySize: 512  # Needs memory for PDF parsing with PyMuPDF
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -975,28 +975,6 @@ Resources:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
-
-  DetectFileTypeFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
-      CodeUri: src/lambda/detect_file_type/
-      Handler: index.lambda_handler
-      Description: Detect file type for routing (ocr/text/passthrough)
-      Layers:
-        - !Ref RagstackCommonLayer
-      Runtime: python3.13
-      Timeout: 60
-      MemorySize: 256
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataBucket
 
   ProcessTextFunction:
     Type: AWS::Serverless::Function
@@ -1348,49 +1326,6 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
-
-  # IngestVisualContent Lambda - triggers StartIngestionJob for visual embeddings
-  IngestVisualContentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest-visual-content'
-      CodeUri: src/lambda/ingest_visual/
-      Handler: index.lambda_handler
-      Description: Trigger visual embedding ingestion via StartIngestionJob
-      Runtime: python3.13
-      Timeout: 600  # 10 minutes if polling enabled
-      MemorySize: 128  # Minimal - just API calls
-      Layers:
-        - !Ref RagstackCommonLayer
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
-          # Fallback env vars (config table takes precedence)
-          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
-          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - bedrock:StartIngestionJob
-                - bedrock:GetIngestionJob
-              Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
-            - Effect: Allow
-              Action:
-                - bedrock:StartIngestionJob
-                - bedrock:GetIngestionJob
-              Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-              Resource:
-                - !GetAtt ConfigurationTable.Arn
 
   ProcessImageFunction:
     Type: AWS::Serverless::Function
@@ -2057,7 +1992,6 @@ Resources:
                   - !GetAtt ProcessDocumentFunction.Arn
                   - !GetAtt IngestToKBFunction.Arn
                   - !GetAtt IngestMediaFunction.Arn
-                  - !GetAtt GetPageInfoFunction.Arn
                   - !GetAtt EnqueueBatchesFunction.Arn
                   - !GetAtt DetectFileTypeFunction.Arn
                   - !GetAtt ProcessTextFunction.Arn
@@ -2088,7 +2022,6 @@ Resources:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
         IngestToKBFunctionArn: !GetAtt IngestToKBFunction.Arn
         IngestMediaFunctionArn: !GetAtt IngestMediaFunction.Arn
-        GetPageInfoFunctionArn: !GetAtt GetPageInfoFunction.Arn
         EnqueueBatchesFunctionArn: !GetAtt EnqueueBatchesFunction.Arn
         DetectFileTypeFunctionArn: !GetAtt DetectFileTypeFunction.Arn
         ProcessTextFunctionArn: !GetAtt ProcessTextFunction.Arn

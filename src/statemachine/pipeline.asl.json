@@ -57,7 +57,7 @@
           "Next": "ProcessDocumentSingle"
         }
       ],
-      "Default": "GetPageInfo"
+      "Default": "CheckBatchingRequired"
     },
 
     "ProcessText": {
@@ -153,30 +153,6 @@
         }
       ],
       "Next": "MarkAsCompleted"
-    },
-
-    "GetPageInfo": {
-      "Type": "Task",
-      "Resource": "${GetPageInfoFunctionArn}",
-      "Comment": "Count pages and determine processing strategy for OCR files",
-      "TimeoutSeconds": 120,
-      "ResultPath": "$.pageInfo",
-      "Retry": [
-        {
-          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 2,
-          "BackoffRate": 2.0
-        }
-      ],
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "ResultPath": "$.error",
-          "Next": "ProcessingFailed"
-        }
-      ],
-      "Next": "CheckBatchingRequired"
     },
 
     "CheckBatchingRequired": {

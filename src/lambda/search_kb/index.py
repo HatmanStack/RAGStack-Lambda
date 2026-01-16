@@ -41,6 +41,7 @@ from ragstack_common.config import ConfigurationManager, get_knowledge_base_conf
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.storage import generate_presigned_url, parse_s3_uri
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -170,36 +171,6 @@ def lookup_original_source(document_id, tracking_table_name):
     except Exception as e:
         logger.warning(f"Failed to lookup document {document_id}: {e}")
     return {}
-
-
-def generate_presigned_url(bucket, key, expiration=3600):
-    """Generate presigned URL for S3 object.
-
-    Only generates URLs for the configured DATA_BUCKET to prevent
-    unauthorized access to other buckets.
-    """
-    # Security: Only allow presigned URLs for the configured data bucket
-    if bucket != DATA_BUCKET:
-        logger.warning(f"Attempted presigned URL for unauthorized bucket: {bucket}")
-        return None
-    try:
-        return s3_client.generate_presigned_url(
-            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
-        )
-    except Exception as e:
-        logger.error(f"Failed to generate presigned URL: {e}")
-        return None
-
-
-def parse_s3_uri(s3_uri):
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri or not s3_uri.startswith("s3://"):
-        return None, None
-    path = s3_uri[5:]
-    if "/" not in path:
-        return path, ""
-    bucket, key = path.split("/", 1)
-    return bucket, key
 
 
 def lambda_handler(event, context):
@@ -425,7 +396,7 @@ def lambda_handler(event, context):
                     # For segments/media, create video URL with timestamp parameter
                     bucket, key = parse_s3_uri(input_s3_uri)
                     if bucket and key:
-                        base_url = generate_presigned_url(bucket, key)
+                        base_url = generate_presigned_url(bucket, key, allowed_bucket=DATA_BUCKET)
                         if base_url and timestamp_start is not None:
                             # Append timestamp for deep linking (works with HTML5 video)
                             if timestamp_end is not None:
@@ -436,7 +407,9 @@ def lambda_handler(event, context):
                 elif input_s3_uri:
                     bucket, key = parse_s3_uri(input_s3_uri)
                     if bucket and key:
-                        document_url = generate_presigned_url(bucket, key)
+                        document_url = generate_presigned_url(
+                            bucket, key, allowed_bucket=DATA_BUCKET
+                        )
 
             # Deduplicate - for segments, use full KB URI; for others, use document_id
             dedup_key = kb_uri if is_segment else document_id

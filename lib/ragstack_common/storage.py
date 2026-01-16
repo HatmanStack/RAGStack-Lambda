@@ -4,11 +4,15 @@ Storage utilities for S3 and DynamoDB operations.
 Provides simple, consistent interface for reading/writing data.
 """
 
+import json
 import logging
+import uuid
 from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
+
+from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +156,135 @@ def delete_s3_object(s3_uri: str) -> None:
     bucket, key = parse_s3_uri(s3_uri)
     get_s3_client().delete_object(Bucket=bucket, Key=key)
     logger.debug(f"Deleted S3 object: {s3_uri}")
+
+
+def generate_presigned_url(
+    bucket: str,
+    key: str,
+    expiration: int = 3600,
+    allowed_bucket: str | None = None,
+) -> str | None:
+    """
+    Generate presigned URL for S3 object download.
+
+    Args:
+        bucket: S3 bucket name
+        key: S3 object key
+        expiration: URL expiration time in seconds (default 1 hour)
+        allowed_bucket: If provided, only generates URLs for this bucket (security)
+
+    Returns:
+        Presigned URL or None if generation fails or bucket not allowed
+    """
+    # Security: Only allow presigned URLs for specific bucket if configured
+    if allowed_bucket and bucket != allowed_bucket:
+        logger.warning(f"Attempted presigned URL for unauthorized bucket: {bucket}")
+        return None
+    try:
+        return get_s3_client().generate_presigned_url(
+            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
+        return None
+
+
+def write_metadata_to_s3(s3_uri: str, metadata: dict[str, Any]) -> str:
+    """
+    Write metadata to S3 as a .metadata.json file alongside the content file.
+
+    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
+    provided inline. The metadata file must be in the same location as the
+    content file with .metadata.json suffix.
+
+    Args:
+        s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
+        metadata: Dictionary of metadata key-value pairs
+
+    Returns:
+        S3 URI of the metadata file
+    """
+    bucket, key = parse_s3_uri(s3_uri)
+
+    if not key:
+        raise ValueError(f"Invalid S3 URI: missing object key in {s3_uri}")
+
+    # Create metadata file key (same location with .metadata.json suffix)
+    metadata_key = f"{key}.metadata.json"
+    metadata_uri = f"s3://{bucket}/{metadata_key}"
+
+    # Normalize metadata for S3 Vectors (convert multi-value fields to arrays)
+    normalized_metadata = normalize_metadata_for_s3(metadata)
+
+    # Build metadata JSON in Bedrock KB format
+    metadata_content = {"metadataAttributes": normalized_metadata}
+
+    # Write to S3
+    get_s3_client().put_object(
+        Bucket=bucket,
+        Key=metadata_key,
+        Body=json.dumps(metadata_content),
+        ContentType="application/json",
+    )
+
+    logger.info(f"Wrote metadata to {metadata_uri}")
+    return metadata_uri
+
+
+# ============================================================================
+# Validation Utilities
+# ============================================================================
+
+
+def is_valid_uuid(value: str) -> bool:
+    """
+    Check if string is a valid UUID format.
+
+    Args:
+        value: String to validate
+
+    Returns:
+        True if valid UUID format, False otherwise
+    """
+    if not value:
+        return False
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def extract_filename_from_s3_uri(s3_uri: str, default: str = "document") -> str:
+    """
+    Extract filename from S3 URI.
+
+    Args:
+        s3_uri: S3 URI like "s3://bucket/path/to/file.txt"
+        default: Default value if extraction fails
+
+    Returns:
+        Filename portion of the URI (e.g., "file.txt")
+    """
+    if not s3_uri:
+        return default
+    parts = s3_uri.split("/")
+    return parts[-1] if parts and parts[-1] else default
+
+
+def get_file_type_from_filename(filename: str) -> str:
+    """
+    Extract file type from filename.
+
+    Args:
+        filename: Original filename
+
+    Returns:
+        File extension without dot, lowercase (e.g., "pdf", "jpg")
+    """
+    if not filename or "." not in filename:
+        return "unknown"
+    return filename.rsplit(".", 1)[-1].lower()
 
 
 # ============================================================================

@@ -33,7 +33,6 @@ Output:
 }
 """
 
-import json
 import logging
 import os
 import time
@@ -48,9 +47,14 @@ from ragstack_common.config import (
     get_config_manager_or_none,
     get_knowledge_base_config,
 )
+from ragstack_common.ingestion import (
+    batch_check_document_statuses,
+    check_document_status,
+    start_ingestion_with_retry,
+)
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
-from ragstack_common.storage import parse_s3_uri, read_s3_text
+from ragstack_common.metadata_normalizer import reduce_metadata
+from ragstack_common.storage import parse_s3_uri, read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -59,65 +63,6 @@ logger.setLevel(logging.INFO)
 bedrock_agent = boto3.client("bedrock-agent")
 dynamodb = boto3.resource("dynamodb")
 s3_client = boto3.client("s3")
-
-
-def start_ingestion_with_retry(
-    kb_id: str,
-    ds_id: str,
-    max_retries: int = 5,
-    base_delay: float = 5.0,
-) -> dict:
-    """
-    Start ingestion job with retry for concurrent API conflicts.
-
-    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
-    data source. This function retries with exponential backoff when a conflict
-    is detected.
-
-    Args:
-        kb_id: Knowledge base ID
-        ds_id: Data source ID
-        max_retries: Maximum retry attempts (default 5)
-        base_delay: Base delay in seconds (default 5.0)
-
-    Returns:
-        StartIngestionJob response
-
-    Raises:
-        ClientError: If all retries exhausted or non-retryable error
-    """
-    last_error = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            return bedrock_agent.start_ingestion_job(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
-            )
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            error_msg = e.response.get("Error", {}).get("Message", "")
-
-            # Check if this is a retryable concurrent API conflict
-            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
-                last_error = e
-                if attempt < max_retries:
-                    delay = base_delay * (2**attempt)  # Exponential backoff
-                    logger.warning(
-                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
-                        f"after {delay}s: {error_msg}"
-                    )
-                    time.sleep(delay)
-                    continue
-
-            # Non-retryable error, raise immediately
-            raise
-
-    # All retries exhausted
-    logger.error(f"All {max_retries} retries exhausted for ingestion job")
-    if last_error:
-        raise last_error
-    raise RuntimeError("Ingestion job failed with no error captured")
 
 
 # Lazy-initialized singletons
@@ -132,164 +77,8 @@ def get_metadata_extractor() -> MetadataExtractor:
     return _metadata_extractor
 
 
-# Core metadata keys (~8) to preserve when reducing metadata
-# content_type covers media_type/file_type (they were redundant)
-CORE_METADATA_KEYS = {
-    "content_type",  # "video" or "audio"
-    "document_id",
-    "filename",
-    "timestamp_start",  # For segment deep linking
-    "timestamp_end",
-    "segment_index",
-    "duration_seconds",
-    "main_topic",  # Primary topic for search
-}
-
-
-def check_document_status(kb_id: str, ds_id: str, s3_uri: str, sleep_first: bool = True) -> str:
-    """
-    Quick check for document ingestion status (single call, no polling).
-
-    Args:
-        kb_id: Knowledge Base ID.
-        ds_id: Data Source ID.
-        s3_uri: S3 URI of the document.
-        sleep_first: Whether to sleep before checking (default True for single doc checks).
-
-    Returns:
-        Status string (INDEXED, FAILED, STARTING, etc.)
-    """
-    try:
-        if sleep_first:
-            time.sleep(2)
-
-        response = bedrock_agent.get_knowledge_base_documents(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-            documentIdentifiers=[{"dataSourceType": "S3", "s3": {"uri": s3_uri}}],
-        )
-        doc_details = response.get("documentDetails", [])
-        if doc_details:
-            return doc_details[0].get("status", "UNKNOWN")
-    except ClientError as e:
-        logger.warning(f"Error checking document status: {e}")
-
-    return "UNKNOWN"
-
-
-# Batch limits for Bedrock KB APIs
+# Batch size for segment ingestion
 INGEST_BATCH_SIZE = 25
-STATUS_CHECK_BATCH_SIZE = 25
-
-
-def batch_check_document_statuses(kb_id: str, ds_id: str, s3_uris: list[str]) -> dict[str, str]:
-    """
-    Check ingestion status for multiple documents in batches.
-
-    Args:
-        kb_id: Knowledge Base ID.
-        ds_id: Data Source ID.
-        s3_uris: List of S3 URIs to check.
-
-    Returns:
-        Dict mapping S3 URI to status string.
-    """
-    results = {}
-
-    for i in range(0, len(s3_uris), STATUS_CHECK_BATCH_SIZE):
-        batch = s3_uris[i : i + STATUS_CHECK_BATCH_SIZE]
-        doc_identifiers = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in batch]
-
-        try:
-            response = bedrock_agent.get_knowledge_base_documents(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
-                documentIdentifiers=doc_identifiers,
-            )
-            doc_details = response.get("documentDetails", [])
-            for detail in doc_details:
-                uri = detail.get("identifier", {}).get("s3", {}).get("uri")
-                status = detail.get("status", "UNKNOWN")
-                if uri:
-                    results[uri] = status
-        except ClientError as e:
-            logger.warning(f"Error batch checking document statuses: {e}")
-            # Mark batch as unknown on error
-            for uri in batch:
-                results[uri] = "UNKNOWN"
-
-    return results
-
-
-def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
-    """
-    Reduce metadata size by removing non-core keys or truncating values.
-
-    Args:
-        metadata: Original metadata dict.
-        reduction_level: 1 = remove non-core keys, 2 = also truncate arrays, 3 = minimal
-
-    Returns:
-        Reduced metadata dict.
-    """
-    reduced = {}
-
-    for key, value in metadata.items():
-        # Level 3: Only keep core keys
-        if reduction_level >= 3 and key not in CORE_METADATA_KEYS:
-            continue
-
-        # Level 1+: Always keep core keys
-        if key in CORE_METADATA_KEYS:
-            reduced[key] = value
-            continue
-
-        # Level 2+: Truncate arrays to 3 items max, preserve scalars
-        if reduction_level >= 2 and isinstance(value, list):
-            reduced[key] = value[:3]
-        else:
-            reduced[key] = value
-
-    return reduced
-
-
-def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file.
-
-    Args:
-        output_s3_uri: S3 URI of the content file.
-        metadata: Dictionary of metadata key-value pairs.
-
-    Returns:
-        S3 URI of the metadata file.
-    """
-    if not output_s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
-
-    path = output_s3_uri[5:]
-    if "/" not in path:
-        raise ValueError(f"Invalid S3 URI: missing object key in {output_s3_uri}")
-
-    bucket, key = path.split("/", 1)
-
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Normalize metadata for S3 Vectors
-    normalized_metadata = normalize_metadata_for_s3(metadata)
-
-    metadata_content = {"metadataAttributes": normalized_metadata}
-
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
 
 
 def ingest_text_to_kb(

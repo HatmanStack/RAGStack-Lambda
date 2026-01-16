@@ -360,29 +360,29 @@ class TestProcessTextLambda:
 
 
 class TestHelperFunctions:
-    """Test helper functions in process_text module."""
+    """Test helper functions (now in shared storage module)."""
 
     def test_parse_s3_uri(self, mock_env):
-        """Test S3 URI parsing."""
+        """Test S3 URI parsing (via shared module)."""
         module = _load_process_text_module()
 
-        bucket, key = module._parse_s3_uri("s3://my-bucket/path/to/file.txt")
+        bucket, key = module.parse_s3_uri("s3://my-bucket/path/to/file.txt")
         assert bucket == "my-bucket"
         assert key == "path/to/file.txt"
 
     def test_parse_s3_uri_invalid(self, mock_env):
-        """Test S3 URI parsing with invalid URI."""
+        """Test S3 URI parsing with invalid URI (via shared module)."""
         module = _load_process_text_module()
 
         with pytest.raises(ValueError, match="Invalid S3 URI"):
-            module._parse_s3_uri("http://not-s3/path/file.txt")
+            module.parse_s3_uri("http://not-s3/path/file.txt")
 
     def test_extract_filename(self, mock_env):
-        """Test filename extraction from S3 URI."""
+        """Test filename extraction from S3 URI (via shared module)."""
         module = _load_process_text_module()
 
-        filename = module._extract_filename("s3://bucket/path/to/document.html")
+        filename = module.extract_filename_from_s3_uri("s3://bucket/path/to/document.html")
         assert filename == "document.html"
 
-        filename = module._extract_filename("s3://bucket/file.csv")
+        filename = module.extract_filename_from_s3_uri("s3://bucket/file.csv")
         assert filename == "file.csv"

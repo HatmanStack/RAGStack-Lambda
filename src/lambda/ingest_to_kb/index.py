@@ -26,7 +26,6 @@ Output:
 import json
 import logging
 import os
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,10 +37,14 @@ from ragstack_common.config import (
     get_config_manager_or_none,
     get_knowledge_base_config,
 )
+from ragstack_common.ingestion import check_document_status
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
-from ragstack_common.storage import read_s3_text
+from ragstack_common.metadata_normalizer import reduce_metadata
+from ragstack_common.storage import (
+    read_s3_text,
+    write_metadata_to_s3,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -54,74 +57,6 @@ s3_client = boto3.client("s3")
 # Lazy-initialized singletons (reused across invocations)
 _key_library = None
 _metadata_extractor = None
-
-# Core metadata keys to preserve when reducing metadata for documents
-CORE_METADATA_KEYS = {
-    "content_type",
-    "document_id",
-    "filename",
-    "main_topic",
-    "document_type",
-}
-
-
-def check_document_status(kb_id: str, ds_id: str, s3_uri: str) -> str:
-    """
-    Quick check for document ingestion status (single call, no polling).
-
-    Args:
-        kb_id: Knowledge Base ID.
-        ds_id: Data Source ID.
-        s3_uri: S3 URI of the document.
-
-    Returns:
-        Status string (INDEXED, FAILED, STARTING, etc.)
-    """
-    try:
-        time.sleep(2)  # Brief pause to let Bedrock process
-        response = bedrock_agent.get_knowledge_base_documents(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-            documentIdentifiers=[{"dataSourceType": "S3", "s3": {"uri": s3_uri}}],
-        )
-        doc_details = response.get("documentDetails", [])
-        if doc_details:
-            return doc_details[0].get("status", "UNKNOWN")
-    except ClientError as e:
-        logger.warning(f"Error checking document status: {e}")
-    return "UNKNOWN"
-
-
-def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
-    """
-    Reduce metadata size by removing non-core keys or truncating values.
-
-    Args:
-        metadata: Original metadata dict.
-        reduction_level: 1 = keep all keys, 2 = truncate arrays, 3 = core keys only
-
-    Returns:
-        Reduced metadata dict.
-    """
-    reduced = {}
-
-    for key, value in metadata.items():
-        # Level 3: Only keep core keys
-        if reduction_level >= 3 and key not in CORE_METADATA_KEYS:
-            continue
-
-        # Core keys always kept as-is
-        if key in CORE_METADATA_KEYS:
-            reduced[key] = value
-            continue
-
-        # Level 2+: Truncate arrays to 3 items
-        if reduction_level >= 2 and isinstance(value, list):
-            reduced[key] = value[:3]
-        elif reduction_level < 2:
-            reduced[key] = value
-
-    return reduced
 
 
 def get_key_library() -> KeyLibrary:
@@ -248,65 +183,6 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
     except Exception as e:
         logger.warning(f"Error checking for existing metadata: {e}")
         return None
-
-
-def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file alongside the content file.
-
-    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
-    provided inline. The metadata file must be in the same location as the
-    content file with .metadata.json suffix.
-
-    Args:
-        output_s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
-        metadata: Dictionary of metadata key-value pairs
-
-    Returns:
-        S3 URI of the metadata file
-    """
-    # Parse S3 URI
-    if not output_s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
-
-    path = output_s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-
-    # Create metadata file key (same location with .metadata.json suffix)
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Normalize metadata for S3 Vectors (convert multi-value fields to arrays)
-    normalized_metadata = normalize_metadata_for_s3(metadata)
-
-    # Build metadata JSON in Bedrock KB format
-    metadata_content = {"metadataAttributes": normalized_metadata}
-
-    # Write to S3
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
-
-
-def get_file_type_from_filename(filename: str) -> str:
-    """
-    Extract file type from filename.
-
-    Args:
-        filename: Original filename.
-
-    Returns:
-        File extension without dot, lowercase (e.g., "pdf", "jpg").
-    """
-    if not filename or "." not in filename:
-        return "unknown"
-    return filename.rsplit(".", 1)[-1].lower()
 
 
 def extract_document_metadata(

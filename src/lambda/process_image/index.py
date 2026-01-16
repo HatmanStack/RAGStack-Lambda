@@ -31,7 +31,6 @@ import json
 import logging
 import os
 import re
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -41,8 +40,14 @@ from botocore.exceptions import ClientError
 from ragstack_common.appsync import publish_image_update
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.image import ImageStatus
+from ragstack_common.ingestion import start_ingestion_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.storage import (
+    get_file_type_from_filename,
+    is_valid_uuid,
+    write_metadata_to_s3,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -112,13 +117,6 @@ def get_metadata_extractor() -> MetadataExtractor:
             max_keys=max_keys if max_keys else 8,
         )
     return _metadata_extractor
-
-
-def get_file_type_from_filename(filename: str) -> str:
-    """Extract file type from filename."""
-    if not filename or "." not in filename:
-        return "unknown"
-    return filename.rsplit(".", 1)[-1].lower()
 
 
 def get_base_image_metadata(
@@ -193,58 +191,6 @@ def extract_image_metadata(
     except Exception as e:
         logger.warning(f"Failed to extract metadata for image {image_id}: {e}")
         return {}
-
-
-def write_metadata_to_s3(s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file alongside the content file.
-
-    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
-    provided inline. The metadata file must be in the same location as the
-    content file with .metadata.json suffix.
-
-    Args:
-        s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
-        metadata: Dictionary of metadata key-value pairs
-
-    Returns:
-        S3 URI of the metadata file
-    """
-    # Parse S3 URI
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-
-    path = s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-
-    # Create metadata file key (same location with .metadata.json suffix)
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Build metadata JSON in Bedrock KB format
-    metadata_content = {"metadataAttributes": metadata}
-
-    # Write to S3
-    s3.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
-
-
-def is_valid_uuid(value: str) -> bool:
-    """Check if string is a valid UUID format."""
-    try:
-        import uuid
-
-        uuid.UUID(value)
-        return True
-    except (ValueError, AttributeError):
-        return False
 
 
 def lambda_handler(event, context):
@@ -705,62 +651,3 @@ def extract_text_from_image(s3_uri: str) -> str:
     except Exception as e:
         logger.error(f"Failed to extract text from image: {e}", exc_info=True)
         return ""
-
-
-def start_ingestion_with_retry(
-    kb_id: str,
-    ds_id: str,
-    max_retries: int = 5,
-    base_delay: float = 5.0,
-) -> dict:
-    """
-    Start ingestion job with retry for concurrent API conflicts.
-
-    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
-    data source. This function retries with exponential backoff when a conflict
-    is detected.
-
-    Args:
-        kb_id: Knowledge base ID
-        ds_id: Data source ID
-        max_retries: Maximum retry attempts (default 5)
-        base_delay: Base delay in seconds (default 5.0)
-
-    Returns:
-        StartIngestionJob response
-
-    Raises:
-        ClientError: If all retries exhausted or non-retryable error
-    """
-    last_error = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            return bedrock_agent.start_ingestion_job(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
-            )
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            error_msg = e.response.get("Error", {}).get("Message", "")
-
-            # Check if this is a retryable concurrent API conflict
-            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
-                last_error = e
-                if attempt < max_retries:
-                    delay = base_delay * (2**attempt)  # Exponential backoff
-                    logger.warning(
-                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
-                        f"after {delay}s: {error_msg}"
-                    )
-                    time.sleep(delay)
-                    continue
-
-            # Non-retryable error, raise immediately
-            raise
-
-    # All retries exhausted
-    logger.error(f"All {max_retries} retries exhausted for ingestion job")
-    if last_error:
-        raise last_error
-    raise RuntimeError("Ingestion job failed with no error captured")

@@ -43,6 +43,7 @@ from ragstack_common.config import ConfigurationManager
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.scraper import ScrapeStatus
+from ragstack_common.storage import is_valid_uuid
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -584,14 +585,6 @@ def format_document(item):
         "mediaType": item.get("media_type"),  # video, audio
         "durationSeconds": item.get("duration_seconds"),
     }
-
-
-def is_valid_uuid(uuid_string):
-    """Validate UUID format."""
-    uuid_pattern = re.compile(
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
-    )
-    return bool(uuid_pattern.match(uuid_string))
 
 
 # =========================================================================
