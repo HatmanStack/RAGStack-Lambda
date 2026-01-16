@@ -123,7 +123,9 @@ def start_ingestion_with_retry(
 
     # All retries exhausted
     logger.error(f"All {max_retries} retries exhausted for ingestion job")
-    raise last_error
+    if last_error:
+        raise last_error
+    raise RuntimeError("Ingestion job failed with no error captured")
 
 
 def is_valid_video_path(key: str) -> bool:

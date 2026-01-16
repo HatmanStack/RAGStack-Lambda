@@ -534,3 +534,144 @@ def test_get_active_keys_includes_media_keys(key_library, mock_dynamodb_table):
     key_names = [k["key_name"] for k in result]
     assert "content_type" in key_names
     assert "timestamp_start" in key_names
+
+
+# Test: reset_occurrence_counts
+
+
+def test_reset_occurrence_counts_success(key_library, mock_dynamodb_table):
+    """Test resetting occurrence counts for all keys."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "topic"},
+            {"key_name": "location"},
+            {"key_name": "date_range"},
+        ]
+    }
+
+    result = key_library.reset_occurrence_counts()
+
+    assert result == 3
+    assert mock_dynamodb_table.update_item.call_count == 3
+    # Verify update_item was called with correct parameters
+    for call in mock_dynamodb_table.update_item.call_args_list:
+        assert ":zero" in call.kwargs["ExpressionAttributeValues"]
+        assert call.kwargs["ExpressionAttributeValues"][":zero"] == 0
+
+
+def test_reset_occurrence_counts_empty_table(key_library, mock_dynamodb_table):
+    """Test reset on empty table returns 0."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.reset_occurrence_counts()
+
+    assert result == 0
+    mock_dynamodb_table.update_item.assert_not_called()
+
+
+def test_reset_occurrence_counts_handles_pagination(key_library, mock_dynamodb_table):
+    """Test reset handles paginated results."""
+    mock_dynamodb_table.scan.side_effect = [
+        {"Items": [{"key_name": "topic"}], "LastEvaluatedKey": {"key_name": "topic"}},
+        {"Items": [{"key_name": "location"}]},
+    ]
+
+    result = key_library.reset_occurrence_counts()
+
+    assert result == 2
+    assert mock_dynamodb_table.scan.call_count == 2
+
+
+def test_reset_occurrence_counts_table_not_exists(mock_dynamodb_resource):
+    """Test reset returns 0 when table doesn't exist."""
+    mock_table = MagicMock()
+    type(mock_table).table_status = property(fget=lambda _: _raise_resource_not_found())
+    mock_dynamodb_resource.Table.return_value = mock_table
+
+    with patch("boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="nonexistent-table")
+        result = library.reset_occurrence_counts()
+
+    assert result == 0
+
+
+def test_reset_occurrence_counts_clears_cache(key_library, mock_dynamodb_table):
+    """Test that reset clears the active keys cache."""
+    mock_dynamodb_table.scan.return_value = {"Items": [{"key_name": "topic"}]}
+    key_library._active_keys_cache = [{"key_name": "cached"}]
+    key_library._active_keys_cache_time = 12345
+
+    key_library.reset_occurrence_counts()
+
+    assert key_library._active_keys_cache is None
+    assert key_library._active_keys_cache_time is None
+
+
+# Test: deactivate_zero_count_keys
+
+
+def test_deactivate_zero_count_keys_success(key_library, mock_dynamodb_table):
+    """Test deactivating keys with zero occurrence count."""
+    mock_dynamodb_table.scan.return_value = {
+        "Items": [
+            {"key_name": "unused_key1"},
+            {"key_name": "unused_key2"},
+        ]
+    }
+
+    result = key_library.deactivate_zero_count_keys()
+
+    assert result == 2
+    assert mock_dynamodb_table.update_item.call_count == 2
+    # Verify status is set to inactive
+    for call in mock_dynamodb_table.update_item.call_args_list:
+        assert ":inactive" in call.kwargs["ExpressionAttributeValues"]
+        assert call.kwargs["ExpressionAttributeValues"][":inactive"] == "inactive"
+
+
+def test_deactivate_zero_count_keys_none_to_deactivate(key_library, mock_dynamodb_table):
+    """Test deactivate returns 0 when no keys need deactivation."""
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    result = key_library.deactivate_zero_count_keys()
+
+    assert result == 0
+    mock_dynamodb_table.update_item.assert_not_called()
+
+
+def test_deactivate_zero_count_keys_handles_pagination(key_library, mock_dynamodb_table):
+    """Test deactivate handles paginated results."""
+    mock_dynamodb_table.scan.side_effect = [
+        {"Items": [{"key_name": "key1"}], "LastEvaluatedKey": {"key_name": "key1"}},
+        {"Items": [{"key_name": "key2"}]},
+    ]
+
+    result = key_library.deactivate_zero_count_keys()
+
+    assert result == 2
+    assert mock_dynamodb_table.scan.call_count == 2
+
+
+def test_deactivate_zero_count_keys_table_not_exists(mock_dynamodb_resource):
+    """Test deactivate returns 0 when table doesn't exist."""
+    mock_table = MagicMock()
+    type(mock_table).table_status = property(fget=lambda _: _raise_resource_not_found())
+    mock_dynamodb_resource.Table.return_value = mock_table
+
+    with patch("boto3.resource", return_value=mock_dynamodb_resource):
+        library = KeyLibrary(table_name="nonexistent-table")
+        result = library.deactivate_zero_count_keys()
+
+    assert result == 0
+
+
+def test_deactivate_zero_count_keys_clears_cache(key_library, mock_dynamodb_table):
+    """Test that deactivate clears the active keys cache."""
+    mock_dynamodb_table.scan.return_value = {"Items": [{"key_name": "topic"}]}
+    key_library._active_keys_cache = [{"key_name": "cached"}]
+    key_library._active_keys_cache_time = 12345
+
+    key_library.deactivate_zero_count_keys()
+
+    assert key_library._active_keys_cache is None
+    assert key_library._active_keys_cache_time is None
