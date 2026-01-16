@@ -222,6 +222,19 @@ def handle_init(event: dict) -> dict:
     new_kb = migrator.create_knowledge_base(suffix=timestamp)
     logger.info(f"Created new KB: {new_kb['kb_id']}")
 
+    # Run baseline sync on empty KB to establish sync tracking point
+    # This prevents full re-sync issues when final start_ingestion_job runs
+    try:
+        logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
+        bedrock_agent.start_ingestion_job(
+            knowledgeBaseId=new_kb["kb_id"],
+            dataSourceId=new_kb["data_source_id"],
+        )
+        logger.info("Baseline sync started successfully")
+    except Exception as e:
+        # Non-critical - log and continue
+        logger.warning(f"Baseline sync failed (will retry in finalize): {e}")
+
     # Return state for processing loop
     return {
         "action": "process_batch",
