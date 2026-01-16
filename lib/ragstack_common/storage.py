@@ -6,6 +6,7 @@ Provides simple, consistent interface for reading/writing data.
 
 import json
 import logging
+import uuid
 from typing import Any
 
 import boto3
@@ -228,6 +229,62 @@ def write_metadata_to_s3(s3_uri: str, metadata: dict[str, Any]) -> str:
 
     logger.info(f"Wrote metadata to {metadata_uri}")
     return metadata_uri
+
+
+# ============================================================================
+# Validation Utilities
+# ============================================================================
+
+
+def is_valid_uuid(value: str) -> bool:
+    """
+    Check if string is a valid UUID format.
+
+    Args:
+        value: String to validate
+
+    Returns:
+        True if valid UUID format, False otherwise
+    """
+    if not value:
+        return False
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def extract_filename_from_s3_uri(s3_uri: str, default: str = "document") -> str:
+    """
+    Extract filename from S3 URI.
+
+    Args:
+        s3_uri: S3 URI like "s3://bucket/path/to/file.txt"
+        default: Default value if extraction fails
+
+    Returns:
+        Filename portion of the URI (e.g., "file.txt")
+    """
+    if not s3_uri:
+        return default
+    parts = s3_uri.split("/")
+    return parts[-1] if parts and parts[-1] else default
+
+
+def get_file_type_from_filename(filename: str) -> str:
+    """
+    Extract file type from filename.
+
+    Args:
+        filename: Original filename
+
+    Returns:
+        File extension without dot, lowercase (e.g., "pdf", "jpg")
+    """
+    if not filename or "." not in filename:
+        return "unknown"
+    return filename.rsplit(".", 1)[-1].lower()
 
 
 # ============================================================================

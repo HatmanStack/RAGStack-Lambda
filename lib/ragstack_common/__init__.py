@@ -36,7 +36,10 @@ from ragstack_common.metadata_normalizer import (
 )
 from ragstack_common.multislice_retriever import MultiSliceRetriever
 from ragstack_common.storage import (
+    extract_filename_from_s3_uri,
     generate_presigned_url,
+    get_file_type_from_filename,
+    is_valid_uuid,
     parse_s3_uri,
     write_metadata_to_s3,
 )
@@ -56,7 +59,10 @@ __all__ = [
     "check_public_access",
     "constants",
     "expand_to_searchable_array",
+    "extract_filename_from_s3_uri",
+    "get_file_type_from_filename",
     "is_supported_image",
+    "is_valid_uuid",
     "log_summary",
     "normalize_metadata_for_s3",
     "parse_s3_uri",

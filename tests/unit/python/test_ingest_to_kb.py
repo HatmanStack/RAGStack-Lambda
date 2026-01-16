@@ -65,37 +65,37 @@ def sample_event():
 
 
 class TestGetFileTypeFromFilename:
-    """Tests for get_file_type_from_filename function."""
+    """Tests for get_file_type_from_filename function (now in shared module)."""
 
     def test_extracts_pdf(self, set_env_vars):
         """Test extracting PDF file type."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-            assert module.get_file_type_from_filename("document.pdf") == "pdf"
+        from ragstack_common.storage import get_file_type_from_filename
+
+        assert get_file_type_from_filename("document.pdf") == "pdf"
 
     def test_extracts_jpg(self, set_env_vars):
         """Test extracting JPG file type."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-            assert module.get_file_type_from_filename("photo.JPG") == "jpg"
+        from ragstack_common.storage import get_file_type_from_filename
+
+        assert get_file_type_from_filename("photo.JPG") == "jpg"
 
     def test_handles_multiple_dots(self, set_env_vars):
         """Test handling filenames with multiple dots."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-            assert module.get_file_type_from_filename("file.name.txt") == "txt"
+        from ragstack_common.storage import get_file_type_from_filename
+
+        assert get_file_type_from_filename("file.name.txt") == "txt"
 
     def test_handles_no_extension(self, set_env_vars):
         """Test handling filenames without extension."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-            assert module.get_file_type_from_filename("noextension") == "unknown"
+        from ragstack_common.storage import get_file_type_from_filename
+
+        assert get_file_type_from_filename("noextension") == "unknown"
 
     def test_handles_empty_filename(self, set_env_vars):
         """Test handling empty filename."""
-        with patch("boto3.client"), patch("boto3.resource"):
-            module = load_ingest_module()
-            assert module.get_file_type_from_filename("") == "unknown"
+        from ragstack_common.storage import get_file_type_from_filename
+
+        assert get_file_type_from_filename("") == "unknown"
 
 
 class TestBuildInlineAttributes:

@@ -40,7 +40,10 @@ from ragstack_common.config import (
 from ragstack_common.ingestion import check_document_status
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.storage import read_s3_text, write_metadata_to_s3
+from ragstack_common.storage import (
+    read_s3_text,
+    write_metadata_to_s3,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -220,21 +223,6 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
     except Exception as e:
         logger.warning(f"Error checking for existing metadata: {e}")
         return None
-
-
-def get_file_type_from_filename(filename: str) -> str:
-    """
-    Extract file type from filename.
-
-    Args:
-        filename: Original filename.
-
-    Returns:
-        File extension without dot, lowercase (e.g., "pdf", "jpg").
-    """
-    if not filename or "." not in filename:
-        return "unknown"
-    return filename.rsplit(".", 1)[-1].lower()
 
 
 def extract_document_metadata(

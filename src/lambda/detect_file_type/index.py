@@ -25,6 +25,7 @@ import logging
 
 import boto3
 
+from ragstack_common.storage import extract_filename_from_s3_uri, parse_s3_uri
 from ragstack_common.text_extractors import ContentSniffer
 
 logger = logging.getLogger()
@@ -51,23 +52,6 @@ def _get_sniffer() -> ContentSniffer:
     if _sniffer is None:
         _sniffer = ContentSniffer()
     return _sniffer
-
-
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]  # Remove 's3://'
-    parts = path.split("/", 1)
-    if len(parts) < 2 or not parts[1]:
-        raise ValueError(f"S3 URI must include a key/path: {s3_uri}")
-    return parts[0], parts[1]
-
-
-def _extract_filename(s3_uri: str) -> str:
-    """Extract filename from S3 URI."""
-    parts = s3_uri.split("/")
-    return parts[-1] if parts else "document"
 
 
 def _get_routing_category(file_type: str) -> str:
@@ -166,7 +150,7 @@ def lambda_handler(event, context):
     input_s3_uri = event["input_s3_uri"]
     output_s3_prefix = event["output_s3_prefix"]
 
-    filename = _extract_filename(input_s3_uri)
+    filename = extract_filename_from_s3_uri(input_s3_uri)
     logger.info(f"Detecting file type for: {filename}")
 
     # Check for markdown passthrough first (skip content download)
@@ -181,7 +165,7 @@ def lambda_handler(event, context):
         }
 
     # Download first 4KB for content sniffing
-    bucket, key = _parse_s3_uri(input_s3_uri)
+    bucket, key = parse_s3_uri(input_s3_uri)
 
     try:
         response = s3_client.get_object(

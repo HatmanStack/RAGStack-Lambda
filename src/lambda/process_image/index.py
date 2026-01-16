@@ -43,7 +43,11 @@ from ragstack_common.image import ImageStatus
 from ragstack_common.ingestion import start_ingestion_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.storage import write_metadata_to_s3
+from ragstack_common.storage import (
+    get_file_type_from_filename,
+    is_valid_uuid,
+    write_metadata_to_s3,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -113,13 +117,6 @@ def get_metadata_extractor() -> MetadataExtractor:
             max_keys=max_keys if max_keys else 8,
         )
     return _metadata_extractor
-
-
-def get_file_type_from_filename(filename: str) -> str:
-    """Extract file type from filename."""
-    if not filename or "." not in filename:
-        return "unknown"
-    return filename.rsplit(".", 1)[-1].lower()
 
 
 def get_base_image_metadata(
@@ -194,17 +191,6 @@ def extract_image_metadata(
     except Exception as e:
         logger.warning(f"Failed to extract metadata for image {image_id}: {e}")
         return {}
-
-
-def is_valid_uuid(value: str) -> bool:
-    """Check if string is a valid UUID format."""
-    try:
-        import uuid
-
-        uuid.UUID(value)
-        return True
-    except (ValueError, AttributeError):
-        return False
 
 
 def lambda_handler(event, context):
