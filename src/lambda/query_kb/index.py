@@ -1474,6 +1474,11 @@ def lambda_handler(event, context):
                     metadata_filter=generated_filter,
                     num_results=5,
                 )
+                logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
+                for i, r in enumerate(retrieval_results):
+                    uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                    score = r.get("score", "N/A")
+                    logger.info(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
             else:
                 # Standard single-query retrieval
                 retrieval_config = {
@@ -1492,6 +1497,12 @@ def lambda_handler(event, context):
                 )
                 retrieval_results = retrieve_response.get("retrievalResults", [])
             logger.info(f"Retrieved {len(retrieval_results)} results")
+
+            # Log each result's URI and score for debugging
+            for i, r in enumerate(retrieval_results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
         except Exception as e:
             logger.warning(f"Retrieval failed: {e}")
 
