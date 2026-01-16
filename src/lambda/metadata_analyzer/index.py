@@ -590,6 +590,23 @@ def lambda_handler(event: dict, context) -> dict:
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table)
 
+        # Step 4b: Filter to active keys only for example generation
+        # In manual mode, only use manually selected keys
+        # In auto mode, use all keys
+        active_field_analysis = field_analysis
+        if config:
+            extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+            if extraction_mode == "manual":
+                manual_keys_list = config.get_parameter("metadata_manual_keys", default=[])
+                manual_keys = set(manual_keys_list) if manual_keys_list else set()
+                active_field_analysis = {
+                    k: v for k, v in field_analysis.items() if k in manual_keys
+                }
+                logger.info(
+                    f"Manual mode: filtered to {len(active_field_analysis)} active keys "
+                    f"from {len(field_analysis)} total"
+                )
+
         # Step 5: Load existing examples and disabled list, preserve enabled ones
         preserved_examples = []
         disabled_names = set()
@@ -607,11 +624,11 @@ def lambda_handler(event: dict, context) -> dict:
                 ]
                 logger.info(f"Preserving {len(preserved_examples)} enabled examples")
 
-        # Step 6: Generate new examples to replace disabled ones
+        # Step 6: Generate new examples to replace disabled ones (using active keys only)
         num_to_generate = max(0, target_example_count - len(preserved_examples))
         new_examples = []
-        if field_analysis and num_to_generate > 0:
-            new_examples = generate_filter_examples(field_analysis, num_examples=num_to_generate)
+        if active_field_analysis and num_to_generate > 0:
+            new_examples = generate_filter_examples(active_field_analysis, num_examples=num_to_generate)
             logger.info(f"Generated {len(new_examples)} new examples")
 
         # Combine preserved + new
