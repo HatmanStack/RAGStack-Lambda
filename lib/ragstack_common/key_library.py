@@ -404,6 +404,63 @@ class KeyLibrary:
             logger.exception("Error resetting occurrence counts")
             raise
 
+    def deactivate_zero_count_keys(self) -> int:
+        """
+        Mark all keys with occurrence_count=0 as inactive.
+
+        Call this after reindex completes to deactivate keys that
+        no longer appear in any documents.
+
+        Returns:
+            Number of keys deactivated.
+        """
+        if not self._check_table_exists():
+            return 0
+
+        try:
+            # Get all keys with count=0 and status=active
+            response = self.table.scan(
+                FilterExpression="occurrence_count = :zero AND #status = :active",
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={":zero": 0, ":active": "active"},
+                ProjectionExpression="key_name",
+            )
+            items = response.get("Items", [])
+
+            while "LastEvaluatedKey" in response:
+                response = self.table.scan(
+                    FilterExpression="occurrence_count = :zero AND #status = :active",
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={":zero": 0, ":active": "active"},
+                    ProjectionExpression="key_name",
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                )
+                items.extend(response.get("Items", []))
+
+            # Deactivate each key
+            deactivated = 0
+            for item in items:
+                key_name = item.get("key_name")
+                if key_name:
+                    self.table.update_item(
+                        Key={"key_name": key_name},
+                        UpdateExpression="SET #status = :inactive",
+                        ExpressionAttributeNames={"#status": "status"},
+                        ExpressionAttributeValues={":inactive": "inactive"},
+                    )
+                    deactivated += 1
+
+            # Clear cache
+            self._active_keys_cache = None
+            self._active_keys_cache_time = None
+
+            logger.info(f"Deactivated {deactivated} keys with zero occurrences")
+            return deactivated
+
+        except ClientError:
+            logger.exception("Error deactivating zero-count keys")
+            raise
+
     def get_library_stats(self) -> dict[str, Any]:
         """
         Get summary statistics about the key library.

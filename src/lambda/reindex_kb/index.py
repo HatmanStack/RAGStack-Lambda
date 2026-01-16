@@ -992,6 +992,15 @@ def handle_finalize(event: dict) -> dict:
             # Don't fail the operation if old KB deletion fails
             error_messages.append(f"Failed to delete old KB: {str(e)[:100]}")
 
+    # Deactivate metadata keys with zero occurrences (no longer in any documents)
+    try:
+        key_library = get_key_library()
+        deactivated = key_library.deactivate_zero_count_keys()
+        if deactivated > 0:
+            logger.info(f"Deactivated {deactivated} metadata keys with zero occurrences")
+    except Exception as e:
+        logger.warning(f"Failed to deactivate zero-count keys: {e}")
+
     # Publish completion status
     publish_reindex_update(
         graphql_endpoint,
