@@ -9,7 +9,6 @@ import {
   Modal,
   Toggle,
   Popover,
-  Icon,
   ExpandableSection,
   CopyToClipboard,
 } from '@cloudscape-design/components';
@@ -83,7 +82,12 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
 
   const parseFilter = (filterJson: string): object => {
     try {
-      return JSON.parse(filterJson);
+      let parsed = JSON.parse(filterJson);
+      // Handle double-encoded JSON strings
+      if (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      return parsed;
     } catch {
       return {};
     }
@@ -124,9 +128,9 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
             position="right"
             size="large"
           >
-            <Box color="text-status-info" display="inline">
-              <Icon name="status-info" />
-            </Box>
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Filter Examples" />
+            </span>
           </Popover>
         }
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
