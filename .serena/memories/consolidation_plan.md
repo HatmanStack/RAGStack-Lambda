@@ -85,9 +85,9 @@ Could be unified with a `mode` parameter or `include_conversation=False`.
 - [x] P0.2: Add `generate_presigned_url()` to storage.py
 - [x] P0.3: Add `write_metadata_to_s3()` to storage.py
 - [x] P0.4: Enforce `parse_s3_uri()` usage (removed 2 duplicates: search_kb, move_video)
-- [ ] P1.1: Add `is_valid_uuid()` to storage.py
-- [ ] P1.2: Add `extract_filename_from_path()` to storage.py
-- [ ] P1.3: Move `reduce_metadata()` to metadata_normalizer.py
+- [x] P1.1: Add `is_valid_uuid()` to storage.py
+- [x] P1.2: Add `extract_filename_from_s3_uri()` and `get_file_type_from_filename()` to storage.py
+- [x] P1.3: Move `reduce_metadata()` to metadata_normalizer.py
 - [ ] P2.1: Evaluate search_kb → query_kb merge
 
 ---

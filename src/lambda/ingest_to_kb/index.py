@@ -40,6 +40,7 @@ from ragstack_common.config import (
 from ragstack_common.ingestion import check_document_status
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.metadata_normalizer import reduce_metadata
 from ragstack_common.storage import (
     read_s3_text,
     write_metadata_to_s3,
@@ -56,47 +57,6 @@ s3_client = boto3.client("s3")
 # Lazy-initialized singletons (reused across invocations)
 _key_library = None
 _metadata_extractor = None
-
-# Core metadata keys to preserve when reducing metadata for documents
-CORE_METADATA_KEYS = {
-    "content_type",
-    "document_id",
-    "filename",
-    "main_topic",
-    "document_type",
-}
-
-
-def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
-    """
-    Reduce metadata size by removing non-core keys or truncating values.
-
-    Args:
-        metadata: Original metadata dict.
-        reduction_level: 1 = keep all keys, 2 = truncate arrays, 3 = core keys only
-
-    Returns:
-        Reduced metadata dict.
-    """
-    reduced = {}
-
-    for key, value in metadata.items():
-        # Level 3: Only keep core keys
-        if reduction_level >= 3 and key not in CORE_METADATA_KEYS:
-            continue
-
-        # Core keys always kept as-is
-        if key in CORE_METADATA_KEYS:
-            reduced[key] = value
-            continue
-
-        # Level 2+: Truncate arrays to 3 items
-        if reduction_level >= 2 and isinstance(value, list):
-            reduced[key] = value[:3]
-        elif reduction_level < 2:
-            reduced[key] = value
-
-    return reduced
 
 
 def get_key_library() -> KeyLibrary:

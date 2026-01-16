@@ -140,3 +140,66 @@ def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
                 normalized[key] = expanded
 
     return normalized
+
+
+# Default core metadata keys to preserve when reducing metadata
+# This is a superset covering documents, media, and images
+DEFAULT_CORE_METADATA_KEYS = frozenset(
+    {
+        "content_type",
+        "document_id",
+        "document_type",
+        "duration_seconds",
+        "filename",
+        "main_topic",
+        "segment_index",
+        "timestamp_end",
+        "timestamp_start",
+    }
+)
+
+
+def reduce_metadata(
+    metadata: dict[str, Any],
+    reduction_level: int = 1,
+    core_keys: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Reduce metadata size by removing non-core keys or truncating values.
+
+    Used when metadata is too large for ingestion APIs. Progressively strips
+    non-essential fields while preserving core identifiers and search keys.
+
+    Args:
+        metadata: Original metadata dict.
+        reduction_level: Aggressiveness of reduction:
+            1 = keep all keys (no reduction)
+            2 = truncate arrays to 3 items
+            3 = core keys only
+        core_keys: Set of keys to always preserve. Defaults to DEFAULT_CORE_METADATA_KEYS.
+
+    Returns:
+        Reduced metadata dict.
+    """
+    if core_keys is None:
+        core_keys = DEFAULT_CORE_METADATA_KEYS
+
+    reduced = {}
+
+    for key, value in metadata.items():
+        # Level 3: Only keep core keys
+        if reduction_level >= 3 and key not in core_keys:
+            continue
+
+        # Core keys always kept as-is
+        if key in core_keys:
+            reduced[key] = value
+            continue
+
+        # Level 2+: Truncate arrays to 3 items
+        if reduction_level >= 2 and isinstance(value, list):
+            reduced[key] = value[:3]
+        elif reduction_level < 2:
+            reduced[key] = value
+
+    return reduced

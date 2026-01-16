@@ -31,8 +31,10 @@ from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import (
+    DEFAULT_CORE_METADATA_KEYS,
     expand_to_searchable_array,
     normalize_metadata_for_s3,
+    reduce_metadata,
 )
 from ragstack_common.multislice_retriever import MultiSliceRetriever
 from ragstack_common.storage import (
@@ -58,6 +60,7 @@ __all__ = [
     "MultiSliceRetriever",
     "check_public_access",
     "constants",
+    "DEFAULT_CORE_METADATA_KEYS",
     "expand_to_searchable_array",
     "extract_filename_from_s3_uri",
     "get_file_type_from_filename",
@@ -69,6 +72,7 @@ __all__ = [
     "publish_document_update",
     "publish_image_update",
     "publish_scrape_update",
+    "reduce_metadata",
     "safe_log_event",
     "start_ingestion_with_retry",
     "validate_image_size",

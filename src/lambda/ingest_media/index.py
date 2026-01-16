@@ -53,6 +53,7 @@ from ragstack_common.ingestion import (
     start_ingestion_with_retry,
 )
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.metadata_normalizer import reduce_metadata
 from ragstack_common.storage import parse_s3_uri, read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
@@ -76,54 +77,8 @@ def get_metadata_extractor() -> MetadataExtractor:
     return _metadata_extractor
 
 
-# Core metadata keys (~8) to preserve when reducing metadata
-# content_type covers media_type/file_type (they were redundant)
-CORE_METADATA_KEYS = {
-    "content_type",  # "video" or "audio"
-    "document_id",
-    "filename",
-    "timestamp_start",  # For segment deep linking
-    "timestamp_end",
-    "segment_index",
-    "duration_seconds",
-    "main_topic",  # Primary topic for search
-}
-
-
 # Batch size for segment ingestion
 INGEST_BATCH_SIZE = 25
-
-
-def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
-    """
-    Reduce metadata size by removing non-core keys or truncating values.
-
-    Args:
-        metadata: Original metadata dict.
-        reduction_level: 1 = remove non-core keys, 2 = also truncate arrays, 3 = minimal
-
-    Returns:
-        Reduced metadata dict.
-    """
-    reduced = {}
-
-    for key, value in metadata.items():
-        # Level 3: Only keep core keys
-        if reduction_level >= 3 and key not in CORE_METADATA_KEYS:
-            continue
-
-        # Level 1+: Always keep core keys
-        if key in CORE_METADATA_KEYS:
-            reduced[key] = value
-            continue
-
-        # Level 2+: Truncate arrays to 3 items max, preserve scalars
-        if reduction_level >= 2 and isinstance(value, list):
-            reduced[key] = value[:3]
-        else:
-            reduced[key] = value
-
-    return reduced
 
 
 def ingest_text_to_kb(
