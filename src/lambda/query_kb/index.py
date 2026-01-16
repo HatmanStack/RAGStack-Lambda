@@ -45,6 +45,7 @@ from ragstack_common.config import ConfigurationManager, get_knowledge_base_conf
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.storage import parse_s3_uri
 
 # Initialize AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
@@ -58,6 +59,67 @@ logger.setLevel(logging.INFO)
 
 # Content types recognized as media for source attribution
 MEDIA_CONTENT_TYPES = ("video", "audio", "transcript", "visual")
+
+# Maximum image size for Converse API (5MB)
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+
+# Supported image formats for Bedrock Converse API
+IMAGE_FORMAT_MAP = {
+    "image/jpeg": "jpeg",
+    "image/jpg": "jpeg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+
+
+def fetch_image_for_converse(s3_uri: str, content_type: str | None = None) -> dict | None:
+    """
+    Fetch image from S3 and prepare for Bedrock Converse API.
+
+    Args:
+        s3_uri: S3 URI of the image (s3://bucket/key)
+        content_type: Optional content type, will be inferred from extension if not provided
+
+    Returns:
+        ImageBlock dict for Converse API, or None if image cannot be fetched/processed
+    """
+    try:
+        bucket, key = parse_s3_uri(s3_uri)
+        if not bucket or not key:
+            logger.warning(f"Invalid S3 URI for image: {s3_uri}")
+            return None
+
+        # Fetch image from S3
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        image_bytes = response["Body"].read()
+
+        # Check size limit
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            logger.warning(f"Image too large ({len(image_bytes)} bytes): {s3_uri}")
+            return None
+
+        # Determine format from content type or extension
+        if not content_type:
+            content_type = response.get("ContentType", "")
+
+        image_format = IMAGE_FORMAT_MAP.get(content_type.lower())
+        if not image_format:
+            # Try to infer from extension
+            ext = key.lower().split(".")[-1]
+            ext_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp"}
+            image_format = ext_map.get(ext)
+
+        if not image_format:
+            logger.warning(f"Unsupported image format: {content_type}, {s3_uri}")
+            return None
+
+        # Return ImageBlock for Converse API
+        return {"image": {"format": image_format, "source": {"bytes": image_bytes}}}
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch image {s3_uri}: {e}")
+        return None
 
 
 def extract_kb_scalar(value: Any) -> str | None:
@@ -557,7 +619,7 @@ QUERY TO USE FOR SEARCH:"""
     return query
 
 
-def build_conversation_messages(current_query, history, retrieved_context):
+def build_conversation_messages(current_query, history, retrieved_context, images=None):
     """
     Build messages array for Bedrock Converse API with conversation history.
 
@@ -565,6 +627,7 @@ def build_conversation_messages(current_query, history, retrieved_context):
         current_query (str): The user's current question
         history (list[dict]): Previous conversation turns
         retrieved_context (str): Retrieved documents from KB
+        images (list[dict], optional): List of ImageBlock dicts for visual matches
 
     Returns:
         list[dict]: Messages array for Converse API
@@ -591,7 +654,16 @@ Please answer this question: {current_query}
 
 If the retrieved information doesn't contain the answer, say so and provide relevant info."""
 
-    messages.append({"role": "user", "content": [{"text": current_message}]})
+    # Build content blocks - text first, then images
+    content_blocks = [{"text": current_message}]
+
+    # Add images if present (for visual matches)
+    if images:
+        for img in images:
+            if img:
+                content_blocks.append(img)
+
+    messages.append({"role": "user", "content": content_blocks})
 
     return messages
 
@@ -869,11 +941,17 @@ def extract_sources(citations):
 
                     # Determine content type from filename
                     last_part = parts[-1] if parts else ""
+                    last_part_lower = last_part.lower()
                     if last_part == "caption.txt":
-                        # Image caption
+                        # Image caption (text embedding)
                         input_prefix = "content"
                         is_image = True
                         logger.info(f"Image caption detected: imageId={document_id}")
+                    elif last_part_lower.endswith((".jpeg", ".jpg", ".png", ".gif", ".webp")):
+                        # Image file directly (visual embedding)
+                        input_prefix = "content"
+                        is_image = True
+                        logger.info(f"Image file detected: imageId={document_id}, file={last_part}")
                     elif last_part == "full_text.txt":
                         # Scraped content
                         input_prefix = "input"
@@ -1428,7 +1506,14 @@ def lambda_handler(event, context):
         # Build context from retrieved documents
         retrieved_chunks = []
         citations = []  # Build citations in the format expected by extract_sources
-        for result in retrieval_results:
+        matched_images = []  # Collect images for visual matches to send to LLM
+
+        # Only send images from top 3 most relevant results (already sorted by score)
+        # Limit to 1 image to control costs and context size
+        MAX_IMAGE_RANK = 3  # Only consider images in top 3 results
+        MAX_IMAGES_TO_SEND = 1  # Only send 1 image to the model
+
+        for result_rank, result in enumerate(retrieval_results):
             content = result.get("content") or {}
             metadata = result.get("metadata") or {}
             location = result.get("location") or {}
@@ -1477,18 +1562,83 @@ def lambda_handler(event, context):
             is_visual = content_type == "visual" or content.get("type") == "VIDEO"
 
             if is_visual:
-                # Visual segment - explain to LLM that video frames matched the query
-                # This tells the LLM that the VIDEO CONTENT is relevant, not just metadata
+                # Visual match - get additional context (caption for images, transcript for videos)
+                visual_context = ""
+                s3_uri = location.get("s3Location", {}).get("uri", "")
+                tracked_type = ""  # Track the type from DynamoDB for labeling
+
+                # Extract document_id from URI (content/{docId}/...)
+                doc_id = None
+                if s3_uri:
+                    uri_parts = s3_uri.replace("s3://", "").split("/")
+                    if len(uri_parts) >= 3 and uri_parts[1] == "content":
+                        doc_id = uri_parts[2]
+
+                if doc_id and tracking_table:
+                    try:
+                        table = dynamodb.Table(tracking_table)
+                        response = table.get_item(Key={"document_id": doc_id})
+                        item = response.get("Item", {})
+                        tracked_type = item.get("type", "")
+
+                        if tracked_type == "image":
+                            # For images, use the caption
+                            if item.get("caption"):
+                                visual_context = f"\nImage caption: {item['caption']}"
+                            logger.info(f"Visual image match - added caption for {doc_id}")
+
+                            # Only fetch images from top N results to send to LLM
+                            # This ensures we only send the most relevant images
+                            if (
+                                result_rank < MAX_IMAGE_RANK
+                                and len(matched_images) < MAX_IMAGES_TO_SEND
+                            ):
+                                input_uri = item.get("input_s3_uri")
+                                content_type_img = item.get("content_type")
+                                if input_uri:
+                                    img_block = fetch_image_for_converse(
+                                        input_uri, content_type_img
+                                    )
+                                    if img_block:
+                                        matched_images.append(img_block)
+                                        logger.info(
+                                            f"Fetched image for LLM (rank {result_rank}): {doc_id}"
+                                        )
+                        elif tracked_type == "media":
+                            # For video/audio, get the relevant segment transcript
+                            is_segment = "/segment-" in s3_uri
+                            if is_segment:
+                                # Specific segment - fetch that segment's text
+                                bucket, key = parse_s3_uri(s3_uri)
+                                if bucket and key:
+                                    resp = s3_client.get_object(Bucket=bucket, Key=key)
+                                    txt = resp["Body"].read().decode("utf-8")
+                                    visual_context = f"\nTranscript: {txt}"
+                                    logger.info(f"Visual segment match: {doc_id}")
+                            else:
+                                # Full video match - get first segment
+                                data_bucket = os.environ.get("DATA_BUCKET")
+                                if data_bucket:
+                                    seg_key = f"content/{doc_id}/segment-000.txt"
+                                    resp = s3_client.get_object(Bucket=data_bucket, Key=seg_key)
+                                    txt = resp["Body"].read().decode("utf-8")
+                                    visual_context = f"\nTranscript (first segment): {txt}"
+                                    logger.info(f"Visual video match: {doc_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to get visual context for {doc_id}: {e}")
+
+                # Build visual hint with context - use tracking table type for label
+                media_type = "Image" if tracked_type == "image" else "Video"
                 visual_hint = (
                     f"{source_header}"
-                    f"VIDEO VISUAL MATCH: This video segment's visual content matches the query "
-                    f'"{query}". The video frames were analyzed and found to be semantically '
-                    f"relevant. Direct the user to watch this video source to see what they're "
-                    f"looking for."
+                    f"{media_type.upper()} VISUAL MATCH: This {media_type.lower()}'s visual "
+                    f'content matches the query "{query}". The visual content was analyzed '
+                    f"and found to be semantically relevant.{visual_context}"
                 )
                 retrieved_chunks.append(visual_hint)
                 # For sources display, use shorter text
-                source_text = f'Video visual match for: "{query}"'
+                source_text = f'{media_type} visual match for: "{query}"'
+                result_score = result.get("score")
                 citations.append(
                     {
                         "retrievedReferences": [
@@ -1496,6 +1646,7 @@ def lambda_handler(event, context):
                                 "content": {"text": source_text},
                                 "location": location,
                                 "metadata": metadata,
+                                "score": result_score,
                             }
                         ]
                     }
@@ -1504,6 +1655,7 @@ def lambda_handler(event, context):
                 # Text content - enrich with source metadata
                 enriched_text = f"{source_header}{content_text}"
                 retrieved_chunks.append(enriched_text)
+                result_score = result.get("score")
                 citations.append(
                     {
                         "retrievedReferences": [
@@ -1511,22 +1663,27 @@ def lambda_handler(event, context):
                                 "content": {"text": content_text},
                                 "location": location,
                                 "metadata": metadata,
+                                "score": result_score,
                             }
                         ]
                     }
                 )
 
+        # Limit to top 5 sources for both LLM context and UI display
+        MAX_SOURCES = 5
         if retrieved_chunks:
-            retrieved_context = "\n\n---\n\n".join(retrieved_chunks)
+            retrieved_context = "\n\n---\n\n".join(retrieved_chunks[:MAX_SOURCES])
         else:
             retrieved_context = "No relevant information found in the knowledge base."
 
-        # Parse sources from citations
-        sources = extract_sources(citations)
+        # Parse sources from citations (limited to top 5)
+        sources = extract_sources(citations[:MAX_SOURCES])
 
         # STEP 2: Generate response using Converse API with conversation history
         # Build messages with conversation history and retrieved context
-        messages = build_conversation_messages(query, history, retrieved_context)
+        messages = build_conversation_messages(
+            query, history, retrieved_context, images=matched_images
+        )
 
         # System prompt for the assistant (configurable via DynamoDB)
         default_prompt = (
@@ -1535,10 +1692,10 @@ def lambda_handler(event, context):
             "base information. If the provided information doesn't contain the answer, "
             "clearly state that and provide what relevant information you can. "
             "Be concise but thorough.\n\n"
-            "IMPORTANT: When you see 'VIDEO VISUAL MATCH' in the context, this means "
-            "the video's visual frames were analyzed and matched the user's query. "
-            "This is relevant information - tell the user the video contains what "
-            "they're looking for and direct them to watch the linked source."
+            "IMPORTANT: When you see 'VISUAL MATCH' in the context, images or videos from "
+            "the knowledge base matched the query. For image matches, the actual image is "
+            "included - describe what you see. For video matches, a transcript is provided. "
+            "Use this visual information to answer the question."
         )
         system_prompt = get_config_manager().get_parameter(
             "chat_system_prompt", default=default_prompt
