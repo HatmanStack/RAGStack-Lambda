@@ -686,7 +686,7 @@ export function Settings() {
         headerInfo={
           <Popover
             header="About Metadata Extraction"
-            content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
+            content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list. Reindex your KB without having to reprocess."
             triggerType="custom"
             dismissButton={false}
             position="right"
