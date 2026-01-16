@@ -16,6 +16,11 @@ from ragstack_common.config import (
     get_knowledge_base_config,
 )
 from ragstack_common.filter_generator import FilterGenerator
+from ragstack_common.ingestion import (
+    batch_check_document_statuses,
+    check_document_status,
+    start_ingestion_with_retry,
+)
 from ragstack_common.image import (
     ImageStatus,
     is_supported_image,
@@ -32,6 +37,8 @@ from ragstack_common.metadata_normalizer import (
 from ragstack_common.multislice_retriever import MultiSliceRetriever
 
 __all__ = [
+    "batch_check_document_statuses",
+    "check_document_status",
     "ConfigurationManager",
     "FilterGenerator",
     "get_config_manager_or_none",
@@ -50,6 +57,7 @@ __all__ = [
     "publish_image_update",
     "publish_scrape_update",
     "safe_log_event",
+    "start_ingestion_with_retry",
     "validate_image_size",
     "validate_image_type",
 ]

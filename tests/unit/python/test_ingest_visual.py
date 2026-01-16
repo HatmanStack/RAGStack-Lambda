@@ -73,12 +73,13 @@ def s3_put_event():
 class TestIngestVisualContentLambda:
     """Tests for the IngestVisualContentFunction Lambda handler."""
 
+    @patch("ragstack_common.ingestion.start_ingestion_with_retry")
     @patch("boto3.client")
-    def test_handler_starts_ingestion_job_for_video(self, mock_boto_client, s3_put_event):
+    def test_handler_starts_ingestion_job_for_video(
+        self, mock_boto_client, mock_start_ingestion, s3_put_event
+    ):
         """Test that handler starts ingestion job for video file."""
-        mock_bedrock_agent = MagicMock()
-        mock_boto_client.return_value = mock_bedrock_agent
-        mock_bedrock_agent.start_ingestion_job.return_value = {
+        mock_start_ingestion.return_value = {
             "ingestionJob": {
                 "ingestionJobId": "job-123",
                 "status": "STARTING",
@@ -92,9 +93,9 @@ class TestIngestVisualContentLambda:
 
         assert result["status"] == "success"
         assert result["job_id"] == "job-123"
-        mock_bedrock_agent.start_ingestion_job.assert_called_once_with(
-            knowledgeBaseId="test-kb-id",
-            dataSourceId="test-ds-id",
+        mock_start_ingestion.assert_called_once_with(
+            "test-kb-id",
+            "test-ds-id",
         )
 
     @patch("boto3.client")
@@ -126,12 +127,13 @@ class TestIngestVisualContentLambda:
         assert result["status"] == "skipped"
         mock_bedrock_agent.start_ingestion_job.assert_not_called()
 
+    @patch("ragstack_common.ingestion.start_ingestion_with_retry")
     @patch("boto3.client")
-    def test_handler_logs_ingestion_statistics(self, mock_boto_client, s3_put_event):
+    def test_handler_logs_ingestion_statistics(
+        self, mock_boto_client, mock_start_ingestion, s3_put_event
+    ):
         """Test that handler logs ingestion statistics for monitoring."""
-        mock_bedrock_agent = MagicMock()
-        mock_boto_client.return_value = mock_bedrock_agent
-        mock_bedrock_agent.start_ingestion_job.return_value = {
+        mock_start_ingestion.return_value = {
             "ingestionJob": {
                 "ingestionJobId": "job-123",
                 "status": "STARTING",
@@ -154,12 +156,13 @@ class TestIngestVisualContentLambda:
         if "statistics" in result:
             assert "numberOfDocumentsScanned" in result["statistics"]
 
+    @patch("ragstack_common.ingestion.start_ingestion_with_retry")
     @patch("boto3.client")
-    def test_handler_with_polling_disabled(self, mock_boto_client, s3_put_event):
+    def test_handler_with_polling_disabled(
+        self, mock_boto_client, mock_start_ingestion, s3_put_event
+    ):
         """Test that handler works in fire-and-forget mode by default."""
-        mock_bedrock_agent = MagicMock()
-        mock_boto_client.return_value = mock_bedrock_agent
-        mock_bedrock_agent.start_ingestion_job.return_value = {
+        mock_start_ingestion.return_value = {
             "ingestionJob": {
                 "ingestionJobId": "job-123",
                 "status": "STARTING",
@@ -171,16 +174,17 @@ class TestIngestVisualContentLambda:
 
         assert result["status"] == "success"
         # Should not call get_ingestion_job when polling is disabled
-        mock_bedrock_agent.get_ingestion_job.assert_not_called()
+        mock_boto_client.return_value.get_ingestion_job.assert_not_called()
 
+    @patch("ragstack_common.ingestion.start_ingestion_with_retry")
     @patch("boto3.client")
-    def test_handler_validates_video_path_pattern(self, mock_boto_client, s3_put_event):
+    def test_handler_validates_video_path_pattern(
+        self, mock_boto_client, mock_start_ingestion, s3_put_event
+    ):
         """Test that handler processes content/{docId}/video.mp4 pattern."""
         s3_put_event["detail"]["object"]["key"] = "content/abc-123/video.mp4"
 
-        mock_bedrock_agent = MagicMock()
-        mock_boto_client.return_value = mock_bedrock_agent
-        mock_bedrock_agent.start_ingestion_job.return_value = {
+        mock_start_ingestion.return_value = {
             "ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}
         }
 
@@ -245,36 +249,24 @@ class TestIngestVisualContentLambda:
         assert result["status"] == "skipped"
         mock_bedrock_agent.start_ingestion_job.assert_not_called()
 
-    @patch("time.sleep")
+    @patch("ragstack_common.ingestion.start_ingestion_with_retry")
     @patch("boto3.client")
     def test_handler_retries_on_concurrent_api_conflict(
-        self, mock_boto_client, mock_sleep, s3_put_event
+        self, mock_boto_client, mock_start_ingestion, s3_put_event
     ):
-        """Test that handler retries when IngestDocuments is still running."""
-        from botocore.exceptions import ClientError
+        """Test that handler uses shared retry function for API conflicts.
 
-        mock_bedrock_agent = MagicMock()
-        mock_boto_client.return_value = mock_bedrock_agent
-
-        # First call raises conflict, second succeeds
-        conflict_error = ClientError(
-            {
-                "Error": {
-                    "Code": "ValidationException",
-                    "Message": "There is an ongoing KnowledgeBaseDocuments API request",
-                }
-            },
-            "StartIngestionJob",
-        )
-        mock_bedrock_agent.start_ingestion_job.side_effect = [
-            conflict_error,
-            {"ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}},
-        ]
+        Note: The actual retry logic is tested in test_ingestion.py.
+        This test verifies the handler integrates correctly with the shared module.
+        """
+        # Simulate successful response after retry (handled by shared function)
+        mock_start_ingestion.return_value = {
+            "ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}
+        }
 
         module = load_ingest_visual_module()
         result = module.lambda_handler(s3_put_event, None)
 
         assert result["status"] == "success"
         assert result["job_id"] == "job-123"
-        assert mock_bedrock_agent.start_ingestion_job.call_count == 2
-        mock_sleep.assert_called_once()  # Should have slept once between retries
+        mock_start_ingestion.assert_called_once_with("test-kb-id", "test-ds-id")

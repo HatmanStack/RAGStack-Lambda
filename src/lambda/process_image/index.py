@@ -31,7 +31,6 @@ import json
 import logging
 import os
 import re
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -41,6 +40,7 @@ from botocore.exceptions import ClientError
 from ragstack_common.appsync import publish_image_update
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.image import ImageStatus
+from ragstack_common.ingestion import start_ingestion_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 
@@ -707,60 +707,3 @@ def extract_text_from_image(s3_uri: str) -> str:
         return ""
 
 
-def start_ingestion_with_retry(
-    kb_id: str,
-    ds_id: str,
-    max_retries: int = 5,
-    base_delay: float = 5.0,
-) -> dict:
-    """
-    Start ingestion job with retry for concurrent API conflicts.
-
-    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
-    data source. This function retries with exponential backoff when a conflict
-    is detected.
-
-    Args:
-        kb_id: Knowledge base ID
-        ds_id: Data source ID
-        max_retries: Maximum retry attempts (default 5)
-        base_delay: Base delay in seconds (default 5.0)
-
-    Returns:
-        StartIngestionJob response
-
-    Raises:
-        ClientError: If all retries exhausted or non-retryable error
-    """
-    last_error = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            return bedrock_agent.start_ingestion_job(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
-            )
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "")
-            error_msg = e.response.get("Error", {}).get("Message", "")
-
-            # Check if this is a retryable concurrent API conflict
-            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
-                last_error = e
-                if attempt < max_retries:
-                    delay = base_delay * (2**attempt)  # Exponential backoff
-                    logger.warning(
-                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
-                        f"after {delay}s: {error_msg}"
-                    )
-                    time.sleep(delay)
-                    continue
-
-            # Non-retryable error, raise immediately
-            raise
-
-    # All retries exhausted
-    logger.error(f"All {max_retries} retries exhausted for ingestion job")
-    if last_error:
-        raise last_error
-    raise RuntimeError("Ingestion job failed with no error captured")
