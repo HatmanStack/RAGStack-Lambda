@@ -4,9 +4,8 @@ ProcessMedia Lambda
 Handles video and audio file processing through AWS Transcribe.
 Outputs timestamped transcript segments for embedding.
 
-Trigger modes:
-1. EventBridge S3 event (content/{docId}/*.mp4) - Direct upload to content/
-2. Step Functions event (legacy) - From input/ folder via state machine
+Media files are uploaded directly to content/{docId}/ folder and processed
+via EventBridge trigger. No Step Functions involved for media.
 
 Input event (EventBridge S3):
 {
@@ -14,15 +13,6 @@ Input event (EventBridge S3):
         "bucket": {"name": "bucket"},
         "object": {"key": "content/{docId}/video.mp4"}
     }
-}
-
-Input event (Step Functions - legacy):
-{
-    "document_id": "abc123",
-    "input_s3_uri": "s3://input-bucket/uploads/video.mp4",
-    "output_s3_prefix": "s3://output-bucket/content/abc123/",
-    "fileType": "media",
-    "detectedType": "video"
 }
 
 Output:
@@ -57,6 +47,7 @@ logger.setLevel(logging.INFO)
 # Module-level AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
+lambda_client = boto3.client("lambda")
 
 
 def _extract_filename(input_s3_uri: str) -> str:
@@ -321,7 +312,7 @@ def lambda_handler(event, context):
         full_transcript_uri = f"s3://{output_bucket}/{transcript_key}"
         logger.info(f"Wrote full transcript to: {full_transcript_uri}")
 
-        # Video stays in input/ - KB will sync it from there
+        # Video stays in content/ - uploaded directly there, KB syncs from there
         video_uri = input_s3_uri
 
         # Write segment files to S3 (flat structure, no /segments/ subfolder)
@@ -406,8 +397,8 @@ def lambda_handler(event, context):
             for s in segments
         ]
 
-        # Return result for Step Functions
-        return {
+        # Build result
+        result = {
             "document_id": document_id,
             "status": "transcribed",
             "output_s3_uri": full_transcript_uri,
@@ -418,6 +409,18 @@ def lambda_handler(event, context):
             "visual_segments": visual_segments,
             "transcript_segments": transcript_segments,
         }
+
+        # If triggered via EventBridge (not Step Functions), invoke IngestMedia directly
+        ingest_media_arn = os.environ.get("INGEST_MEDIA_FUNCTION_ARN")
+        if eb_event and ingest_media_arn:
+            logger.info(f"EventBridge trigger: invoking IngestMedia for {document_id}")
+            lambda_client.invoke(
+                FunctionName=ingest_media_arn,
+                InvocationType="Event",  # Async invocation
+                Payload=json.dumps(result),
+            )
+
+        return result
 
     except Exception as e:
         logger.error(f"Media processing failed: {e}", exc_info=True)

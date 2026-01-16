@@ -1048,6 +1048,7 @@ Resources:
           VECTOR_BUCKET: !Ref VectorBucket
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          INGEST_MEDIA_FUNCTION_ARN: !GetAtt IngestMediaFunction.Arn
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1071,6 +1072,10 @@ Resources:
                 - transcribe:GetTranscriptionJob
                 - transcribe:DeleteTranscriptionJob
               Resource: '*'
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt IngestMediaFunction.Arn
 
   CombinePagesFunction:
     Type: AWS::Serverless::Function
