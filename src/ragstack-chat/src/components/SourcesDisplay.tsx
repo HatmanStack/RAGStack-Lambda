@@ -52,12 +52,12 @@ const SourceItem: React.FC<{
 }> = ({ source, index, defaultExpanded }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  // Determine source type label
+  // Determine source type label - check isImage first since images may have isMedia set
   const getSourceLabel = (): string => {
-    if (source.isSegment || source.isMedia) {
-      return source.contentType === 'transcript' ? 'Video Transcript' : 'Video Visual Match';
-    }
     if (source.isImage) return 'Image';
+    if (source.isSegment || source.isMedia) {
+      return source.contentType === 'transcript' ? 'Video Transcript' : 'Video';
+    }
     if (source.isScraped) return 'Web Page';
     return source.filename || source.title || `Document ${index + 1}`;
   };
@@ -65,8 +65,8 @@ const SourceItem: React.FC<{
   // Check if we have a valid score to display (> 0 and not null/undefined)
   const hasValidScore = source.score !== undefined && source.score !== null && source.score > 0;
 
-  // Check if we should show timestamp (media sources with timestamp data)
-  const hasTimestamp = (source.isSegment || source.isMedia) && source.timestampStart !== undefined;
+  // Check if we should show timestamp (media sources with timestamp data, not images)
+  const hasTimestamp = !source.isImage && (source.isSegment || source.isMedia) && source.timestampStart !== undefined;
 
   return (
     <div className={styles.sourceItem}>
@@ -84,7 +84,7 @@ const SourceItem: React.FC<{
           }
         }}
       >
-        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
         <span className={styles.sourceLabel}>{getSourceLabel()}</span>
         {hasValidScore && (
           <span className={`${styles.badge} ${getRelevanceClass(source.score!)}`}>
@@ -120,8 +120,20 @@ const SourceItem: React.FC<{
 
           {/* Links Section */}
           <div className={styles.sourceLinks}>
-            {/* Video segment links */}
-            {(source.isSegment || source.isMedia) && (
+            {/* Image link - check first since images may have isMedia set */}
+            {source.isImage && source.documentUrl && (
+              <a
+                href={source.documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.sourceLink}
+              >
+                View Image →
+              </a>
+            )}
+
+            {/* Video/audio segment links - exclude images */}
+            {!source.isImage && (source.isSegment || source.isMedia) && (
               <>
                 {source.segmentUrl && (
                   <a
@@ -144,18 +156,6 @@ const SourceItem: React.FC<{
                   </a>
                 )}
               </>
-            )}
-
-            {/* Image link */}
-            {source.isImage && source.documentUrl && (
-              <a
-                href={source.documentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.sourceLink}
-              >
-                View Image →
-              </a>
             )}
 
             {/* Scraped content link */}
@@ -236,7 +236,7 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
           }
         }}
       >
-        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
         <span className={styles.sourcesIcon}>📄</span>
         <span className={styles.sourcesLabel}>Sources</span>
         <span className={styles.sourceCount}>({sources.length})</span>
