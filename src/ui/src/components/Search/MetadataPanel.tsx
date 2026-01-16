@@ -19,6 +19,7 @@ import type { GqlResponse } from '../../types/graphql';
 export const MetadataPanel: React.FC = () => {
   // Generate GraphQL client (memoized to avoid recreating on re-renders)
   const client = useMemo(() => generateClient(), []);
+  const [expanded, setExpanded] = useState(false);
   const {
     stats,
     totalKeys,
@@ -134,38 +135,19 @@ export const MetadataPanel: React.FC = () => {
         <Popover
           triggerType="custom"
           header="About Metadata Analysis"
-          content={
-            <SpaceBetween size="s">
-              <Box>
-                <strong>What it does:</strong> Samples vectors from your Knowledge Base to discover
-                metadata fields and generate filter examples for improved search.
-              </Box>
-              <Box>
-                <strong>Key Statistics:</strong> Shows which metadata keys exist in your documents,
-                their data types, and how often they appear.
-              </Box>
-              <Box>
-                <strong>Filter Examples:</strong> AI-generated filter patterns based on your actual
-                metadata. When multi-slice retrieval is enabled, these examples are fed to the LLM
-                after each user query to generate targeted metadata filters, creating parallel search
-                vectors that improve recall by searching both filtered and unfiltered results.
-              </Box>
-            </SpaceBetween>
-          }
+          content="Samples vectors from your Knowledge Base to discover metadata fields and generate filter examples for improved search."
           dismissButton={false}
           position="right"
-          size="large"
+          size="medium"
         >
-          <Button
-            variant="inline-icon"
-            iconName="status-info"
-            ariaLabel="About Metadata Analysis"
-          />
+          <span style={{ position: 'relative', top: '-2px' }}>
+            <Button variant="inline-icon" iconName="status-info" ariaLabel="About Metadata Analysis" />
+          </span>
         </Popover>
       }
-      headerDescription="Discover metadata fields and filter patterns in your documents"
-      headerActions={<AnalyzeButton onComplete={handleAnalysisComplete} />}
-      defaultExpanded={false}
+      headerActions={expanded ? <AnalyzeButton onComplete={handleAnalysisComplete} /> : undefined}
+      expanded={expanded}
+      onChange={({ detail }) => setExpanded(detail.expanded)}
     >
       <SpaceBetween size="l">
         {(totalKeys === 0 && totalExamples === 0 && !statsLoading && !examplesLoading) ? (

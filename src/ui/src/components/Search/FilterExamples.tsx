@@ -101,32 +101,11 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerInfo={
           <Popover
             header="How Filter Examples Work"
-            content={
-              <SpaceBetween size="s">
-                <Box>
-                  <strong>Few-shot learning:</strong> Enabled examples are fed to the LLM as
-                  reference patterns when generating metadata filters for your queries.
-                </Box>
-                <Box>
-                  <strong>Control what the LLM sees:</strong> Toggle examples on/off to control
-                  which patterns guide filter generation. Disable irrelevant examples to improve
-                  filter accuracy for your use case.
-                </Box>
-                <Box>
-                  <strong>Re-analysis:</strong> When you run "Analyze Metadata" again, your
-                  enabled filter examples are preserved. New examples will be created to replace
-                  the disabled examples.
-                </Box>
-                <Box>
-                  <strong>Multi-slice retrieval:</strong> When enabled in the Metadata Query
-                  section above, each query generates parallel searches with different metadata
-                  filters based on these examples.
-                </Box>
-              </SpaceBetween>
-            }
+            content="Enabled examples are fed to the LLM as reference patterns when generating metadata filters. Toggle examples on/off to control which patterns guide filter generation. When you run Analyze Metadata again, enabled examples are preserved and new ones replace disabled examples."
+            triggerType="custom"
             dismissButton={false}
             position="right"
-            size="large"
+            size="medium"
           >
             <span style={{ position: 'relative', top: '-2px' }}>
               <Button variant="inline-icon" iconName="status-info" ariaLabel="About Filter Examples" />
