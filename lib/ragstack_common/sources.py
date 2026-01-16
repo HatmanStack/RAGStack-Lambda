@@ -147,14 +147,11 @@ def construct_image_uri_from_content_uri(
     if not is_caption_file:
         return None
 
-    try:
-        if content_text:
-            filename = extract_filename_from_frontmatter(content_text)
-            if filename:
-                base_uri = content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
-                return f"{base_uri}/{filename}"
+    if content_text:
+        filename = extract_filename_from_frontmatter(content_text)
+        if filename:
+            base_uri = content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
+            return f"{base_uri}/{filename}"
 
-        # Fallback: return base path (folder)
-        return content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")
-    except Exception:
-        return None
+    # Fallback: return base path (folder)
+    return content_s3_uri.replace("/caption.txt", "").replace("/content.txt", "")

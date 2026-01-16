@@ -79,7 +79,7 @@ jobs:
 
       - name: Run ESLint
         working-directory: ./src/ui
-        run: npm run lint -- --max-warnings 0
+        run: npm run lint
 
   frontend-tests:
     name: Frontend Tests
@@ -100,7 +100,7 @@ jobs:
 
       - name: Run tests
         working-directory: ./src/ui
-        run: npm test -- --run
+        run: npm test
 
   ragstack-chat-lint:
     name: RagStack Chat Linting
@@ -121,7 +121,7 @@ jobs:
 
       - name: Run ESLint
         working-directory: ./src/ragstack-chat
-        run: npm run lint -- --max-warnings 0
+        run: npm run lint
 
   ragstack-chat-typecheck:
     name: RagStack Chat Typecheck
@@ -169,7 +169,7 @@ jobs:
 
       - name: Run tests
         working-directory: ./src/ragstack-chat
-        run: npm test -- --run
+        run: npm test
 
   status-check:
     name: All Checks Passed

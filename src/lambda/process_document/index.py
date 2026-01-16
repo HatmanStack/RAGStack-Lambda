@@ -35,7 +35,7 @@ from ragstack_common.models import Document, Status
 
 # Import from shared package (installed via pip)
 from ragstack_common.ocr import OcrService
-from ragstack_common.storage import update_item
+from ragstack_common.storage import parse_s3_uri, update_item
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -56,15 +56,6 @@ def _get_config_manager():
     return _config_manager
 
 
-def _parse_s3_uri(s3_uri):
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    path = s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-    return bucket, key
-
-
 def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, tracking_table):
     """
     Process scraped markdown files by copying directly to output bucket.
@@ -75,7 +66,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     logger.info(f"Processing scraped markdown: {input_s3_uri}")
 
     # Parse input S3 URI
-    input_bucket, input_key = _parse_s3_uri(input_s3_uri)
+    input_bucket, input_key = parse_s3_uri(input_s3_uri)
 
     # Read content from input bucket
     response = s3_client.get_object(Bucket=input_bucket, Key=input_key)
@@ -90,7 +81,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     logger.info(f"Extracted metadata - title: {title}, source_url: {source_url}")
 
     # Parse output prefix to get bucket and key prefix
-    output_bucket, output_prefix = _parse_s3_uri(output_s3_prefix)
+    output_bucket, output_prefix = parse_s3_uri(output_s3_prefix)
 
     # Write to output bucket as full_text.txt
     output_key = f"{output_prefix}full_text.txt".replace("//", "/")

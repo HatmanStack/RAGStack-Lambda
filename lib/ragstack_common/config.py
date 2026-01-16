@@ -70,6 +70,54 @@ def get_knowledge_base_config(
     )
 
 
+# Module-level singleton for get_config_manager_or_none()
+_config_manager_singleton: "ConfigurationManager | None" = None
+
+
+def get_config_manager_or_none() -> "ConfigurationManager | None":
+    """
+    Get ConfigurationManager singleton if CONFIGURATION_TABLE_NAME is configured.
+
+    This factory function provides a safe way to get a ConfigurationManager
+    that returns None instead of raising an exception if the configuration
+    table is not set up. Useful for Lambda handlers where configuration
+    is optional.
+
+    Returns:
+        ConfigurationManager instance if configured, None otherwise.
+
+    Example:
+        config = get_config_manager_or_none()
+        if config:
+            model_id = config.get_parameter("chat_model")
+    """
+    global _config_manager_singleton
+    if _config_manager_singleton is not None:
+        return _config_manager_singleton
+
+    table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not table_name:
+        return None
+
+    try:
+        _config_manager_singleton = ConfigurationManager(table_name)
+        return _config_manager_singleton
+    except Exception as e:
+        logger.warning(f"Failed to initialize ConfigurationManager: {e}")
+        return None
+
+
+def reset_config_manager_singleton() -> None:
+    """
+    Reset the ConfigurationManager singleton (for testing only).
+
+    This function clears the cached ConfigurationManager instance,
+    allowing tests to run with fresh configuration.
+    """
+    global _config_manager_singleton
+    _config_manager_singleton = None
+
+
 class ConfigurationManager:
     """
     Manages configuration retrieval and updates for document pipeline.

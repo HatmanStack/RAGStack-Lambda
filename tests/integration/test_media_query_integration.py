@@ -44,7 +44,7 @@ def lambda_client():
 
 
 @pytest.fixture(scope="module")
-def query_function_name(stack_outputs):
+def query_function_name(stack_outputs):  # noqa: ARG001 - fixture dependency ensures stack exists
     """Get the query Lambda function name from stack outputs."""
     # Function name typically follows pattern: {stack-name}-query-{suffix}
     stack_name = os.environ.get("STACK_NAME")
