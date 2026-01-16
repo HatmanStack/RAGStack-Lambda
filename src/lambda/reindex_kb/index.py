@@ -897,20 +897,16 @@ def handle_finalize(event: dict) -> dict:
         error_messages.extend(lambda_errors)
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
 
-    # Establish sync tracking baseline on new KB
-    # This prevents full re-sync when first StartIngestionJob runs (e.g., video upload)
+    # Start ingestion job for visual embeddings (images/videos)
+    # This must run after all API ingestion completes - if API is still processing,
+    # this will fail and the state machine will retry after a delay
     if new_data_source_id:
-        try:
-            logger.info(f"Starting initial sync to establish tracking baseline for {new_kb_id}")
-            bedrock_agent.start_ingestion_job(
-                knowledgeBaseId=new_kb_id,
-                dataSourceId=new_data_source_id,
-            )
-            logger.info("Initial sync started successfully")
-        except Exception as e:
-            # Don't fail reindex if baseline sync fails - it's not critical
-            logger.warning(f"Failed to start initial sync for baseline: {e}")
-            error_messages.append(f"Initial sync baseline failed: {str(e)[:100]}")
+        logger.info(f"Starting ingestion job for visual embeddings on {new_kb_id}")
+        bedrock_agent.start_ingestion_job(
+            knowledgeBaseId=new_kb_id,
+            dataSourceId=new_data_source_id,
+        )
+        logger.info("Ingestion job started successfully")
 
     # Publish deleting old KB status
     publish_reindex_update(
