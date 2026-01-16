@@ -160,10 +160,12 @@ def lookup_original_source(document_id, tracking_table_name):
                 doc_type = "scraped"
             return {
                 "input_s3_uri": item.get("input_s3_uri"),
+                "output_s3_uri": item.get("output_s3_uri"),  # transcript for media
                 "filename": item.get("filename"),
                 "type": doc_type,
                 "media_type": item.get("media_type"),  # video, audio
                 "source_url": item.get("source_url"),  # for scraped content
+                "caption": item.get("caption"),  # for images
             }
     except Exception as e:
         logger.warning(f"Failed to lookup document {document_id}: {e}")
@@ -326,6 +328,7 @@ def lambda_handler(event, context):
                 if generated_filter:
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
 
+                logger.info(f"[SEARCH RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={retrieval_config}")
                 response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
                     retrievalQuery={"text": query},
@@ -333,6 +336,10 @@ def lambda_handler(event, context):
                 )
                 retrieval_results = response.get("retrievalResults", [])
             logger.info(f"Retrieved {len(retrieval_results)} results")
+            for i, r in enumerate(retrieval_results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[SEARCH RESULT] {i}: score={score}, uri={uri}")
         except Exception as e:
             logger.warning(f"Search failed: {e}")
 
@@ -439,9 +446,49 @@ def lambda_handler(event, context):
                     continue
                 seen_sources.add(dedup_key)
 
+            # Get the KB content
+            kb_content = item.get("content", {}).get("text", "")
+
+            # Check if this is a visual embedding match (content_type is "visual")
+            is_visual_match = content_type == "visual"
+
+            # For visual matches, enhance with caption/transcript for context
+            visual_context = None
+            if is_visual_match:
+                if is_image and doc_info.get("caption"):
+                    # For images, use the caption as context
+                    visual_context = doc_info["caption"]
+                    logger.info(f"Visual image match - adding caption context for {document_id}")
+                elif is_media:
+                    # For video/audio, get the relevant segment transcript
+                    try:
+                        if is_segment and "/segment-" in kb_uri:
+                            # This is a specific segment match - fetch that segment's text
+                            bucket, key = parse_s3_uri(kb_uri)
+                            if bucket and key:
+                                response = s3_client.get_object(Bucket=bucket, Key=key)
+                                visual_context = response["Body"].read().decode("utf-8")
+                            logger.info(f"Visual segment match: {document_id}")
+                        else:
+                            # Full video match - get first segment for context
+                            segment_key = f"content/{document_id}/segment-000.txt"
+                            response = s3_client.get_object(Bucket=DATA_BUCKET, Key=segment_key)
+                            visual_context = response["Body"].read().decode("utf-8")
+                            logger.info(f"Visual video match: {document_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch segment for {document_id}: {e}")
+
+            # Build the result content - for visual matches, include context
+            result_content = kb_content
+            if is_visual_match and visual_context:
+                if kb_content:
+                    result_content = f"{visual_context}\n\n[Visual match from: {kb_content}]"
+                else:
+                    result_content = visual_context
+
             results.append(
                 {
-                    "content": item.get("content", {}).get("text", ""),
+                    "content": result_content,
                     "source": source_uri,
                     "score": item.get("score", 0.0),
                     "documentId": document_id,
@@ -457,6 +504,7 @@ def lambda_handler(event, context):
                     "isSegment": is_segment,
                     "segmentUrl": segment_url,
                     "timestampStart": timestamp_start,
+                    "isVisualMatch": is_visual_match,
                 }
             )
 

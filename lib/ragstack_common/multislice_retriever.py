@@ -270,13 +270,19 @@ class MultiSliceRetriever:
                 vector_config["filter"] = filter_expr
 
             # Execute retrieve
+            logger.info(f"[SLICE RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={vector_config}")
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
                 retrievalConfiguration={"vectorSearchConfiguration": vector_config},
             )
 
-            return response.get("retrievalResults", [])
+            results = response.get("retrievalResults", [])
+            for i, r in enumerate(results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[SLICE RESULT] {i}: score={score}, uri={uri}")
+            return results
 
         except Exception as e:
             logger.warning(f"Slice '{slice_config.name}' execution failed: {e}")
@@ -431,6 +437,7 @@ class MultiSliceRetriever:
             if filter_expr:
                 vector_config["filter"] = filter_expr
 
+            logger.info(f"[SINGLE RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={vector_config}")
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
@@ -439,6 +446,10 @@ class MultiSliceRetriever:
 
             results = response.get("retrievalResults", [])
             logger.info(f"Single retrieval returned {len(results)} results")
+            for i, r in enumerate(results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[SINGLE RESULT] {i}: score={score}, uri={uri}")
             return results
 
         except Exception as e:
