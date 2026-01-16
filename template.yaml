@@ -1048,6 +1048,7 @@ Resources:
           VECTOR_BUCKET: !Ref VectorBucket
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          INGEST_MEDIA_FUNCTION_ARN: !GetAtt IngestMediaFunction.Arn
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1071,6 +1072,10 @@ Resources:
                 - transcribe:GetTranscriptionJob
                 - transcribe:DeleteTranscriptionJob
               Resource: '*'
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt IngestMediaFunction.Arn
 
   CombinePagesFunction:
     Type: AWS::Serverless::Function
@@ -1344,45 +1349,24 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
 
-  # MoveVideo Lambda - moves video from input/ to content/{docId}/ for visual embeddings
-  MoveVideoFunction:
+  # IngestVisualContent Lambda - triggers StartIngestionJob for visual embeddings
+  IngestVisualContentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-move-video'
-      CodeUri: src/lambda/move_video/
-      Handler: index.lambda_handler
-      Description: Move video files for visual embedding ingestion
-      Runtime: python3.13
-      Timeout: 300  # 5 minutes for large video copy
-      MemorySize: 256  # S3 operations are not memory intensive
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-          TRACKING_TABLE: !Ref TrackingTable
-          DATA_BUCKET: !Ref DataBucket
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref DataBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TrackingTable
-
-  # IngestVisual Lambda - triggers StartIngestionJob for visual embeddings
-  IngestVisualFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest-visual'
+      FunctionName: !Sub '${AWS::StackName}-ingest-visual-content'
       CodeUri: src/lambda/ingest_visual/
       Handler: index.lambda_handler
       Description: Trigger visual embedding ingestion via StartIngestionJob
       Runtime: python3.13
       Timeout: 600  # 10 minutes if polling enabled
       MemorySize: 128  # Minimal - just API calls
+      Layers:
+        - !Ref RagstackCommonLayer
       Environment:
         Variables:
           LOG_LEVEL: INFO
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          # Fallback env vars (config table takes precedence)
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
       Tags:
@@ -1402,6 +1386,11 @@ Resources:
                 - bedrock:GetIngestionJob
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource:
+                - !GetAtt ConfigurationTable.Arn
 
   ProcessImageFunction:
     Type: AWS::Serverless::Function
@@ -1609,6 +1598,7 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-query'
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-search'
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest'
+                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest-media'
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-reindex-kb'
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-image'
                 - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-metadata-analyzer'
@@ -1748,6 +1738,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          DATA_BUCKET: !Ref DataBucket
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -2428,41 +2419,14 @@ Resources:
   # Visual Embeddings Pipeline - EventBridge Rules
   # =========================================================================
 
-  # Rule 1: Trigger MoveVideoFunction when Step Functions media pipeline completes
-  MediaProcessingCompleteRule:
+  # Rule 1: Trigger ProcessMediaFunction when media files land in content/
+  # This enables direct upload to content/ without Step Functions for media
+  # Uses suffix patterns for common media extensions
+  MediaContentUploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-MediaProcessingComplete'
-      Description: Trigger video move after media processing completes
-      EventPattern:
-        source:
-          - aws.states
-        detail-type:
-          - Step Functions Execution Status Change
-        detail:
-          status:
-            - SUCCEEDED
-          stateMachineArn:
-            - !Ref ProcessingStateMachine
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt MoveVideoFunction.Arn
-          Id: TriggerMoveVideo
-
-  MoveVideoFunctionEventBridgePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref MoveVideoFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt MediaProcessingCompleteRule.Arn
-
-  # Rule 2: Trigger IngestVisualFunction when video.mp4 lands in content/{docId}/
-  VideoUploadRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${AWS::StackName}-VideoUploadTrigger'
-      Description: Trigger visual embedding ingestion on video upload
+      Name: !Sub '${AWS::StackName}-MediaContentTrigger'
+      Description: Trigger media processing when video/audio uploaded to content/
       EventPattern:
         source:
           - aws.s3
@@ -2474,19 +2438,121 @@ Resources:
               - !Ref DataBucket
           object:
             key:
-              - suffix: /video.mp4
+              - prefix: content/
+              - suffix: .mp4
       State: ENABLED
       Targets:
-        - Arn: !GetAtt IngestVisualFunction.Arn
-          Id: TriggerVisualIngestion
+        - Arn: !GetAtt ProcessMediaFunction.Arn
+          Id: TriggerProcessMedia
 
-  IngestVisualFunctionEventBridgePermission:
+  # Rule for .webm video files
+  MediaContentWebmRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-MediaContentWebm'
+      Description: Trigger media processing for webm files
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: content/
+              - suffix: .webm
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessMediaFunction.Arn
+          Id: TriggerProcessMedia
+
+  # Rule for .mp3 audio files
+  MediaContentMp3Rule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-MediaContentMp3'
+      Description: Trigger media processing for mp3 files
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: content/
+              - suffix: .mp3
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessMediaFunction.Arn
+          Id: TriggerProcessMedia
+
+  # Rule for .wav audio files
+  MediaContentWavRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-MediaContentWav'
+      Description: Trigger media processing for wav files
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucket
+          object:
+            key:
+              - prefix: content/
+              - suffix: .wav
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ProcessMediaFunction.Arn
+          Id: TriggerProcessMedia
+
+  ProcessMediaFunctionEventBridgePermissionMp4:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref IngestVisualFunction
+      FunctionName: !Ref ProcessMediaFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt VideoUploadRule.Arn
+      SourceArn: !GetAtt MediaContentUploadRule.Arn
+
+  ProcessMediaFunctionEventBridgePermissionWebm:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MediaContentWebmRule.Arn
+
+  ProcessMediaFunctionEventBridgePermissionMp3:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MediaContentMp3Rule.Arn
+
+  ProcessMediaFunctionEventBridgePermissionWav:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MediaContentWavRule.Arn
+
+  # Note: Visual embedding ingestion for videos is now handled by IngestMedia
+  # which calls StartIngestionJob after transcript ingestion completes.
+  # Images are handled by ProcessImageFunction which calls StartIngestionJob directly.
+  # The VisualContentUploadRule has been removed as part of the simplified media pipeline.
 
   # =========================================================================
   # Bedrock Knowledge Base
@@ -2652,6 +2718,35 @@ Resources:
       ProjectName: !Ref AWS::StackName
       # Version property forces custom resource update to return new attributes
       Version: "1"  # Reset for clean deployment
+
+  # Initial sync to establish KB tracking baseline
+  InitialSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-initial-sync'
+      CodeUri: src/lambda/initial_sync/
+      Handler: index.lambda_handler
+      Description: Triggers initial KB sync on stack creation
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+
+  InitialSync:
+    Type: Custom::InitialSync
+    DependsOn:
+      - KnowledgeBase
+    Properties:
+      ServiceToken: !GetAtt InitialSyncFunction.Arn
+      KnowledgeBaseId: !GetAtt KnowledgeBase.KnowledgeBaseId
+      DataSourceId: !GetAtt KnowledgeBase.DataSourceId
 
   # =========================================================================
   # Cognito Authentication
@@ -2858,6 +2953,8 @@ Resources:
           METADATA_ANALYZER_FUNCTION_ARN: !GetAtt MetadataAnalyzerFunction.Arn
           # Reindex state machine for KB reindex operations
           REINDEX_STATE_MACHINE_ARN: !GetAtt ReindexStateMachine.Arn
+          # Process image function for submitImage
+          PROCESS_IMAGE_FUNCTION_ARN: !GetAtt ProcessImageFunction.Arn
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -2891,6 +2988,11 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt MetadataAnalyzerFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt ProcessImageFunction.Arn
         - Statement:
             - Effect: Allow
               Action:

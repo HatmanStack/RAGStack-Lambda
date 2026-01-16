@@ -2,6 +2,20 @@
 
 Guidance for Claude Code when working with this repository.
 
+## READ FIRST - Problem Solving Discipline
+
+**Never fix a symptom without investigating what else shares that pattern.**
+
+Before declaring any fix complete:
+1. **Trace the full flow** - If a GraphQL field is missing, diff the entire query against the entire schema
+2. **Check related systems** - If CSP blocks one resource type, check all resource types the component uses
+3. **Question existence** - If a file causes problems, ask whether it should exist at all
+4. **Follow the data** - Trace from UI → GraphQL → resolver → Lambda → S3/DynamoDB and back
+
+When you encounter an error, your first action is investigation, not a fix.
+
+---
+
 ## Project Overview
 
 RAGStack-Lambda is a serverless document processing pipeline with AI chat on AWS. Documents are uploaded → OCR processed (Textract/Bedrock) → vectorized → stored in Bedrock Knowledge Base → queryable via chat interface.

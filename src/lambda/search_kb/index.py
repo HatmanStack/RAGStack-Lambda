@@ -25,6 +25,7 @@ Output (KBQueryResult):
 }
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -159,10 +160,12 @@ def lookup_original_source(document_id, tracking_table_name):
                 doc_type = "scraped"
             return {
                 "input_s3_uri": item.get("input_s3_uri"),
+                "output_s3_uri": item.get("output_s3_uri"),  # transcript for media
                 "filename": item.get("filename"),
                 "type": doc_type,
                 "media_type": item.get("media_type"),  # video, audio
                 "source_url": item.get("source_url"),  # for scraped content
+                "caption": item.get("caption"),  # for images
             }
     except Exception as e:
         logger.warning(f"Failed to lookup document {document_id}: {e}")
@@ -325,6 +328,7 @@ def lambda_handler(event, context):
                 if generated_filter:
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
 
+                logger.info(f"[SEARCH RETRIEVE] kb={knowledge_base_id}")
                 response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
                     retrievalQuery={"text": query},
@@ -332,6 +336,10 @@ def lambda_handler(event, context):
                 )
                 retrieval_results = response.get("retrievalResults", [])
             logger.info(f"Retrieved {len(retrieval_results)} results")
+            for i, r in enumerate(retrieval_results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[SEARCH RESULT] {i}: score={score}, uri={uri}")
         except Exception as e:
             logger.warning(f"Search failed: {e}")
 
@@ -353,8 +361,12 @@ def lambda_handler(event, context):
             # Check if this is a segment (transcript segment or video with timestamp)
             # Transcript segments: content/<doc_id>/segment-000.txt
             # Video segments: Nova provides timestamp in metadata for auto-segmented video
+            # Visual embeddings: Use native KB timestamp keys (x-amz-bedrock-kb-chunk-*)
             is_transcript_segment = "/segment-" in kb_uri
-            has_timestamp_metadata = kb_metadata.get("timestamp_start") is not None
+            has_timestamp_metadata = (
+                kb_metadata.get("timestamp_start") is not None
+                or kb_metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis") is not None
+            )
             is_segment = is_transcript_segment or has_timestamp_metadata
 
             # Look up document details from tracking table
@@ -376,7 +388,9 @@ def lambda_handler(event, context):
 
             # Get timestamp from segment metadata (KB returns as list with quoted strings)
             timestamp_start = None
-            if is_segment:
+            timestamp_end = None
+            if is_segment or is_media:
+                # Check custom metadata first (transcripts use seconds)
                 ts_raw = kb_metadata.get("timestamp_start")
                 ts_str = extract_kb_scalar(ts_raw)
                 if ts_str is not None:
@@ -384,6 +398,20 @@ def lambda_handler(event, context):
                         timestamp_start = int(ts_str)
                     except (ValueError, TypeError):
                         logger.warning(f"Invalid timestamp_start value: {ts_raw}")
+                # Fall back to native KB keys for visual embeddings (milliseconds)
+                if timestamp_start is None:
+                    ts_millis = extract_kb_scalar(
+                        kb_metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                    )
+                    if ts_millis is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            timestamp_start = int(ts_millis) // 1000
+                    ts_millis_end = extract_kb_scalar(
+                        kb_metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                    )
+                    if ts_millis_end is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            timestamp_end = int(ts_millis_end) // 1000
 
             # Generate presigned URL if access is enabled
             document_url = None
@@ -393,14 +421,17 @@ def lambda_handler(event, context):
                 # For scraped content, use source_url (original web URL)
                 if is_scraped and doc_info.get("source_url"):
                     document_url = doc_info["source_url"]
-                elif is_segment and input_s3_uri:
-                    # For segments, create video URL with timestamp parameter
+                elif (is_segment or is_media) and input_s3_uri:
+                    # For segments/media, create video URL with timestamp parameter
                     bucket, key = parse_s3_uri(input_s3_uri)
                     if bucket and key:
                         base_url = generate_presigned_url(bucket, key)
                         if base_url and timestamp_start is not None:
                             # Append timestamp for deep linking (works with HTML5 video)
-                            segment_url = f"{base_url}#t={timestamp_start}"
+                            if timestamp_end is not None:
+                                segment_url = f"{base_url}#t={timestamp_start},{timestamp_end}"
+                            else:
+                                segment_url = f"{base_url}#t={timestamp_start}"
                         document_url = base_url  # Full video without timestamp
                 elif input_s3_uri:
                     bucket, key = parse_s3_uri(input_s3_uri)
@@ -415,9 +446,49 @@ def lambda_handler(event, context):
                     continue
                 seen_sources.add(dedup_key)
 
+            # Get the KB content
+            kb_content = item.get("content", {}).get("text", "")
+
+            # Check if this is a visual embedding match (content_type is "visual")
+            is_visual_match = content_type == "visual"
+
+            # For visual matches, enhance with caption/transcript for context
+            visual_context = None
+            if is_visual_match:
+                if is_image and doc_info.get("caption"):
+                    # For images, use the caption as context
+                    visual_context = doc_info["caption"]
+                    logger.info(f"Visual image match - adding caption context for {document_id}")
+                elif is_media:
+                    # For video/audio, get the relevant segment transcript
+                    try:
+                        if is_segment and "/segment-" in kb_uri:
+                            # This is a specific segment match - fetch that segment's text
+                            bucket, key = parse_s3_uri(kb_uri)
+                            if bucket and key:
+                                response = s3_client.get_object(Bucket=bucket, Key=key)
+                                visual_context = response["Body"].read().decode("utf-8")
+                            logger.info(f"Visual segment match: {document_id}")
+                        else:
+                            # Full video match - get first segment for context
+                            segment_key = f"content/{document_id}/segment-000.txt"
+                            response = s3_client.get_object(Bucket=DATA_BUCKET, Key=segment_key)
+                            visual_context = response["Body"].read().decode("utf-8")
+                            logger.info(f"Visual video match: {document_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch segment for {document_id}: {e}")
+
+            # Build the result content - for visual matches, include context
+            result_content = kb_content
+            if is_visual_match and visual_context:
+                if kb_content:
+                    result_content = f"{visual_context}\n\n[Visual match from: {kb_content}]"
+                else:
+                    result_content = visual_context
+
             results.append(
                 {
-                    "content": item.get("content", {}).get("text", ""),
+                    "content": result_content,
                     "source": source_uri,
                     "score": item.get("score", 0.0),
                     "documentId": document_id,
@@ -433,6 +504,7 @@ def lambda_handler(event, context):
                     "isSegment": is_segment,
                     "segmentUrl": segment_url,
                     "timestampStart": timestamp_start,
+                    "isVisualMatch": is_visual_match,
                 }
             )
 

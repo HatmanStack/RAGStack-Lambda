@@ -299,7 +299,7 @@ class TestGenerateCaption:
 
         event = {
             "info": {"fieldName": "generateCaption"},
-            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/content/123/image.png"},
         }
 
         result = module.lambda_handler(event, None)
@@ -309,7 +309,7 @@ class TestGenerateCaption:
 
         # Verify S3 was called correctly
         mock_boto3["s3"].get_object.assert_called_once_with(
-            Bucket="test-data-bucket", Key="images/123/image.png"
+            Bucket="test-data-bucket", Key="content/123/image.png"
         )
 
         # Verify Bedrock Converse was called
@@ -355,7 +355,7 @@ class TestGenerateCaption:
 
         event = {
             "info": {"fieldName": "generateCaption"},
-            "arguments": {"imageS3Uri": "s3://other-bucket/images/123/image.png"},
+            "arguments": {"imageS3Uri": "s3://other-bucket/content/123/image.png"},
         }
 
         result = module.lambda_handler(event, None)
@@ -378,7 +378,7 @@ class TestGenerateCaption:
 
         event = {
             "info": {"fieldName": "generateCaption"},
-            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/content/123/image.png"},
         }
 
         result = module.lambda_handler(event, None)
@@ -412,7 +412,7 @@ class TestGenerateCaption:
 
         event = {
             "info": {"fieldName": "generateCaption"},
-            "arguments": {"imageS3Uri": "s3://test-data-bucket/images/123/image.png"},
+            "arguments": {"imageS3Uri": "s3://test-data-bucket/content/123/image.png"},
         }
 
         result = module.lambda_handler(event, None)
@@ -440,7 +440,7 @@ class TestSubmitImage:
             "Item": {
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
-                "input_s3_uri": "s3://test-data-bucket/images/12345678-1234-1234-1234-123456789012/test.png",
+                "input_s3_uri": "s3://test-data-bucket/content/12345678-1234-1234-1234-123456789012/test.png",
                 "status": "PENDING",
                 "type": "image",
                 "created_at": "2025-01-01T00:00:00Z",
@@ -470,12 +470,10 @@ class TestSubmitImage:
         assert result["imageId"] == "12345678-1234-1234-1234-123456789012"
         assert result["status"] == "PENDING"  # From mock return
 
-        # Verify S3 metadata was written
-        mock_boto3["s3"].put_object.assert_called_once()
-        put_call = mock_boto3["s3"].put_object.call_args
-        assert put_call.kwargs["Key"].endswith("metadata.json")
+        # Note: metadata.json no longer written to S3 - all data stored in DynamoDB
+        # This prevents KB from incorrectly indexing the metadata file
 
-        # Verify DynamoDB was updated
+        # Verify DynamoDB was updated with caption data
         mock_boto3["table"].update_item.assert_called_once()
 
     def test_submit_image_user_caption_only(self, mock_env, mock_boto3):
@@ -488,7 +486,7 @@ class TestSubmitImage:
             "Item": {
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
-                "input_s3_uri": "s3://test-data-bucket/images/12345678-1234-1234-1234-123456789012/test.png",
+                "input_s3_uri": "s3://test-data-bucket/content/12345678-1234-1234-1234-123456789012/test.png",
                 "status": "PENDING",
                 "type": "image",
             }
@@ -570,7 +568,7 @@ class TestSubmitImage:
             "Item": {
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
-                "input_s3_uri": "s3://test-data-bucket/images/123/test.png",
+                "input_s3_uri": "s3://test-data-bucket/content/123/test.png",
                 "status": "PROCESSING",  # Already processing
                 "type": "image",
             }
@@ -598,7 +596,7 @@ class TestSubmitImage:
             "Item": {
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
-                "input_s3_uri": "s3://test-data-bucket/images/123/test.png",
+                "input_s3_uri": "s3://test-data-bucket/content/123/test.png",
                 "status": "PENDING",
                 "type": "image",
             }
@@ -676,7 +674,7 @@ class TestGetImage:
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
                 "caption": "Test caption",
-                "input_s3_uri": "s3://test-bucket/images/123/test.png",
+                "input_s3_uri": "s3://test-bucket/content/123/test.png",
                 "status": "INDEXED",
                 "type": "image",
             }
@@ -853,7 +851,7 @@ class TestDeleteImage:
             "Item": {
                 "document_id": "12345678-1234-1234-1234-123456789012",
                 "filename": "test.png",
-                "input_s3_uri": "s3://test-bucket/images/123/test.png",
+                "input_s3_uri": "s3://test-bucket/content/123/test.png",
                 "type": "image",
             }
         }

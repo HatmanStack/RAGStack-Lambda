@@ -65,6 +65,66 @@ bedrock_agent = boto3.client("bedrock-agent")
 dynamodb = boto3.resource("dynamodb")
 s3_client = boto3.client("s3")
 
+
+def start_ingestion_with_retry(
+    kb_id: str,
+    ds_id: str,
+    max_retries: int = 5,
+    base_delay: float = 5.0,
+) -> dict:
+    """
+    Start ingestion job with retry for concurrent API conflicts.
+
+    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
+    data source. This function retries with exponential backoff when a conflict
+    is detected.
+
+    Args:
+        kb_id: Knowledge base ID
+        ds_id: Data source ID
+        max_retries: Maximum retry attempts (default 5)
+        base_delay: Base delay in seconds (default 5.0)
+
+    Returns:
+        StartIngestionJob response
+
+    Raises:
+        ClientError: If all retries exhausted or non-retryable error
+    """
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return bedrock_agent.start_ingestion_job(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", "")
+
+            # Check if this is a retryable concurrent API conflict
+            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
+                last_error = e
+                if attempt < max_retries:
+                    delay = base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Concurrent API conflict, retry {attempt + 1}/{max_retries} "
+                        f"after {delay}s: {error_msg}"
+                    )
+                    time.sleep(delay)
+                    continue
+
+            # Non-retryable error, raise immediately
+            raise
+
+    # All retries exhausted
+    logger.error(f"All {max_retries} retries exhausted for ingestion job")
+    if last_error:
+        raise last_error
+    raise RuntimeError("Ingestion job failed with no error captured")
+
+
 # Lazy-initialized singletons
 _metadata_extractor = None
 _config_manager = None
@@ -739,12 +799,25 @@ def lambda_handler(event, context):
             total_pages=total_segments,
         )
 
+        # Start KB ingestion job for visual embeddings (video file)
+        # This syncs the video file to KB for multimodal visual search
+        try:
+            ingestion_response = start_ingestion_with_retry(kb_id, ds_id)
+            job_info = ingestion_response.get("ingestionJob", {})
+            ingestion_job_id = job_info.get("ingestionJobId")
+            logger.info(f"Started ingestion job {ingestion_job_id} for media {document_id}")
+        except ClientError as e:
+            logger.warning(f"Failed to start visual ingestion for {document_id}: {e}")
+            # Don't fail - text ingestion succeeded, visual can be retried
+            ingestion_job_id = None
+
         return {
             "document_id": document_id,
             "status": "indexed",
             "text_indexed": text_indexed,
             "segments_indexed": segments_indexed,
             "metadata_keys": list(extracted_metadata.keys()),
+            "visual_ingestion_job_id": ingestion_job_id,
         }
 
     except ClientError as e:

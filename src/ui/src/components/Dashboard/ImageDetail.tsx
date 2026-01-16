@@ -29,10 +29,15 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDeta
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const loadImage = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPreviewContent(null);
+    setPreviewError(null);
 
     try {
       const img = await getImage(imageId) as ImageDetailData;
@@ -43,6 +48,26 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDeta
       setLoading(false);
     }
   }, [getImage, imageId]);
+
+  const loadPreview = useCallback(async () => {
+    if (!image?.captionUrl) return;
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+
+    try {
+      const response = await fetch(image.captionUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch preview: ${response.status}`);
+      }
+      const text = await response.text();
+      setPreviewContent(text.length > 50000 ? text.slice(0, 50000) + '\n\n... (truncated)' : text);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [image?.captionUrl]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
@@ -217,6 +242,108 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDeta
               {image.s3Uri}
             </div>
           </Container>
+
+          {/* Extracted Text */}
+          {(image.extractedText || image.captionUrl) && (
+            <Container
+              header={
+                <Header
+                  variant="h2"
+                  actions={
+                    image.captionUrl && !previewContent && !previewLoading && (
+                      <Button onClick={loadPreview} loading={previewLoading}>
+                        Load Full Caption
+                      </Button>
+                    )
+                  }
+                >
+                  Extracted Text
+                </Header>
+              }
+            >
+              {image.extractedText && (
+                <Box>
+                  <pre style={{
+                    fontSize: '12px',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    maxHeight: '300px',
+                    backgroundColor: '#f8f9fa',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    {image.extractedText}
+                  </pre>
+                </Box>
+              )}
+              {previewLoading && (
+                <Box textAlign="center" padding="l">
+                  <Spinner /> Loading full caption...
+                </Box>
+              )}
+              {previewError && (
+                <Alert type="error">{previewError}</Alert>
+              )}
+              {previewContent && (
+                <Box padding={{ top: 'm' }}>
+                  <Box variant="awsui-key-label">Full Caption</Box>
+                  <pre style={{
+                    fontSize: '12px',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    maxHeight: '300px',
+                    backgroundColor: '#f8f9fa',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    {previewContent}
+                  </pre>
+                </Box>
+              )}
+            </Container>
+          )}
+
+          {/* Extracted Metadata */}
+          {image.extractedMetadata && (() => {
+            const formatLabel = (key: string) =>
+              key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+            const formatValue = (value: unknown): string => {
+              if (typeof value === 'string') return value;
+              if (Array.isArray(value)) return value.join(', ');
+              return String(value);
+            };
+
+            try {
+              const parsed = typeof image.extractedMetadata === 'string'
+                ? JSON.parse(image.extractedMetadata)
+                : image.extractedMetadata;
+
+              if (!parsed || typeof parsed !== 'object') return null;
+
+              const fields = Object.entries(parsed).sort(([a], [b]) => a.localeCompare(b));
+              if (fields.length === 0) return null;
+
+              return (
+                <Container header={<Header variant="h2">Extracted Metadata</Header>}>
+                  <ColumnLayout columns={2} variant="text-grid">
+                    {fields.map(([key, value]) => (
+                      <div key={key}>
+                        <Box variant="awsui-key-label">{formatLabel(key)}</Box>
+                        <div>{formatValue(value)}</div>
+                      </div>
+                    ))}
+                  </ColumnLayout>
+                </Container>
+              );
+            } catch {
+              return null;
+            }
+          })()}
 
           {/* Error Message */}
           {image.errorMessage && (

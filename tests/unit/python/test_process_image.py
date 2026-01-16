@@ -22,11 +22,11 @@ def _load_process_image_module():
 @pytest.fixture
 def mock_env(monkeypatch):
     """Set up environment variables for tests."""
-    monkeypatch.setenv("KNOWLEDGE_BASE_ID", "test-kb-id")
-    monkeypatch.setenv("DATA_SOURCE_ID", "test-ds-id")
     monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
     monkeypatch.setenv("GRAPHQL_ENDPOINT", "https://test.appsync.amazonaws.com/graphql")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID", "test-kb-id")
+    monkeypatch.setenv("DATA_SOURCE_ID", "test-ds-id")
 
 
 @pytest.fixture
@@ -36,12 +36,6 @@ def mock_boto3():
         patch("boto3.client") as mock_client,
         patch("boto3.resource") as mock_resource,
     ):
-        # Mock Bedrock Agent client
-        mock_bedrock_agent = MagicMock()
-        mock_bedrock_agent.ingest_knowledge_base_documents.return_value = {
-            "documentDetails": [{"status": "STARTING"}]
-        }
-
         # Mock S3 client
         mock_s3 = MagicMock()
         mock_s3.head_object.return_value = {
@@ -63,6 +57,15 @@ def mock_boto3():
             )
         }
 
+        # Mock Bedrock Runtime client (for AI caption generation)
+        mock_bedrock_runtime = MagicMock()
+
+        # Mock Bedrock Agent client (for StartIngestionJob)
+        mock_bedrock_agent = MagicMock()
+        mock_bedrock_agent.start_ingestion_job.return_value = {
+            "ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}
+        }
+
         # Mock DynamoDB resource
         mock_table = MagicMock()
         mock_table.get_item.return_value = {
@@ -79,6 +82,8 @@ def mock_boto3():
         mock_dynamodb.Table.return_value = mock_table
 
         def client_factory(service, **kwargs):
+            if service == "bedrock-runtime":
+                return mock_bedrock_runtime
             if service == "bedrock-agent":
                 return mock_bedrock_agent
             if service == "s3":
@@ -89,6 +94,7 @@ def mock_boto3():
         mock_resource.return_value = mock_dynamodb
 
         yield {
+            "bedrock_runtime": mock_bedrock_runtime,
             "bedrock_agent": mock_bedrock_agent,
             "s3": mock_s3,
             "dynamodb": mock_dynamodb,
@@ -100,13 +106,13 @@ class TestProcessImage:
     """Tests for process_image Lambda handler."""
 
     def test_process_image_success(self, mock_env, mock_boto3):
-        """Test successful image processing."""
+        """Test successful image processing creates caption and metadata files."""
         module = _load_process_image_module()
 
         # Reinitialize module clients
-        module.bedrock_agent = mock_boto3["bedrock_agent"]
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
+        module.bedrock_agent = mock_boto3["bedrock_agent"]
 
         event = {
             "image_id": "content/test-image-id/test.png",
@@ -119,13 +125,14 @@ class TestProcessImage:
 
         assert result["image_id"] == "test-image-id"
         assert result["status"] == "INDEXED"
-        assert result["knowledge_base_id"] == "test-kb-id"
 
-        # Verify S3 text file was created
-        mock_boto3["s3"].put_object.assert_called()
+        # Verify S3 files were created (caption.txt, metadata files)
+        put_calls = mock_boto3["s3"].put_object.call_args_list
+        assert len(put_calls) >= 2  # At least caption.txt and image metadata
 
-        # Verify Bedrock ingestion was called
-        mock_boto3["bedrock_agent"].ingest_knowledge_base_documents.assert_called_once()
+        # Check that image metadata file was created for visual embedding trigger
+        keys_written = [call.kwargs.get("Key", "") for call in put_calls]
+        assert any("test.png.metadata.json" in key for key in keys_written)
 
         # Verify DynamoDB was updated
         mock_boto3["table"].update_item.assert_called()
@@ -133,7 +140,6 @@ class TestProcessImage:
     def test_process_image_not_found_in_table(self, mock_env, mock_boto3):
         """Test error when image not in tracking table."""
         module = _load_process_image_module()
-        module.bedrock_agent = mock_boto3["bedrock_agent"]
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
 
@@ -151,7 +157,6 @@ class TestProcessImage:
     def test_process_image_not_image_type(self, mock_env, mock_boto3):
         """Test error when record is not an image type."""
         module = _load_process_image_module()
-        module.bedrock_agent = mock_boto3["bedrock_agent"]
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
 
@@ -184,7 +189,6 @@ class TestProcessImage:
     def test_process_image_missing_s3_uri_in_tracking(self, mock_env, mock_boto3):
         """Test error when tracking record has no input_s3_uri."""
         module = _load_process_image_module()
-        module.bedrock_agent = mock_boto3["bedrock_agent"]
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
 
@@ -209,7 +213,6 @@ class TestProcessImage:
         from botocore.exceptions import ClientError
 
         module = _load_process_image_module()
-        module.bedrock_agent = mock_boto3["bedrock_agent"]
         module.s3 = mock_boto3["s3"]
         module.dynamodb = mock_boto3["dynamodb"]
 
@@ -226,11 +229,9 @@ class TestProcessImage:
         with pytest.raises(ValueError, match="not found in S3"):
             module.lambda_handler(event, None)
 
-    def test_process_image_missing_env_vars(self, monkeypatch):
-        """Test error when environment variables are missing."""
-        monkeypatch.delenv("KNOWLEDGE_BASE_ID", raising=False)
-        monkeypatch.delenv("DATA_SOURCE_ID", raising=False)
-        monkeypatch.setenv("TRACKING_TABLE", "test-table")
+    def test_process_image_missing_tracking_table_env(self, monkeypatch):
+        """Test error when TRACKING_TABLE env var is missing."""
+        monkeypatch.delenv("TRACKING_TABLE", raising=False)
 
         module = _load_process_image_module()
 
@@ -239,7 +240,7 @@ class TestProcessImage:
             "input_s3_uri": "s3://test-bucket/content/test-image-id/test.png",
         }
 
-        with pytest.raises(ValueError, match="Knowledge Base configuration not found"):
+        with pytest.raises(ValueError, match="TRACKING_TABLE"):
             module.lambda_handler(event, None)
 
 

@@ -4,13 +4,15 @@ ProcessMedia Lambda
 Handles video and audio file processing through AWS Transcribe.
 Outputs timestamped transcript segments for embedding.
 
-Input event:
+Media files are uploaded directly to content/{docId}/ folder and processed
+via EventBridge trigger. No Step Functions involved for media.
+
+Input event (EventBridge S3):
 {
-    "document_id": "abc123",
-    "input_s3_uri": "s3://input-bucket/uploads/video.mp4",
-    "output_s3_prefix": "s3://output-bucket/content/abc123/",
-    "fileType": "media",
-    "detectedType": "video"
+    "detail": {
+        "bucket": {"name": "bucket"},
+        "object": {"key": "content/{docId}/video.mp4"}
+    }
 }
 
 Output:
@@ -45,12 +47,79 @@ logger.setLevel(logging.INFO)
 # Module-level AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
+lambda_client = boto3.client("lambda")
 
 
 def _extract_filename(input_s3_uri: str) -> str:
     """Extract filename from S3 URI."""
     parts = input_s3_uri.split("/")
     return parts[-1] if parts else "media"
+
+
+# Media file extensions
+MEDIA_EXTENSIONS = {".mp4", ".webm", ".mp3", ".wav", ".m4a", ".ogg"}
+VIDEO_EXTENSIONS = {".mp4", ".webm"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
+
+
+def _parse_eventbridge_event(event: dict) -> dict | None:
+    """
+    Parse EventBridge S3 event to extract media processing parameters.
+
+    Args:
+        event: EventBridge S3 event
+
+    Returns:
+        Dict with document_id, input_s3_uri, output_s3_prefix, detectedType
+        or None if not an EventBridge event
+    """
+    detail = event.get("detail", {})
+    if not detail:
+        return None
+
+    bucket_info = detail.get("bucket", {})
+    object_info = detail.get("object", {})
+
+    bucket = bucket_info.get("name")
+    key = object_info.get("key")
+
+    if not bucket or not key:
+        return None
+
+    # Expected key format: content/{docId}/{filename}
+    # e.g., content/abc123/video.mp4
+    if not key.startswith("content/"):
+        logger.info(f"Skipping non-content path: {key}")
+        return None
+
+    # Extract document_id from path
+    parts = key.split("/")
+    if len(parts) < 3:
+        logger.info(f"Invalid content path format: {key}")
+        return None
+
+    document_id = parts[1]
+    filename = parts[-1]
+
+    # Check if it's a media file
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in MEDIA_EXTENSIONS:
+        logger.info(f"Skipping non-media file: {key}")
+        return None
+
+    # Determine media type
+    detected_type = "video" if ext in VIDEO_EXTENSIONS else "audio"
+
+    input_s3_uri = f"s3://{bucket}/{key}"
+    output_s3_prefix = f"s3://{bucket}/content/{document_id}/"
+
+    return {
+        "document_id": document_id,
+        "input_s3_uri": input_s3_uri,
+        "output_s3_prefix": output_s3_prefix,
+        "detectedType": detected_type,
+        "filename": filename,
+    }
 
 
 def _get_media_duration_estimate(content_length: int, media_type: str) -> float:
@@ -77,6 +146,8 @@ def lambda_handler(event, context):
 
     Orchestrates transcription through AWS Transcribe and outputs
     timestamped transcript segments.
+
+    Handles both EventBridge S3 events and Step Functions events.
     """
     tracking_table = os.environ.get("TRACKING_TABLE")
     if not tracking_table:
@@ -85,25 +156,34 @@ def lambda_handler(event, context):
     vector_bucket = os.environ.get("VECTOR_BUCKET")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
-    logger.info(f"ProcessMedia: Received event: {event}")
+    logger.info(f"ProcessMedia: Received event: {json.dumps(event)[:500]}")
 
     document_id = None
     filename = None
 
     try:
-        # Extract event data
-        document_id = event["document_id"]
-        input_s3_uri = event["input_s3_uri"]
-        output_s3_prefix = event["output_s3_prefix"]
-        detected_type = event.get("detectedType", "video")
+        # Try parsing as EventBridge S3 event first (direct upload to content/)
+        eb_event = _parse_eventbridge_event(event)
+        if eb_event:
+            document_id = eb_event["document_id"]
+            input_s3_uri = eb_event["input_s3_uri"]
+            output_s3_prefix = eb_event["output_s3_prefix"]
+            detected_type = eb_event["detectedType"]
+            logger.info(f"EventBridge trigger: {document_id}, type={detected_type}")
+        else:
+            # Legacy Step Functions event format
+            document_id = event["document_id"]
+            input_s3_uri = event["input_s3_uri"]
+            output_s3_prefix = event["output_s3_prefix"]
+            detected_type = event.get("detectedType", "video")
 
-        # Fix output_s3_prefix - EventBridge template produces wrong format
-        # Received: s3://bucket/content/input/{doc_id}/{filename}/
-        # Expected: s3://bucket/content/{doc_id}/
-        if "/content/input/" in output_s3_prefix:
-            bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
-            output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
-            logger.info(f"Fixed output_s3_prefix to: {output_s3_prefix}")
+            # Fix output_s3_prefix - EventBridge template produces wrong format
+            # Received: s3://bucket/content/input/{doc_id}/{filename}/
+            # Expected: s3://bucket/content/{doc_id}/
+            if "/content/input/" in output_s3_prefix:
+                bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
+                output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
+                logger.info(f"Fixed output_s3_prefix to: {output_s3_prefix}")
 
         filename = _extract_filename(input_s3_uri)
         logger.info(f"Processing media file: {filename} (type: {detected_type})")
@@ -232,7 +312,7 @@ def lambda_handler(event, context):
         full_transcript_uri = f"s3://{output_bucket}/{transcript_key}"
         logger.info(f"Wrote full transcript to: {full_transcript_uri}")
 
-        # Video stays in input/ - KB will sync it from there
+        # Video stays in content/ - uploaded directly there, KB syncs from there
         video_uri = input_s3_uri
 
         # Write segment files to S3 (flat structure, no /segments/ subfolder)
@@ -317,8 +397,8 @@ def lambda_handler(event, context):
             for s in segments
         ]
 
-        # Return result for Step Functions
-        return {
+        # Build result
+        result = {
             "document_id": document_id,
             "status": "transcribed",
             "output_s3_uri": full_transcript_uri,
@@ -329,6 +409,22 @@ def lambda_handler(event, context):
             "visual_segments": visual_segments,
             "transcript_segments": transcript_segments,
         }
+
+        # If triggered via EventBridge (not Step Functions), invoke IngestMedia directly
+        ingest_media_arn = os.environ.get("INGEST_MEDIA_FUNCTION_ARN")
+        if eb_event and ingest_media_arn:
+            logger.info(f"EventBridge trigger: invoking IngestMedia for {document_id}")
+            try:
+                lambda_client.invoke(
+                    FunctionName=ingest_media_arn,
+                    InvocationType="Event",  # Async invocation
+                    Payload=json.dumps(result),
+                )
+            except Exception as invoke_err:
+                # Log but don't fail - transcription succeeded, ingest can be retried
+                logger.error(f"Failed to invoke IngestMedia for {document_id}: {invoke_err}")
+
+        return result
 
     except Exception as e:
         logger.error(f"Media processing failed: {e}", exc_info=True)

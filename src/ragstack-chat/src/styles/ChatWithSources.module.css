@@ -367,6 +367,14 @@
   color: var(--chat-color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  padding: var(--chat-spacing-xs) 0;
+  user-select: none;
+  transition: color var(--chat-transition-fast);
+}
+
+.sourcesHeader:hover {
+  color: var(--chat-color-source-accent);
 }
 
 .sourcesIcon {
@@ -483,6 +491,111 @@
 }
 
 /* ============================================================================
+   EXPANDABLE SOURCE ITEMS (matches search UI pattern)
+   ============================================================================ */
+
+.sourcesHeaderStatic {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  margin-bottom: var(--chat-spacing-md);
+  font-size: var(--chat-font-size-xs);
+  font-weight: 600;
+  color: var(--chat-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sourceHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--chat-spacing-sm);
+  cursor: pointer;
+  padding: var(--chat-spacing-xs) 0;
+  user-select: none;
+}
+
+.sourceHeader:hover {
+  color: var(--chat-color-source-accent);
+}
+
+.expandIcon {
+  font-size: 10px;
+  color: var(--chat-color-text-secondary);
+  transition: transform var(--chat-transition-fast);
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.expandIconOpen {
+  transform: rotate(90deg);
+}
+
+.sourceLabel {
+  font-weight: 600;
+  font-size: var(--chat-font-size-sm);
+  color: var(--chat-color-text);
+}
+
+.sourceContent {
+  margin-top: var(--chat-spacing-sm);
+  padding-left: var(--chat-spacing-lg);
+}
+
+.sourceInfo {
+  display: flex;
+  gap: var(--chat-spacing-sm);
+  align-items: baseline;
+  margin-top: var(--chat-spacing-sm);
+  font-size: var(--chat-font-size-xs);
+}
+
+.sourceInfoLabel {
+  font-weight: 600;
+  color: var(--chat-color-text-secondary);
+}
+
+.sourceInfoText {
+  color: var(--chat-color-text-secondary);
+  word-break: break-all;
+}
+
+.sourceLinks {
+  display: flex;
+  gap: var(--chat-spacing-md);
+  margin-top: var(--chat-spacing-sm);
+  flex-wrap: wrap;
+}
+
+.sourceLink {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-source-accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color var(--chat-transition-fast);
+}
+
+.sourceLink:hover {
+  text-decoration: underline;
+}
+
+.sourceLinkDisabled {
+  font-size: var(--chat-font-size-xs);
+  color: var(--chat-color-text-secondary);
+  font-style: italic;
+}
+
+/* Badge colors */
+.badgeGreen {
+  background-color: #e6f4ea;
+  color: #1e8e3e;
+}
+
+/* ============================================================================
    FOOTER
    ============================================================================ */
 
@@ -570,22 +683,8 @@
 }
 
 /* ============================================================================
-   DARK MODE SUPPORT (Prefers color scheme)
+   LIGHT MODE ONLY - Dark mode disabled for consistency
    ============================================================================ */
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --chat-color-bg: #1a1a1a;
-    --chat-color-bg-secondary: #2a2a2a;
-    --chat-color-text: #ffffff;
-    --chat-color-text-secondary: #999999;
-    --chat-color-border: #333333;
-    --chat-color-border-light: #2a2a2a;
-    --chat-color-assistant-bg: #2a2a2a;
-    --chat-color-assistant-text: #ffffff;
-    --chat-color-source-bg: #252525;
-  }
-}
 
 /* ============================================================================
    MOBILE OPTIMIZATION - iOS Safe Area Support
@@ -667,6 +766,18 @@
   flex-wrap: wrap;
 }
 
+.mediaLinks {
+  display: flex;
+  gap: var(--chat-spacing-md);
+  flex-wrap: wrap;
+  margin-top: var(--chat-spacing-xs);
+  margin-bottom: var(--chat-spacing-sm);
+}
+
+.mediaLinks .documentLink {
+  margin-top: 0;
+}
+
 .mediaIcon {
   font-size: var(--chat-font-size-lg);
   line-height: 1;
@@ -743,27 +854,3 @@
   font-size: var(--chat-font-size-xs);
 }
 
-/* Dark mode media styles */
-@media (prefers-color-scheme: dark) {
-  .timestampButton {
-    background-color: #0972d3;
-  }
-
-  .timestampButton:hover {
-    background-color: #1086ed;
-  }
-
-  .badgeBlue {
-    background-color: rgba(9, 114, 211, 0.3);
-    color: #6bb3f5;
-  }
-
-  .badgeGray {
-    background-color: rgba(153, 153, 153, 0.3);
-    color: #cccccc;
-  }
-
-  .mediaPlayerContainer {
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-}

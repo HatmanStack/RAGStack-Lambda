@@ -429,9 +429,9 @@ def update_key_library_counts(
     """
     Update the key library with analyzed field counts.
 
-    Sets status based on extraction settings:
-    - "active" if extraction mode is auto, or key is in manual selection
-    - "inactive" if extraction mode is manual and key is not selected
+    Keys with non-zero counts are always marked active. The extraction mode
+    only affects which keys are used for filter example generation, not
+    whether a key is active in the library.
 
     Args:
         field_analysis: Dictionary of field analysis results.
@@ -440,22 +440,10 @@ def update_key_library_counts(
     table = dynamodb.Table(table_name)
     now = datetime.now(UTC).isoformat()
 
-    # Get extraction settings to determine status
-    config = get_config_manager()
-    extraction_mode = "auto"
-    manual_keys: set[str] = set()
-    if config:
-        extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
-        manual_keys_list = config.get_parameter("metadata_manual_keys", default=[])
-        if manual_keys_list and isinstance(manual_keys_list, list):
-            manual_keys = set(manual_keys_list)
-
     for key_name, stats in field_analysis.items():
-        # Determine status based on extraction settings
-        if extraction_mode == "manual":
-            status = "active" if key_name in manual_keys else "inactive"
-        else:
-            status = "active"
+        # Keys with occurrences are always active
+        # (extraction mode only affects filter example generation)
+        status = "active"
 
         try:
             # Update or create key entry
@@ -586,7 +574,7 @@ def lambda_handler(event: dict, context) -> dict:
         keys_analyzed = len(field_analysis)
         logger.info(f"Analyzed {keys_analyzed} metadata fields")
 
-        # Step 4: Update key library with counts
+        # Step 4: Update key library with counts (marks all found keys as active)
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table)
 
@@ -607,7 +595,7 @@ def lambda_handler(event: dict, context) -> dict:
                 ]
                 logger.info(f"Preserving {len(preserved_examples)} enabled examples")
 
-        # Step 6: Generate new examples to replace disabled ones
+        # Step 6: Generate new examples to replace disabled ones (using all active keys)
         num_to_generate = max(0, target_example_count - len(preserved_examples))
         new_examples = []
         if field_analysis and num_to_generate > 0:

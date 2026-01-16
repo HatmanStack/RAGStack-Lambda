@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Box,
-  Button,
+  Checkbox,
   FormField,
   SpaceBetween,
   Textarea,
@@ -10,47 +10,44 @@ import {
 
 interface CaptionInputProps {
   userCaption: string;
-  aiCaption: string;
+  extractText: boolean;
   onUserCaptionChange: (value: string) => void;
-  onGenerateCaption: () => void;
-  generating: boolean;
+  onExtractTextChange: (checked: boolean) => void;
   error: string | null;
 }
 
 export const CaptionInput = ({
   userCaption,
-  aiCaption,
+  extractText,
   onUserCaptionChange,
-  onGenerateCaption,
-  generating,
+  onExtractTextChange,
   error
 }: CaptionInputProps) => {
-  const combinedCaption = [userCaption, aiCaption].filter(Boolean).join('. ');
-
   return (
     <SpaceBetween size="m">
       <FormField
-        label="Your caption"
-        description="Describe the image content. This helps with search and retrieval."
+        label="Caption (optional)"
+        description="Describe the image with context only you know (names, dates, events). Visual search works without a caption."
       >
         <Textarea
           value={userCaption}
           onChange={({ detail }) => onUserCaptionChange(detail.value)}
-          placeholder="Enter a description for this image..."
+          placeholder="e.g., Company retreat 2024, Team photo with Sarah and Mike..."
           rows={3}
         />
       </FormField>
 
-      <SpaceBetween direction="horizontal" size="s">
-        <Button
-          onClick={onGenerateCaption}
-          loading={generating}
-          disabled={generating}
-          iconName="gen-ai"
-        >
-          {generating ? 'Generating...' : 'Generate AI Caption'}
-        </Button>
-      </SpaceBetween>
+      <Checkbox
+        checked={extractText}
+        onChange={({ detail }) => onExtractTextChange(detail.checked)}
+      >
+        <Box>
+          <Box fontWeight="bold">Extract text from image (OCR)</Box>
+          <Box variant="small" color="text-body-secondary">
+            Use AI to extract visible text (signs, labels, memes, documents) for searchability
+          </Box>
+        </Box>
+      </Checkbox>
 
       {error && (
         <Alert type="error" dismissible>
@@ -58,25 +55,8 @@ export const CaptionInput = ({
         </Alert>
       )}
 
-      {aiCaption && (
-        <FormField label="AI-generated caption">
-          <div
-            style={{
-              backgroundColor: '#f0f9ff',
-              borderRadius: '4px',
-              border: '1px solid #bae6fd',
-              padding: '8px'
-            }}
-          >
-            <Box variant="small" color="text-body-secondary">
-              {aiCaption}
-            </Box>
-          </div>
-        </FormField>
-      )}
-
-      {combinedCaption && (
-        <FormField label="Final caption (user + AI)">
+      {userCaption && (
+        <FormField label="Caption preview">
           <div
             style={{
               backgroundColor: '#f5f5f5',
@@ -85,7 +65,7 @@ export const CaptionInput = ({
               padding: '8px'
             }}
           >
-            {combinedCaption}
+            {userCaption}
           </div>
         </FormField>
       )}

@@ -26,11 +26,20 @@ const QUERY_KB_QUERY = `
         snippet
         documentUrl
         documentAccessAllowed
+        score
+        filename
         isMedia
+        isSegment
+        segmentUrl
         mediaType
+        contentType
         timestampStart
         timestampEnd
         timestampDisplay
+        speaker
+        isImage
+        isScraped
+        sourceUrl
       }
       error
     }
@@ -60,11 +69,20 @@ async function queryKnowledgeBase(
     snippet?: string;
     documentUrl?: string;
     documentAccessAllowed?: boolean;
+    score?: number;
+    filename?: string;
     isMedia?: boolean;
+    isSegment?: boolean;
+    segmentUrl?: string;
     mediaType?: string;
+    contentType?: string;
     timestampStart?: number;
     timestampEnd?: number;
     timestampDisplay?: string;
+    speaker?: string;
+    isImage?: boolean;
+    isScraped?: boolean;
+    sourceUrl?: string;
   }>;
   error?: string;
 }> {
@@ -206,16 +224,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         // Map sources to the format expected by the UI
         const mappedSources = (response.sources || []).map((s) => ({
-          title: s.documentId,
+          title: s.documentId || s.filename || 'Unknown',
           location: s.pageNumber ? `Page ${s.pageNumber}` : '',
           snippet: s.snippet || '',
           documentUrl: s.documentUrl,
           documentAccessAllowed: s.documentAccessAllowed,
+          score: s.score,
+          documentId: s.documentId,
+          filename: s.filename,
           isMedia: s.isMedia,
+          isSegment: s.isSegment,
+          segmentUrl: s.segmentUrl,
           mediaType: s.mediaType as 'video' | 'audio' | undefined,
+          contentType: s.contentType as 'transcript' | 'visual' | undefined,
           timestampStart: s.timestampStart,
           timestampEnd: s.timestampEnd,
           timestampDisplay: s.timestampDisplay,
+          speaker: s.speaker,
+          isImage: s.isImage,
+          isScraped: s.isScraped,
+          sourceUrl: s.sourceUrl,
         }));
 
         // Create assistant message from response

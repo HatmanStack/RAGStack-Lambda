@@ -208,11 +208,11 @@ class ConfigurationManager:
         """
         Update Custom configuration in DynamoDB.
 
-        This method is typically called by the ConfigurationResolver Lambda,
-        not by processing Lambdas.
+        Merges the provided values with existing Custom config using UpdateItem.
+        This preserves existing custom settings while updating specific values.
 
         Args:
-            custom_config: Dictionary of custom configuration values
+            custom_config: Dictionary of custom configuration values to update
 
         Raises:
             ClientError: If DynamoDB write fails
@@ -221,8 +221,30 @@ class ConfigurationManager:
             # Remove 'Configuration' key if present to prevent partition key override
             safe_config = {k: v for k, v in custom_config.items() if k != "Configuration"}
 
-            # Put item to DynamoDB with protected partition key
-            self.table.put_item(Item={"Configuration": "Custom", **safe_config})
+            if not safe_config:
+                logger.warning("No configuration values to update")
+                return
+
+            # Build UpdateExpression to merge values instead of replacing
+            update_parts = []
+            expression_names = {}
+            expression_values = {}
+
+            for i, (key, value) in enumerate(safe_config.items()):
+                attr_name = f"#k{i}"
+                attr_value = f":v{i}"
+                update_parts.append(f"{attr_name} = {attr_value}")
+                expression_names[attr_name] = key
+                expression_values[attr_value] = value
+
+            update_expression = "SET " + ", ".join(update_parts)
+
+            self.table.update_item(
+                Key={"Configuration": "Custom"},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_names,
+                ExpressionAttributeValues=expression_values,
+            )
 
             logger.info("Updated Custom configuration in DynamoDB")
 

@@ -29,12 +29,17 @@ describe('ZipUpload', () => {
     expect(screen.getByText(/or click to browse/i)).toBeInTheDocument();
   });
 
-  it('displays info about captions.json', () => {
+  it('displays info about captions.json in popover', async () => {
     render(<ZipUpload />);
 
-    // Multiple mentions of captions.json - just verify at least one exists
-    const matches = screen.getAllByText(/captions\.json/);
-    expect(matches.length).toBeGreaterThanOrEqual(1);
+    // Click the info button to open popover
+    const infoButton = screen.getByRole('button', { name: /how to use/i });
+    fireEvent.click(infoButton);
+
+    await waitFor(() => {
+      // Verify captions.json is mentioned in the popover content
+      expect(screen.getByText(/captions\.json/)).toBeInTheDocument();
+    });
   });
 
   it('has file input with correct accept attribute', () => {
@@ -206,21 +211,10 @@ describe('ZipUpload', () => {
     });
   });
 
-  it('shows expandable help section', () => {
+  it('shows info button in header', () => {
     render(<ZipUpload />);
 
-    expect(screen.getByText(/How to use captions.json/i)).toBeInTheDocument();
-  });
-
-  it('shows example JSON in help section', async () => {
-    render(<ZipUpload />);
-
-    // Click to expand the help section
-    const helpButton = screen.getByText(/How to use captions.json/i);
-    fireEvent.click(helpButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/sunset.jpg/)).toBeInTheDocument();
-    });
+    // Info is now in a Popover triggered by info button
+    expect(screen.getByRole('button', { name: /how to use/i })).toBeInTheDocument();
   });
 });

@@ -185,7 +185,8 @@ describe('useImage', () => {
             imageId: 'img-123',
             caption: 'User caption. AI generated description.',
             userCaption: 'User caption',
-            aiCaption: 'AI generated description.'
+            aiCaption: 'AI generated description.',
+            extractText: false
           }
         }
       });
@@ -355,7 +356,7 @@ describe('useImage', () => {
       });
 
       expect(mockUploadDataFn).toHaveBeenCalledWith({
-        path: 'images/img-456/test.png',
+        path: 'content/img-456/test.png',
         data: mockFile,
         options: expect.objectContaining({
           onProgress: expect.any(Function)

@@ -8,11 +8,9 @@ import { CaptionInput } from './CaptionInput';
 vi.mock('../../hooks/useImage', () => ({
   useImage: () => ({
     uploading: false,
-    generating: false,
     error: null,
     clearError: vi.fn(),
     uploadImage: vi.fn().mockResolvedValue({ imageId: 'img-123', filename: 'test.png' }),
-    generateCaption: vi.fn().mockResolvedValue('AI generated caption'),
     submitImage: vi.fn().mockResolvedValue({ imageId: 'img-123' })
   })
 }));
@@ -30,10 +28,11 @@ describe('ImageUpload', () => {
     expect(screen.getByText(/or click to browse/i)).toBeInTheDocument();
   });
 
-  it('displays supported formats info', () => {
+  it('has info button for supported formats', () => {
     render(<ImageUpload />);
 
-    expect(screen.getByText(/Supported formats: PNG, JPG, GIF, WebP/i)).toBeInTheDocument();
+    // Info is now in a Popover triggered by info button
+    expect(screen.getByRole('button', { name: /how it works/i })).toBeInTheDocument();
   });
 
   it('has file input with correct accept attribute', () => {
@@ -123,132 +122,108 @@ describe('CaptionInput', () => {
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={false}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={false}
+        onExtractTextChange={vi.fn()}
         error={null}
       />
     );
 
-    expect(screen.getByLabelText(/your caption/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/enter a description/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/caption/i)).toBeInTheDocument();
   });
 
-  it('displays generate caption button', () => {
+  it('displays extract text checkbox', () => {
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={false}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={false}
+        onExtractTextChange={vi.fn()}
         error={null}
       />
     );
 
-    expect(screen.getByRole('button', { name: /generate ai caption/i })).toBeInTheDocument();
+    expect(screen.getByText(/extract text from image/i)).toBeInTheDocument();
   });
 
-  it('shows loading state when generating', () => {
+  it('checkbox reflects extractText state', () => {
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={true}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={true}
+        onExtractTextChange={vi.fn()}
         error={null}
       />
     );
 
-    expect(screen.getByRole('button', { name: /generating/i })).toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).toBeChecked();
   });
 
-  it('calls onUserCaptionChange when typing', async () => {
+  it('calls onUserCaptionChange when typing', () => {
     const onUserCaptionChange = vi.fn();
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={false}
         onUserCaptionChange={onUserCaptionChange}
-        onGenerateCaption={vi.fn()}
-        generating={false}
+        onExtractTextChange={vi.fn()}
         error={null}
       />
     );
 
-    const textarea = screen.getByPlaceholderText(/enter a description/i);
+    const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'My caption' } });
 
     expect(onUserCaptionChange).toHaveBeenCalled();
   });
 
-  it('calls onGenerateCaption when button clicked', () => {
-    const onGenerateCaption = vi.fn();
+  it('calls onExtractTextChange when checkbox clicked', () => {
+    const onExtractTextChange = vi.fn();
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={false}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={onGenerateCaption}
-        generating={false}
+        onExtractTextChange={onExtractTextChange}
         error={null}
       />
     );
 
-    const button = screen.getByRole('button', { name: /generate ai caption/i });
-    fireEvent.click(button);
+    const checkbox = screen.getByRole('checkbox');
+    fireEvent.click(checkbox);
 
-    expect(onGenerateCaption).toHaveBeenCalled();
+    expect(onExtractTextChange).toHaveBeenCalledWith(true);
   });
 
-  it('displays AI caption when provided', () => {
-    render(
-      <CaptionInput
-        userCaption=""
-        aiCaption="AI generated description"
-        onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={false}
-        error={null}
-      />
-    );
-
-    // AI caption appears twice - once in AI section and once in final caption preview
-    const aiCaptionTexts = screen.getAllByText('AI generated description');
-    expect(aiCaptionTexts.length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/ai-generated caption/i)).toBeInTheDocument();
-  });
-
-  it('displays combined caption preview', () => {
+  it('displays caption preview when caption provided', () => {
     render(
       <CaptionInput
         userCaption="User description"
-        aiCaption="AI description"
+        extractText={false}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={false}
+        onExtractTextChange={vi.fn()}
         error={null}
       />
     );
 
-    expect(screen.getByText(/final caption/i)).toBeInTheDocument();
-    expect(screen.getByText('User description. AI description')).toBeInTheDocument();
+    expect(screen.getByText(/caption preview/i)).toBeInTheDocument();
+    // Caption appears in both textarea and preview - check at least one exists
+    expect(screen.getAllByText('User description').length).toBeGreaterThanOrEqual(1);
   });
 
   it('displays error when provided', () => {
     render(
       <CaptionInput
         userCaption=""
-        aiCaption=""
+        extractText={false}
         onUserCaptionChange={vi.fn()}
-        onGenerateCaption={vi.fn()}
-        generating={false}
-        error="Failed to generate caption"
+        onExtractTextChange={vi.fn()}
+        error="Something went wrong"
       />
     );
 
-    expect(screen.getByText('Failed to generate caption')).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
   });
 });

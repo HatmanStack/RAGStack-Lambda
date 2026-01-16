@@ -141,9 +141,10 @@ def lambda_handler(event: dict, context: Any) -> dict:
 
     except Exception as e:
         logger.exception(f"Reindex error: {e}")
-        # Publish failure update
+        # Publish failure update - but NOT for finalize action since it has retries
+        # and the state machine will handle final failure via cleanup_failed state
         graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-        if graphql_endpoint:
+        if graphql_endpoint and action != "finalize":
             publish_reindex_update(
                 graphql_endpoint,
                 status="FAILED",
@@ -179,6 +180,11 @@ def handle_init(event: dict) -> dict:
         total_documents=0,
         processed_count=0,
     )
+
+    # Reset key library occurrence counts so they accurately reflect post-reindex state
+    key_library = get_key_library()
+    reset_count = key_library.reset_occurrence_counts()
+    logger.info(f"Reset occurrence counts for {reset_count} metadata keys")
 
     # Count all content to reindex (documents, images, scraped pages)
     tracking_table = dynamodb.Table(tracking_table_name)
@@ -216,6 +222,42 @@ def handle_init(event: dict) -> dict:
 
     new_kb = migrator.create_knowledge_base(suffix=timestamp)
     logger.info(f"Created new KB: {new_kb['kb_id']}")
+
+    # Run baseline sync on empty KB and wait for completion
+    # This establishes sync tracking before any API ingestion
+    logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
+    baseline_response = bedrock_agent.start_ingestion_job(
+        knowledgeBaseId=new_kb["kb_id"],
+        dataSourceId=new_kb["data_source_id"],
+    )
+    baseline_job_id = baseline_response.get("ingestionJob", {}).get("ingestionJobId")
+    logger.info(f"Baseline sync started: {baseline_job_id}")
+
+    # Wait for baseline to complete before proceeding
+    if baseline_job_id:
+        max_wait = 120  # 2 minutes max
+        poll_interval = 5
+        elapsed = 0
+
+        while elapsed < max_wait:
+            job_response = bedrock_agent.get_ingestion_job(
+                knowledgeBaseId=new_kb["kb_id"],
+                dataSourceId=new_kb["data_source_id"],
+                ingestionJobId=baseline_job_id,
+            )
+            status = job_response.get("ingestionJob", {}).get("status")
+            logger.info(f"Baseline sync status: {status} ({elapsed}s)")
+
+            if status in ("COMPLETE", "FAILED"):
+                break
+
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+        if status == "FAILED":
+            logger.warning("Baseline sync failed, continuing anyway")
+        elif elapsed >= max_wait:
+            logger.warning("Baseline sync timed out, continuing anyway")
 
     # Return state for processing loop
     return {
@@ -852,8 +894,9 @@ def handle_finalize(event: dict) -> dict:
 
     1. Update config table with new KB ID and Data Source ID (primary source)
     2. Update Lambda environment variables (fallback, for backwards compatibility)
-    3. Delete old KB
-    4. Publish completion status
+    3. Start initial sync to establish tracking baseline (prevents re-sync on first video upload)
+    4. Delete old KB
+    5. Publish completion status
     """
     old_kb_id = event.get("old_kb_id")
     new_kb_id = event["new_kb_id"]
@@ -891,6 +934,37 @@ def handle_finalize(event: dict) -> dict:
         error_messages.extend(lambda_errors)
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
 
+    # Start ingestion job for visual embeddings (images/videos)
+    # Wait for any ongoing API operations to complete first
+    if new_data_source_id:
+        logger.info(f"Starting ingestion job for visual embeddings on {new_kb_id}")
+
+        # Poll until API operations complete (max 5 minutes)
+        max_wait = 300  # 5 minutes
+        poll_interval = 10  # 10 seconds
+        elapsed = 0
+
+        while elapsed < max_wait:
+            try:
+                bedrock_agent.start_ingestion_job(
+                    knowledgeBaseId=new_kb_id,
+                    dataSourceId=new_data_source_id,
+                )
+                logger.info("Ingestion job started successfully")
+                break
+            except bedrock_agent.exceptions.ValidationException as e:
+                if "ongoing KnowledgeBaseDocuments API request" in str(e):
+                    logger.info(f"API operations still in progress, waiting... ({elapsed}s)")
+                    time.sleep(poll_interval)
+                    elapsed += poll_interval
+                else:
+                    raise
+        else:
+            # Timeout - raise to trigger state machine retry
+            raise RuntimeError(
+                f"Timed out waiting for API operations to complete after {max_wait}s"
+            )
+
     # Publish deleting old KB status
     publish_reindex_update(
         graphql_endpoint,
@@ -917,6 +991,15 @@ def handle_finalize(event: dict) -> dict:
             logger.warning(f"Failed to delete old KB {old_kb_id}: {e}")
             # Don't fail the operation if old KB deletion fails
             error_messages.append(f"Failed to delete old KB: {str(e)[:100]}")
+
+    # Deactivate metadata keys with zero occurrences (no longer in any documents)
+    try:
+        key_library = get_key_library()
+        deactivated = key_library.deactivate_zero_count_keys()
+        if deactivated > 0:
+            logger.info(f"Deactivated {deactivated} metadata keys with zero occurrences")
+    except Exception as e:
+        logger.warning(f"Failed to deactivate zero-count keys: {e}")
 
     # Publish completion status
     publish_reindex_update(

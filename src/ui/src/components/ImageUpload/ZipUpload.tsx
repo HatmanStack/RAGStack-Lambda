@@ -9,7 +9,7 @@ import {
   Alert,
   ProgressBar,
   StatusIndicator,
-  ExpandableSection
+  Popover,
 } from '@cloudscape-design/components';
 import { useImage } from '../../hooks/useImage';
 
@@ -132,12 +132,32 @@ export const ZipUpload = () => {
   return (
     <Container>
       <SpaceBetween size="l">
-        <Header variant="h2">Upload Image Archive</Header>
-
-        <Alert type="info">
-          Upload a ZIP file containing images. Optionally include a <code>captions.json</code> file
-          to provide captions for your images.
-        </Alert>
+        <Header variant="h2">
+          Upload Image Archive{' '}
+          <Popover
+            header="How to use"
+            content={
+              <Box variant="small">
+                Upload a ZIP file containing images (max 100 MB).
+                <br /><br />
+                <strong>Optional captions.json:</strong>
+                <pre style={{ margin: '4px 0', fontSize: '11px', background: '#f5f5f5', padding: '4px', borderRadius: '2px' }}>
+{`{
+  "photo.jpg": "Description here"
+}`}
+                </pre>
+                Images without captions use AI-generated captions if enabled.
+              </Box>
+            }
+            triggerType="custom"
+            dismissButton={false}
+            size="large"
+          >
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="How to use" />
+            </span>
+          </Popover>
+        </Header>
 
         {displayError && (
           <Alert type="error" dismissible onDismiss={() => { setLocalError(null); clearError(); }}>
@@ -281,30 +301,6 @@ export const ZipUpload = () => {
           </SpaceBetween>
         )}
 
-        {/* Help section */}
-        <ExpandableSection headerText="How to use captions.json">
-          <SpaceBetween size="s">
-            <Box variant="p">
-              Include a <code>captions.json</code> file in your ZIP archive to provide custom captions
-              for your images. The file should be a JSON object mapping filenames to caption strings.
-            </Box>
-
-            <div style={{ backgroundColor: '#f5f5f5', borderRadius: '4px', padding: '8px' }}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-{`{
-  "sunset.jpg": "A beautiful sunset over the mountains",
-  "beach.png": "Sandy beach with crystal blue water",
-  "city.jpeg": "Downtown skyline at night"
-}`}
-              </pre>
-            </div>
-
-            <Box variant="p">
-              Images not listed in the manifest will either have no caption, or will have an
-              AI-generated caption if you enable the "Generate AI captions" option.
-            </Box>
-          </SpaceBetween>
-        </ExpandableSection>
       </SpaceBetween>
     </Container>
   );

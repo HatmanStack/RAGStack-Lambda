@@ -45,6 +45,7 @@ from ragstack_common.config import ConfigurationManager, get_knowledge_base_conf
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.storage import parse_s3_uri
 
 # Initialize AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
@@ -58,6 +59,67 @@ logger.setLevel(logging.INFO)
 
 # Content types recognized as media for source attribution
 MEDIA_CONTENT_TYPES = ("video", "audio", "transcript", "visual")
+
+# Maximum image size for Converse API (5MB)
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+
+# Supported image formats for Bedrock Converse API
+IMAGE_FORMAT_MAP = {
+    "image/jpeg": "jpeg",
+    "image/jpg": "jpeg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+
+
+def fetch_image_for_converse(s3_uri: str, content_type: str | None = None) -> dict | None:
+    """
+    Fetch image from S3 and prepare for Bedrock Converse API.
+
+    Args:
+        s3_uri: S3 URI of the image (s3://bucket/key)
+        content_type: Optional content type, will be inferred from extension if not provided
+
+    Returns:
+        ImageBlock dict for Converse API, or None if image cannot be fetched/processed
+    """
+    try:
+        bucket, key = parse_s3_uri(s3_uri)
+        if not bucket or not key:
+            logger.warning(f"Invalid S3 URI for image: {s3_uri}")
+            return None
+
+        # Fetch image from S3
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        image_bytes = response["Body"].read()
+
+        # Check size limit
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            logger.warning(f"Image too large ({len(image_bytes)} bytes): {s3_uri}")
+            return None
+
+        # Determine format from content type or extension
+        if not content_type:
+            content_type = response.get("ContentType", "")
+
+        image_format = IMAGE_FORMAT_MAP.get(content_type.lower())
+        if not image_format:
+            # Try to infer from extension
+            ext = key.lower().split(".")[-1]
+            ext_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp"}
+            image_format = ext_map.get(ext)
+
+        if not image_format:
+            logger.warning(f"Unsupported image format: {content_type}, {s3_uri}")
+            return None
+
+        # Return ImageBlock for Converse API
+        return {"image": {"format": image_format, "source": {"bytes": image_bytes}}}
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch image {s3_uri}: {e}")
+        return None
 
 
 def extract_kb_scalar(value: Any) -> str | None:
@@ -557,7 +619,7 @@ QUERY TO USE FOR SEARCH:"""
     return query
 
 
-def build_conversation_messages(current_query, history, retrieved_context):
+def build_conversation_messages(current_query, history, retrieved_context, images=None):
     """
     Build messages array for Bedrock Converse API with conversation history.
 
@@ -565,6 +627,7 @@ def build_conversation_messages(current_query, history, retrieved_context):
         current_query (str): The user's current question
         history (list[dict]): Previous conversation turns
         retrieved_context (str): Retrieved documents from KB
+        images (list[dict], optional): List of ImageBlock dicts for visual matches
 
     Returns:
         list[dict]: Messages array for Converse API
@@ -591,7 +654,16 @@ Please answer this question: {current_query}
 
 If the retrieved information doesn't contain the answer, say so and provide relevant info."""
 
-    messages.append({"role": "user", "content": [{"text": current_message}]})
+    # Build content blocks - text first, then images
+    content_blocks = [{"text": current_message}]
+
+    # Add images if present (for visual matches)
+    if images:
+        for img in images:
+            if img:
+                content_blocks.append(img)
+
+    messages.append({"role": "user", "content": content_blocks})
 
     return messages
 
@@ -829,6 +901,8 @@ def extract_sources(citations):
             location = ref.get("location") or {}
             s3_location = location.get("s3Location") or {}
             uri = s3_location.get("uri", "")
+            # Extract relevance score from KB response (0-1 range)
+            relevance_score = ref.get("score")
 
             if not uri:
                 logger.debug(f"No URI found in reference. Location: {location}")
@@ -867,11 +941,17 @@ def extract_sources(citations):
 
                     # Determine content type from filename
                     last_part = parts[-1] if parts else ""
+                    last_part_lower = last_part.lower()
                     if last_part == "caption.txt":
-                        # Image caption
+                        # Image caption (text embedding)
                         input_prefix = "content"
                         is_image = True
                         logger.info(f"Image caption detected: imageId={document_id}")
+                    elif last_part_lower.endswith((".jpeg", ".jpg", ".png", ".gif", ".webp")):
+                        # Image file directly (visual embedding)
+                        input_prefix = "content"
+                        is_image = True
+                        logger.info(f"Image file detected: imageId={document_id}, file={last_part}")
                     elif last_part == "full_text.txt":
                         # Scraped content
                         input_prefix = "input"
@@ -1020,8 +1100,19 @@ def extract_sources(citations):
                     preview = image_caption[:50] if image_caption else None
                     logger.debug(f"Image content detected, caption: {preview}...")
 
-                # Deduplicate by document + page
-                source_key = f"{document_id}:{page_num}"
+                # Deduplicate sources:
+                # - Video/media segments: use full URI (each timestamp is unique)
+                # - PDF pages: use document_id:page_num
+                # - Other content: use document_id
+                is_segment = doc_type == "media" or "segment-" in uri or uri.endswith("/video.mp4")
+                if is_segment:
+                    # Each video segment is a unique source (different timestamps)
+                    source_key = uri
+                elif page_num is not None:
+                    source_key = f"{document_id}:{page_num}"
+                else:
+                    source_key = document_id
+
                 if source_key not in seen:
                     # Check if document access is allowed
                     allow_document_access = get_config_manager().get_parameter(
@@ -1098,6 +1189,7 @@ def extract_sources(citations):
                     timestamp_start = None
                     timestamp_end = None
                     if is_media:
+                        # Check custom metadata first (transcripts use seconds)
                         ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
                         ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
                         if ts_start_str is not None:
@@ -1106,6 +1198,21 @@ def extract_sources(citations):
                         if ts_end_str is not None:
                             with contextlib.suppress(ValueError, TypeError):
                                 timestamp_end = int(ts_end_str)
+                        # Fall back to native KB keys for visual embeddings (milliseconds)
+                        if timestamp_start is None:
+                            ts_millis = extract_kb_scalar(
+                                metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                            )
+                            if ts_millis is not None:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    timestamp_start = int(ts_millis) // 1000
+                        if timestamp_end is None:
+                            ts_millis = extract_kb_scalar(
+                                metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                            )
+                            if ts_millis is not None:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    timestamp_end = int(ts_millis) // 1000
 
                     speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
                     segment_index = None
@@ -1115,20 +1222,27 @@ def extract_sources(citations):
                             with contextlib.suppress(ValueError, TypeError):
                                 segment_index = int(seg_idx_str)
 
-                    # For media sources, generate URL with timestamp fragment
+                    # For media sources, generate both full URL and segment URL with timestamp
+                    segment_url = None
                     if is_media and allow_document_access and document_s3_uri:
                         s3_path = document_s3_uri.replace("s3://", "")
                         s3_match = s3_path.split("/", 1)
                         if len(s3_match) == 2 and s3_match[1]:
                             media_bucket = s3_match[0]
                             media_key = s3_match[1]
-                            document_url = generate_media_url(
-                                media_bucket, media_key, timestamp_start, timestamp_end
-                            )
-                            logger.info(
-                                f"[SOURCE] Media URL generated with timestamps: "
-                                f"#t={timestamp_start},{timestamp_end}"
-                            )
+                            # Full video URL (no timestamp)
+                            document_url = generate_presigned_url(media_bucket, media_key)
+                            # Segment URL with timestamp fragment for deep linking
+                            if document_url and timestamp_start is not None:
+                                if timestamp_end is not None:
+                                    ts_frag = f"#t={timestamp_start},{timestamp_end}"
+                                else:
+                                    ts_frag = f"#t={timestamp_start}"
+                                segment_url = f"{document_url}{ts_frag}"
+                                logger.info(
+                                    f"[SOURCE] Media URLs: full={document_url[:50]}..., "
+                                    f"segment=#t={timestamp_start},{timestamp_end}"
+                                )
 
                     # Format timestamp display for media sources
                     timestamp_display = None
@@ -1144,14 +1258,18 @@ def extract_sources(citations):
                         "snippet": snippet,
                         "documentUrl": document_url,
                         "documentAccessAllowed": allow_document_access,
+                        "score": relevance_score,  # KB relevance score (0-1)
+                        "filename": original_filename,  # Original filename
                         "isScraped": is_scraped,
                         "sourceUrl": source_url,  # Original web URL for scraped content
                         # Image-specific fields
                         "isImage": is_image,
                         "thumbnailUrl": thumbnail_url,
                         "caption": image_caption,
-                        # Media-specific fields
+                        # Media-specific fields (matches search_kb structure)
                         "isMedia": is_media if is_media else None,
+                        "isSegment": is_segment,
+                        "segmentUrl": segment_url,  # URL with #t=start,end for deep linking
                         "mediaType": media_type,
                         "contentType": content_type if is_media else None,
                         "timestampStart": timestamp_start,
@@ -1349,23 +1467,34 @@ def lambda_handler(event, context):
             if multislice_enabled and generated_filter:
                 # Use multi-slice retrieval with filter
                 _, _, multislice_retriever = _get_filter_components()
+                logger.info(
+                    f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
+                )
                 retrieval_results = multislice_retriever.retrieve(
                     query=retrieval_query,
                     knowledge_base_id=knowledge_base_id,
                     data_source_id=None,  # No data source filtering with unified content/
                     metadata_filter=generated_filter,
-                    num_results=10,
+                    num_results=5,
                 )
+                logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
+                for i, r in enumerate(retrieval_results):
+                    uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                    score = r.get("score", "N/A")
+                    logger.info(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
             else:
                 # Standard single-query retrieval
                 retrieval_config = {
                     "vectorSearchConfiguration": {
-                        "numberOfResults": 10,
+                        "numberOfResults": 5,
                     }
                 }
                 # Apply generated filter if available
                 if generated_filter:
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
+
+                # Log exactly what we're sending to the KB
+                logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
 
                 retrieve_response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
@@ -1374,6 +1503,12 @@ def lambda_handler(event, context):
                 )
                 retrieval_results = retrieve_response.get("retrievalResults", [])
             logger.info(f"Retrieved {len(retrieval_results)} results")
+
+            # Log each result's URI and score for debugging
+            for i, r in enumerate(retrieval_results):
+                uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+                score = r.get("score", "N/A")
+                logger.info(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
         except Exception as e:
             logger.warning(f"Retrieval failed: {e}")
 
@@ -1388,35 +1523,192 @@ def lambda_handler(event, context):
         # Build context from retrieved documents
         retrieved_chunks = []
         citations = []  # Build citations in the format expected by extract_sources
-        for result in retrieval_results:
+        matched_images = []  # Collect images for visual matches to send to LLM
+
+        # Only send images from top 3 most relevant results (already sorted by score)
+        # Limit to 1 image to control costs and context size
+        MAX_IMAGE_RANK = 3  # Only consider images in top 3 results
+        MAX_IMAGES_TO_SEND = 1  # Only send 1 image to the model
+
+        for result_rank, result in enumerate(retrieval_results):
             content = result.get("content") or {}
+            metadata = result.get("metadata") or {}
+            location = result.get("location") or {}
+
+            # Extract metadata for context enrichment
+            content_type = extract_kb_scalar(metadata.get("content_type"))
+            filename = extract_kb_scalar(metadata.get("filename"))
+
+            # Get timestamps (custom keys in seconds, native KB keys in milliseconds)
+            ts_start = None
+            ts_end = None
+            ts_raw = metadata.get("timestamp_start")
+            if ts_raw is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    ts_start = int(extract_kb_scalar(ts_raw))
+            else:
+                ts_millis = metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                if ts_millis is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_start = int(extract_kb_scalar(ts_millis)) // 1000
+
+            ts_raw = metadata.get("timestamp_end")
+            if ts_raw is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    ts_end = int(extract_kb_scalar(ts_raw))
+            else:
+                ts_millis = metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
+                if ts_millis is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_end = int(extract_kb_scalar(ts_millis)) // 1000
+
+            # Format timestamp for display (M:SS format)
+            ts_display = ""
+            if ts_start is not None:
+                start_fmt = f"{ts_start // 60}:{ts_start % 60:02d}"
+                if ts_end is not None:
+                    end_fmt = f"{ts_end // 60}:{ts_end % 60:02d}"
+                    ts_display = f", {start_fmt}-{end_fmt}"
+                else:
+                    ts_display = f", {start_fmt}"
+
+            # Build source header for context enrichment
+            source_header = f"[Source: {filename}{ts_display}]\n" if filename else ""
+
             content_text = content.get("text", "") if isinstance(content, dict) else ""
-            if content_text:
-                retrieved_chunks.append(content_text)
-                # Build citation structure for source extraction
+            s3_uri = location.get("s3Location", {}).get("uri", "")
+            uri_lower = s3_uri.lower()
+            # Detect visual content by metadata OR by file extension (for visual embeddings)
+            visual_extensions = (".jpeg", ".jpg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi")
+            is_visual = (
+                content_type == "visual"
+                or content.get("type") == "VIDEO"
+                or uri_lower.endswith(visual_extensions)
+            )
+            logger.info(f"[RESULT {result_rank}] visual={is_visual}, text={bool(content_text)}")
+
+            if is_visual:
+                # Visual match - get additional context (caption for images, transcript for videos)
+                visual_context = ""
+                tracked_type = ""  # Track the type from DynamoDB for labeling
+
+                # Extract document_id from URI (content/{docId}/...)
+                doc_id = None
+                if s3_uri:
+                    uri_parts = s3_uri.replace("s3://", "").split("/")
+                    if len(uri_parts) >= 3 and uri_parts[1] == "content":
+                        doc_id = uri_parts[2]
+
+                if doc_id and tracking_table:
+                    try:
+                        table = dynamodb.Table(tracking_table)
+                        response = table.get_item(Key={"document_id": doc_id})
+                        item = response.get("Item", {})
+                        tracked_type = item.get("type", "")
+
+                        if tracked_type == "image":
+                            # For images, use the caption
+                            if item.get("caption"):
+                                visual_context = f"\nImage caption: {item['caption']}"
+                            logger.info(f"Visual image match - added caption for {doc_id}")
+
+                            # Only fetch images from top N results to send to LLM
+                            # This ensures we only send the most relevant images
+                            if (
+                                result_rank < MAX_IMAGE_RANK
+                                and len(matched_images) < MAX_IMAGES_TO_SEND
+                            ):
+                                input_uri = item.get("input_s3_uri")
+                                content_type_img = item.get("content_type")
+                                if input_uri:
+                                    img_block = fetch_image_for_converse(
+                                        input_uri, content_type_img
+                                    )
+                                    if img_block:
+                                        matched_images.append(img_block)
+                                        logger.info(
+                                            f"Fetched image for LLM (rank {result_rank}): {doc_id}"
+                                        )
+                        elif tracked_type == "media":
+                            # For video/audio, get the relevant segment transcript
+                            is_segment = "/segment-" in s3_uri
+                            if is_segment:
+                                # Specific segment - fetch that segment's text
+                                bucket, key = parse_s3_uri(s3_uri)
+                                if bucket and key:
+                                    resp = s3_client.get_object(Bucket=bucket, Key=key)
+                                    txt = resp["Body"].read().decode("utf-8")
+                                    visual_context = f"\nTranscript: {txt}"
+                                    logger.info(f"Visual segment match: {doc_id}")
+                            else:
+                                # Full video match - get first segment
+                                data_bucket = os.environ.get("DATA_BUCKET")
+                                if data_bucket:
+                                    seg_key = f"content/{doc_id}/segment-000.txt"
+                                    resp = s3_client.get_object(Bucket=data_bucket, Key=seg_key)
+                                    txt = resp["Body"].read().decode("utf-8")
+                                    visual_context = f"\nTranscript (first segment): {txt}"
+                                    logger.info(f"Visual video match: {doc_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to get visual context for {doc_id}: {e}")
+
+                # Build visual hint with context - use tracking table type for label
+                media_type = "Image" if tracked_type == "image" else "Video"
+                visual_hint = (
+                    f"{source_header}"
+                    f"{media_type.upper()} VISUAL MATCH: This {media_type.lower()}'s visual "
+                    f'content matches the query "{query}". The visual content was analyzed '
+                    f"and found to be semantically relevant.{visual_context}"
+                )
+                retrieved_chunks.append(visual_hint)
+                # For sources display, use shorter text
+                source_text = f'{media_type} visual match for: "{query}"'
+                result_score = result.get("score")
+                citations.append(
+                    {
+                        "retrievedReferences": [
+                            {
+                                "content": {"text": source_text},
+                                "location": location,
+                                "metadata": metadata,
+                                "score": result_score,
+                            }
+                        ]
+                    }
+                )
+            elif content_text:
+                # Text content - enrich with source metadata
+                enriched_text = f"{source_header}{content_text}"
+                retrieved_chunks.append(enriched_text)
+                result_score = result.get("score")
                 citations.append(
                     {
                         "retrievedReferences": [
                             {
                                 "content": {"text": content_text},
-                                "location": result.get("location") or {},
-                                "metadata": result.get("metadata") or {},
+                                "location": location,
+                                "metadata": metadata,
+                                "score": result_score,
                             }
                         ]
                     }
                 )
 
+        # Limit to top 5 sources for both LLM context and UI display
+        MAX_SOURCES = 5
         if retrieved_chunks:
-            retrieved_context = "\n\n---\n\n".join(retrieved_chunks)
+            retrieved_context = "\n\n---\n\n".join(retrieved_chunks[:MAX_SOURCES])
         else:
             retrieved_context = "No relevant information found in the knowledge base."
 
-        # Parse sources from citations
-        sources = extract_sources(citations)
+        # Parse sources from citations (limited to top 5)
+        sources = extract_sources(citations[:MAX_SOURCES])
 
         # STEP 2: Generate response using Converse API with conversation history
         # Build messages with conversation history and retrieved context
-        messages = build_conversation_messages(query, history, retrieved_context)
+        messages = build_conversation_messages(
+            query, history, retrieved_context, images=matched_images
+        )
 
         # System prompt for the assistant (configurable via DynamoDB)
         default_prompt = (
@@ -1424,7 +1716,11 @@ def lambda_handler(event, context):
             "from a knowledge base. Always base your answers on the provided knowledge "
             "base information. If the provided information doesn't contain the answer, "
             "clearly state that and provide what relevant information you can. "
-            "Be concise but thorough."
+            "Be concise but thorough.\n\n"
+            "IMPORTANT: When you see 'VISUAL MATCH' in the context, images or videos from "
+            "the knowledge base matched the query. For image matches, the actual image is "
+            "included - describe what you see. For video matches, a transcript is provided. "
+            "Use this visual information to answer the question."
         )
         system_prompt = get_config_manager().get_parameter(
             "chat_system_prompt", default=default_prompt

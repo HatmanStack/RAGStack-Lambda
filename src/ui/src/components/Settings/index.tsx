@@ -37,7 +37,6 @@ import {
   CopyToClipboard,
   ColumnLayout,
   Popover,
-  Icon,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
@@ -618,7 +617,25 @@ export function Settings() {
         </SpaceBetween>
       </Container>
 
-      <Container header={<Header variant="h2">Public Access</Header>}>
+      <ExpandableSection
+        variant="container"
+        headerText="Public Access"
+        headerInfo={
+          <Popover
+            header="About Public Access"
+            content="Control which features are accessible without authentication. When enabled, users can access these features without logging in. Useful for public-facing demos or open knowledge bases."
+            triggerType="custom"
+            dismissButton={false}
+            position="right"
+            size="medium"
+          >
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Public Access" />
+            </span>
+          </Popover>
+        }
+        defaultExpanded={false}
+      >
         <ColumnLayout columns={3} variant="text-grid">
           <Toggle
             checked={formValues.public_access_chat === true}
@@ -661,7 +678,7 @@ export function Settings() {
             Web Scraping
           </Toggle>
         </ColumnLayout>
-      </Container>
+      </ExpandableSection>
 
       <ExpandableSection
         variant="container"
@@ -669,14 +686,15 @@ export function Settings() {
         headerInfo={
           <Popover
             header="About Metadata Extraction"
-            content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list."
+            content="LLM-based metadata extraction analyzes documents during upload to generate searchable metadata fields. Auto mode lets the LLM decide which keys to extract, while Manual mode uses your specified key list. Reindex your KB without having to reprocess."
+            triggerType="custom"
             dismissButton={false}
             position="right"
             size="medium"
           >
-            <Box color="text-status-info" display="inline">
-              <Icon name="status-info" />
-            </Box>
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Metadata Extraction" />
+            </span>
           </Popover>
         }
         defaultExpanded={false}
@@ -735,6 +753,20 @@ export function Settings() {
           <FormField
             label="Extraction Mode"
             description="Auto lets LLM decide keys, Manual uses your specified list"
+            info={
+              <Popover
+                header="About Extraction Mode"
+                content="Auto mode: LLM analyzes each document and decides which keys to extract. Manual mode: Only extracts the specific keys you specify. Changes only affect newly uploaded documents - to update existing documents, use the Reindex feature below."
+                triggerType="custom"
+                dismissButton={false}
+                position="right"
+                size="medium"
+              >
+                <span style={{ position: 'relative', top: '-2px' }}>
+                  <Button variant="inline-icon" iconName="status-info" ariaLabel="About Extraction Mode" />
+                </span>
+              </Popover>
+            }
           >
             <Select
               selectedOption={{
@@ -755,7 +787,7 @@ export function Settings() {
           {formValues.metadata_extraction_mode === 'manual' && (
             <FormField
               label="Keys to Extract"
-              description="Metadata keys to extract when in Manual mode"
+              description="Metadata keys to extract when in Manual mode. System keys (content_type, media_type, filename) are preserved automatically."
             >
               <MetadataKeyInput
                 value={(formValues.metadata_manual_keys as string[]) || []}
@@ -764,11 +796,6 @@ export function Settings() {
               />
             </FormField>
           )}
-
-          <Alert type="info">
-            Changes apply to newly uploaded documents only. Previously indexed documents retain their
-            existing metadata.
-          </Alert>
 
           {/* Divider */}
           <Box margin={{ top: 'm' }}>
@@ -787,13 +814,14 @@ export function Settings() {
           <Popover
             header="About Metadata Query"
             content="Configure how metadata filters are generated and applied during knowledge base queries. Multi-slice retrieval runs parallel queries with different filters for better recall."
+            triggerType="custom"
             dismissButton={false}
             position="right"
             size="medium"
           >
-            <Box color="text-status-info" display="inline">
-              <Icon name="status-info" />
-            </Box>
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Metadata Query" />
+            </span>
           </Popover>
         }
         defaultExpanded={false}
@@ -885,7 +913,25 @@ export function Settings() {
 
       <MetadataPanel />
 
-      <Container header={<Header variant="h2">Runtime Configuration</Header>}>
+      <ExpandableSection
+        variant="container"
+        headerText="Runtime Configuration"
+        headerInfo={
+          <Popover
+            header="About Runtime Configuration"
+            content="Runtime settings that take effect immediately without redeployment. Quotas apply only to the chat API (daily message limits per user). Also includes OCR backend selection and chat model configuration."
+            triggerType="custom"
+            dismissButton={false}
+            position="right"
+            size="medium"
+          >
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Runtime Configuration" />
+            </span>
+          </Popover>
+        }
+        defaultExpanded={false}
+      >
         <SpaceBetween size="l">
           {(schema as { properties?: Record<string, SchemaProperty> }).properties &&
             Object.entries((schema as { properties: Record<string, SchemaProperty> }).properties)
@@ -897,7 +943,7 @@ export function Settings() {
                 </React.Fragment>
               ))}
         </SpaceBetween>
-      </Container>
+      </ExpandableSection>
 
       <Box float="right" padding={{ top: 's' }}>
         <SpaceBetween direction="horizontal" size="xs">

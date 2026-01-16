@@ -13,8 +13,18 @@ export interface Source {
   documentUrl?: string | null;
   /** Whether document access is allowed by admin configuration (optional) */
   documentAccessAllowed?: boolean;
+  /** Relevance score (0-1) from the knowledge base */
+  score?: number;
+  /** Document ID from tracking table */
+  documentId?: string;
+  /** Original filename */
+  filename?: string;
   /** Whether this source is a media file (video/audio) */
   isMedia?: boolean;
+  /** Whether this is a video/audio segment with timestamp */
+  isSegment?: boolean;
+  /** URL with timestamp fragment for deep linking (e.g., url#t=30,60) */
+  segmentUrl?: string | null;
   /** Media type - "video" or "audio" */
   mediaType?: 'video' | 'audio';
   /** Content type - "transcript" (speech) or "visual" (visual similarity) */
@@ -27,6 +37,12 @@ export interface Source {
   timestampDisplay?: string;
   /** Speaker label from transcription */
   speaker?: string;
+  /** Whether this source is an image */
+  isImage?: boolean;
+  /** Whether this source is scraped web content */
+  isScraped?: boolean;
+  /** Original URL for scraped content */
+  sourceUrl?: string;
 }
 
 /**

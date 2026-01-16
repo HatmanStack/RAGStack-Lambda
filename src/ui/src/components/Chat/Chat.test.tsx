@@ -38,10 +38,12 @@ describe('Chat Page', () => {
     expect(screen.getByText(/Ask questions about your documents/i)).toBeInTheDocument();
   });
 
-  it('renders ChatPanel component', () => {
+  it('shows warning when CDN URL is not configured', async () => {
     render(<Chat />);
-    // ChatPanel should render with empty state
-    expect(screen.getByText(/Start a conversation/i)).toBeInTheDocument();
+    // When CDN URL is not configured, show a warning
+    await waitFor(() => {
+      expect(screen.getByText(/Chat widget CDN URL not configured/i)).toBeInTheDocument();
+    });
   });
 
   it('shows embed section when CDN URL is available', async () => {

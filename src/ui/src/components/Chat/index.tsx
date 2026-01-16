@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ContentLayout,
   Header,
@@ -12,12 +12,13 @@ import {
   Button,
   FormField,
   Alert,
+  Spinner,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
 import type { GqlResponse } from '../../types/graphql';
-import { ChatPanel } from './ChatPanel';
+
 
 interface ConfigData {
   Default: string;
@@ -27,15 +28,20 @@ interface ConfigData {
 const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn\'t contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.';
 
 export function Chat() {
-  const [cdnUrl, setCdnUrl] = useState(null);
+  const [cdnUrl, setCdnUrl] = useState<string | null>(null);
   const [requireAuth, setRequireAuth] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [originalPrompt, setOriginalPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [scriptError, setScriptError] = useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const scriptLoadedRef = useRef(false);
   const client = useMemo(() => generateClient(), []);
 
+  // Load configuration
   useEffect(() => {
     async function loadConfig() {
       try {
@@ -49,12 +55,43 @@ export function Chat() {
         const prompt = merged.chat_system_prompt || DEFAULT_SYSTEM_PROMPT;
         setSystemPrompt(prompt);
         setOriginalPrompt(prompt);
+        setConfigLoaded(true);
       } catch (err) {
         console.error('Error loading config:', err);
+        setConfigLoaded(true); // Still mark loaded so we don't spin forever
       }
     }
     loadConfig();
   }, [client]);
+
+  // Load ragstack-chat web component script
+  useEffect(() => {
+    if (!cdnUrl || scriptLoadedRef.current) return;
+
+    // Check if script already exists
+    const existingScript = document.querySelector(`script[src="${cdnUrl}"]`);
+    if (existingScript) {
+      setScriptLoaded(true);
+      scriptLoadedRef.current = true;
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = cdnUrl;
+    script.async = true;
+    script.onload = () => {
+      setScriptLoaded(true);
+      scriptLoadedRef.current = true;
+    };
+    script.onerror = () => {
+      setScriptError('Failed to load chat component');
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      // Don't remove script on unmount - it may be used elsewhere
+    };
+  }, [cdnUrl]);
 
   const handleSavePrompt = async () => {
     setIsSaving(true);
@@ -114,7 +151,39 @@ initChat();
       }
     >
       <SpaceBetween size="l">
-        <ChatPanel />
+        {/* Ragstack Chat Web Component */}
+        <Container>
+          {scriptError && (
+            <Alert type="error">{scriptError}</Alert>
+          )}
+          {!configLoaded && (
+            <Box textAlign="center" padding="l">
+              <Spinner /> Loading configuration...
+            </Box>
+          )}
+          {configLoaded && !cdnUrl && !scriptError && (
+            <Alert type="warning">
+              Chat widget CDN URL not configured. Deploy with <code>--skip-ui</code> instead of <code>--skip-ui-all</code> to enable the chat widget.
+            </Alert>
+          )}
+          {cdnUrl && !scriptLoaded && !scriptError && (
+            <Box textAlign="center" padding="l">
+              <Spinner /> Loading chat component...
+            </Box>
+          )}
+          {scriptLoaded && (
+            <div
+              style={{ minHeight: '500px' }}
+              ref={(el) => {
+                if (el && !el.querySelector('ragstack-chat')) {
+                  // No conversation-id set - component auto-generates unique UUID per browser
+                  const chat = document.createElement('ragstack-chat');
+                  el.appendChild(chat);
+                }
+              }}
+            />
+          )}
+        </Container>
 
         <Container>
           <ExpandableSection headerText="System Prompt" variant="footer">
