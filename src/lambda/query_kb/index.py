@@ -1467,6 +1467,7 @@ def lambda_handler(event, context):
             if multislice_enabled and generated_filter:
                 # Use multi-slice retrieval with filter
                 _, _, multislice_retriever = _get_filter_components()
+                logger.info(f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, query={retrieval_query}, filter={generated_filter}, num_results=5")
                 retrieval_results = multislice_retriever.retrieve(
                     query=retrieval_query,
                     knowledge_base_id=knowledge_base_id,
@@ -1489,6 +1490,9 @@ def lambda_handler(event, context):
                 # Apply generated filter if available
                 if generated_filter:
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
+
+                # Log exactly what we're sending to the KB
+                logger.info(f"[RETRIEVE REQUEST] kb_id={knowledge_base_id}, query={retrieval_query}, config={retrieval_config}")
 
                 retrieve_response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
