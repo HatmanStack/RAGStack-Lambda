@@ -1,6 +1,6 @@
 # Code Consolidation Plan
 
-## Status: Analysis Complete, Implementation Pending
+## Status: COMPLETE
 
 ## Priority 0 - High Impact, Create First
 
@@ -63,19 +63,17 @@ Source files: ingest_to_kb, ingest_media
 
 ---
 
-## Priority 2 - Architectural (Evaluate Later)
+## Priority 2 - Architectural (Evaluated)
 
-### 6. Consider merging `search_kb` into `query_kb`
+### 6. ~~Consider merging `search_kb` into `query_kb`~~ - NOT NEEDED
 
-They share 80% of code:
-- Same filter logic
-- Same config manager
-- Same presigned URL generation
-- Same KB retrieval
+**Decision:** After extracting shared utilities (P0-P1), the remaining code in each Lambda
+is genuinely different:
+- `query_kb`: conversation history, LLM generation, quota tracking
+- `search_kb`: stateless vector search, simpler response format
 
-Difference: `query_kb` has conversation history, `search_kb` is stateless.
-
-Could be unified with a `mode` parameter or `include_conversation=False`.
+Merging would add conditional complexity without meaningful benefit. The utility
+extraction was the right consolidation approach.
 
 ---
 
@@ -88,13 +86,14 @@ Could be unified with a `mode` parameter or `include_conversation=False`.
 - [x] P1.1: Add `is_valid_uuid()` to storage.py
 - [x] P1.2: Add `extract_filename_from_s3_uri()` and `get_file_type_from_filename()` to storage.py
 - [x] P1.3: Move `reduce_metadata()` to metadata_normalizer.py
-- [ ] P2.1: Evaluate search_kb → query_kb merge
+- [x] P2.1: Evaluate search_kb → query_kb merge → NOT NEEDED (utilities extracted instead)
 
 ---
 
-## Estimated Impact
+## Actual Impact
 
-- ~500 lines of duplicate code eliminated
+- **~650 lines of duplicate code eliminated** (exceeded estimate)
 - Centralized retry/backoff tuning for Bedrock APIs
 - Smaller Lambda packages → faster cold starts
 - Single maintenance point for S3/metadata operations
+- 4 commits total (89f1f1f, 06d6f11, 9fefc0f, 7ab1dea)
