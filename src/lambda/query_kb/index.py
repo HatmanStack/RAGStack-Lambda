@@ -1467,7 +1467,9 @@ def lambda_handler(event, context):
             if multislice_enabled and generated_filter:
                 # Use multi-slice retrieval with filter
                 _, _, multislice_retriever = _get_filter_components()
-                logger.info(f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, query={retrieval_query}, filter={generated_filter}, num_results=5")
+                logger.info(
+                    f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
+                )
                 retrieval_results = multislice_retriever.retrieve(
                     query=retrieval_query,
                     knowledge_base_id=knowledge_base_id,
@@ -1492,7 +1494,7 @@ def lambda_handler(event, context):
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
 
                 # Log exactly what we're sending to the KB
-                logger.info(f"[RETRIEVE REQUEST] kb_id={knowledge_base_id}, query={retrieval_query}, config={retrieval_config}")
+                logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
 
                 retrieve_response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
@@ -1577,12 +1579,13 @@ def lambda_handler(event, context):
             s3_uri = location.get("s3Location", {}).get("uri", "")
             uri_lower = s3_uri.lower()
             # Detect visual content by metadata OR by file extension (for visual embeddings)
+            visual_extensions = (".jpeg", ".jpg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi")
             is_visual = (
                 content_type == "visual"
                 or content.get("type") == "VIDEO"
-                or uri_lower.endswith((".jpeg", ".jpg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi"))
+                or uri_lower.endswith(visual_extensions)
             )
-            logger.info(f"[RESULT {result_rank}] uri={s3_uri}, content_type={content_type}, is_visual={is_visual}, has_text={bool(content_text)}")
+            logger.info(f"[RESULT {result_rank}] visual={is_visual}, text={bool(content_text)}")
 
             if is_visual:
                 # Visual match - get additional context (caption for images, transcript for videos)

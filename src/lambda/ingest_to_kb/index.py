@@ -62,9 +62,6 @@ CORE_METADATA_KEYS = {
     "document_type",
 }
 
-# Image extensions that should also get visual embeddings
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
-
 
 def check_document_status(kb_id: str, ds_id: str, s3_uri: str) -> str:
     """

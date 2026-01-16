@@ -470,12 +470,10 @@ class TestSubmitImage:
         assert result["imageId"] == "12345678-1234-1234-1234-123456789012"
         assert result["status"] == "PENDING"  # From mock return
 
-        # Verify S3 metadata was written
-        mock_boto3["s3"].put_object.assert_called_once()
-        put_call = mock_boto3["s3"].put_object.call_args
-        assert put_call.kwargs["Key"].endswith("metadata.json")
+        # Note: metadata.json no longer written to S3 - all data stored in DynamoDB
+        # This prevents KB from incorrectly indexing the metadata file
 
-        # Verify DynamoDB was updated
+        # Verify DynamoDB was updated with caption data
         mock_boto3["table"].update_item.assert_called_once()
 
     def test_submit_image_user_caption_only(self, mock_env, mock_boto3):

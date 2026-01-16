@@ -37,6 +37,7 @@ export function Chat() {
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const scriptLoadedRef = useRef(false);
   const client = useMemo(() => generateClient(), []);
 
@@ -54,8 +55,10 @@ export function Chat() {
         const prompt = merged.chat_system_prompt || DEFAULT_SYSTEM_PROMPT;
         setSystemPrompt(prompt);
         setOriginalPrompt(prompt);
+        setConfigLoaded(true);
       } catch (err) {
         console.error('Error loading config:', err);
+        setConfigLoaded(true); // Still mark loaded so we don't spin forever
       }
     }
     loadConfig();
@@ -153,10 +156,15 @@ initChat();
           {scriptError && (
             <Alert type="error">{scriptError}</Alert>
           )}
-          {!cdnUrl && !scriptError && (
+          {!configLoaded && (
             <Box textAlign="center" padding="l">
               <Spinner /> Loading configuration...
             </Box>
+          )}
+          {configLoaded && !cdnUrl && !scriptError && (
+            <Alert type="warning">
+              Chat widget CDN URL not configured. Deploy with <code>--skip-ui</code> instead of <code>--skip-ui-all</code> to enable the chat widget.
+            </Alert>
           )}
           {cdnUrl && !scriptLoaded && !scriptError && (
             <Box textAlign="center" padding="l">

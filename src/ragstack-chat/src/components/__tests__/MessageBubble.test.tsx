@@ -26,7 +26,8 @@ describe('MessageBubble', () => {
     timestamp: '2024-01-01T12:00:01Z',
     sources: [
       {
-        title: 'Document 1',
+        title: 'Test Source Title',
+        filename: 'test-document.pdf',
         location: 'Page 1',
         snippet: 'This is a snippet from the document',
       },
@@ -54,8 +55,7 @@ describe('MessageBubble', () => {
     const sourcesHeader = screen.getByText('Sources');
     expect(sourcesHeader).toBeInTheDocument();
 
-    // Verify sources are collapsed by default
-    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    // Verify sources are collapsed by default (snippet not visible)
     expect(screen.queryByText('This is a snippet from the document')).not.toBeInTheDocument();
 
     // Verify aria-expanded is false by default
@@ -69,7 +69,6 @@ describe('MessageBubble', () => {
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
 
     // Check that source content is visible after expansion
-    expect(screen.getByText('Document 1')).toBeInTheDocument();
     expect(screen.getByText('This is a snippet from the document')).toBeInTheDocument();
   });
 
@@ -81,7 +80,6 @@ describe('MessageBubble', () => {
 
     // Sources section should NOT be rendered
     expect(screen.queryByText('Sources')).not.toBeInTheDocument();
-    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
   });
 
   it('does NOT render SourcesDisplay when sources array is empty', () => {
@@ -104,7 +102,8 @@ describe('MessageBubble', () => {
       ...userMessage,
       sources: [
         {
-          title: 'Document 1',
+          title: 'User Source',
+          filename: 'user-doc.pdf',
           location: 'Page 1',
           snippet: 'This should not be displayed',
         },
@@ -132,16 +131,16 @@ describe('MessageBubble', () => {
     const sourcesHeader = screen.getByText('Sources');
     const sourcesButton = sourcesHeader.closest('[role="button"]');
 
-    // Verify sources are collapsed by default
-    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    // Verify sources are collapsed by default (snippet not visible)
+    expect(screen.queryByText('This is a snippet from the document')).not.toBeInTheDocument();
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
 
     // Press Enter to expand
     fireEvent.keyDown(sourcesButton!, { key: 'Enter' });
 
-    // Verify sources are now expanded
+    // Verify sources are now expanded (snippet visible)
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Document 1')).toBeInTheDocument();
+    expect(screen.getByText('This is a snippet from the document')).toBeInTheDocument();
   });
 
   it('supports keyboard navigation for collapsible sources (Space key)', () => {
@@ -150,15 +149,15 @@ describe('MessageBubble', () => {
     const sourcesHeader = screen.getByText('Sources');
     const sourcesButton = sourcesHeader.closest('[role="button"]');
 
-    // Verify sources are collapsed by default
-    expect(screen.queryByText('Document 1')).not.toBeInTheDocument();
+    // Verify sources are collapsed by default (snippet not visible)
+    expect(screen.queryByText('This is a snippet from the document')).not.toBeInTheDocument();
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
 
     // Press Space to expand
     fireEvent.keyDown(sourcesButton!, { key: ' ' });
 
-    // Verify sources are now expanded
+    // Verify sources are now expanded (snippet visible)
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Document 1')).toBeInTheDocument();
+    expect(screen.getByText('This is a snippet from the document')).toBeInTheDocument();
   });
 });

@@ -81,7 +81,7 @@ export const UploadZone = ({ onFilesSelected, disabled }: UploadZoneProps) => {
               <Box variant="small">
                 <strong>Documents:</strong> PDF, DOCX, XLSX, TXT, CSV, MD, EPUB
                 <br />
-                <strong>Media:</strong> MP4, WebM, MP3, WAV
+                <strong>Media:</strong> MP4, WebM, MP3, WAV, M4A, OGG
                 <br />
                 <strong>Images:</strong> Use Image Archive
               </Box>

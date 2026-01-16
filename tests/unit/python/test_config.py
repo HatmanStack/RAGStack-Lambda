@@ -246,20 +246,18 @@ def test_update_custom_config_success(config_manager):
 
     config_manager.update_custom_config(new_config)
 
-    config_manager.table.put_item.assert_called_once_with(
-        Item={
-            "Configuration": "Custom",
-            "ocr_backend": "bedrock",
-            "chat_model_id": "us.amazon.nova-lite-v1:0",
-        }
-    )
+    # Code uses update_item to merge values instead of replace
+    config_manager.table.update_item.assert_called_once()
+    call_kwargs = config_manager.table.update_item.call_args.kwargs
+    assert call_kwargs["Key"] == {"Configuration": "Custom"}
+    assert "UpdateExpression" in call_kwargs
 
 
 def test_update_custom_config_dynamodb_error(config_manager):
     """Test DynamoDB error during update is propagated."""
-    config_manager.table.put_item.side_effect = ClientError(
+    config_manager.table.update_item.side_effect = ClientError(
         {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "Throttled"}},
-        "PutItem",
+        "UpdateItem",
     )
 
     with pytest.raises(ClientError):

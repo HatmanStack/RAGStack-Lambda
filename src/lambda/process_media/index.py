@@ -414,11 +414,15 @@ def lambda_handler(event, context):
         ingest_media_arn = os.environ.get("INGEST_MEDIA_FUNCTION_ARN")
         if eb_event and ingest_media_arn:
             logger.info(f"EventBridge trigger: invoking IngestMedia for {document_id}")
-            lambda_client.invoke(
-                FunctionName=ingest_media_arn,
-                InvocationType="Event",  # Async invocation
-                Payload=json.dumps(result),
-            )
+            try:
+                lambda_client.invoke(
+                    FunctionName=ingest_media_arn,
+                    InvocationType="Event",  # Async invocation
+                    Payload=json.dumps(result),
+                )
+            except Exception as invoke_err:
+                # Log but don't fail - transcription succeeded, ingest can be retried
+                logger.error(f"Failed to invoke IngestMedia for {document_id}: {invoke_err}")
 
         return result
 

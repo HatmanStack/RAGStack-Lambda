@@ -16,6 +16,9 @@ const CREATE_UPLOAD_URL = gql`
 
 const client = generateClient();
 
+// Media extensions that go to content/ for EventBridge → ProcessMedia flow
+const MEDIA_EXTENSIONS = new Set(['.mp4', '.webm', '.mp3', '.wav', '.m4a', '.ogg']);
+
 export interface UploadProgress {
   filename: string;
   progress: number; // 0-100

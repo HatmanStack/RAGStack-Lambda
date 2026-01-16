@@ -283,9 +283,10 @@ class TestMediaSourceExtraction:
 
         assert len(sources) == 1
         source = sources[0]
-        # Presigned URL should include #t=start,end fragment
+        # documentUrl is the full video, segmentUrl has the #t=start,end fragment for deep linking
         assert source["documentUrl"] is not None
-        assert "#t=60,90" in source["documentUrl"]
+        assert source["segmentUrl"] is not None
+        assert "#t=60,90" in source["segmentUrl"]
 
     def test_document_source_not_marked_as_media(self):
         """Test that regular document sources are not marked as media."""

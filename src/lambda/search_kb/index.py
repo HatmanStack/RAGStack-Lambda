@@ -328,7 +328,7 @@ def lambda_handler(event, context):
                 if generated_filter:
                     retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
 
-                logger.info(f"[SEARCH RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={retrieval_config}")
+                logger.info(f"[SEARCH RETRIEVE] kb={knowledge_base_id}")
                 response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
                     retrievalQuery={"text": query},

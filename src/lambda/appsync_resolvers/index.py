@@ -1311,6 +1311,7 @@ def submit_image(args):
                 "s3_key": key,
                 "bucket": bucket,
                 "trigger_type": "submit_image",
+                "extract_text": extract_text,
             }
             logger.info(f"Invoking process_image for {image_id}")
             lambda_client.invoke(

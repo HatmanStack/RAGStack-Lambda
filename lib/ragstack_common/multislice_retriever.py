@@ -270,7 +270,7 @@ class MultiSliceRetriever:
                 vector_config["filter"] = filter_expr
 
             # Execute retrieve
-            logger.info(f"[SLICE RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={vector_config}")
+            logger.info(f"[SLICE RETRIEVE] kb_id={knowledge_base_id}, config={vector_config}")
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
@@ -437,7 +437,7 @@ class MultiSliceRetriever:
             if filter_expr:
                 vector_config["filter"] = filter_expr
 
-            logger.info(f"[SINGLE RETRIEVE] kb_id={knowledge_base_id}, query={query}, config={vector_config}")
+            logger.info(f"[SINGLE RETRIEVE] kb_id={knowledge_base_id}, config={vector_config}")
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
