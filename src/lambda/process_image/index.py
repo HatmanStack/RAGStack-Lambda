@@ -43,6 +43,7 @@ from ragstack_common.image import ImageStatus
 from ragstack_common.ingestion import start_ingestion_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.storage import write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -193,47 +194,6 @@ def extract_image_metadata(
     except Exception as e:
         logger.warning(f"Failed to extract metadata for image {image_id}: {e}")
         return {}
-
-
-def write_metadata_to_s3(s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file alongside the content file.
-
-    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
-    provided inline. The metadata file must be in the same location as the
-    content file with .metadata.json suffix.
-
-    Args:
-        s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
-        metadata: Dictionary of metadata key-value pairs
-
-    Returns:
-        S3 URI of the metadata file
-    """
-    # Parse S3 URI
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {s3_uri}")
-
-    path = s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-
-    # Create metadata file key (same location with .metadata.json suffix)
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Build metadata JSON in Bedrock KB format
-    metadata_content = {"metadataAttributes": metadata}
-
-    # Write to S3
-    s3.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
 
 
 def is_valid_uuid(value: str) -> bool:
@@ -705,5 +665,3 @@ def extract_text_from_image(s3_uri: str) -> str:
     except Exception as e:
         logger.error(f"Failed to extract text from image: {e}", exc_info=True)
         return ""
-
-

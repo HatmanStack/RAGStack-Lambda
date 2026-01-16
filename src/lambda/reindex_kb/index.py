@@ -14,7 +14,6 @@ Content Types:
 - Scraped (type="scraped"): Web content stored at output_s3_uri
 """
 
-import json
 import logging
 import os
 import time
@@ -28,8 +27,7 @@ from ragstack_common.appsync import publish_reindex_update
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
-from ragstack_common.storage import read_s3_text
+from ragstack_common.storage import read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -448,7 +446,7 @@ def process_text_item(
         metadata["source_url"] = item["source_url"]
 
     # Write metadata to S3
-    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
 
     # Ingest to new KB
     ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
@@ -537,7 +535,7 @@ def process_scraped_item(
         metadata["job_id"] = job_id
 
     # Write metadata to S3
-    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
 
     # Ingest to new KB
     ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
@@ -604,7 +602,7 @@ def process_media_item(
     # Ingest source video file for visual embeddings (if video)
     if input_s3_uri and media_type == "video":
         try:
-            video_metadata_uri = write_metadata_to_s3(input_s3_uri, metadata, data_bucket)
+            video_metadata_uri = write_metadata_to_s3(input_s3_uri, metadata)
             ingest_document(kb_id, ds_id, input_s3_uri, video_metadata_uri)
             logger.info(f"Reindexed video file {doc_id}: {filename}")
         except Exception as e:
@@ -613,7 +611,7 @@ def process_media_item(
     # Ingest full transcript for text search
     if output_s3_uri:
         try:
-            transcript_metadata_uri = write_metadata_to_s3(output_s3_uri, metadata, data_bucket)
+            transcript_metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
             ingest_document(kb_id, ds_id, output_s3_uri, transcript_metadata_uri)
             logger.info(f"Reindexed transcript {doc_id}: {filename}")
         except Exception as e:
@@ -656,9 +654,7 @@ def process_media_item(
                 }
 
                 segment_uri = f"s3://{bucket}/{segment_key}"
-                segment_metadata_uri = write_metadata_to_s3(
-                    segment_uri, segment_metadata, data_bucket
-                )
+                segment_metadata_uri = write_metadata_to_s3(segment_uri, segment_metadata)
                 ingest_document(kb_id, ds_id, segment_uri, segment_metadata_uri)
                 segment_count += 1
 
@@ -738,9 +734,9 @@ def process_image_item(
 
     # Write metadata to S3 for BOTH files (Bedrock requires metadata filename to match content)
     # Caption metadata
-    caption_metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata, data_bucket)
+    caption_metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata)
     # Image metadata (same content, different filename)
-    image_metadata_uri = write_metadata_to_s3(image_s3_uri, metadata, data_bucket)
+    image_metadata_uri = write_metadata_to_s3(image_s3_uri, metadata)
 
     # Ingest both image and caption to KB
     # Both documents have same metadata content but separate files
@@ -1314,43 +1310,6 @@ def extract_document_metadata(output_s3_uri: str, document_id: str) -> dict[str,
     except Exception as e:
         logger.warning(f"Failed to extract metadata for {document_id}: {e}")
         return {}
-
-
-def write_metadata_to_s3(output_s3_uri: str, metadata: dict, data_bucket: str) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file.
-
-    Args:
-        output_s3_uri: S3 URI of the content file
-        metadata: Dictionary of metadata
-        data_bucket: S3 bucket name
-
-    Returns:
-        S3 URI of the metadata file
-    """
-    if not output_s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
-
-    path = output_s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Normalize metadata for S3 Vectors (expand strings to searchable arrays)
-    normalized_metadata = normalize_metadata_for_s3(metadata)
-
-    metadata_content = {"metadataAttributes": normalized_metadata}
-
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
 
 
 def ingest_document(kb_id: str, ds_id: str, content_uri: str, metadata_uri: str) -> None:

@@ -33,7 +33,6 @@ Output:
 }
 """
 
-import json
 import logging
 import os
 import time
@@ -54,8 +53,7 @@ from ragstack_common.ingestion import (
     start_ingestion_with_retry,
 )
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
-from ragstack_common.storage import parse_s3_uri, read_s3_text
+from ragstack_common.storage import parse_s3_uri, read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -126,45 +124,6 @@ def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[
             reduced[key] = value
 
     return reduced
-
-
-def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file.
-
-    Args:
-        output_s3_uri: S3 URI of the content file.
-        metadata: Dictionary of metadata key-value pairs.
-
-    Returns:
-        S3 URI of the metadata file.
-    """
-    if not output_s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
-
-    path = output_s3_uri[5:]
-    if "/" not in path:
-        raise ValueError(f"Invalid S3 URI: missing object key in {output_s3_uri}")
-
-    bucket, key = path.split("/", 1)
-
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Normalize metadata for S3 Vectors
-    normalized_metadata = normalize_metadata_for_s3(metadata)
-
-    metadata_content = {"metadataAttributes": normalized_metadata}
-
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
 
 
 def ingest_text_to_kb(

@@ -48,7 +48,7 @@ from ragstack_common.multislice_retriever import MultiSliceRetriever
 from ragstack_common.sources import (
     construct_image_uri_from_content_uri,  # noqa: F401 - re-exported for tests
 )
-from ragstack_common.storage import parse_s3_uri
+from ragstack_common.storage import generate_presigned_url, parse_s3_uri
 
 # Initialize AWS clients (reused across warm invocations)
 s3_client = boto3.client("s3")
@@ -669,27 +669,6 @@ If the retrieved information doesn't contain the answer, say so and provide rele
     messages.append({"role": "user", "content": content_blocks})
 
     return messages
-
-
-def generate_presigned_url(bucket, key, expiration=3600):
-    """
-    Generate presigned URL for S3 object download.
-
-    Args:
-        bucket (str): S3 bucket name
-        key (str): S3 object key
-        expiration (int): URL expiration time in seconds (default 1 hour)
-
-    Returns:
-        str: Presigned URL or None if generation fails
-    """
-    try:
-        return s3_client.generate_presigned_url(
-            "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
-        )
-    except Exception as e:
-        logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
-        return None
 
 
 def format_timestamp(seconds):

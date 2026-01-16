@@ -40,8 +40,7 @@ from ragstack_common.config import (
 from ragstack_common.ingestion import check_document_status
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import normalize_metadata_for_s3
-from ragstack_common.storage import read_s3_text
+from ragstack_common.storage import read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -63,7 +62,6 @@ CORE_METADATA_KEYS = {
     "main_topic",
     "document_type",
 }
-
 
 
 def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1) -> dict[str, Any]:
@@ -222,50 +220,6 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
     except Exception as e:
         logger.warning(f"Error checking for existing metadata: {e}")
         return None
-
-
-def write_metadata_to_s3(output_s3_uri: str, metadata: dict[str, Any]) -> str:
-    """
-    Write metadata to S3 as a .metadata.json file alongside the content file.
-
-    For S3 Vectors knowledge bases, metadata must be stored in S3 rather than
-    provided inline. The metadata file must be in the same location as the
-    content file with .metadata.json suffix.
-
-    Args:
-        output_s3_uri: S3 URI of the content file (e.g., s3://bucket/path/file.txt)
-        metadata: Dictionary of metadata key-value pairs
-
-    Returns:
-        S3 URI of the metadata file
-    """
-    # Parse S3 URI
-    if not output_s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {output_s3_uri}")
-
-    path = output_s3_uri[5:]  # Remove 's3://'
-    bucket, key = path.split("/", 1)
-
-    # Create metadata file key (same location with .metadata.json suffix)
-    metadata_key = f"{key}.metadata.json"
-    metadata_uri = f"s3://{bucket}/{metadata_key}"
-
-    # Normalize metadata for S3 Vectors (convert multi-value fields to arrays)
-    normalized_metadata = normalize_metadata_for_s3(metadata)
-
-    # Build metadata JSON in Bedrock KB format
-    metadata_content = {"metadataAttributes": normalized_metadata}
-
-    # Write to S3
-    s3_client.put_object(
-        Bucket=bucket,
-        Key=metadata_key,
-        Body=json.dumps(metadata_content),
-        ContentType="application/json",
-    )
-
-    logger.info(f"Wrote metadata to {metadata_uri}")
-    return metadata_uri
 
 
 def get_file_type_from_filename(filename: str) -> str:

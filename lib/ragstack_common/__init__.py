@@ -16,16 +16,16 @@ from ragstack_common.config import (
     get_knowledge_base_config,
 )
 from ragstack_common.filter_generator import FilterGenerator
-from ragstack_common.ingestion import (
-    batch_check_document_statuses,
-    check_document_status,
-    start_ingestion_with_retry,
-)
 from ragstack_common.image import (
     ImageStatus,
     is_supported_image,
     validate_image_size,
     validate_image_type,
+)
+from ragstack_common.ingestion import (
+    batch_check_document_statuses,
+    check_document_status,
+    start_ingestion_with_retry,
 )
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
@@ -35,12 +35,18 @@ from ragstack_common.metadata_normalizer import (
     normalize_metadata_for_s3,
 )
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.storage import (
+    generate_presigned_url,
+    parse_s3_uri,
+    write_metadata_to_s3,
+)
 
 __all__ = [
     "batch_check_document_statuses",
     "check_document_status",
     "ConfigurationManager",
     "FilterGenerator",
+    "generate_presigned_url",
     "get_config_manager_or_none",
     "get_knowledge_base_config",
     "ImageStatus",
@@ -53,6 +59,7 @@ __all__ = [
     "is_supported_image",
     "log_summary",
     "normalize_metadata_for_s3",
+    "parse_s3_uri",
     "publish_document_update",
     "publish_image_update",
     "publish_scrape_update",
@@ -60,4 +67,5 @@ __all__ = [
     "start_ingestion_with_retry",
     "validate_image_size",
     "validate_image_type",
+    "write_metadata_to_s3",
 ]

@@ -129,6 +129,7 @@ class TestIngestMediaLambda:
         assert result["document_id"] == "media-123"
 
     @patch("ragstack_common.appsync.publish_document_update")
+    @patch("ragstack_common.storage.write_metadata_to_s3")
     @patch("ragstack_common.storage.read_s3_text")
     @patch("boto3.resource")
     @patch("boto3.client")
@@ -137,13 +138,14 @@ class TestIngestMediaLambda:
         mock_boto_client,
         mock_boto_resource,
         mock_read_s3,
+        mock_write_metadata,
         mock_publish,
         sample_media_event,
     ):
         """Test that handler writes metadata files and triggers KB sync."""
         mock_read_s3.return_value = "Test content"
+        mock_write_metadata.return_value = "s3://test-bucket/metadata.json"
 
-        mock_s3 = MagicMock()
         mock_bedrock_agent = MagicMock()
 
         mock_table = MagicMock()
@@ -153,8 +155,6 @@ class TestIngestMediaLambda:
         def client_factory(service_name, **kwargs):
             if service_name == "bedrock-agent":
                 return mock_bedrock_agent
-            if service_name == "s3":
-                return mock_s3
             return MagicMock()
 
         mock_boto_client.side_effect = client_factory
@@ -163,8 +163,8 @@ class TestIngestMediaLambda:
         result = module.lambda_handler(sample_media_event, None)
 
         assert "segments_indexed" in result
-        # Metadata files written to S3 (transcript + segments)
-        assert mock_s3.put_object.call_count >= 2
+        # Metadata files written via shared module (transcript + segments)
+        assert mock_write_metadata.call_count >= 2
 
     @patch("ragstack_common.appsync.publish_document_update")
     @patch("ragstack_common.storage.read_s3_text")

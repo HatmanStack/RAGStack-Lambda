@@ -20,6 +20,8 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.storage import parse_s3_uri
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -56,17 +58,6 @@ def parse_event(event: dict) -> dict:
         "execution_arn": detail.get("executionArn"),
         "status": detail.get("status"),
     }
-
-
-def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Parse S3 URI into bucket and key."""
-    if not s3_uri or not s3_uri.startswith("s3://"):
-        return None, None
-    path = s3_uri[5:]
-    if "/" not in path:
-        return path, ""
-    bucket, key = path.split("/", 1)
-    return bucket, key
 
 
 def create_metadata(document_id: str, filename: str) -> dict:
