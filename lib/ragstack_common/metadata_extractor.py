@@ -93,22 +93,24 @@ DO NOT include any text outside the JSON object."""
 
 # System prompt for manual mode extraction
 MANUAL_MODE_SYSTEM_PROMPT = """You are a metadata extraction assistant. Extract ONLY the specified \
-metadata fields from the document.
+metadata fields from the document. Do NOT extract any other fields.
 
 FIELDS TO EXTRACT: {manual_keys}
 
-RULES:
+{key_examples}
+
+STRICT RULES:
 1. Return ONLY valid JSON - no explanations or markdown
-2. Only include fields from the list above
-3. If a field is not applicable to this document, omit it
+2. ONLY include fields from the FIELDS TO EXTRACT list above - no other fields
+3. If a field is not applicable to this document, omit it entirely
 4. Keep values concise (under 100 characters)
 5. Use snake_case for all key names (lowercase with underscores)
 6. ALL VALUES MUST BE LOWERCASE - this is critical for filtering
 7. Extract ACTUAL content (names, places, dates) not abstract descriptions
+8. For array fields (like people_mentioned, surnames), use JSON arrays: ["value1", "value2"]
 
 OUTPUT FORMAT:
-Return a JSON object with only the specified fields that are present in the document.
-Example: {{"topic": "immigration", "document_type": "letter", "people_mentioned": "john smith"}}
+Return a JSON object with ONLY the specified fields. Do not add any fields not in the list.
 
 DO NOT include any text outside the JSON object."""
 
@@ -220,8 +222,11 @@ class MetadataExtractor:
 
             # Select appropriate system prompt based on mode
             if self.extraction_mode == "manual" and self.manual_keys:
+                # Build examples for manual keys from key library
+                key_examples = self._build_manual_key_examples()
                 system_prompt = MANUAL_MODE_SYSTEM_PROMPT.format(
-                    manual_keys=", ".join(self.manual_keys)
+                    manual_keys=", ".join(self.manual_keys),
+                    key_examples=key_examples,
                 )
             else:
                 system_prompt = EXTRACTION_SYSTEM_PROMPT
@@ -302,12 +307,53 @@ class MetadataExtractor:
                 "Only create a new key if no existing key captures the same concept."
             )
 
-        prompt_parts.append(
-            f"\n\nAim for around {self.max_keys} metadata fields - a few more or less is fine, "
-            "but focus on the most relevant and searchable attributes."
-        )
+        # Only add max_keys guidance in auto mode
+        if self.extraction_mode != "manual":
+            prompt_parts.append(
+                f"\n\nAim for around {self.max_keys} metadata fields - a few more or less is fine, "
+                "but focus on the most relevant and searchable attributes."
+            )
 
         return "\n".join(prompt_parts)
+
+    def _build_manual_key_examples(self) -> str:
+        """
+        Build example values for manual extraction keys from the key library.
+
+        Returns:
+            Formatted string with key examples, or empty string if no examples.
+        """
+        if not self.manual_keys:
+            return ""
+
+        examples = []
+        try:
+            # Get all active keys from library to find examples
+            active_keys = self.key_library.get_active_keys()
+            key_map = {k.get("key_name", "").lower(): k for k in active_keys}
+
+            for key in self.manual_keys:
+                normalized_key = key.lower().replace(" ", "_").replace("-", "_")
+                key_info = key_map.get(normalized_key)
+
+                if key_info and key_info.get("sample_values"):
+                    samples = key_info["sample_values"][:3]
+                    samples_str = ", ".join(f'"{s}"' for s in samples)
+                    examples.append(f"  - {normalized_key}: e.g., {samples_str}")
+                else:
+                    # Provide generic guidance for common keys
+                    examples.append(f"  - {normalized_key}")
+
+        except Exception as e:
+            logger.warning(f"Failed to get key examples from library: {e}")
+            # Fall back to just listing keys
+            for key in self.manual_keys:
+                normalized_key = key.lower().replace(" ", "_").replace("-", "_")
+                examples.append(f"  - {normalized_key}")
+
+        if examples:
+            return "EXAMPLES FOR EACH FIELD:\n" + "\n".join(examples)
+        return ""
 
     def _parse_response(self, response_text: str) -> dict[str, Any]:
         """
