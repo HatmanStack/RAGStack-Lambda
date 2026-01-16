@@ -222,18 +222,41 @@ def handle_init(event: dict) -> dict:
     new_kb = migrator.create_knowledge_base(suffix=timestamp)
     logger.info(f"Created new KB: {new_kb['kb_id']}")
 
-    # Run baseline sync on empty KB to establish sync tracking point
-    # This prevents full re-sync issues when final start_ingestion_job runs
-    try:
-        logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
-        bedrock_agent.start_ingestion_job(
-            knowledgeBaseId=new_kb["kb_id"],
-            dataSourceId=new_kb["data_source_id"],
-        )
-        logger.info("Baseline sync started successfully")
-    except Exception as e:
-        # Non-critical - log and continue
-        logger.warning(f"Baseline sync failed (will retry in finalize): {e}")
+    # Run baseline sync on empty KB and wait for completion
+    # This establishes sync tracking before any API ingestion
+    logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
+    baseline_response = bedrock_agent.start_ingestion_job(
+        knowledgeBaseId=new_kb["kb_id"],
+        dataSourceId=new_kb["data_source_id"],
+    )
+    baseline_job_id = baseline_response.get("ingestionJob", {}).get("ingestionJobId")
+    logger.info(f"Baseline sync started: {baseline_job_id}")
+
+    # Wait for baseline to complete before proceeding
+    if baseline_job_id:
+        max_wait = 120  # 2 minutes max
+        poll_interval = 5
+        elapsed = 0
+
+        while elapsed < max_wait:
+            job_response = bedrock_agent.get_ingestion_job(
+                knowledgeBaseId=new_kb["kb_id"],
+                dataSourceId=new_kb["data_source_id"],
+                ingestionJobId=baseline_job_id,
+            )
+            status = job_response.get("ingestionJob", {}).get("status")
+            logger.info(f"Baseline sync status: {status} ({elapsed}s)")
+
+            if status in ("COMPLETE", "FAILED"):
+                break
+
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+        if status == "FAILED":
+            logger.warning("Baseline sync failed, continuing anyway")
+        elif elapsed >= max_wait:
+            logger.warning("Baseline sync timed out, continuing anyway")
 
     # Return state for processing loop
     return {
