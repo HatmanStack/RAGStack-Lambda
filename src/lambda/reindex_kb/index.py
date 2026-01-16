@@ -141,9 +141,10 @@ def lambda_handler(event: dict, context: Any) -> dict:
 
     except Exception as e:
         logger.exception(f"Reindex error: {e}")
-        # Publish failure update
+        # Publish failure update - but NOT for finalize action since it has retries
+        # and the state machine will handle final failure via cleanup_failed state
         graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-        if graphql_endpoint:
+        if graphql_endpoint and action != "finalize":
             publish_reindex_update(
                 graphql_endpoint,
                 status="FAILED",
