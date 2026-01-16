@@ -934,15 +934,35 @@ def handle_finalize(event: dict) -> dict:
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
 
     # Start ingestion job for visual embeddings (images/videos)
-    # This must run after all API ingestion completes - if API is still processing,
-    # this will fail and the state machine will retry after a delay
+    # Wait for any ongoing API operations to complete first
     if new_data_source_id:
         logger.info(f"Starting ingestion job for visual embeddings on {new_kb_id}")
-        bedrock_agent.start_ingestion_job(
-            knowledgeBaseId=new_kb_id,
-            dataSourceId=new_data_source_id,
-        )
-        logger.info("Ingestion job started successfully")
+
+        # Poll until API operations complete (max 5 minutes)
+        max_wait = 300  # 5 minutes
+        poll_interval = 10  # 10 seconds
+        elapsed = 0
+
+        while elapsed < max_wait:
+            try:
+                bedrock_agent.start_ingestion_job(
+                    knowledgeBaseId=new_kb_id,
+                    dataSourceId=new_data_source_id,
+                )
+                logger.info("Ingestion job started successfully")
+                break
+            except bedrock_agent.exceptions.ValidationException as e:
+                if "ongoing KnowledgeBaseDocuments API request" in str(e):
+                    logger.info(f"API operations still in progress, waiting... ({elapsed}s)")
+                    time.sleep(poll_interval)
+                    elapsed += poll_interval
+                else:
+                    raise
+        else:
+            # Timeout - raise to trigger state machine retry
+            raise RuntimeError(
+                f"Timed out waiting for API operations to complete after {max_wait}s"
+            )
 
     # Publish deleting old KB status
     publish_reindex_update(
