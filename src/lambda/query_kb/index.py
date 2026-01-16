@@ -1574,12 +1574,19 @@ def lambda_handler(event, context):
             source_header = f"[Source: {filename}{ts_display}]\n" if filename else ""
 
             content_text = content.get("text", "") if isinstance(content, dict) else ""
-            is_visual = content_type == "visual" or content.get("type") == "VIDEO"
+            s3_uri = location.get("s3Location", {}).get("uri", "")
+            uri_lower = s3_uri.lower()
+            # Detect visual content by metadata OR by file extension (for visual embeddings)
+            is_visual = (
+                content_type == "visual"
+                or content.get("type") == "VIDEO"
+                or uri_lower.endswith((".jpeg", ".jpg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi"))
+            )
+            logger.info(f"[RESULT {result_rank}] uri={s3_uri}, content_type={content_type}, is_visual={is_visual}, has_text={bool(content_text)}")
 
             if is_visual:
                 # Visual match - get additional context (caption for images, transcript for videos)
                 visual_context = ""
-                s3_uri = location.get("s3Location", {}).get("uri", "")
                 tracked_type = ""  # Track the type from DynamoDB for labeling
 
                 # Extract document_id from URI (content/{docId}/...)
