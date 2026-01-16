@@ -30,6 +30,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -61,6 +62,17 @@ def get_config_manager():
     if _config_manager is None:
         _config_manager = ConfigurationManager()
     return _config_manager
+
+
+def convert_decimals(obj):
+    """Convert DynamoDB Decimal types to native Python types for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: convert_decimals(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    return obj
 
 
 TRACKING_TABLE = os.environ["TRACKING_TABLE"]
@@ -1345,10 +1357,8 @@ def format_image(item):
     if caption_s3_uri and caption_s3_uri.startswith("s3://"):
         caption_url = generate_presigned_download_url(caption_s3_uri)
 
-    # Format extracted_metadata as JSON if it exists
+    # Get extracted_metadata - pass dict directly, AppSync handles AWSJSON serialization
     extracted_metadata = item.get("extracted_metadata")
-    if extracted_metadata and isinstance(extracted_metadata, dict):
-        extracted_metadata = json.dumps(extracted_metadata)
 
     return {
         "imageId": item.get("document_id"),
@@ -1852,7 +1862,7 @@ def get_filter_examples(args):
                         "name": ex.get("name", ""),
                         "description": ex.get("description", ""),
                         "useCase": ex.get("use_case", ""),
-                        "filter": json.dumps(ex.get("filter", {})),
+                        "filter": json.dumps(convert_decimals(ex.get("filter", {}))),
                     }
                 )
 
