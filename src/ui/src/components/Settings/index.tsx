@@ -37,7 +37,6 @@ import {
   CopyToClipboard,
   ColumnLayout,
   Popover,
-  Icon,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
@@ -618,7 +617,25 @@ export function Settings() {
         </SpaceBetween>
       </Container>
 
-      <Container header={<Header variant="h2">Public Access</Header>}>
+      <ExpandableSection
+        variant="container"
+        headerText="Public Access"
+        headerInfo={
+          <Popover
+            header="About Public Access"
+            content="Control which features are accessible without authentication. When enabled, users can access these features without logging in. Useful for public-facing demos or open knowledge bases."
+            triggerType="custom"
+            dismissButton={false}
+            position="right"
+            size="medium"
+          >
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Public Access" />
+            </span>
+          </Popover>
+        }
+        defaultExpanded={false}
+      >
         <ColumnLayout columns={3} variant="text-grid">
           <Toggle
             checked={formValues.public_access_chat === true}
@@ -661,7 +678,7 @@ export function Settings() {
             Web Scraping
           </Toggle>
         </ColumnLayout>
-      </Container>
+      </ExpandableSection>
 
       <ExpandableSection
         variant="container"
@@ -675,9 +692,9 @@ export function Settings() {
             position="right"
             size="medium"
           >
-            <Box color="text-status-info" display="inline">
-              <Icon name="status-info" />
-            </Box>
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Metadata Extraction" />
+            </span>
           </Popover>
         }
         defaultExpanded={false}
@@ -756,7 +773,7 @@ export function Settings() {
           {formValues.metadata_extraction_mode === 'manual' && (
             <FormField
               label="Keys to Extract"
-              description="Metadata keys to extract when in Manual mode"
+              description="Metadata keys to extract when in Manual mode. System keys (content_type, media_type, filename) are preserved automatically."
             >
               <MetadataKeyInput
                 value={(formValues.metadata_manual_keys as string[]) || []}
@@ -793,9 +810,9 @@ export function Settings() {
             position="right"
             size="medium"
           >
-            <Box color="text-status-info" display="inline">
-              <Icon name="status-info" />
-            </Box>
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Metadata Query" />
+            </span>
           </Popover>
         }
         defaultExpanded={false}
@@ -887,7 +904,25 @@ export function Settings() {
 
       <MetadataPanel />
 
-      <Container header={<Header variant="h2">Runtime Configuration</Header>}>
+      <ExpandableSection
+        variant="container"
+        headerText="Runtime Configuration"
+        headerInfo={
+          <Popover
+            header="About Runtime Configuration"
+            content="Runtime settings that take effect immediately without redeployment. Quotas apply only to the chat API (daily message limits per user). Also includes OCR backend selection and chat model configuration."
+            triggerType="custom"
+            dismissButton={false}
+            position="right"
+            size="medium"
+          >
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="About Runtime Configuration" />
+            </span>
+          </Popover>
+        }
+        defaultExpanded={false}
+      >
         <SpaceBetween size="l">
           {(schema as { properties?: Record<string, SchemaProperty> }).properties &&
             Object.entries((schema as { properties: Record<string, SchemaProperty> }).properties)
@@ -899,7 +934,7 @@ export function Settings() {
                 </React.Fragment>
               ))}
         </SpaceBetween>
-      </Container>
+      </ExpandableSection>
 
       <Box float="right" padding={{ top: 's' }}>
         <SpaceBetween direction="horizontal" size="xs">
