@@ -180,6 +180,11 @@ def handle_init(event: dict) -> dict:
         processed_count=0,
     )
 
+    # Reset key library occurrence counts so they accurately reflect post-reindex state
+    key_library = get_key_library()
+    reset_count = key_library.reset_occurrence_counts()
+    logger.info(f"Reset occurrence counts for {reset_count} metadata keys")
+
     # Count all content to reindex (documents, images, scraped pages)
     tracking_table = dynamodb.Table(tracking_table_name)
     all_content = list_all_content(tracking_table)

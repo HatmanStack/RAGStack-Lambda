@@ -355,6 +355,55 @@ class KeyLibrary:
             logger.exception(f"Error deprecating key '{key_name}'")
             raise
 
+    def reset_occurrence_counts(self) -> int:
+        """
+        Reset occurrence_count to 0 for all keys.
+
+        Call this at the start of a reindex to ensure counts accurately
+        reflect the current state after reindex completes. Keys that
+        are no longer extracted will have count=0.
+
+        Returns:
+            Number of keys reset.
+        """
+        if not self._check_table_exists():
+            return 0
+
+        try:
+            # Get all keys
+            response = self.table.scan(ProjectionExpression="key_name")
+            items = response.get("Items", [])
+
+            while "LastEvaluatedKey" in response:
+                response = self.table.scan(
+                    ProjectionExpression="key_name",
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                )
+                items.extend(response.get("Items", []))
+
+            # Reset each key's count
+            reset_count = 0
+            for item in items:
+                key_name = item.get("key_name")
+                if key_name:
+                    self.table.update_item(
+                        Key={"key_name": key_name},
+                        UpdateExpression="SET occurrence_count = :zero, sample_values = :empty",
+                        ExpressionAttributeValues={":zero": 0, ":empty": []},
+                    )
+                    reset_count += 1
+
+            # Clear cache
+            self._active_keys_cache = None
+            self._active_keys_cache_time = None
+
+            logger.info(f"Reset occurrence counts for {reset_count} keys")
+            return reset_count
+
+        except ClientError:
+            logger.exception("Error resetting occurrence counts")
+            raise
+
     def get_library_stats(self) -> dict[str, Any]:
         """
         Get summary statistics about the key library.
