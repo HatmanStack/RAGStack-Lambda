@@ -25,6 +25,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { ChatInterface } from './ChatInterface';
 import { ChatWithSourcesProps, ChatMessage } from '../types';
+import { getOrCreateConversationId } from '../utils/conversationId';
 import styles from '../styles/ChatWithSources.module.css';
 
 /**
@@ -54,7 +55,7 @@ import styles from '../styles/ChatWithSources.module.css';
  * ```
  */
 export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
-  conversationId = 'default',
+  conversationId: propConversationId,
   className,
   headerText = 'Document Q&A',
   headerSubtitle = 'Ask questions about your documents',
@@ -66,6 +67,12 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   userId = null,
   userToken = null,
 }) => {
+  // Generate unique conversation ID if not provided
+  // This ensures each browser has isolated chat history
+  const conversationId = useMemo(() => {
+    return propConversationId || getOrCreateConversationId();
+  }, [propConversationId]);
+
   // Memoize callbacks to prevent unnecessary re-renders
   const handleSendMessage = useCallback(
     (message: string) => {

@@ -172,7 +172,9 @@ export const ImageUpload = () => {
             dismissButton={false}
             size="medium"
           >
-            <Button variant="inline-icon" iconName="status-info" ariaLabel="How it works" />
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="How it works" />
+            </span>
           </Popover>
         </Header>
 
@@ -256,7 +258,7 @@ export const ImageUpload = () => {
                   error={null}
                 />
 
-                <Box>
+                <Box margin={{ top: 'm', bottom: 'm' }}>
                   <Button
                     variant="primary"
                     onClick={handleSubmit}

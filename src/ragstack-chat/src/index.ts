@@ -45,5 +45,12 @@ export type {
   BedrockCitation,
 } from './types';
 
+// Export conversation utilities
+export {
+  getOrCreateConversationId,
+  clearConversationId,
+  resetConversationId,
+} from './utils/conversationId';
+
 // Version - will be updated by build process
 export const VERSION = '1.0.0';

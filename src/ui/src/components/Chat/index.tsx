@@ -168,8 +168,8 @@ initChat();
               style={{ minHeight: '500px' }}
               ref={(el) => {
                 if (el && !el.querySelector('ragstack-chat')) {
+                  // No conversation-id set - component auto-generates unique UUID per browser
                   const chat = document.createElement('ragstack-chat');
-                  chat.setAttribute('conversation-id', 'dashboard-chat');
                   el.appendChild(chat);
                 }
               }}

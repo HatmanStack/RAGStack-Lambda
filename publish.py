@@ -710,92 +710,9 @@ def get_stack_outputs(stack_name, region="us-east-1"):
         return {}
 
 
-def trigger_codebuild_projects(outputs, region="us-east-1", skip_ui=False, skip_ui_all=False):
-    """
-    Trigger CodeBuild projects for UI and web component deployment.
-
-    Args:
-        outputs: Stack outputs containing CodeBuild project names
-        region: AWS region
-        skip_ui: If True, skip UI build (only build web component)
-        skip_ui_all: If True, skip all UI builds (dashboard and web component)
-    """
-    codebuild = boto3.client('codebuild', region_name=region)
-
-    projects_to_build = []
-
-    # Web component build (unless skip_ui_all)
-    if not skip_ui_all:
-        wc_project = outputs.get('WebComponentBuildProjectName')
-        if wc_project:
-            projects_to_build.append(('Web Component', wc_project))
-
-    # UI build (unless skipped)
-    if not skip_ui:
-        ui_project = outputs.get('AmplifyDeployProjectName')
-        if ui_project:
-            projects_to_build.append(('UI', ui_project))
-
-    if not projects_to_build:
-        if skip_ui_all:
-            log_info("Skipping all UI builds (--skip-ui-all flag)")
-        elif skip_ui:
-            log_info("Skipping UI dashboard build (--skip-ui flag)")
-        else:
-            log_warning("No CodeBuild projects found in stack outputs")
-        return
-
-    # Start all builds
-    build_ids = []
-    for name, project in projects_to_build:
-        try:
-            log_info(f"Starting {name} build ({project})...")
-            response = codebuild.start_build(projectName=project)
-            build_id = response['build']['id']
-            build_ids.append((name, build_id))
-            log_success(f"{name} build started: {build_id.split(':')[1][:8]}...")
-        except Exception as e:
-            log_error(f"Failed to start {name} build: {e}")
-
-    if not build_ids:
-        return
-
-    # Wait for builds to complete
-    log_info("Waiting for builds to complete...")
-    import time
-    max_wait = 600  # 10 minutes
-    poll_interval = 15
-    elapsed = 0
-
-    while build_ids and elapsed < max_wait:
-        time.sleep(poll_interval)
-        elapsed += poll_interval
-
-        try:
-            response = codebuild.batch_get_builds(ids=[bid for _, bid in build_ids])
-            remaining = []
-            for build in response['builds']:
-                name = next((n for n, bid in build_ids if bid == build['id']), 'Unknown')
-                status = build['buildStatus']
-                if status == 'IN_PROGRESS':
-                    remaining.append((name, build['id']))
-                elif status == 'SUCCEEDED':
-                    log_success(f"{name} build completed successfully")
-                else:
-                    log_error(f"{name} build failed: {status}")
-            build_ids = remaining
-        except Exception as e:
-            log_warning(f"Error checking build status: {e}")
-
-    if build_ids:
-        log_warning(f"Builds still in progress after {max_wait}s: {[n for n, _ in build_ids]}")
-
-
-def configure_ui(stack_name, region="us-east-1"):
+def configure_ui(outputs, region="us-east-1"):
     """Configure UI with stack outputs."""
     log_info("Configuring UI...")
-
-    outputs = get_stack_outputs(stack_name, region)
 
     if not outputs:
         log_warning("No stack outputs found, skipping UI configuration")
@@ -1182,14 +1099,14 @@ Examples:
         # Get outputs
         outputs = get_stack_outputs(stack_name, args.region)
 
-        # Trigger CodeBuild projects for UI and web component
-        trigger_codebuild_projects(outputs, args.region, skip_ui=args.skip_ui, skip_ui_all=args.skip_ui_all)
+        # Note: CodeBuild projects are triggered by CloudFormation Custom Resources
+        # (WCCodeBuildRun, CodeBuildRun) when source keys change - no need to trigger again
 
         # Configuration table is seeded by ConfigurationSeeder Lambda custom resource
 
         # Configure UI
         if not args.skip_ui:
-            configure_ui(stack_name, args.region)
+            configure_ui(outputs, args.region)
 
         # Print outputs
         print_outputs(outputs, args.stack_name, args.region)

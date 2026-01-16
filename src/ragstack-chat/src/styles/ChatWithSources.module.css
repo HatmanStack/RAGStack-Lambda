@@ -520,10 +520,19 @@
 }
 
 .expandIcon {
-  font-size: var(--chat-font-size-xs);
+  font-size: 10px;
   color: var(--chat-color-text-secondary);
   transition: transform var(--chat-transition-fast);
-  min-width: 12px;
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.expandIconOpen {
+  transform: rotate(90deg);
 }
 
 .sourceLabel {

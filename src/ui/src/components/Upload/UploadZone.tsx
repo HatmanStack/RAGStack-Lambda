@@ -90,7 +90,9 @@ export const UploadZone = ({ onFilesSelected, disabled }: UploadZoneProps) => {
             dismissButton={false}
             size="medium"
           >
-            <Button variant="inline-icon" iconName="status-info" ariaLabel="Supported formats" />
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="Supported formats" />
+            </span>
           </Popover>
         </Header>
 

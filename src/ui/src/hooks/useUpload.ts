@@ -59,9 +59,17 @@ export const useUpload = () => {
       const { documentId } = uploadResult || {};
 
       // Upload to S3 using Amplify Storage with progress tracking
+      // Media files go to content/ (processed by EventBridge → ProcessMedia)
+      // Documents go to input/ (processed by Step Functions)
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      const isMedia = MEDIA_EXTENSIONS.has(ext);
+      const uploadPath = isMedia
+        ? `content/${documentId}/${file.name}`
+        : `input/${documentId}/${file.name}`;
+
       setCurrentUpload({ filename: file.name, progress: 10, status: 'uploading' });
       const operation = uploadData({
-        path: `input/${documentId}/${file.name}`,
+        path: uploadPath,
         data: file,
         options: {
           onProgress: ({ transferredBytes, totalBytes }) => {

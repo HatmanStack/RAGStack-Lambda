@@ -111,10 +111,8 @@ class RagStackChat extends HTMLElement {
       }
 
       const props: ChatWithSourcesProps = {
-        conversationId: this.getAttributeWithFallback(
-          'conversation-id',
-          'default'
-        ),
+        // Only pass conversationId if explicitly set - ChatWithSources will generate UUID otherwise
+        conversationId: super.getAttribute('conversation-id') || undefined,
         headerText: this.getAttributeWithFallback(
           'header-text',
           'Document Q&A'

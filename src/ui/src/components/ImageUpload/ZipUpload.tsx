@@ -153,7 +153,9 @@ export const ZipUpload = () => {
             dismissButton={false}
             size="large"
           >
-            <Button variant="inline-icon" iconName="status-info" ariaLabel="How to use" />
+            <span style={{ position: 'relative', top: '-2px' }}>
+              <Button variant="inline-icon" iconName="status-info" ariaLabel="How to use" />
+            </span>
           </Popover>
         </Header>
 
