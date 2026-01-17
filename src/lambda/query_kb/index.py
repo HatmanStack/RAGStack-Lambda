@@ -894,11 +894,21 @@ def extract_sources(citations):
                         is_image = True
                         logger.info(f"Image file detected: imageId={document_id}, file={last_part}")
                     elif last_part == "full_text.txt":
-                        # Scraped content
+                        # Old format scraped content
                         input_prefix = "input"
                         original_filename = f"{document_id}.scraped.md"
                         is_scraped = True
-                        logger.info(f"Scraped content detected: docId={document_id}")
+                        logger.info(f"Scraped content detected (old format): docId={document_id}")
+                    elif last_part_lower.endswith(".md"):
+                        # Possible new format scraped content: content/{job_id}/{url_slug}.md
+                        # Will confirm via tracking table lookup (doc_type == "scraped")
+                        input_prefix = "content"
+                        original_filename = last_part
+                        # Don't set is_scraped here - wait for tracking table confirmation
+                        logger.info(
+                            f"Markdown in content/ detected: doc_id={document_id}, "
+                            f"file={last_part} (will confirm type from tracking table)"
+                        )
                     else:
                         # PDF or other document
                         input_prefix = "input"
@@ -979,6 +989,12 @@ def extract_sources(citations):
                     doc_type = "document"  # Default when no tracking table
                     logger.warning("[SOURCE] TRACKING_TABLE env var not set!")
 
+                # Confirm is_scraped from tracking table doc_type (authoritative)
+                # This handles new format scraped content: content/{job_id}/{slug}.md
+                if doc_type == "scraped":
+                    is_scraped = True
+                    logger.info("[SOURCE] Confirmed scraped content from tracking table")
+
                 # Construct document URI
                 # For scraped content, use output URI (input may be deleted after processing)
                 # For other content, prefer input_s3_uri from tracking table
@@ -1022,15 +1038,44 @@ def extract_sources(citations):
                 # Extract snippet (content_text already extracted above)
                 snippet = content_text[:200] if content_text else ""
 
-                # For scraped content, get source URL from tracking table or frontmatter
+                # For scraped content, get source URL from metadata sidecar, tracking table,
+                # or frontmatter
                 source_url = None
                 if is_scraped:
-                    # Prefer source_url from tracking table (more reliable)
-                    if tracking_source_url:
+                    # For new format, read source_url from metadata sidecar file
+                    # URI: s3://bucket/content/{job_id}/{slug}.md
+                    # Metadata: {slug}.md.metadata.json
+                    if uri.endswith(".md"):
+                        metadata_uri = f"{uri}.metadata.json"
+                        try:
+                            metadata_path = metadata_uri.replace("s3://", "")
+                            meta_parts = metadata_path.split("/", 1)
+                            if len(meta_parts) == 2:
+                                meta_response = s3_client.get_object(
+                                    Bucket=meta_parts[0], Key=meta_parts[1]
+                                )
+                                meta_body = meta_response["Body"].read().decode("utf-8")
+                                meta_content = json.loads(meta_body)
+                                source_url = meta_content.get(
+                                    "metadataAttributes", {}
+                                ).get("source_url")
+                                # Handle case where source_url is stored as a list
+                                if isinstance(source_url, list):
+                                    source_url = source_url[0] if source_url else None
+                                if source_url:
+                                    logger.info(
+                                        f"[SOURCE] Got source_url from metadata: {source_url}"
+                                    )
+                        except Exception as e:
+                            logger.debug(f"[SOURCE] Could not read metadata sidecar: {e}")
+
+                    # Fallback: try tracking table (old format has source_url per-page)
+                    if not source_url and tracking_source_url:
                         source_url = tracking_source_url
                         logger.info(f"[SOURCE] Using source_url from tracking: {source_url}")
-                    else:
-                        # Fallback: try to extract from content frontmatter
+
+                    # Last fallback: try to extract from content frontmatter
+                    if not source_url:
                         source_url = extract_source_url_from_content(content_text)
                         logger.info(f"[SOURCE] Extracted source_url from content: {source_url}")
 
@@ -1044,6 +1089,7 @@ def extract_sources(citations):
                 # Deduplicate sources:
                 # - Video/media segments: use full URI (each timestamp is unique)
                 # - PDF pages: use document_id:page_num
+                # - Scraped pages: use source_url (each page has a unique URL)
                 # - Other content: use document_id
                 is_segment = doc_type == "media" or "segment-" in uri or uri.endswith("/video.mp4")
                 if is_segment:
@@ -1051,6 +1097,9 @@ def extract_sources(citations):
                     source_key = uri
                 elif page_num is not None:
                     source_key = f"{document_id}:{page_num}"
+                elif is_scraped and source_url:
+                    # Each scraped page has a unique source URL
+                    source_key = source_url
                 else:
                     source_key = document_id
 
