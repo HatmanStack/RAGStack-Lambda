@@ -115,6 +115,14 @@ type Mutation {
   # Note: Does not delete from S3 or Knowledge Base - those are cleaned up separately
   deleteDocuments(documentIds: [ID!]!): DeleteDocumentsResult @aws_api_key @aws_cognito_user_pools
 
+  # Reprocess a document/image/media by triggering the appropriate pipeline
+  # Documents -> Step Functions, Images -> ProcessImageFunction, Media -> ProcessMediaFunction
+  reprocessDocument(documentId: ID!): ReprocessResult @aws_api_key @aws_cognito_user_pools
+
+  # Reindex a document - re-extract metadata from existing OCR text and reingest to KB
+  # Faster than reprocess since it skips OCR extraction
+  reindexDocument(documentId: ID!): ReprocessResult @aws_api_key @aws_cognito_user_pools
+
   # Create presigned URL for ZIP archive upload (batch image upload)
   # Accessible via API key for external integrations, or Cognito for admin UI
   createZipUploadUrl(generateCaptions: Boolean): ZipUploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
@@ -289,6 +297,15 @@ type DeleteDocumentsResult @aws_api_key @aws_cognito_user_pools {
   errors: [String!]
 }
 
+# Result of reprocessing a document
+type ReprocessResult @aws_api_key @aws_cognito_user_pools {
+  documentId: ID!
+  type: String!
+  status: String!
+  executionArn: String
+  error: String
+}
+
 # Upload URL response
 type UploadUrl @aws_api_key @aws_cognito_user_pools {
   uploadUrl: String!
@@ -409,6 +426,7 @@ type ApiKeyResponse @aws_cognito_user_pools {
 enum ImageStatus {
   PENDING
   PROCESSING
+  SYNC_QUEUED
   INDEXED
   FAILED
 }
@@ -544,6 +562,7 @@ type ScrapeJob @aws_api_key @aws_cognito_user_pools {
   processedCount: Int!
   failedCount: Int!
   failedUrls: [String!]
+  jobMetadata: AWSJSON
   createdAt: AWSDateTime!
   updatedAt: AWSDateTime!
 }
