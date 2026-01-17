@@ -1286,6 +1286,7 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Layers:
         - !Ref RagstackCommonLayer
       Tags:
@@ -1302,22 +1303,17 @@ Resources:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt SyncRequestQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
                 - bedrock:GetKnowledgeBaseDocuments
-                - bedrock:StartIngestionJob
                 - bedrock:GetKnowledgeBase
                 - bedrock:GetDataSource
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
-            - Effect: Allow
-              Action:
-                - bedrock:StartIngestionJob
-                - bedrock:GetIngestionJob
-              Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
@@ -1350,6 +1346,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1364,21 +1361,16 @@ Resources:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt SyncRequestQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
-                - bedrock:StartIngestionJob
                 - bedrock:GetKnowledgeBase
                 - bedrock:GetDataSource
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
-            - Effect: Allow
-              Action:
-                - bedrock:StartIngestionJob
-                - bedrock:GetIngestionJob
-              Resource:
-                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
@@ -1813,12 +1805,16 @@ Resources:
           SCRAPE_STATE_MACHINE_ARN: !Ref ScrapeStateMachine
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
+          TRACKING_TABLE: !Ref TrackingTable
+          DATA_BUCKET: !Ref DataBucket
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigurationTable
         - SQSSendMessagePolicy:
@@ -1945,6 +1941,7 @@ Resources:
           SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
           SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          TRACKING_TABLE: !Ref TrackingTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1953,6 +1950,8 @@ Resources:
             TableName: !Ref ScrapeJobsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeUrlsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
         - Statement:
             - Effect: Allow
               Action:
@@ -2073,6 +2072,15 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !GetAtt ScrapeJobsTable.Arn
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource:
+                  - !GetAtt SyncRequestQueue.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -2098,6 +2106,7 @@ Resources:
       DefinitionSubstitutions:
         ScrapeStatusFunctionArn: !GetAtt ScrapeStatusFunction.Arn
         ScrapeJobsTable: !Ref ScrapeJobsTable
+        SyncRequestQueueUrl: !Ref SyncRequestQueue
       Role: !GetAtt ScrapeStateMachineExecutionRole.Arn
       Logging:
         Level: ALL
@@ -2888,6 +2897,8 @@ Resources:
           REINDEX_STATE_MACHINE_ARN: !GetAtt ReindexStateMachine.Arn
           # Process image function for submitImage
           PROCESS_IMAGE_FUNCTION_ARN: !GetAtt ProcessImageFunction.Arn
+          # Ingest to KB function for single document reindexing
+          INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -2929,6 +2940,11 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt IngestToKBFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
                 - states:StopExecution
               Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*'
         # Configuration table read for caption model selection
@@ -2943,6 +2959,19 @@ Resources:
                 # Wildcard regions needed: inference profiles route to any region
                 - !Sub 'arn:${AWS::Partition}:bedrock:*::foundation-model/*'
                 - !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*'
+        # Bedrock Agent for document deletion and scraped content reindex
+        # DeleteKnowledgeBaseDocuments requires StartIngestionJob permission internally
+        # IngestKnowledgeBaseDocuments for direct scraped content reindex (no LLM extraction)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:DeleteKnowledgeBaseDocuments
+                - bedrock:IngestKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
 
   StartUICodeBuild:
     Type: AWS::Serverless::Function
@@ -3339,6 +3368,24 @@ Resources:
       FieldName: deleteDocuments
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
+  ReprocessDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: reprocessDocument
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  ReindexDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: reindexDocument
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
   CreateZipUploadUrlResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -3556,6 +3603,128 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
+
+  # =========================================================================
+  # Sync Coordinator Queue (FIFO) - Serializes KB ingestion sync requests
+  # =========================================================================
+
+  SyncRequestDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-sync-request-dlq.fifo'
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600  # 14 days
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  SyncRequestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-sync-request.fifo'
+      FifoQueue: true
+      ContentBasedDeduplication: true  # Dedup identical messages within 5-min window
+      VisibilityTimeout: 600  # 10 min - enough for sync coordinator to complete
+      MessageRetentionPeriod: 86400  # 1 day
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SyncRequestDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  # Sync Coordinator Lambda - processes sync requests from FIFO queue
+  SyncCoordinatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-sync-coordinator'
+      CodeUri: src/lambda/sync_coordinator/
+      Handler: index.lambda_handler
+      Description: Coordinates KB sync requests - waits for running syncs, then starts new one
+      Runtime: python3.13
+      Timeout: 600  # 10 min - allows waiting for long syncs
+      MemorySize: 256
+      ReservedConcurrentExecutions: 1  # CRITICAL: prevents race conditions
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SyncRequestQueue.Arn
+            BatchSize: 1  # Process one message at a time
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:ListIngestionJobs
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+                - bedrock:ListIngestionJobs
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
+
+  # Sync Status Checker Lambda - verifies SYNC_QUEUED documents are indexed
+  SyncStatusCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-sync-status-checker'
+      CodeUri: src/lambda/sync_status_checker/
+      Handler: index.lambda_handler
+      Description: Checks KB status for SYNC_QUEUED documents and updates tracking table
+      Runtime: python3.13
+      Timeout: 120  # 2 minutes - enough to check batch of documents
+      MemorySize: 256
+      Layers:
+        - !Ref RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
+          DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          TRACKING_TABLE: !Ref TrackingTable
+          GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+      Tags:
+        Project: !Ref AWS::StackName
+        CostCenter: Engineering
+      Events:
+        ScheduleEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+            Description: Check status of documents waiting for KB sync
+            Enabled: true
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrackingTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:GetKnowledgeBaseDocuments
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action: appsync:GraphQL
+              Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
 
   # =========================================================================
   # SNS Topic for Alarm Notifications
