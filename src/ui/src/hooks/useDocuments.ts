@@ -4,6 +4,8 @@ import gql from 'graphql-tag';
 import { listScrapeJobs } from '../graphql/queries/listScrapeJobs';
 import { listImages } from '../graphql/queries/listImages';
 import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations/deleteDocuments';
+import { reprocessDocument as reprocessDocumentMutation } from '../graphql/mutations/reprocessDocument';
+import { reindexDocument as reindexDocumentMutation } from '../graphql/mutations/reindexDocument';
 
 // Type helper for GraphQL responses - Amplify returns a union type but we know queries return this shape
 type GqlResponse<T = Record<string, unknown>> = { data?: T; errors?: Array<{ message: string }> };
@@ -144,8 +146,6 @@ const ON_IMAGE_UPDATE = gql`
       filename
       caption
       status
-      s3Uri
-      thumbnailUrl
       errorMessage
       updatedAt
     }
@@ -422,6 +422,96 @@ export const useDocuments = () => {
     }
   }, []);
 
+  // Reprocess a document by ID
+  const reprocessDocument = useCallback(async (documentId: string) => {
+    try {
+      const response = await client.graphql({
+        query: reprocessDocumentMutation as unknown as string,
+        variables: { documentId }
+      }) as GqlResponse;
+
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors reprocessing document:', response.errors);
+        throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
+      }
+
+      const result = response.data?.reprocessDocument as {
+        documentId: string;
+        type: string;
+        status: string;
+        executionArn?: string;
+        error?: string;
+      };
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      // Update local state to show processing status
+      if (result) {
+        const updateStatus = (prev: DocumentItem[]) =>
+          prev.map(d =>
+            d.documentId === documentId
+              ? { ...d, status: result.status || 'PROCESSING' }
+              : d
+          );
+        setDocuments(updateStatus);
+        setScrapeJobs(updateStatus);
+        setImages(updateStatus);
+      }
+
+      return result;
+    } catch (err) {
+      console.error('Failed to reprocess document:', err);
+      throw err;
+    }
+  }, []);
+
+  // Reindex a document by ID (re-extract metadata, skip OCR)
+  const reindexDocument = useCallback(async (documentId: string) => {
+    try {
+      const response = await client.graphql({
+        query: reindexDocumentMutation as unknown as string,
+        variables: { documentId }
+      }) as GqlResponse;
+
+      if (response.errors) {
+        console.error('[useDocuments] GraphQL errors reindexing document:', response.errors);
+        throw new Error(response.errors[0]?.message || 'Failed to reindex document');
+      }
+
+      const result = response.data?.reindexDocument as {
+        documentId: string;
+        type: string;
+        status: string;
+        executionArn?: string;
+        error?: string;
+      };
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      // Update local state to show processing status
+      if (result) {
+        const updateStatus = (prev: DocumentItem[]) =>
+          prev.map(d =>
+            d.documentId === documentId
+              ? { ...d, status: result.status || 'PROCESSING' }
+              : d
+          );
+        setDocuments(updateStatus);
+        setScrapeJobs(updateStatus);
+        setImages(updateStatus);
+      }
+
+      return result;
+    } catch (err) {
+      console.error('Failed to reindex document:', err);
+      throw err;
+    }
+  }, []);
+
   useEffect(() => {
     // Initial fetch on mount
     fetchDocuments();
@@ -490,13 +580,15 @@ export const useDocuments = () => {
   }, [fetchDocuments, handleDocumentUpdate, handleScrapeUpdate, handleImageUpdate]);
 
   // Merge and deduplicate by documentId with type precedence: media > image > scrape > document
+  // Later sources (images, scrapeJobs) take precedence over earlier (documents) for same type
+  // This ensures subscription updates override stale data from initial fetch
   const allItems = useMemo(() => {
     const typePriority: Record<string, number> = { media: 4, image: 3, scrape: 2, document: 1 };
     const itemMap = new Map<string, DocumentItem>();
 
     [...documents, ...scrapeJobs, ...images].forEach(item => {
       const existing = itemMap.get(item.documentId);
-      if (!existing || typePriority[item.type] > typePriority[existing.type]) {
+      if (!existing || typePriority[item.type] >= typePriority[existing.type]) {
         itemMap.set(item.documentId, item);
       }
     });
@@ -515,6 +607,8 @@ export const useDocuments = () => {
     fetchDocuments,
     refreshDocuments,
     fetchDocument,
-    deleteDocuments
+    deleteDocuments,
+    reprocessDocument,
+    reindexDocument
   };
 };

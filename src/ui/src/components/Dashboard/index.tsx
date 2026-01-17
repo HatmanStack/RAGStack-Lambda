@@ -10,7 +10,7 @@ import { useScrape } from '../../hooks/useScrape';
 type ItemType = 'document' | 'scrape' | 'image' | 'media' | null;
 
 export const Dashboard = () => {
-  const { documents, loading, refreshDocuments, deleteDocuments } = useDocuments();
+  const { documents, loading, refreshDocuments, deleteDocuments, reprocessDocument, reindexDocument } = useDocuments();
   const { fetchJobDetail, selectedJob, cancelScrape } = useScrape();
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<ItemType>(null);
@@ -48,6 +48,30 @@ export const Dashboard = () => {
     }
   };
 
+  const handleReprocess = async (documentIds: string[]) => {
+    const results = await Promise.allSettled(
+      documentIds.map(id => reprocessDocument(id))
+    );
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some reprocess operations failed:', failures);
+    }
+    refreshDocuments();
+    return results;
+  };
+
+  const handleReindex = async (documentIds: string[]) => {
+    const results = await Promise.allSettled(
+      documentIds.map(id => reindexDocument(id))
+    );
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some reindex operations failed:', failures);
+    }
+    refreshDocuments();
+    return results;
+  };
+
   return (
     <ContentLayout
       header={
@@ -63,6 +87,8 @@ export const Dashboard = () => {
           onRefresh={refreshDocuments}
           onSelectDocument={handleSelectItem}
           onDelete={handleDelete}
+          onReprocess={handleReprocess}
+          onReindex={handleReindex}
         />
       </SpaceBetween>
 
@@ -80,10 +106,6 @@ export const Dashboard = () => {
           imageId={selectedDocumentId}
           visible={!!selectedDocumentId && selectedType === 'image'}
           onDismiss={handleDismiss}
-          onDelete={async () => {
-            handleDismiss();
-            refreshDocuments();
-          }}
         />
       )}
 
