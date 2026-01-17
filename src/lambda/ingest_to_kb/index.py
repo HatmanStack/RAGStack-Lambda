@@ -17,7 +17,7 @@ Input event:
 Output:
 {
     "document_id": "abc123",
-    "status": "indexed",
+    "status": "INDEXED",
     "ingestion_status": "STARTING",
     "metadata_extracted": true
 }
@@ -37,7 +37,7 @@ from ragstack_common.config import (
     get_config_manager_or_none,
     get_knowledge_base_config,
 )
-from ragstack_common.ingestion import check_document_status
+from ragstack_common.ingestion import check_document_status, ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import reduce_metadata
@@ -232,11 +232,14 @@ def lambda_handler(event, context):
     # Extract document info from event
     document_id = event.get("document_id")
     output_s3_uri = event.get("output_s3_uri")
+    force_extraction = event.get("force_extraction", False)
 
     if not document_id or not output_s3_uri:
         raise ValueError("document_id and output_s3_uri are required in event")
 
     logger.info(f"Ingesting document {document_id} from {output_s3_uri}")
+    if force_extraction:
+        logger.info("Force extraction enabled - will re-extract metadata")
 
     # Get DynamoDB table
     tracking_table = dynamodb.Table(tracking_table_name)
@@ -248,8 +251,10 @@ def lambda_handler(event, context):
     total_pages = doc_item.get("total_pages", 0)
 
     # Check for existing metadata (e.g., from scrape_process)
-    # If found, skip LLM extraction and use existing metadata
-    existing_metadata = check_existing_metadata(output_s3_uri)
+    # If found and not forcing extraction, skip LLM extraction and use existing metadata
+    existing_metadata = None
+    if not force_extraction:
+        existing_metadata = check_existing_metadata(output_s3_uri)
     llm_metadata_extracted = False
 
     # LLM-extracted metadata: written to S3 for KB filtering AND stored in DynamoDB
@@ -307,10 +312,10 @@ def lambda_handler(event, context):
                     "s3Location": {"uri": metadata_uri},
                 }
 
-            # Call Bedrock Agent to ingest the document
-            response = bedrock_agent.ingest_knowledge_base_documents(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
+            # Call Bedrock Agent to ingest the document (with retry for conflicts)
+            response = ingest_documents_with_retry(
+                kb_id=kb_id,
+                ds_id=ds_id,
                 documents=[document],
             )
 
@@ -347,7 +352,7 @@ def lambda_handler(event, context):
             update_expression = "SET #status = :status, updated_at = :updated_at"
             expression_names = {"#status": "status"}
             expression_values = {
-                ":status": "indexed",
+                ":status": "INDEXED",
                 ":updated_at": datetime.now(UTC).isoformat(),
             }
 
@@ -380,7 +385,7 @@ def lambda_handler(event, context):
 
         return {
             "document_id": document_id,
-            "status": "indexed",
+            "status": "INDEXED",
             "ingestion_status": ingestion_status,
             "knowledge_base_id": kb_id,
             "llm_metadata_extracted": llm_metadata_extracted,

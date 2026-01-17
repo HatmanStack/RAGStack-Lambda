@@ -107,6 +107,77 @@ def start_ingestion_with_retry(
     raise RuntimeError("Ingestion job failed with no error captured")
 
 
+def ingest_documents_with_retry(
+    kb_id: str,
+    ds_id: str,
+    documents: list[dict],
+    max_retries: int = 5,
+    base_delay: float = 2.0,
+    client=None,
+) -> dict:
+    """
+    Ingest documents with retry for concurrent API conflicts.
+
+    IngestDocuments and StartIngestionJob cannot run simultaneously on the same
+    data source. This function retries with exponential backoff when a conflict
+    is detected (e.g., when a sync job is running).
+
+    Args:
+        kb_id: Knowledge base ID.
+        ds_id: Data source ID.
+        documents: List of document objects for the IngestKnowledgeBaseDocuments API.
+        max_retries: Maximum retry attempts (default 5).
+        base_delay: Base delay in seconds (default 2.0).
+        client: Optional bedrock-agent client (for testing).
+
+    Returns:
+        IngestKnowledgeBaseDocuments response dict.
+
+    Raises:
+        ClientError: If all retries exhausted or non-retryable error.
+    """
+    bedrock_agent = client or _get_bedrock_agent()
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return bedrock_agent.ingest_knowledge_base_documents(
+                knowledgeBaseId=kb_id,
+                dataSourceId=ds_id,
+                documents=documents,
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            error_msg = e.response.get("Error", {}).get("Message", "")
+
+            # Check for retryable concurrent API conflict or service unavailable
+            is_conflict = error_code == "ConflictException"
+            is_validation_ongoing = (
+                error_code == "ValidationException" and "ongoing" in error_msg.lower()
+            )
+            is_service_unavailable = error_code == "ServiceUnavailableException"
+
+            if is_conflict or is_validation_ongoing or is_service_unavailable:
+                last_error = e
+                if attempt < max_retries:
+                    delay = base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"API conflict/unavailable ({error_code}), "
+                        f"retry {attempt + 1}/{max_retries} after {delay}s: {error_msg}"
+                    )
+                    time.sleep(delay)
+                    continue
+
+            # Non-retryable error, raise immediately
+            raise
+
+    # All retries exhausted
+    logger.error(f"All {max_retries} retries exhausted for document ingestion")
+    if last_error:
+        raise last_error
+    raise RuntimeError("Document ingestion failed with no error captured")
+
+
 def check_document_status(
     kb_id: str,
     ds_id: str,
