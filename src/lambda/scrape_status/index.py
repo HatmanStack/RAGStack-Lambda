@@ -207,17 +207,19 @@ def _handle_step_functions(
             )
 
             # Update tracking table record (job_id IS the document_id)
+            # Map job status to tracking status
+            tracking_status = "FAILED" if new_status == ScrapeStatus.FAILED.value else "INDEXED"
             tracking_tbl.update_item(
                 Key={"document_id": job_id},
                 UpdateExpression="SET #status = :status, total_pages = :pages, updated_at = :ts",
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
-                    ":status": "INDEXED",
+                    ":status": tracking_status,
                     ":pages": processed_count,
                     ":ts": datetime.now(UTC).isoformat(),
                 },
             )
-            logger.info(f"Updated tracking record for scrape job: {job_id}")
+            logger.info(f"Updated tracking record for scrape job: {job_id} -> {tracking_status}")
 
         result = {
             "job_id": job_id,

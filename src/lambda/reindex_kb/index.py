@@ -547,9 +547,7 @@ def process_scraped_item(
                 try:
                     response = s3_client.get_object(Bucket=bucket, Key=metadata_key)
                     existing = json.loads(response["Body"].read().decode("utf-8"))
-                    page_source_url = existing.get("metadataAttributes", {}).get(
-                        "source_url", ""
-                    )
+                    page_source_url = existing.get("metadataAttributes", {}).get("source_url", "")
                 except Exception:
                     logger.debug(f"No existing metadata for {key}")
 
@@ -592,9 +590,7 @@ def process_scraped_item(
     job_metadata = {}
     if job_id:
         job_metadata = get_or_extract_job_metadata(job_id, all_content, data_bucket)
-        logger.info(
-            f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {job_id})"
-        )
+        logger.info(f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {job_id})")
     else:
         logger.warning(f"No job_id found for scraped item {doc_id}, using page-only metadata")
 

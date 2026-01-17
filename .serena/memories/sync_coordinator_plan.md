@@ -6,7 +6,7 @@
 ## Solution: SQS FIFO Queue + Single-Concurrency Sync Coordinator
 
 ### Architecture
-```
+```text
 process-image → SQS FIFO Queue → sync-coordinator Lambda (concurrency=1)
      │              │                      │
  writes S3    dedup window           Wait for running sync

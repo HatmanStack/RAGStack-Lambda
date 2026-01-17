@@ -200,9 +200,15 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }: ScrapeJob
         </Container>
 
         {jobInfo.jobMetadata && (() => {
-          const metadata = typeof jobInfo.jobMetadata === 'string'
-            ? JSON.parse(jobInfo.jobMetadata)
-            : jobInfo.jobMetadata;
+          let metadata: Record<string, unknown>;
+          try {
+            metadata = typeof jobInfo.jobMetadata === 'string'
+              ? JSON.parse(jobInfo.jobMetadata)
+              : jobInfo.jobMetadata;
+          } catch {
+            // Malformed JSON - display raw value
+            metadata = { raw: jobInfo.jobMetadata };
+          }
           const entries = Object.entries(metadata).filter(([, v]) => v != null && v !== '');
           if (entries.length === 0) return null;
           return (

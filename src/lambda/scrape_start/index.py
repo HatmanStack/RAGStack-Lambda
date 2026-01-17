@@ -246,20 +246,26 @@ def lambda_handler(event, context):
         # Create tracking table record (job_id IS the document_id for scrape jobs)
         now = datetime.now(UTC).isoformat()
         tracking_table = dynamodb.Table(tracking_table_name)
-        tracking_table.put_item(
-            Item={
-                "document_id": job_id,  # job_id IS the document_id
-                "type": "scraped",
-                "status": "PROCESSING",
-                "filename": job.title or base_url,
-                "input_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
-                "output_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
-                "source_url": base_url,
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
-        logger.info(f"Created tracking record for scrape job: {job_id}")
+        try:
+            tracking_table.put_item(
+                Item={
+                    "document_id": job_id,  # job_id IS the document_id
+                    "type": "scraped",
+                    "status": "PROCESSING",
+                    "filename": job.title or base_url,
+                    "input_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
+                    "output_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
+                    "source_url": base_url,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            logger.info(f"Created tracking record for scrape job: {job_id}")
+        except Exception as e:
+            # Rollback: delete the job record to avoid orphan
+            logger.error(f"Failed to create tracking record, rolling back job: {e}")
+            table.delete_item(Key={"job_id": job_id})
+            raise
 
         # Send initial URL to discovery queue
         sqs = boto3.client("sqs")

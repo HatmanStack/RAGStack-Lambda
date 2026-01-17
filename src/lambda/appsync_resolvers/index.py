@@ -593,7 +593,7 @@ def reprocess_document(args):
         raise ValueError(f"Document is already being processed (status: {current_status})")
 
     # Handle scrapes - they need to be re-triggered from the scrape UI
-    if doc_type == "scrape":
+    if doc_type in ("scrape", "scraped"):
         return {
             "documentId": document_id,
             "type": doc_type,
@@ -609,7 +609,6 @@ def reprocess_document(args):
         return _reprocess_media(document_id, item, table)
     # Default: document (including "document" and "scraped" types)
     return _reprocess_as_document(document_id, item, table)
-
 
 
 def _list_kb_uris_for_document(input_s3_uri: str) -> list[str]:
@@ -668,6 +667,7 @@ def _list_kb_uris_for_document(input_s3_uri: str) -> list[str]:
     except ClientError as e:
         logger.warning(f"Failed to list KB URIs for {input_s3_uri}: {e}")
         return []
+
 
 def _delete_from_kb_for_reprocess(item: dict) -> None:
     """
@@ -866,7 +866,6 @@ def _reprocess_as_document(document_id: str, item: dict, table) -> dict:
     }
 
 
-
 # File extensions for visual/media content that shouldn't be reindexed
 VISUAL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
 MEDIA_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac"}
@@ -948,9 +947,7 @@ def _list_text_uris_for_reindex(input_s3_uri: str) -> list[str]:
         return []
 
 
-def _reindex_scraped_content(
-    document_id: str, text_uris: list[str], kb_id: str, ds_id: str
-) -> int:
+def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str, ds_id: str) -> int:
     """
     Reindex scraped content by re-extracting metadata from the base page.
 
@@ -1084,16 +1081,18 @@ def _reindex_scraped_content(
             logger.info(f"Wrote metadata for {uri}: {list(page_metadata.keys())}")
 
             # Build document for ingestion
-            documents.append({
-                "content": {
-                    "dataSourceType": "S3",
-                    "s3": {"s3Location": {"uri": uri}},
-                },
-                "metadata": {
-                    "type": "S3_LOCATION",
-                    "s3Location": {"uri": metadata_uri},
-                },
-            })
+            documents.append(
+                {
+                    "content": {
+                        "dataSourceType": "S3",
+                        "s3": {"s3Location": {"uri": uri}},
+                    },
+                    "metadata": {
+                        "type": "S3_LOCATION",
+                        "s3Location": {"uri": metadata_uri},
+                    },
+                }
+            )
             ingested_count += 1
 
         except Exception as e:
@@ -1141,10 +1140,8 @@ def reindex_document(args):
     if not is_valid_uuid(document_id):
         raise ValueError("Invalid document ID format")
 
-    if not INGEST_TO_KB_FUNCTION_ARN:
-        raise ValueError("Reindex not configured - INGEST_TO_KB_FUNCTION_ARN not set")
-
-    # Get document from tracking table
+    # Get document from tracking table first to check type
+    # (scraped docs don't need INGEST_TO_KB_FUNCTION_ARN)
     table = dynamodb.Table(TRACKING_TABLE)
     response = table.get_item(Key={"document_id": document_id})
     item = response.get("Item")
@@ -1154,6 +1151,10 @@ def reindex_document(args):
 
     doc_type = item.get("type", "document")
     current_status = item.get("status", "").lower()
+
+    # Non-scraped docs need INGEST_TO_KB_FUNCTION_ARN for Lambda invocation
+    if doc_type != "scraped" and not INGEST_TO_KB_FUNCTION_ARN:
+        raise ValueError("Reindex not configured - INGEST_TO_KB_FUNCTION_ARN not set")
 
     # Check if already processing
     if current_status in ("processing", "transcribing", "pending"):
@@ -1221,6 +1222,19 @@ def reindex_document(args):
             )
         except ValueError as e:
             logger.error(f"KB config not available for scraped reindex: {e}")
+            # Revert status since we can't complete reindex
+            table.update_item(
+                Key={"document_id": document_id},
+                UpdateExpression=(
+                    "SET #status = :status, updated_at = :updated_at, error_message = :error"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": "FAILED",
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                    ":error": "Reindex requires Knowledge Base configuration",
+                },
+            )
             raise ValueError("Reindex requires Knowledge Base configuration") from e
     else:
         # Regular documents: invoke IngestToKB Lambda for each text file

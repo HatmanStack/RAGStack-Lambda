@@ -27,6 +27,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("KNOWLEDGE_BASE_ID", "test-kb-id")
     monkeypatch.setenv("DATA_SOURCE_ID", "test-ds-id")
+    monkeypatch.setenv("SYNC_REQUEST_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue.fifo")
 
 
 @pytest.fixture
@@ -66,6 +67,10 @@ def mock_boto3():
             "ingestionJob": {"ingestionJobId": "job-123", "status": "STARTING"}
         }
 
+        # Mock SQS client (for sync queue)
+        mock_sqs = MagicMock()
+        mock_sqs.send_message.return_value = {"MessageId": "test-message-id"}
+
         # Mock DynamoDB resource
         mock_table = MagicMock()
         mock_table.get_item.return_value = {
@@ -88,6 +93,8 @@ def mock_boto3():
                 return mock_bedrock_agent
             if service == "s3":
                 return mock_s3
+            if service == "sqs":
+                return mock_sqs
             return MagicMock()
 
         mock_client.side_effect = client_factory
@@ -97,6 +104,7 @@ def mock_boto3():
             "bedrock_runtime": mock_bedrock_runtime,
             "bedrock_agent": mock_bedrock_agent,
             "s3": mock_s3,
+            "sqs": mock_sqs,
             "dynamodb": mock_dynamodb,
             "table": mock_table,
         }
@@ -111,6 +119,7 @@ class TestProcessImage:
 
         # Reinitialize module clients
         module.s3 = mock_boto3["s3"]
+        module.sqs = mock_boto3["sqs"]
         module.dynamodb = mock_boto3["dynamodb"]
         module.bedrock_agent = mock_boto3["bedrock_agent"]
 

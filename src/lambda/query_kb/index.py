@@ -1056,9 +1056,9 @@ def extract_sources(citations):
                                 )
                                 meta_body = meta_response["Body"].read().decode("utf-8")
                                 meta_content = json.loads(meta_body)
-                                source_url = meta_content.get(
-                                    "metadataAttributes", {}
-                                ).get("source_url")
+                                source_url = meta_content.get("metadataAttributes", {}).get(
+                                    "source_url"
+                                )
                                 # Handle case where source_url is stored as a list
                                 if isinstance(source_url, list):
                                     source_url = source_url[0] if source_url else None

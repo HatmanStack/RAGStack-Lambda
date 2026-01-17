@@ -436,7 +436,39 @@ def lambda_handler(event, context):
                     "error": str(e),
                 }
         else:
-            logger.warning("SYNC_REQUEST_QUEUE_URL not set, skipping sync queue")
+            # Missing queue config - fail since we can't guarantee indexing
+            error_msg = "SYNC_REQUEST_QUEUE_URL not configured"
+            logger.error(f"Failed to queue sync for image {image_id}: {error_msg}")
+            tracking_table.update_item(
+                Key={"document_id": image_id},
+                UpdateExpression=(
+                    "SET #status = :status, error_message = :error, "
+                    "updated_at = :updated_at, output_s3_uri = :output_uri, "
+                    "caption_s3_uri = :caption_uri, extracted_metadata = :metadata"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": "INGESTION_FAILED",
+                    ":error": error_msg,
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                    ":output_uri": input_s3_uri,
+                    ":caption_uri": text_s3_uri,
+                    ":metadata": combined_metadata,
+                },
+            )
+            if graphql_endpoint:
+                publish_image_update(
+                    graphql_endpoint,
+                    image_id,
+                    filename,
+                    "INGESTION_FAILED",
+                    error_message=error_msg,
+                )
+            return {
+                "image_id": image_id,
+                "status": "INGESTION_FAILED",
+                "error": error_msg,
+            }
 
         # Update image status in DynamoDB
         # Store URIs and extracted metadata

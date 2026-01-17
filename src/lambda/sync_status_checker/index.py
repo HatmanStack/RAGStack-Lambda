@@ -95,9 +95,11 @@ def update_document_status(
         if error_message:
             update_expr += ", error_message = :error"
             expr_values[":error"] = error_message
-
-        # Remove ingestion_job_id on completion (success or failure)
-        update_expr += " REMOVE ingestion_job_id"
+            # Remove ingestion_job_id on completion (success or failure)
+            update_expr += " REMOVE ingestion_job_id"
+        else:
+            # Remove both ingestion_job_id and any stale error_message on success
+            update_expr += " REMOVE ingestion_job_id, error_message"
 
         table.update_item(
             Key={"document_id": document_id},
