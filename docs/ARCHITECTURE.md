@@ -129,6 +129,8 @@ Upload → DetectFileType → Route by Type:
 6. **Sources:** KB URIs resolved to original files via tracking table
 7. **Store:** Save turn to conversation history (14-day TTL)
 
+**Media sources:** Results from video/audio include `timestampStart`, `timestampEnd` (seconds), `timestampDisplay` ("1:30-2:00"), and `segmentUrl` with `#t=start,end` fragment for direct playback positioning.
+
 ### Real-time Updates
 All state changes publish via GraphQL subscriptions:
 - `onDocumentUpdate` - Document processing progress
