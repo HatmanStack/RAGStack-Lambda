@@ -124,7 +124,8 @@ class TestProcessImage:
             result = module.lambda_handler(event, None)
 
         assert result["image_id"] == "test-image-id"
-        assert result["status"] == "INDEXED"
+        # Status is SYNC_QUEUED until sync_status_checker confirms KB indexing
+        assert result["status"] == "SYNC_QUEUED"
 
         # Verify S3 files were created (caption.txt, metadata files)
         put_calls = mock_boto3["s3"].put_object.call_args_list

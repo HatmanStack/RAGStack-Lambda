@@ -27,6 +27,7 @@ class ImageStatus(str, Enum):
 
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
+    SYNC_QUEUED = "SYNC_QUEUED"  # Files created, waiting for KB sync
     INDEXED = "INDEXED"
     FAILED = "FAILED"
 

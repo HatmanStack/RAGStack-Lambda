@@ -40,7 +40,6 @@ from botocore.exceptions import ClientError
 from ragstack_common.appsync import publish_image_update
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.image import ImageStatus
-from ragstack_common.ingestion import start_ingestion_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.storage import (
@@ -54,10 +53,9 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
-bedrock_agent = boto3.client("bedrock-agent", region_name=os.environ.get("AWS_REGION"))
-
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
+sqs = boto3.client("sqs")
 
 # Configuration table name (optional, for getting chat model)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
@@ -382,23 +380,67 @@ def lambda_handler(event, context):
         )
         logger.info(f"Created image metadata at s3://{bucket}/{image_metadata_key}")
 
-        # Start KB ingestion job for visual embeddings
+        # Queue sync request for KB ingestion (visual embeddings)
+        # The sync coordinator Lambda will handle waiting for any running sync
+        # and starting the new ingestion job
         config_manager = get_config_manager()
         kb_id, ds_id = get_knowledge_base_config(config_manager)
-        logger.info(f"Starting ingestion for image {image_id}: kb={kb_id}, ds={ds_id}")
+        sync_queue_url = os.environ.get("SYNC_REQUEST_QUEUE_URL")
 
-        try:
-            ingestion_response = start_ingestion_with_retry(kb_id, ds_id)
-            job_info = ingestion_response.get("ingestionJob", {})
-            job_id = job_info.get("ingestionJobId")
-            logger.info(f"Started ingestion job {job_id} for image {image_id}")
-        except ClientError as e:
-            logger.error(f"Failed to start ingestion for image {image_id}: {e}")
-            # Don't fail the whole process - files are created, ingestion can be retried
-            job_id = None
+        if sync_queue_url:
+            try:
+                sqs.send_message(
+                    QueueUrl=sync_queue_url,
+                    MessageBody=json.dumps(
+                        {
+                            "kb_id": kb_id,
+                            "ds_id": ds_id,
+                            "document_ids": [image_id],
+                            "source": "process_image",
+                        }
+                    ),
+                    MessageGroupId="sync-requests",  # All sync requests in same FIFO group
+                )
+                logger.info(f"Queued sync request for image {image_id}")
+            except ClientError as e:
+                logger.error(f"Failed to queue sync request for image {image_id}: {e}")
+                # Set status to INGESTION_FAILED since we can't guarantee indexing
+                tracking_table.update_item(
+                    Key={"document_id": image_id},
+                    UpdateExpression=(
+                        "SET #status = :status, error_message = :error, "
+                        "updated_at = :updated_at, output_s3_uri = :output_uri, "
+                        "caption_s3_uri = :caption_uri, extracted_metadata = :metadata"
+                    ),
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": "INGESTION_FAILED",
+                        ":error": f"Failed to queue sync request: {e}",
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                        ":output_uri": input_s3_uri,
+                        ":caption_uri": text_s3_uri,
+                        ":metadata": combined_metadata,
+                    },
+                )
+                if graphql_endpoint:
+                    publish_image_update(
+                        graphql_endpoint,
+                        image_id,
+                        filename,
+                        "INGESTION_FAILED",
+                        error_message=str(e),
+                    )
+                return {
+                    "image_id": image_id,
+                    "status": "INGESTION_FAILED",
+                    "error": str(e),
+                }
+        else:
+            logger.warning("SYNC_REQUEST_QUEUE_URL not set, skipping sync queue")
 
         # Update image status in DynamoDB
         # Store URIs and extracted metadata
+        # Status is SYNC_QUEUED - files created, waiting for KB sync to complete
         update_expr = (
             "SET #status = :status, updated_at = :updated_at, "
             "output_s3_uri = :output_uri, caption_s3_uri = :caption_uri, "
@@ -409,14 +451,14 @@ def lambda_handler(event, context):
             UpdateExpression=update_expr,
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
-                ":status": ImageStatus.INDEXED.value,
+                ":status": ImageStatus.SYNC_QUEUED.value,
                 ":updated_at": datetime.now(UTC).isoformat(),
                 ":output_uri": input_s3_uri,  # Original image
                 ":caption_uri": text_s3_uri,  # Caption text file
                 ":metadata": combined_metadata,
             },
         )
-        logger.info(f"Updated image {image_id} status to INDEXED")
+        logger.info(f"Updated image {image_id} status to SYNC_QUEUED")
 
         # Publish real-time update
         if graphql_endpoint:
@@ -425,7 +467,7 @@ def lambda_handler(event, context):
                     graphql_endpoint,
                     image_id,
                     filename,
-                    ImageStatus.INDEXED.value,
+                    ImageStatus.SYNC_QUEUED.value,
                     caption=caption,
                 )
             except Exception as e:
@@ -433,7 +475,7 @@ def lambda_handler(event, context):
 
         return {
             "image_id": image_id,
-            "status": ImageStatus.INDEXED.value,
+            "status": ImageStatus.SYNC_QUEUED.value,
             "llm_metadata_extracted": bool(llm_metadata),
             "metadata_keys": list(combined_metadata.keys()),
         }
