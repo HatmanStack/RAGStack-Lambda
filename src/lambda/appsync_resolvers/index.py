@@ -1109,6 +1109,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
             logger.info(f"Ingested {len(documents)} scraped pages: {response}")
         except Exception as e:
             logger.error(f"Failed to ingest scraped pages: {e}")
+            raise  # Propagate to caller so job is marked FAILED, not INDEXED
 
     return ingested_count
 
@@ -1236,6 +1237,22 @@ def reindex_document(args):
                 },
             )
             raise ValueError("Reindex requires Knowledge Base configuration") from e
+        except Exception as e:
+            # Handle ingestion failures from _reindex_scraped_content
+            logger.error(f"Scraped content reindex failed: {e}")
+            table.update_item(
+                Key={"document_id": document_id},
+                UpdateExpression=(
+                    "SET #status = :status, updated_at = :updated_at, error_message = :error"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": "FAILED",
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                    ":error": f"Reindex failed: {str(e)[:200]}",
+                },
+            )
+            raise
     else:
         # Regular documents: invoke IngestToKB Lambda for each text file
         for _i, uri in enumerate(text_uris):
