@@ -17,7 +17,40 @@ import {
 import { generateClient } from 'aws-amplify/api';
 import { getConfiguration } from '../../graphql/queries/getConfiguration';
 import { updateConfiguration } from '../../graphql/mutations/updateConfiguration';
+import { ApiDocs } from '../common/ApiDocs';
 import type { GqlResponse } from '../../types/graphql';
+
+const graphqlEndpoint = import.meta.env.VITE_GRAPHQL_URL || '';
+
+// Chat API examples
+const chatGraphql = `query QueryKnowledgeBase($query: String!, $conversationId: String) {
+  queryKnowledgeBase(query: $query, conversationId: $conversationId) {
+    answer
+    conversationId
+    sources { documentId, filename, snippet, score }
+    filterApplied
+  }
+}`;
+
+const chatJsExample = `const res = await fetch(ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+  body: JSON.stringify({
+    query: QUERY_KB,
+    variables: {
+      query: 'What is the return policy?',
+      conversationId: 'user-123-session'  // Optional: for multi-turn context
+    }
+  })
+});
+const { answer, sources } = (await res.json()).data.queryKnowledgeBase;`;
+
+const chatCurlExample = `curl -X POST 'ENDPOINT' \\
+  -H 'Content-Type: application/json' \\
+  -H 'x-api-key: API_KEY' \\
+  -d '{
+    "query": "query { queryKnowledgeBase(query: \\"What is the return policy?\\") { answer, sources { snippet } } }"
+  }'`;
 
 
 interface ConfigData {
@@ -317,6 +350,19 @@ initChat();
               </SpaceBetween>
           </ExpandableSection>
         </Container>
+
+        {graphqlEndpoint && (
+          <ApiDocs
+            title="Chat API"
+            description="For backend integrations, MCP servers, and scripts. Supports multi-turn conversations via conversationId."
+            endpoint={graphqlEndpoint}
+            examples={[
+              { id: 'graphql', label: 'GraphQL', code: chatGraphql },
+              { id: 'js', label: 'JavaScript', code: chatJsExample },
+              { id: 'curl', label: 'cURL', code: chatCurlExample },
+            ]}
+          />
+        )}
       </SpaceBetween>
     </ContentLayout>
   );

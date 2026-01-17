@@ -22,8 +22,12 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]  # (bucket, key)
 def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str
 def read_s3_binary(s3_uri: str) -> bytes
 def write_s3_text(s3_uri: str, content: str, content_type: str = "text/plain") -> None
-def write_s3_binary(s3_uri: str, content: bytes, content_type: str = "application/octet-stream") -> None
 def delete_s3_object(s3_uri: str) -> None
+def generate_presigned_url(s3_uri: str, expiration: int = 3600) -> str
+def write_metadata_to_s3(s3_uri: str, metadata: dict) -> None
+def extract_filename_from_s3_uri(s3_uri: str) -> str
+def get_file_type_from_filename(filename: str) -> str
+def is_valid_uuid(value: str) -> bool
 ```
 
 ## ocr.py
@@ -42,7 +46,8 @@ class OcrService:
 class BedrockClient:
     def __init__(region: str | None = None, max_retries: int = 7, initial_backoff: float = 2)
     def invoke_model(model_id: str, system_prompt: str | list, content: list, temperature: float = 0.0) -> dict
-    def generate_embeddings(text: str, model_id: str = "amazon.nova-embed-text-v1:0") -> list[float]
+    def extract_text_from_response(response: dict) -> str
+    def get_metering_data(response: dict) -> dict
 ```
 
 **Environment:** `AWS_REGION`
@@ -82,7 +87,8 @@ class Page:
 def validate_image_type(content_type: str | None, filename: str | None) -> tuple[bool, str]
 def validate_image_size(size_bytes: int | None) -> tuple[bool, str]
 def is_supported_image(filename: str) -> bool
-def resize_image_for_bedrock(image_bytes: bytes, max_dimension: int = 2048) -> bytes
+def resize_image(image_bytes: bytes, max_dimension: int = 2048) -> bytes
+def prepare_bedrock_image_attachment(image_bytes: bytes, content_type: str) -> dict
 ```
 
 **Supported:** JPG, PNG, GIF, WebP, AVIF (max 10MB)
@@ -93,6 +99,7 @@ def resize_image_for_bedrock(image_bytes: bytes, max_dimension: int = 2048) -> b
 def publish_document_update(graphql_endpoint: str, document_id: str, filename: str, status: str, **kwargs) -> None
 def publish_image_update(graphql_endpoint: str, image_id: str, filename: str, status: str, **kwargs) -> None
 def publish_scrape_update(graphql_endpoint: str, job_id: str, base_url: str, **kwargs) -> None
+def publish_reindex_update(graphql_endpoint: str, status: str, total_documents: int, processed_count: int, **kwargs) -> None
 ```
 
 ## auth.py
@@ -312,3 +319,78 @@ class ScrapeJob:
 ```
 
 **Architecture:** Discovery via SQS, HTTP-first fetching with Playwright fallback, SHA-256 content deduplication.
+
+## ingestion.py
+
+Bedrock Knowledge Base ingestion with retry logic for concurrent API conflicts.
+
+```python
+def start_ingestion_with_retry(kb_id: str, ds_id: str, max_retries: int = 5, base_delay: float = 5, client=None) -> dict
+def ingest_documents_with_retry(kb_id: str, ds_id: str, documents: list[dict], max_retries: int = 5, base_delay: float = 2, client=None) -> dict
+def check_document_status(kb_id: str, ds_id: str, s3_uri: str, sleep_first: bool = True, client=None) -> str
+def batch_check_document_statuses(kb_id: str, ds_id: str, s3_uris: list[str], batch_size: int = 25, client=None) -> dict[str, str]
+```
+
+**Environment:** `AWS_REGION`
+
+**Retry behavior:** Exponential backoff when IngestDocuments/StartIngestionJob conflict.
+
+## transcribe_client.py
+
+AWS Transcribe client wrapper for batch transcription jobs.
+
+```python
+class TranscribeClient:
+    def __init__(region: str | None = None, language_code: str = "en-US", enable_speaker_diarization: bool = True)
+    def start_transcription_job(document_id: str, input_s3_uri: str, output_bucket: str) -> str  # Returns job_name
+    def get_job_status(job_name: str) -> str  # QUEUED, IN_PROGRESS, COMPLETED, FAILED
+    def get_transcript_result(job_name: str) -> dict
+    def wait_for_completion(job_name: str, timeout_seconds: int = 1800, poll_interval: int = 30) -> dict
+    def parse_transcript_with_timestamps(result: dict) -> list[dict]  # Returns word-level timestamps
+```
+
+**Environment:** `AWS_REGION`
+
+**Supported formats:** MP4, WebM, MP3, WAV, M4A, OGG, FLAC
+
+## media_segmenter.py
+
+Segments transcripts into time-aligned chunks for embedding and search.
+
+```python
+class MediaSegmenter:
+    def __init__(segment_duration: int = 30)
+    def segment_transcript(words: list[dict], total_duration: float) -> list[dict]
+```
+
+**Segment fields:** `text`, `start_time`, `end_time`, `speaker` (if diarization enabled)
+
+**Default segment:** 30 seconds (configurable via `media_segment_duration_seconds`)
+
+## metadata_normalizer.py
+
+Normalizes metadata for S3 Vectors storage with smart array expansion.
+
+```python
+def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str]
+def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]
+def reduce_metadata(metadata: dict[str, Any], reduction_level: int = 1, core_keys: frozenset[str] | None = None) -> dict[str, Any]
+```
+
+**Expansion:** "chicago, illinois" → ["chicago, illinois", "chicago", "illinois"]
+
+**Reduction levels:** 1 = no reduction, 2 = truncate arrays, 3 = core keys only
+
+## exceptions.py
+
+Media processing exception hierarchy.
+
+```python
+class MediaProcessingError(Exception)  # Base exception
+class TranscriptionError(MediaProcessingError)  # AWS Transcribe errors
+class UnsupportedMediaFormatError(MediaProcessingError)  # Invalid format
+class MediaDurationExceededError(MediaProcessingError)  # Too long
+class MediaFileSizeExceededError(MediaProcessingError)  # Too large
+class AudioExtractionError(MediaProcessingError)  # Audio extraction failed
+class SegmentationError(MediaProcessingError)  # Segmentation failed
+```

@@ -28,6 +28,7 @@ Serverless document and media processing with AI chat. Upload documents, images,
 - ⏱️ **NEW** Media sources with timestamp links - click to play at exact position
 - 🔍 Metadata filtering - auto-discover document metadata and filter search results
 - 🔄 Knowledge Base reindex - regenerate metadata for existing documents with updated settings
+- 🗑️ Document management - reprocess, reindex, or delete documents from the dashboard
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)
 - 🚀 One-click deploy
 - 💰 $7-10/month (1000 docs, Textract + Haiku)
@@ -188,7 +189,7 @@ Ask questions about your content. Sources show where answers came from.
 
 ## Documentation
 
-- [Configuration](docs/CONFIGURATION.md) - Settings, quotas & API keys
+- [Configuration](docs/CONFIGURATION.md) - Settings, quotas, API keys & document management
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Metadata Filtering](docs/METADATA_FILTERING.md) - Auto-discover metadata and filter results
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere

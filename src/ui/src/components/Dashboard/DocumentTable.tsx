@@ -333,21 +333,6 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
           description={`Showing: ${dateRangeLabel}`}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <ButtonDropdown
-                items={[
-                  { id: 'reindex', text: 'Reindex', description: 'Re-extract metadata only' },
-                  { id: 'reprocess', text: 'Reprocess', description: 'Full pipeline (OCR + metadata)' },
-                  { id: 'delete', text: 'Delete', description: 'Remove from S3 and KB' }
-                ]}
-                onItemClick={({ detail }) => handleAction(detail.id)}
-                disabled={selectedItems.length === 0 || actionInProgress !== null}
-                loading={actionInProgress !== null}
-              >
-                Actions{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
-              </ButtonDropdown>
-              <Button onClick={onRefresh} iconName="refresh" loading={loading}>
-                Refresh
-              </Button>
               <Popover
                 header="Document Actions"
                 content={
@@ -371,10 +356,23 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
                 position="bottom"
                 size="large"
               >
-                <span style={{ position: 'relative', top: '-2px' }}>
-                  <Button variant="inline-icon" iconName="status-info" ariaLabel="About document actions" />
-                </span>
+                <Button variant="inline-icon" iconName="status-info" ariaLabel="About document actions" />
               </Popover>
+              <ButtonDropdown
+                items={[
+                  { id: 'reindex', text: 'Reindex', description: 'Re-extract metadata only' },
+                  { id: 'reprocess', text: 'Reprocess', description: 'Full pipeline (OCR + metadata)' },
+                  { id: 'delete', text: 'Delete', description: 'Remove from S3 and KB' }
+                ]}
+                onItemClick={({ detail }) => handleAction(detail.id)}
+                disabled={selectedItems.length === 0 || actionInProgress !== null}
+                loading={actionInProgress !== null}
+              >
+                Actions{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
+              </ButtonDropdown>
+              <Button onClick={onRefresh} iconName="refresh" loading={loading}>
+                Refresh
+              </Button>
             </SpaceBetween>
           }
         >

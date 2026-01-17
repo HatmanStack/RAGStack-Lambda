@@ -17,19 +17,27 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 
 | Component | Purpose |
 |-----------|---------|
-| DetectFileType Lambda | Detect file type and route to appropriate processor |
+| DetectFileType Lambda | Detect file type, count pages, and route to appropriate processor |
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) for PDF/images |
 | ProcessMedia Lambda | Video/audio transcription via AWS Transcribe, 30s segmentation |
 | ProcessText Lambda | Text extraction for HTML, CSV, JSON, XML, EML, EPUB, DOCX, XLSX |
-| GetPageInfo Lambda | Count pages, determine batching strategy |
 | EnqueueBatches Lambda | Queue batch jobs to SQS |
 | BatchProcessor Lambda | Process 10-page batches (max 10 concurrent) |
 | CombinePages Lambda | Merge partial outputs into final document |
 | IngestToKB Lambda | Trigger Bedrock KB ingestion (Nova Multimodal embeddings) |
+| IngestMedia Lambda | Ingest transcribed media segments to KB |
 | QueryKB Lambda | Query documents, chat with sources |
+| SearchKB Lambda | Direct KB search (no chat context) |
 | ProcessImage Lambda | Image ingestion with captions |
 | Scrape Lambdas | Web scraping pipeline (start/discover/process/status) |
-| Step Functions | Orchestrate document/scrape workflows |
+| ReindexKB Lambda | Orchestrate KB reindexing with new metadata settings |
+| MetadataAnalyzer Lambda | Sample KB vectors and generate filter examples |
+| SyncCoordinator Lambda | Coordinate KB sync operations |
+| SyncStatusChecker Lambda | Check KB sync completion status |
+| ConfigurationResolver Lambda | Resolve DynamoDB configuration |
+| AppSyncResolvers Lambda | GraphQL resolver implementations |
+| ApiKeyResolver Lambda | API key validation and management |
+| Step Functions | Orchestrate document/scrape/reindex workflows |
 | Bedrock KB | Vector storage & retrieval (S3 backend) |
 | S3 | File storage (input/, output/, images/) |
 | DynamoDB | Document tracking, config, conversations, scrape jobs |
@@ -50,7 +58,7 @@ Upload → DetectFileType → Route by Type:
          │   └── ProcessText → IngestToKB → Bedrock KB
          │
          ├── OCR files (PDF, images)
-         │   └── GetPageInfo → ProcessDocument → IngestToKB → Bedrock KB
+         │   └── ProcessDocument → IngestToKB → Bedrock KB
          │
          ├── Media files (MP4, WebM, MP3, WAV, M4A, OGG, FLAC)
          │   └── ProcessMedia → AWS Transcribe → 30s segments → IngestToKB → Bedrock KB
@@ -72,7 +80,7 @@ Upload → DetectFileType → Route by Type:
 
 **Large PDFs (>20 pages):**
 1. **Upload:** User → S3 input/ → EventBridge → Step Functions
-2. **Page Info:** GetPageInfo counts pages, creates 10-page batches
+2. **Page Info:** DetectFileType counts pages, creates 10-page batches
 3. **Queue:** EnqueueBatches → SQS batch queue
 4. **Process:** BatchProcessor Lambda (max 10 concurrent) → partial files
 5. **Combine:** Last batch triggers CombinePages → merged output

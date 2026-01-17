@@ -52,7 +52,7 @@ export const Search = () => {
 
         {graphqlEndpoint && (
           <ApiDocs
-            title="Search API (Server-side)"
+            title="Search API"
             description="For backend integrations, MCP servers, and scripts."
             endpoint={graphqlEndpoint}
             examples={examples}

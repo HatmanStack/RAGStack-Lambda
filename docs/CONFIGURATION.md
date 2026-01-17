@@ -191,9 +191,46 @@ For the complete list of supported languages, see [AWS Transcribe Supported Lang
 - Using Haiku: ~$0.0001 per document
 - Disable if not needed to reduce costs
 
+## Document Management
+
+Manage individual documents from the Dashboard → Documents tab.
+
+### Actions
+
+| Action | Description | Use Case |
+|--------|-------------|----------|
+| **Reprocess** | Re-run full processing pipeline (OCR/text extraction → metadata → KB ingestion) | Document failed, content changed, or OCR quality issues |
+| **Reindex** | Re-extract metadata only (skip OCR), reingest to KB | Changed metadata settings, faster than reprocess |
+| **Delete** | Remove from tracking table (does not delete from S3 or KB) | Clean up failed or unwanted documents |
+
+### How to Use
+
+1. Navigate to **Dashboard → Documents** (or Images)
+2. Select document(s) using checkboxes
+3. Click action button (Reprocess, Reindex, or Delete)
+4. For Reprocess/Reindex: monitor progress via status column
+
+### GraphQL API
+
+```graphql
+# Reprocess - full pipeline
+mutation { reprocessDocument(documentId: "doc-123") { documentId status } }
+
+# Reindex - metadata only (faster)
+mutation { reindexDocument(documentId: "doc-123") { documentId status } }
+
+# Delete documents (batch)
+mutation { deleteDocuments(documentIds: ["doc-1", "doc-2"]) { deletedCount } }
+
+# Delete image
+mutation { deleteImage(imageId: "img-123") }
+```
+
+**Note:** Delete removes tracking records only. S3 files and KB vectors remain until the next full reindex or manual cleanup.
+
 ## Knowledge Base Reindex
 
-Reindex allows you to regenerate metadata for all existing documents using current extraction settings. This is useful when:
+Reindex allows you to regenerate metadata for **all** existing documents using current extraction settings. This is useful when:
 
 - You uploaded documents before enabling metadata extraction
 - You changed metadata settings (e.g., switched from auto to manual mode with specific keys)
