@@ -27,7 +27,9 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("KNOWLEDGE_BASE_ID", "test-kb-id")
     monkeypatch.setenv("DATA_SOURCE_ID", "test-ds-id")
-    monkeypatch.setenv("SYNC_REQUEST_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue.fifo")
+    monkeypatch.setenv(
+        "SYNC_REQUEST_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue.fifo"
+    )
 
 
 @pytest.fixture

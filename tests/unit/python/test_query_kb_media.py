@@ -19,8 +19,9 @@ class TestMediaSourceExtraction:
     """Test cases for media source extraction from KB citations."""
 
     @pytest.fixture(autouse=True)
-    def _mock_boto3(self):
+    def _mock_boto3(self, monkeypatch):
         """Mock boto3 clients to avoid AWS initialization."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
         mock_boto3 = MagicMock()
         mock_dynamodb = MagicMock()
         mock_dynamodb_client = MagicMock()
@@ -253,8 +254,9 @@ class TestMediaSourceExtraction:
             }
         }
         index.dynamodb.Table.return_value = mock_table
-        index.s3_client.generate_presigned_url.return_value = (
-            "https://s3.amazonaws.com/test-bucket/input/media123/video.mp4?sig=xyz"
+        # Mock the generate_presigned_url from ragstack_common.storage (used by extract_sources)
+        index.generate_presigned_url = MagicMock(
+            return_value="https://s3.amazonaws.com/test-bucket/input/media123/video.mp4?sig=xyz"
         )
 
         citations = [
