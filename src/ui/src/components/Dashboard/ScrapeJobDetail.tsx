@@ -50,6 +50,7 @@ interface ScrapeJobInfo {
   failedCount?: number;
   createdAt?: string;
   failedUrls?: string[];
+  jobMetadata?: Record<string, unknown> | string;
   config?: {
     maxPages?: number;
     maxDepth?: number;
@@ -197,6 +198,32 @@ export const ScrapeJobDetail = ({ job, visible, onDismiss, onCancel }: ScrapeJob
             label={`${jobInfo.totalUrls || 0} pages discovered`}
           />
         </Container>
+
+        {jobInfo.jobMetadata && (() => {
+          let metadata: Record<string, unknown>;
+          try {
+            metadata = typeof jobInfo.jobMetadata === 'string'
+              ? JSON.parse(jobInfo.jobMetadata)
+              : jobInfo.jobMetadata;
+          } catch {
+            // Malformed JSON - display raw value
+            metadata = { raw: jobInfo.jobMetadata };
+          }
+          const entries = Object.entries(metadata).filter(([, v]) => v != null && v !== '');
+          if (entries.length === 0) return null;
+          return (
+            <Container header={<Header variant="h3">Extracted Metadata</Header>}>
+              <ColumnLayout columns={2} variant="text-grid">
+                {entries.map(([key, value]) => (
+                  <div key={key}>
+                    <Box variant="awsui-key-label">{key.replace(/_/g, ' ')}</Box>
+                    <Box>{String(value)}</Box>
+                  </div>
+                ))}
+              </ColumnLayout>
+            </Container>
+          );
+        })()}
 
         {jobInfo.failedUrls && jobInfo.failedUrls.length > 0 && (
           <Container header={<Header variant="h3">Failed URLs</Header>}>

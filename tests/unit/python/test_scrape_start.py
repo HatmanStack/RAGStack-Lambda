@@ -26,6 +26,8 @@ def _mock_env(monkeypatch):
         "SCRAPE_DISCOVERY_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/queue"
     )
     monkeypatch.setenv("SCRAPE_STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
+    monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
+    monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
 
 
@@ -93,8 +95,8 @@ class TestScrapeStartHandler:
             assert result["base_url"] == "https://docs.example.com"
             assert result["status"] == "discovering"
 
-            # Verify DynamoDB put was called
-            mock_table.put_item.assert_called_once()
+            # Verify DynamoDB put was called twice (jobs table + tracking table)
+            assert mock_table.put_item.call_count == 2
 
             # Verify SQS message was sent
             mock_sqs.send_message.assert_called_once()
@@ -127,8 +129,8 @@ class TestConfigParsing:
             event = {"base_url": "https://example.com"}
             module.lambda_handler(event, None)
 
-            # Verify job was created with default config
-            call_args = mock_table.put_item.call_args
+            # Verify job was created with default config (first put_item call)
+            call_args = mock_table.put_item.call_args_list[0]
             job_data = call_args.kwargs.get("Item") or call_args[1].get("Item")
 
             assert job_data["config"]["max_pages"] == 1000

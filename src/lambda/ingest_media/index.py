@@ -26,13 +26,14 @@ Input event:
 Output:
 {
     "document_id": "abc123",
-    "status": "indexed",
+    "status": "INDEXED",
     "text_indexed": true,
     "segments_indexed": 4,
     "metadata_keys": ["main_topic", "speakers", ...]
 }
 """
 
+import json
 import logging
 import os
 import time
@@ -50,7 +51,7 @@ from ragstack_common.config import (
 from ragstack_common.ingestion import (
     batch_check_document_statuses,
     check_document_status,
-    start_ingestion_with_retry,
+    ingest_documents_with_retry,
 )
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.metadata_normalizer import reduce_metadata
@@ -63,6 +64,7 @@ logger.setLevel(logging.INFO)
 bedrock_agent = boto3.client("bedrock-agent")
 dynamodb = boto3.resource("dynamodb")
 s3_client = boto3.client("s3")
+sqs = boto3.client("sqs")
 
 
 # Lazy-initialized singletons
@@ -122,10 +124,10 @@ def ingest_text_to_kb(
             },
         }
 
-        # Ingest via direct API (Bedrock handles embedding + indexing)
-        response = bedrock_agent.ingest_knowledge_base_documents(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
+        # Ingest via direct API with retry for conflicts
+        response = ingest_documents_with_retry(
+            kb_id=kb_id,
+            ds_id=ds_id,
             documents=[document],
         )
 
@@ -326,11 +328,11 @@ def _batch_ingest_segments(
                 }
             )
 
-        # Ingest batch via direct API
+        # Ingest batch via direct API with retry for conflicts
         try:
-            bedrock_agent.ingest_knowledge_base_documents(
-                knowledgeBaseId=kb_id,
-                dataSourceId=ds_id,
+            ingest_documents_with_retry(
+                kb_id=kb_id,
+                ds_id=ds_id,
                 documents=documents,
             )
             logger.debug(f"Ingested batch of {len(documents)} segments")
@@ -553,7 +555,7 @@ def lambda_handler(event, context):
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
-                ":status": "indexed",
+                ":status": "INDEXED",
                 ":updated_at": datetime.now(UTC).isoformat(),
                 ":metadata": ingested_metadata,
             },
@@ -568,25 +570,41 @@ def lambda_handler(event, context):
             total_pages=total_segments,
         )
 
-        # Start KB ingestion job for visual embeddings (video file)
-        # This syncs the video file to KB for multimodal visual search
-        try:
-            ingestion_response = start_ingestion_with_retry(kb_id, ds_id)
-            job_info = ingestion_response.get("ingestionJob", {})
-            ingestion_job_id = job_info.get("ingestionJobId")
-            logger.info(f"Started ingestion job {ingestion_job_id} for media {document_id}")
-        except ClientError as e:
-            logger.warning(f"Failed to start visual ingestion for {document_id}: {e}")
-            # Don't fail - text ingestion succeeded, visual can be retried
-            ingestion_job_id = None
+        # Queue sync request for visual embeddings (video file)
+        # The sync coordinator Lambda will handle waiting for any running sync
+        sync_queue_url = os.environ.get("SYNC_REQUEST_QUEUE_URL")
+        sync_queued = False
+
+        if sync_queue_url:
+            try:
+                sqs.send_message(
+                    QueueUrl=sync_queue_url,
+                    MessageBody=json.dumps(
+                        {
+                            "kb_id": kb_id,
+                            "ds_id": ds_id,
+                            "document_ids": [document_id],
+                            "source": "ingest_media",
+                        }
+                    ),
+                    MessageGroupId="sync-requests",  # All sync requests in same FIFO group
+                )
+                sync_queued = True
+                logger.info(f"Queued sync request for media {document_id}")
+            except ClientError as e:
+                logger.warning(f"Failed to queue sync for visual ingestion {document_id}: {e}")
+                # Note: Text ingestion succeeded, visual sync failed to queue
+                # We log warning but don't fail - text content is indexed
+        else:
+            logger.warning("SYNC_REQUEST_QUEUE_URL not set, skipping visual sync queue")
 
         return {
             "document_id": document_id,
-            "status": "indexed",
+            "status": "INDEXED",
             "text_indexed": text_indexed,
             "segments_indexed": segments_indexed,
             "metadata_keys": list(extracted_metadata.keys()),
-            "visual_ingestion_job_id": ingestion_job_id,
+            "sync_queued": sync_queued,
         }
 
     except ClientError as e:

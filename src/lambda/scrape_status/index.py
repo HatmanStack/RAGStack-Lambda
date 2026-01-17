@@ -69,23 +69,31 @@ def lambda_handler(event, context):
     urls_table = os.environ.get("SCRAPE_URLS_TABLE")
     discovery_queue_url = os.environ.get("SCRAPE_DISCOVERY_QUEUE_URL")
     processing_queue_url = os.environ.get("SCRAPE_PROCESSING_QUEUE_URL")
+    tracking_table_name = os.environ.get("TRACKING_TABLE")
 
     if not jobs_table:
         raise ValueError("SCRAPE_JOBS_TABLE environment variable required")
+    if not tracking_table_name:
+        raise ValueError("TRACKING_TABLE environment variable required")
 
     dynamodb = boto3.resource("dynamodb")
     jobs_tbl = dynamodb.Table(jobs_table)
     urls_tbl = dynamodb.Table(urls_table) if urls_table else None
+    tracking_tbl = dynamodb.Table(tracking_table_name)
 
     # Determine event type (API Gateway or Step Functions)
     if "httpMethod" in event:
         return _handle_api_request(event, jobs_tbl, urls_tbl)
 
     # Step Functions invocation
-    return _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queue_url)
+    return _handle_step_functions(
+        event, jobs_tbl, tracking_tbl, discovery_queue_url, processing_queue_url
+    )
 
 
-def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queue_url):
+def _handle_step_functions(
+    event, jobs_tbl, tracking_tbl, discovery_queue_url, processing_queue_url
+):
     """Handle Step Functions status polling."""
     job_id = event.get("job_id")
     if not job_id:
@@ -197,6 +205,21 @@ def _handle_step_functions(event, jobs_tbl, discovery_queue_url, processing_queu
                 processed_count=processed_count,
                 failed_count=failed_count,
             )
+
+            # Update tracking table record (job_id IS the document_id)
+            # Map job status to tracking status
+            tracking_status = "FAILED" if new_status == ScrapeStatus.FAILED.value else "INDEXED"
+            tracking_tbl.update_item(
+                Key={"document_id": job_id},
+                UpdateExpression="SET #status = :status, total_pages = :pages, updated_at = :ts",
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": tracking_status,
+                    ":pages": processed_count,
+                    ":ts": datetime.now(UTC).isoformat(),
+                },
+            )
+            logger.info(f"Updated tracking record for scrape job: {job_id} -> {tracking_status}")
 
         result = {
             "job_id": job_id,

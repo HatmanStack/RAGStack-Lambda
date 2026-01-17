@@ -25,6 +25,7 @@ from kb_migrator import KBMigrator
 
 from ragstack_common.appsync import publish_reindex_update
 from ragstack_common.config import ConfigurationManager
+from ragstack_common.ingestion import ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.storage import read_s3_text, write_metadata_to_s3
@@ -466,20 +467,24 @@ def process_scraped_item(
     error_messages: list,
 ) -> tuple[int, int, list]:
     """
-    Process a scraped page with job-aware metadata.
+    Process a scraped job or page with job-aware metadata.
 
-    For scraped content, we combine:
-    1. Job-level metadata (extracted from seed URL using new settings)
-    2. Page-specific deterministic fields (source_url, scraped_date, etc.)
+    New format (single tracking record per job):
+    - output_s3_uri ends with "/" (folder: content/{job_id}/)
+    - job_id IS the document_id
+    - Gets job_metadata from scrape_jobs table
+    - Lists all .md files in folder and processes each
 
-    This ensures all pages in a job share semantic metadata from the seed.
+    Old format (tracking record per page):
+    - output_s3_uri is a single file
+    - Extracts job metadata from seed document via LLM
 
     Args:
         item: DynamoDB tracking record
         kb_id: Knowledge Base ID
         ds_id: Data Source ID
         data_bucket: S3 bucket name
-        all_content: All content items (to find seed document)
+        all_content: All content items (to find seed document for old format)
         processed_count: Current processed count
         error_count: Current error count
         error_messages: List of error messages
@@ -487,6 +492,7 @@ def process_scraped_item(
     Returns:
         Tuple of (processed_count, error_count, error_messages)
     """
+    import json
     from datetime import UTC, datetime
     from urllib.parse import urlparse
 
@@ -500,6 +506,81 @@ def process_scraped_item(
         logger.warning(f"Scraped item {doc_id} has no output_s3_uri, skipping")
         return processed_count + 1, error_count, error_messages
 
+    # Detect new format: output_s3_uri ends with / (folder)
+    is_new_format = output_s3_uri.endswith("/")
+
+    if is_new_format:
+        # NEW FORMAT: Single tracking record per job, files in content/{job_id}/
+        job_id = doc_id  # document_id IS the job_id
+
+        # Get job_metadata from scrape_jobs table (NOT LLM extraction)
+        job_info = get_scrape_job_info(job_id)
+        job_metadata = job_info.get("job_metadata", {}) if job_info else {}
+        logger.info(
+            f"Processing scraped job {job_id} (new format): "
+            f"{len(job_metadata)} metadata fields from DB"
+        )
+
+        # Parse bucket and prefix from output_s3_uri
+        path = output_s3_uri[5:]  # Remove 's3://'
+        bucket, prefix = path.split("/", 1)
+
+        # List all .md files in content/{job_id}/
+        paginator = s3_client.get_paginator("list_objects_v2")
+        files_processed = 0
+
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                # Skip metadata files
+                if key.endswith(".metadata.json"):
+                    continue
+                # Only process .md files
+                if not key.endswith(".md"):
+                    continue
+
+                content_uri = f"s3://{bucket}/{key}"
+                metadata_key = f"{key}.metadata.json"
+
+                # Read existing metadata to get source_url
+                page_source_url = ""
+                try:
+                    response = s3_client.get_object(Bucket=bucket, Key=metadata_key)
+                    existing = json.loads(response["Body"].read().decode("utf-8"))
+                    page_source_url = existing.get("metadataAttributes", {}).get("source_url", "")
+                except Exception:
+                    logger.debug(f"No existing metadata for {key}")
+
+                # Combine job_metadata + page-specific fields
+                parsed = urlparse(page_source_url) if page_source_url else None
+                metadata = dict(job_metadata) if job_metadata else {}
+                metadata.update(
+                    {
+                        "content_type": "web_page",
+                        "source_url": page_source_url,
+                        "job_id": job_id,
+                        "scraped_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+                    }
+                )
+                if parsed and parsed.netloc:
+                    metadata["source_domain"] = parsed.netloc
+
+                # Write updated metadata
+                metadata_uri = write_metadata_to_s3(content_uri, metadata)
+
+                # Ingest to KB
+                try:
+                    ingest_document(kb_id, ds_id, content_uri, metadata_uri)
+                    files_processed += 1
+                except Exception as e:
+                    error_count += 1
+                    error_messages.append(f"{key}: {str(e)[:50]}")
+                    logger.error(f"Failed to ingest {key}: {e}")
+
+        logger.info(f"Reindexed scraped job {job_id}: {files_processed} files")
+        return processed_count + 1, error_count, error_messages
+
+    # OLD FORMAT: Per-page tracking record
     # Get job_id from S3 input file metadata
     job_id = None
     if input_s3_uri:
@@ -763,10 +844,10 @@ def process_image_item(
         },
     }
 
-    # Ingest both documents
-    response = bedrock_agent.ingest_knowledge_base_documents(
-        knowledgeBaseId=kb_id,
-        dataSourceId=ds_id,
+    # Ingest both documents (with retry for conflicts)
+    response = ingest_documents_with_retry(
+        kb_id=kb_id,
+        ds_id=ds_id,
         documents=[image_document, caption_document],
     )
 
@@ -1333,9 +1414,9 @@ def ingest_document(kb_id: str, ds_id: str, content_uri: str, metadata_uri: str)
         },
     }
 
-    response = bedrock_agent.ingest_knowledge_base_documents(
-        knowledgeBaseId=kb_id,
-        dataSourceId=ds_id,
+    response = ingest_documents_with_retry(
+        kb_id=kb_id,
+        ds_id=ds_id,
         documents=[document],
     )
 

@@ -15,6 +15,7 @@ export const getScrapeJob = /* GraphQL */ `
         processedCount
         failedCount
         failedUrls
+        jobMetadata
         createdAt
         updatedAt
       }

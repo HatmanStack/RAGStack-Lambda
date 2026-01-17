@@ -223,10 +223,11 @@ class TestScrapeProcessHandler:
         call_args_list = mock_aws["s3"].put_object.call_args_list
         assert len(call_args_list) == 2
 
-        # First call should be the markdown file
+        # First call should be the markdown file (content/{job_id}/{slug}.md)
         md_call = call_args_list[0]
         s3_key = md_call.kwargs.get("Key") or md_call[1].get("Key")
-        assert s3_key.endswith(".scraped.md")
+        assert s3_key.startswith("content/test-job-123/")
+        assert s3_key.endswith(".md")
         content_type = md_call.kwargs.get("ContentType") or md_call[1].get("ContentType")
         assert content_type == "text/markdown"
 

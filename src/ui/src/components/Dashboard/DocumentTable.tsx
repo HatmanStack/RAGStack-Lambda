@@ -3,6 +3,7 @@ import {
   Table,
   Header,
   Button,
+  ButtonDropdown,
   StatusIndicator,
   Pagination,
   TextFilter,
@@ -10,7 +11,8 @@ import {
   Link,
   Box,
   CollectionPreferences,
-  ProgressBar
+  ProgressBar,
+  Popover
 } from '@cloudscape-design/components';
 import { useCollection } from '@cloudscape-design/collection-hooks';
 import type { DocumentItem } from '../../hooks/useDocuments';
@@ -94,8 +96,10 @@ const getStatusIndicator = (status: string, type: string) => {
     const imageStatusMap: Record<string, StatusMapEntry> = {
       'PENDING': { type: 'pending', text: 'Pending' },
       'PROCESSING': { type: 'in-progress', text: 'Processing' },
+      'SYNC_QUEUED': { type: 'in-progress', text: 'Syncing' },
       'INDEXED': { type: 'success', text: 'Indexed' },
-      'FAILED': { type: 'error', text: 'Failed' }
+      'FAILED': { type: 'error', text: 'Failed' },
+      'INGESTION_FAILED': { type: 'error', text: 'Ingestion Failed' }
     };
     const config = imageStatusMap[status] || { type: 'info' as StatusIndicatorType, text: status };
     return <StatusIndicator type={config.type}>{config.text}</StatusIndicator>;
@@ -123,10 +127,10 @@ const getTypeLabel = (type: string): string => {
   }
 };
 
-export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument, onDelete }: DocumentTableProps) => {
+export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument, onDelete, onReprocess, onReindex }: DocumentTableProps) => {
   const [selectedItems, setSelectedItems] = useState<DocumentItem[]>([]);
   const [preferences, setPreferences] = useState<TablePreferences>(loadPreferences);
-  const [deleting, setDeleting] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   // Save preferences when they change
   useEffect(() => {
@@ -174,23 +178,92 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       }
     });
 
-  const handleDelete = async () => {
-    if (selectedItems.length === 0 || !onDelete) return;
+  const handleAction = async (actionId: string) => {
+    if (selectedItems.length === 0) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedItems.length} item(s)? This cannot be undone.`
-    );
-    if (!confirmed) return;
+    // Filter items based on action type
+    const scrapeItems = selectedItems.filter(i => i.type === 'scrape');
+    const nonScrapeItems = selectedItems.filter(i => i.type !== 'scrape');
 
-    setDeleting(true);
-    try {
-      const documentIds = selectedItems.map(item => item.documentId);
-      await onDelete(documentIds);
-      setSelectedItems([]); // Clear selection after delete
-    } catch (err) {
-      console.error('Delete failed:', err);
-    } finally {
-      setDeleting(false);
+    if (actionId === 'reindex') {
+      if (!onReindex) return;
+
+      // Check for unprocessed items (no output_s3_uri/caption_s3_uri)
+      const unprocessedItems = selectedItems.filter(i =>
+        i.status?.toLowerCase() === 'uploaded' || i.status?.toLowerCase() === 'pending'
+      );
+
+      if (unprocessedItems.length === selectedItems.length) {
+        window.alert('Selected items have not been processed yet. Use Reprocess to run the full pipeline first.');
+        return;
+      }
+
+      let confirmMessage = `Reindex ${selectedItems.length - unprocessedItems.length} item(s)? This will re-extract metadata and reingest to the Knowledge Base.`;
+      if (unprocessedItems.length > 0) {
+        confirmMessage += ` (${unprocessedItems.length} unprocessed item(s) will be skipped)`;
+      }
+
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) return;
+
+      setActionInProgress('reindex');
+      try {
+        const documentIds = selectedItems
+          .filter(i => !unprocessedItems.includes(i))
+          .map(item => item.documentId);
+        await onReindex(documentIds);
+        setSelectedItems([]);
+      } catch (err) {
+        console.error('Reindex failed:', err);
+        window.alert(`Reindex failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      } finally {
+        setActionInProgress(null);
+      }
+    } else if (actionId === 'reprocess') {
+      if (!onReprocess) return;
+
+      if (scrapeItems.length > 0 && nonScrapeItems.length === 0) {
+        window.alert('Scrape jobs cannot be reprocessed. Please start a new scrape from the Scrape page.');
+        return;
+      }
+
+      let confirmMessage = `Reprocess ${nonScrapeItems.length} item(s)? This will re-run OCR, extract metadata, and reingest to the Knowledge Base.`;
+      if (scrapeItems.length > 0) {
+        confirmMessage += ` (${scrapeItems.length} scrape job(s) will be skipped)`;
+      }
+
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) return;
+
+      setActionInProgress('reprocess');
+      try {
+        const documentIds = nonScrapeItems.map(item => item.documentId);
+        await onReprocess(documentIds);
+        setSelectedItems([]);
+      } catch (err) {
+        console.error('Reprocess failed:', err);
+        window.alert(`Reprocess failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      } finally {
+        setActionInProgress(null);
+      }
+    } else if (actionId === 'delete') {
+      if (!onDelete) return;
+
+      const confirmed = window.confirm(
+        `Are you sure you want to delete ${selectedItems.length} item(s)? This will remove them from S3 and the Knowledge Base. This cannot be undone.`
+      );
+      if (!confirmed) return;
+
+      setActionInProgress('delete');
+      try {
+        const documentIds = selectedItems.map(item => item.documentId);
+        await onDelete(documentIds);
+        setSelectedItems([]);
+      } catch (err) {
+        console.error('Delete failed:', err);
+      } finally {
+        setActionInProgress(null);
+      }
     }
   };
 
@@ -260,16 +333,48 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
           description={`Showing: ${dateRangeLabel}`}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button
-                onClick={handleDelete}
-                disabled={selectedItems.length === 0 || deleting}
-                loading={deleting}
+              <ButtonDropdown
+                items={[
+                  { id: 'reindex', text: 'Reindex', description: 'Re-extract metadata only' },
+                  { id: 'reprocess', text: 'Reprocess', description: 'Full pipeline (OCR + metadata)' },
+                  { id: 'delete', text: 'Delete', description: 'Remove from S3 and KB' }
+                ]}
+                onItemClick={({ detail }) => handleAction(detail.id)}
+                disabled={selectedItems.length === 0 || actionInProgress !== null}
+                loading={actionInProgress !== null}
               >
-                Delete{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
-              </Button>
+                Actions{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
+              </ButtonDropdown>
               <Button onClick={onRefresh} iconName="refresh" loading={loading}>
                 Refresh
               </Button>
+              <Popover
+                header="Document Actions"
+                content={
+                  <SpaceBetween size="s">
+                    <div>
+                      <strong>Reindex</strong> - Re-extracts metadata from existing OCR text and reingests to the Knowledge Base. Faster than Reprocess since it skips OCR. Use when metadata extraction settings have changed.
+                    </div>
+                    <div>
+                      <strong>Reprocess</strong> - Re-runs the full processing pipeline: OCR extraction, metadata generation, and Knowledge Base ingestion. Use when documents failed processing or the source file has changed.
+                    </div>
+                    <div>
+                      <strong>Delete</strong> - Permanently removes documents from both the S3 data bucket and the Knowledge Base. This action cannot be undone.
+                    </div>
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e9ebed' }}>
+                      <strong>Tip:</strong> To reindex all documents at once, use the Reindex feature in Settings.
+                    </div>
+                  </SpaceBetween>
+                }
+                triggerType="custom"
+                dismissButton={false}
+                position="bottom"
+                size="large"
+              >
+                <span style={{ position: 'relative', top: '-2px' }}>
+                  <Button variant="inline-icon" iconName="status-info" ariaLabel="About document actions" />
+                </span>
+              </Popover>
             </SpaceBetween>
           }
         >

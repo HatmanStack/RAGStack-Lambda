@@ -89,7 +89,7 @@ export const SearchResults = ({ results, query }: SearchResultsProps) => {
                         Full Video
                       </Link>
                     )}
-                    {!result.isSegment && result.documentUrl && (
+                    {!result.isSegment && !result.isScraped && result.documentUrl && (
                       <Link href={result.documentUrl} external fontSize="body-s">
                         Download
                       </Link>

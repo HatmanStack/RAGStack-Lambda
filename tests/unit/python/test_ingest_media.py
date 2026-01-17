@@ -82,6 +82,7 @@ class TestIngestMediaLambda:
     """Tests for the IngestMedia Lambda handler."""
 
     @patch("ragstack_common.appsync.publish_document_update")
+    @patch("ragstack_common.ingestion.ingest_documents_with_retry")
     @patch("ragstack_common.storage.read_s3_text")
     @patch("boto3.resource")
     @patch("boto3.client")
@@ -90,19 +91,23 @@ class TestIngestMediaLambda:
         mock_boto_client,
         mock_boto_resource,
         mock_read_s3,
+        mock_ingest,
         mock_publish,
         sample_media_event,
     ):
         """Test that handler ingests text content to knowledge base."""
         mock_read_s3.return_value = "Test transcript content"
 
+        # Mock ingest_documents_with_retry
+        mock_ingest.return_value = {"documentDetails": [{"status": "STARTING"}]}
+
         # Mock S3 client
         mock_s3 = MagicMock()
 
         # Mock Bedrock Agent client
         mock_bedrock_agent = MagicMock()
-        mock_bedrock_agent.ingest_knowledge_base_documents.return_value = {
-            "documentDetails": [{"status": "STARTING"}]
+        mock_bedrock_agent.get_knowledge_base_documents.return_value = {
+            "documentDetails": [{"status": {"state": "INDEXED"}}]
         }
 
         # Mock DynamoDB
@@ -125,7 +130,7 @@ class TestIngestMediaLambda:
         module = load_ingest_media_module()
         result = module.lambda_handler(sample_media_event, None)
 
-        assert result["status"] == "indexed"
+        assert result["status"] == "INDEXED"
         assert result["document_id"] == "media-123"
 
     @patch("ragstack_common.appsync.publish_document_update")
@@ -241,7 +246,7 @@ class TestIngestMediaLambda:
         module = load_ingest_media_module()
         result = module.lambda_handler(event, None)
 
-        assert result["status"] == "indexed"
+        assert result["status"] == "INDEXED"
         assert result.get("visual_segments_indexed", 0) == 0
 
 

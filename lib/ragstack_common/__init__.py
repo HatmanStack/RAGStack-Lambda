@@ -25,6 +25,7 @@ from ragstack_common.image import (
 from ragstack_common.ingestion import (
     batch_check_document_statuses,
     check_document_status,
+    ingest_documents_with_retry,
     start_ingestion_with_retry,
 )
 from ragstack_common.key_library import KeyLibrary
@@ -55,6 +56,7 @@ __all__ = [
     "get_config_manager_or_none",
     "get_knowledge_base_config",
     "ImageStatus",
+    "ingest_documents_with_retry",
     "KeyLibrary",
     "MetadataExtractor",
     "MultiSliceRetriever",

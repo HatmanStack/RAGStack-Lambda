@@ -15,6 +15,7 @@ export interface ScrapeJob {
   totalUrls?: number;
   processedCount?: number;
   failedCount?: number;
+  jobMetadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }

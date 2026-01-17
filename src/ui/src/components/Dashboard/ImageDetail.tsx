@@ -11,6 +11,7 @@ import {
   Spinner,
   Button
 } from '@cloudscape-design/components';
+// Note: SpaceBetween and Button kept for content sections
 import { useImage } from '../../hooks/useImage';
 import type { ImageDetailProps, ImageDetailData, StatusConfig } from './types';
 
@@ -23,12 +24,11 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   'FAILED': { type: 'error', label: 'Failed' }
 };
 
-export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDetailProps) => {
-  const { getImage, deleteImage } = useImage();
+export const ImageDetail = ({ imageId, visible, onDismiss }: ImageDetailProps) => {
+  const { getImage } = useImage();
   const [image, setImage] = useState<ImageDetailData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -69,25 +69,6 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDeta
     }
   }, [image?.captionUrl]);
 
-  const handleDelete = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
-      return;
-    }
-
-    setDeleting(true);
-    try {
-      await deleteImage(imageId);
-      if (onDelete) {
-        onDelete(imageId);
-      }
-      onDismiss();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete image');
-    } finally {
-      setDeleting(false);
-    }
-  }, [deleteImage, imageId, onDelete, onDismiss]);
-
   useEffect(() => {
     if (visible && imageId) {
       loadImage();
@@ -113,23 +94,6 @@ export const ImageDetail = ({ imageId, visible, onDismiss, onDelete }: ImageDeta
       onDismiss={onDismiss}
       header="Image Details"
       size="large"
-      footer={
-        <Box float="right">
-          <SpaceBetween direction="horizontal" size="xs">
-            <Button variant="link" onClick={onDismiss}>
-              Close
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleDelete}
-              loading={deleting}
-              disabled={deleting}
-            >
-              Delete Image
-            </Button>
-          </SpaceBetween>
-        </Box>
-      }
     >
       {loading && (
         <Box textAlign="center" padding="xxl">

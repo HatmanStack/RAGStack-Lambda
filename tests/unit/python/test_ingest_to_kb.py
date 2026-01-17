@@ -252,7 +252,7 @@ class TestLambdaHandler:
 
             result = module.lambda_handler(sample_event, lambda_context)
 
-            assert result["status"] == "indexed"
+            assert result["status"] == "INDEXED"
             assert result["document_id"] == "test-doc-123"
             assert result["knowledge_base_id"] == "test-kb-id"
             # LLM metadata status should be reported
@@ -306,7 +306,7 @@ class TestLambdaHandler:
             result = module.lambda_handler(sample_event, lambda_context)
 
             # Should still succeed, just without LLM metadata
-            assert result["status"] == "indexed"
+            assert result["status"] == "INDEXED"
             assert result["llm_metadata_extracted"] is False
             # metadata_keys should contain at least content_type (base metadata)
             assert "content_type" in result["metadata_keys"]

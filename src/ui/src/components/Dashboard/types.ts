@@ -48,6 +48,7 @@ export interface ScrapeJobDetailData {
   totalUrls?: number;
   processedCount?: number;
   failedCount?: number;
+  jobMetadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
   urls?: ScrapeUrlItem[];
@@ -87,13 +88,14 @@ export interface DocumentTableProps {
   onRefresh: () => void;
   onSelectDocument: (id: string, type: string) => void;
   onDelete?: (documentIds: string[]) => Promise<unknown>;
+  onReprocess?: (documentIds: string[]) => Promise<unknown>;
+  onReindex?: (documentIds: string[]) => Promise<unknown>;
 }
 
 export interface ImageDetailProps {
   imageId: string;
   visible: boolean;
   onDismiss: () => void;
-  onDelete?: (imageId: string) => Promise<void>;
 }
 
 export interface ScrapeJobDetailProps {
