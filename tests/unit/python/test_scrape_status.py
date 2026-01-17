@@ -28,6 +28,7 @@ def _mock_env(monkeypatch):
     monkeypatch.setenv(
         "SCRAPE_PROCESSING_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123/proc"
     )
+    monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
 
@@ -38,11 +39,17 @@ def mock_aws(_mock_env):
     with patch("boto3.resource") as mock_resource, patch("boto3.client") as mock_client:
         mock_jobs_table = MagicMock()
         mock_urls_table = MagicMock()
+        mock_tracking_table = MagicMock()
+
+        def table_factory(name):
+            if "jobs" in name:
+                return mock_jobs_table
+            if "urls" in name:
+                return mock_urls_table
+            return mock_tracking_table
 
         mock_dynamodb = MagicMock()
-        mock_dynamodb.Table.side_effect = lambda name: (
-            mock_jobs_table if "jobs" in name else mock_urls_table
-        )
+        mock_dynamodb.Table.side_effect = table_factory
         mock_resource.return_value = mock_dynamodb
 
         mock_sqs = MagicMock()
@@ -57,6 +64,7 @@ def mock_aws(_mock_env):
         yield {
             "jobs_table": mock_jobs_table,
             "urls_table": mock_urls_table,
+            "tracking_table": mock_tracking_table,
             "sqs": mock_sqs,
         }
 

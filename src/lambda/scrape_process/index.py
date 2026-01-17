@@ -19,11 +19,13 @@ Output:
 }
 """
 
+import hashlib
 import json
 import logging
 import os
-import uuid
+import re
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
@@ -46,6 +48,30 @@ dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
 
 
+def generate_url_slug(url: str) -> str:
+    """
+    Generate a unique slug from a URL for S3 key naming.
+
+    Combines sanitized path with a hash suffix for uniqueness.
+
+    Args:
+        url: The full URL to generate a slug from.
+
+    Returns:
+        A sanitized slug like "products_widgets_a1b2c3d4" or just hash if no path.
+    """
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+
+    # Sanitize path: keep only alphanumeric, replace others with underscore
+    sanitized = re.sub(r"[^a-zA-Z0-9]+", "_", path).strip("_")[:50]
+
+    # Add hash suffix for uniqueness (handles query strings, fragments, etc.)
+    url_hash = hashlib.sha256(url.encode()).hexdigest()[:8]
+
+    return f"{sanitized}_{url_hash}" if sanitized else url_hash
+
+
 def build_scrape_metadata(
     job_metadata: dict,
     url: str,
@@ -66,8 +92,6 @@ def build_scrape_metadata(
     Returns:
         Combined metadata dictionary.
     """
-    from urllib.parse import urlparse
-
     parsed = urlparse(url)
 
     # Start with job metadata (semantic fields from seed URL)
@@ -247,11 +271,11 @@ def lambda_handler(event, context):
                 skipped += 1
                 continue
 
-            # Generate document ID and S3 key (input/ prefix for DataBucket)
-            document_id = str(uuid.uuid4())
-            s3_key = f"input/{document_id}/{document_id}.scraped.md"
+            # Generate URL slug and S3 key (content/ prefix - bypasses input/ trigger)
+            url_slug = generate_url_slug(url)
+            s3_key = f"content/{job_id}/{url_slug}.md"
 
-            # Upload to data bucket (input/ prefix)
+            # Upload to data bucket (content/ prefix)
             s3.put_object(
                 Bucket=data_bucket,
                 Key=s3_key,
@@ -260,7 +284,7 @@ def lambda_handler(event, context):
                 Metadata={
                     "source_url": url,
                     "job_id": job_id,
-                    "document_id": document_id,
+                    "url_slug": url_slug,
                     "title": sanitize_for_s3_metadata(extracted.title),
                 },
             )
@@ -280,17 +304,18 @@ def lambda_handler(event, context):
             # Store hash for future deduplication
             dedup.store_hash(job_id, url, extracted.markdown)
 
-            # Update URL record with document ID
+            # Update URL record with S3 key info
             urls_tbl.update_item(
                 Key={"job_id": job_id, "url": url},
                 UpdateExpression=(
-                    "SET #status = :status, document_id = :doc_id, "
+                    "SET #status = :status, url_slug = :slug, s3_key = :s3_key, "
                     "title = :title, processed_at = :ts, content_hash = :hash"
                 ),
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
                     ":status": UrlStatus.COMPLETED.value,
-                    ":doc_id": document_id,
+                    ":slug": url_slug,
+                    ":s3_key": s3_key,
                     ":title": extracted.title,
                     ":ts": datetime.now(UTC).isoformat(),
                     ":hash": dedup.get_content_hash(extracted.markdown),
@@ -322,7 +347,7 @@ def lambda_handler(event, context):
             )
 
             processed += 1
-            logger.info(f"Processed: {url} -> {document_id}")
+            logger.info(f"Processed: {url} -> {s3_key}")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")

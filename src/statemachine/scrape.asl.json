@@ -158,7 +158,7 @@
         }
       },
       "ResultPath": null,
-      "Next": "SuccessState"
+      "Next": "TriggerKBSync"
     },
 
     "CompleteWithErrors": {
@@ -183,6 +183,22 @@
             "S.$": "$$.State.EnteredTime"
           }
         }
+      },
+      "ResultPath": null,
+      "Next": "TriggerKBSync"
+    },
+
+    "TriggerKBSync": {
+      "Type": "Task",
+      "Comment": "Send job to KB sync queue for ingestion",
+      "Resource": "arn:aws:states:::sqs:sendMessage",
+      "Parameters": {
+        "QueueUrl": "${SyncRequestQueueUrl}",
+        "MessageBody": {
+          "document_id.$": "$.job_id",
+          "operation": "sync"
+        },
+        "MessageGroupId.$": "$.job_id"
       },
       "ResultPath": null,
       "Next": "SuccessState"

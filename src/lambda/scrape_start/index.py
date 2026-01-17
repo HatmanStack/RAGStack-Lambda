@@ -149,8 +149,8 @@ def extract_job_metadata(url: str, config: ScrapeConfig) -> dict:
 
         if config_table:
             config_manager = ConfigurationManager(config_table)
-            model_id = config_manager.get("metadata_extraction_model")
-            max_keys = config_manager.get("metadata_max_keys", 8)
+            model_id = config_manager.get_parameter("metadata_extraction_model")
+            max_keys = config_manager.get_parameter("metadata_max_keys", default=8)
 
         # Extract metadata using LLM
         extractor = MetadataExtractor(
@@ -184,6 +184,8 @@ def lambda_handler(event, context):
     jobs_table = os.environ.get("SCRAPE_JOBS_TABLE")
     discovery_queue_url = os.environ.get("SCRAPE_DISCOVERY_QUEUE_URL")
     state_machine_arn = os.environ.get("SCRAPE_STATE_MACHINE_ARN")
+    tracking_table_name = os.environ.get("TRACKING_TABLE")
+    data_bucket = os.environ.get("DATA_BUCKET")
 
     if not jobs_table:
         raise ValueError("SCRAPE_JOBS_TABLE environment variable required")
@@ -191,6 +193,10 @@ def lambda_handler(event, context):
         raise ValueError("SCRAPE_DISCOVERY_QUEUE_URL environment variable required")
     if not state_machine_arn:
         raise ValueError("SCRAPE_STATE_MACHINE_ARN environment variable required")
+    if not tracking_table_name:
+        raise ValueError("TRACKING_TABLE environment variable required")
+    if not data_bucket:
+        raise ValueError("DATA_BUCKET environment variable required")
 
     logger.info(f"Starting scrape job: {json.dumps(event)}")
 
@@ -236,6 +242,24 @@ def lambda_handler(event, context):
 
         table.put_item(Item=job_dict)
         logger.info(f"Created job record: {job_id} with {len(job_metadata)} metadata fields")
+
+        # Create tracking table record (job_id IS the document_id for scrape jobs)
+        now = datetime.now(UTC).isoformat()
+        tracking_table = dynamodb.Table(tracking_table_name)
+        tracking_table.put_item(
+            Item={
+                "document_id": job_id,  # job_id IS the document_id
+                "type": "scraped",
+                "status": "PROCESSING",
+                "filename": job.title or base_url,
+                "input_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
+                "output_s3_uri": f"s3://{data_bucket}/content/{job_id}/",
+                "source_url": base_url,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        logger.info(f"Created tracking record for scrape job: {job_id}")
 
         # Send initial URL to discovery queue
         sqs = boto3.client("sqs")
