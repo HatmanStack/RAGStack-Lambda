@@ -214,6 +214,59 @@ If issues occur after migration:
 - Ensure caption files exist at `content/{imageId}/caption.txt`
 - Check the image's tracking record has `caption_s3_uri` field
 
+### SAM Layer Caching Issue
+
+**Symptoms:**
+- Lambda functions fail with `No module named 'ragstack_common'` or `No module named 'crhelper'`
+- CloudFormation update gets stuck on `CodeBuildRun` or `WCCodeBuildRun` custom resources
+- Stack enters `UPDATE_ROLLBACK_FAILED` state
+
+**Cause:**
+SAM uses content hashing to skip S3 uploads. After a reindex creates a new Knowledge Base, if you redeploy, SAM may reuse a stale/corrupted layer artifact from S3 instead of uploading the freshly built layer. The local build shows ~121MB but S3 only has ~120KB.
+
+**Diagnosis:**
+```bash
+# Check local build size (should be ~121MB)
+du -sh .aws-sam/build/RagstackCommonLayer/
+
+# Check deployed layer size (should match, not 120KB)
+aws lambda get-function-configuration --function-name <stack>-sync-status-checker \
+  --query "Layers[0].CodeSize" --output text
+```
+
+**Fix:**
+
+1. If stack is stuck in `UPDATE_IN_PROGRESS`, cancel and wait for rollback:
+   ```bash
+   aws cloudformation cancel-update-stack --stack-name <stack> --region us-east-1
+   ```
+
+2. If stack is in `UPDATE_ROLLBACK_FAILED`, continue rollback skipping failed resources:
+   ```bash
+   aws cloudformation continue-update-rollback --stack-name <stack> --region us-east-1 \
+     --resources-to-skip CodeBuildRun WCCodeBuildRun BatchProcessorFunction \
+       AppSyncResolverFunction ConfigurationResolverFunction
+   ```
+
+3. Once stack is in `UPDATE_ROLLBACK_COMPLETE`, clear caches and redeploy:
+   ```bash
+   # Delete SAM build cache
+   rm -rf .aws-sam/
+
+   # Delete stale S3 artifacts (keep UI source zips)
+   aws s3 rm s3://<stack>-artifacts-<account-id>/ --recursive --exclude "*.zip"
+
+   # Fresh build and deploy
+   sam build --parallel
+   python publish.py --stack-name <stack> --admin-email <email>
+   ```
+
+**Prevention:**
+After running reindex, always clear the SAM cache before redeploying:
+```bash
+rm -rf .aws-sam/
+```
+
 ## Support
 
 For issues:
