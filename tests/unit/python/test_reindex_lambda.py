@@ -278,20 +278,18 @@ class TestIngestDocument:
     """Tests for ingest_document function."""
 
     def test_calls_bedrock_ingest(self, set_env_vars):
-        """Test document ingestion calls Bedrock API."""
+        """Test document ingestion calls ingest_documents_with_retry."""
         with (
-            patch("boto3.client") as mock_client,
+            patch("boto3.client"),
             patch("boto3.resource"),
             patch("boto3.Session"),
+            patch(
+                "ragstack_common.ingestion.ingest_documents_with_retry"
+            ) as mock_ingest,
         ):
-            mock_bedrock = MagicMock()
-            mock_bedrock.ingest_knowledge_base_documents.return_value = {
-                "documentDetails": [{"status": "STARTING"}]
-            }
-            mock_client.return_value = mock_bedrock
+            mock_ingest.return_value = {"documentDetails": [{"status": "STARTING"}]}
 
             module = load_reindex_module()
-            module.bedrock_agent = mock_bedrock
 
             module.ingest_document(
                 kb_id="test-kb",
@@ -300,4 +298,4 @@ class TestIngestDocument:
                 metadata_uri="s3://bucket/content.txt.metadata.json",
             )
 
-            mock_bedrock.ingest_knowledge_base_documents.assert_called_once()
+            mock_ingest.assert_called_once()
