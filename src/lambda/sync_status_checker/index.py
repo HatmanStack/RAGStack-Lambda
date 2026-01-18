@@ -24,7 +24,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_image_update
-from ragstack_common.config import get_config_manager, get_knowledge_base_config
+from ragstack_common.config import get_config_manager_or_none, get_knowledge_base_config
 from ragstack_common.ingestion import batch_check_document_statuses
 
 logger = logging.getLogger()
@@ -121,7 +121,7 @@ def lambda_handler(event, context):
     Triggered by EventBridge schedule rule.
     """
     # Get KB config from DynamoDB (with env var fallback)
-    config_manager = get_config_manager()
+    config_manager = get_config_manager_or_none()
     kb_id, ds_id = get_knowledge_base_config(config_manager)
     logger.info(f"Using KB config: kb_id={kb_id}, ds_id={ds_id}")
 

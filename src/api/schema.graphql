@@ -431,6 +431,7 @@ enum ImageStatus {
   SYNC_QUEUED
   INDEXED
   FAILED
+  INGESTION_FAILED
 }
 
 # Image type

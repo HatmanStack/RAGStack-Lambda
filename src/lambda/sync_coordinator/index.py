@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
-from ragstack_common.config import get_config_manager, get_knowledge_base_config
+from ragstack_common.config import get_config_manager_or_none, get_knowledge_base_config
 from ragstack_common.ingestion import start_ingestion_with_retry
 
 logger = logging.getLogger()
@@ -192,7 +192,7 @@ def lambda_handler(event, context):
     Updates document statuses based on result.
     """
     # Get KB config from DynamoDB (with env var fallback)
-    config_manager = get_config_manager()
+    config_manager = get_config_manager_or_none()
     kb_id, ds_id = get_knowledge_base_config(config_manager)
     logger.info(f"Using KB config: kb_id={kb_id}, ds_id={ds_id}")
 

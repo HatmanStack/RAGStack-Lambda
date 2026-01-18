@@ -1086,15 +1086,25 @@ def extract_sources(citations):
                     preview = image_caption[:50] if image_caption else None
                     logger.debug(f"Image content detected, caption: {preview}...")
 
+                # Extract KB chunk timestamps early (needed for deduplication)
+                # These are in milliseconds for visual embeddings from native KB chunking
+                kb_metadata = ref.get("metadata", {})
+                kb_chunk_start_ms = extract_kb_scalar(
+                    kb_metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
+                )
+
                 # Deduplicate sources:
-                # - Video/media segments: use full URI (each timestamp is unique)
+                # - Video/media segments: use URI + timestamp (each chunk is unique)
                 # - PDF pages: use document_id:page_num
                 # - Scraped pages: use source_url (each page has a unique URL)
                 # - Other content: use document_id
-                is_segment = doc_type == "media" or "segment-" in uri or uri.endswith("/video.mp4")
+                is_segment = doc_type == "media" or "segment-" in uri or uri.endswith(".mp4")
                 if is_segment:
-                    # Each video segment is a unique source (different timestamps)
-                    source_key = uri
+                    # Each video segment is a unique source (include timestamp for KB chunks)
+                    if kb_chunk_start_ms is not None:
+                        source_key = f"{uri}:{kb_chunk_start_ms}"
+                    else:
+                        source_key = uri
                 elif page_num is not None:
                     source_key = f"{document_id}:{page_num}"
                 elif is_scraped and source_url:
