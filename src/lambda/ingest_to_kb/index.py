@@ -248,7 +248,7 @@ def lambda_handler(event, context):
     doc_response = tracking_table.get_item(Key={"document_id": document_id})
     doc_item = doc_response.get("Item", {})
     filename = doc_item.get("filename", "unknown")
-    total_pages = doc_item.get("total_pages", 0)
+    total_pages = int(doc_item.get("total_pages", 0))
 
     # Check for existing metadata (e.g., from scrape_process)
     # If found and not forcing extraction, skip LLM extraction and use existing metadata
