@@ -24,6 +24,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from ragstack_common.appsync import publish_image_update
+from ragstack_common.config import get_config_manager_or_none, get_knowledge_base_config
 from ragstack_common.ingestion import batch_check_document_statuses
 
 logger = logging.getLogger()
@@ -119,13 +120,16 @@ def lambda_handler(event, context):
 
     Triggered by EventBridge schedule rule.
     """
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    ds_id = os.environ.get("DATA_SOURCE_ID")
+    # Get KB config from DynamoDB (with env var fallback)
+    config_manager = get_config_manager_or_none()
+    kb_id, ds_id = get_knowledge_base_config(config_manager)
+    logger.info(f"Using KB config: kb_id={kb_id}, ds_id={ds_id}")
+
     tracking_table = os.environ.get("TRACKING_TABLE")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
-    if not all([kb_id, ds_id, tracking_table]):
-        raise ValueError("KNOWLEDGE_BASE_ID, DATA_SOURCE_ID, and TRACKING_TABLE are required")
+    if not tracking_table:
+        raise ValueError("TRACKING_TABLE is required")
 
     # Get documents waiting for sync
     documents = get_sync_queued_documents(tracking_table)

@@ -280,8 +280,10 @@ enum DocumentStatus {
   EMBEDDING_COMPLETE
   TRANSCRIBING
   TRANSCRIBED
+  SYNC_QUEUED
   INDEXED
   FAILED
+  INGESTION_FAILED
 }
 
 # Paginated document list
@@ -429,6 +431,7 @@ enum ImageStatus {
   SYNC_QUEUED
   INDEXED
   FAILED
+  INGESTION_FAILED
 }
 
 # Image type

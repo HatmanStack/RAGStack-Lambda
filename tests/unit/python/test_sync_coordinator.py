@@ -103,9 +103,7 @@ class TestStartSyncJob:
 
     def test_successful_start(self, mock_env, mock_bedrock_agent):
         """Successfully starts ingestion job."""
-        with patch(
-            "ragstack_common.ingestion.start_ingestion_with_retry"
-        ) as mock_start:
+        with patch("ragstack_common.ingestion.start_ingestion_with_retry") as mock_start:
             mock_start.return_value = {"ingestionJob": {"ingestionJobId": "new-job-123"}}
 
             module = import_sync_coordinator()
@@ -116,9 +114,7 @@ class TestStartSyncJob:
 
     def test_failed_start_returns_none(self, mock_env, mock_bedrock_agent):
         """Returns None when start fails after retries exhausted."""
-        with patch(
-            "ragstack_common.ingestion.start_ingestion_with_retry"
-        ) as mock_start:
+        with patch("ragstack_common.ingestion.start_ingestion_with_retry") as mock_start:
             mock_start.side_effect = ClientError(
                 {"Error": {"Code": "ConflictException", "Message": "Another job running"}},
                 "StartIngestionJob",
@@ -137,9 +133,7 @@ class TestLambdaHandler:
         # No running jobs
         mock_bedrock_agent.list_ingestion_jobs.return_value = {"ingestionJobSummaries": []}
 
-        with patch(
-            "ragstack_common.ingestion.start_ingestion_with_retry"
-        ) as mock_start:
+        with patch("ragstack_common.ingestion.start_ingestion_with_retry") as mock_start:
             mock_start.return_value = {"ingestionJob": {"ingestionJobId": "new-job-123"}}
 
             module = import_sync_coordinator()
@@ -169,9 +163,7 @@ class TestLambdaHandler:
         # No running jobs
         mock_bedrock_agent.list_ingestion_jobs.return_value = {"ingestionJobSummaries": []}
 
-        with patch(
-            "ragstack_common.ingestion.start_ingestion_with_retry"
-        ) as mock_start:
+        with patch("ragstack_common.ingestion.start_ingestion_with_retry") as mock_start:
             # Start fails after retries exhausted
             mock_start.side_effect = ClientError(
                 {"Error": {"Code": "ValidationException", "Message": "Invalid request"}},
@@ -204,7 +196,8 @@ class TestLambdaHandler:
         """Raises error when required env vars missing."""
         monkeypatch.delenv("KNOWLEDGE_BASE_ID", raising=False)
         monkeypatch.delenv("DATA_SOURCE_ID", raising=False)
+        monkeypatch.delenv("CONFIGURATION_TABLE_NAME", raising=False)
 
         module = import_sync_coordinator()
-        with pytest.raises(ValueError, match="KNOWLEDGE_BASE_ID and DATA_SOURCE_ID are required"):
+        with pytest.raises(ValueError, match="Knowledge Base configuration not found"):
             module.lambda_handler({"Records": []}, None)
