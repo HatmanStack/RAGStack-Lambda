@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.config import get_config_manager, get_knowledge_base_config
 from ragstack_common.ingestion import start_ingestion_with_retry
 
 logger = logging.getLogger()
@@ -190,12 +191,10 @@ def lambda_handler(event, context):
     Waits for any running sync to complete, then starts a new sync job.
     Updates document statuses based on result.
     """
-    # Get KB config from environment (set by template.yaml)
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
-    ds_id = os.environ.get("DATA_SOURCE_ID")
-
-    if not kb_id or not ds_id:
-        raise ValueError("KNOWLEDGE_BASE_ID and DATA_SOURCE_ID are required")
+    # Get KB config from DynamoDB (with env var fallback)
+    config_manager = get_config_manager()
+    kb_id, ds_id = get_knowledge_base_config(config_manager)
+    logger.info(f"Using KB config: kb_id={kb_id}, ds_id={ds_id}")
 
     # Process SQS records (should be just 1 due to BatchSize=1)
     all_document_ids = []
