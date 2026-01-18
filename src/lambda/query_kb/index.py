@@ -1190,29 +1190,31 @@ def extract_sources(citations):
                     timestamp_end = None
                     if is_media:
                         # Check custom metadata first (transcripts use seconds)
+                        # Note: values may be floats, need int(float()) to convert
                         ts_start_str = extract_kb_scalar(metadata.get("timestamp_start"))
                         ts_end_str = extract_kb_scalar(metadata.get("timestamp_end"))
                         if ts_start_str is not None:
                             with contextlib.suppress(ValueError, TypeError):
-                                timestamp_start = int(ts_start_str)
+                                timestamp_start = int(float(ts_start_str))
                         if ts_end_str is not None:
                             with contextlib.suppress(ValueError, TypeError):
-                                timestamp_end = int(ts_end_str)
+                                timestamp_end = int(float(ts_end_str))
                         # Fall back to native KB keys for visual embeddings (milliseconds)
+                        # Note: KB returns floats like 30000.0, need int(float()) to convert
                         if timestamp_start is None:
                             ts_millis = extract_kb_scalar(
                                 metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
                             )
                             if ts_millis is not None:
                                 with contextlib.suppress(ValueError, TypeError):
-                                    timestamp_start = int(ts_millis) // 1000
+                                    timestamp_start = int(float(ts_millis)) // 1000
                         if timestamp_end is None:
                             ts_millis = extract_kb_scalar(
                                 metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
                             )
                             if ts_millis is not None:
                                 with contextlib.suppress(ValueError, TypeError):
-                                    timestamp_end = int(ts_millis) // 1000
+                                    timestamp_end = int(float(ts_millis)) // 1000
 
                     speaker = extract_kb_scalar(metadata.get("speaker")) if is_media else None
                     segment_index = None
@@ -1542,25 +1544,26 @@ def lambda_handler(event, context):
             # Get timestamps (custom keys in seconds, native KB keys in milliseconds)
             ts_start = None
             ts_end = None
+            # Note: KB returns floats like 30000.0, need int(float()) to convert
             ts_raw = metadata.get("timestamp_start")
             if ts_raw is not None:
                 with contextlib.suppress(ValueError, TypeError):
-                    ts_start = int(extract_kb_scalar(ts_raw))
+                    ts_start = int(float(extract_kb_scalar(ts_raw)))
             else:
                 ts_millis = metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
                 if ts_millis is not None:
                     with contextlib.suppress(ValueError, TypeError):
-                        ts_start = int(extract_kb_scalar(ts_millis)) // 1000
+                        ts_start = int(float(extract_kb_scalar(ts_millis))) // 1000
 
             ts_raw = metadata.get("timestamp_end")
             if ts_raw is not None:
                 with contextlib.suppress(ValueError, TypeError):
-                    ts_end = int(extract_kb_scalar(ts_raw))
+                    ts_end = int(float(extract_kb_scalar(ts_raw)))
             else:
                 ts_millis = metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
                 if ts_millis is not None:
                     with contextlib.suppress(ValueError, TypeError):
-                        ts_end = int(extract_kb_scalar(ts_millis)) // 1000
+                        ts_end = int(float(extract_kb_scalar(ts_millis))) // 1000
 
             # Format timestamp for display (M:SS format)
             ts_display = ""
