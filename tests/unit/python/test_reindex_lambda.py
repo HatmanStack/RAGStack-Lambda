@@ -16,9 +16,14 @@ from botocore.exceptions import ClientError
 
 def load_reindex_module():
     """Load the reindex_kb index module dynamically."""
-    module_path = (
-        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "reindex_kb" / "index.py"
+    lambda_dir = (
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "reindex_kb"
     ).resolve()
+    module_path = lambda_dir / "index.py"
+
+    # Add lambda dir to path so kb_migrator can be imported
+    if str(lambda_dir) not in sys.path:
+        sys.path.insert(0, str(lambda_dir))
 
     spec = importlib.util.spec_from_file_location("reindex_kb_index", str(module_path))
     module = importlib.util.module_from_spec(spec)
