@@ -283,9 +283,7 @@ class TestIngestDocument:
             patch("boto3.client"),
             patch("boto3.resource"),
             patch("boto3.Session"),
-            patch(
-                "ragstack_common.ingestion.ingest_documents_with_retry"
-            ) as mock_ingest,
+            patch("ragstack_common.ingestion.ingest_documents_with_retry") as mock_ingest,
         ):
             mock_ingest.return_value = {"documentDetails": [{"status": "STARTING"}]}
 
