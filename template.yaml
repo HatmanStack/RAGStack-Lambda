@@ -1310,10 +1310,19 @@ Resources:
               Action:
                 - bedrock:IngestKnowledgeBaseDocuments
                 - bedrock:GetKnowledgeBaseDocuments
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
                 - bedrock:GetKnowledgeBase
                 - bedrock:GetDataSource
+                - bedrock:ListDataSources
               Resource:
                 - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*'
+            - Effect: Allow
+              Action:
+                - bedrock:StartIngestionJob
+                - bedrock:GetIngestionJob
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*'
             - Effect: Allow
               Action: appsync:GraphQL
               Resource: !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*'
