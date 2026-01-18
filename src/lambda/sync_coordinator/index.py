@@ -30,6 +30,8 @@ from datetime import UTC, datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from ragstack_common.ingestion import start_ingestion_with_retry
+
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
@@ -103,7 +105,7 @@ def wait_for_sync_completion(kb_id: str, ds_id: str, max_wait: int = MAX_WAIT_SE
 
 def start_sync_job(kb_id: str, ds_id: str) -> dict | None:
     """
-    Start a new ingestion job.
+    Start a new ingestion job with retry for concurrent API conflicts.
 
     Args:
         kb_id: Knowledge Base ID.
@@ -113,10 +115,7 @@ def start_sync_job(kb_id: str, ds_id: str) -> dict | None:
         Ingestion job info dict, or None on failure.
     """
     try:
-        response = bedrock_agent.start_ingestion_job(
-            knowledgeBaseId=kb_id,
-            dataSourceId=ds_id,
-        )
+        response = start_ingestion_with_retry(kb_id, ds_id)
         job_info = response.get("ingestionJob", {})
         job_id = job_info.get("ingestionJobId")
         logger.info(f"Started ingestion job: {job_id}")

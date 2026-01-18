@@ -103,26 +103,30 @@ class TestStartSyncJob:
 
     def test_successful_start(self, mock_env, mock_bedrock_agent):
         """Successfully starts ingestion job."""
-        mock_bedrock_agent.start_ingestion_job.return_value = {
-            "ingestionJob": {"ingestionJobId": "new-job-123"}
-        }
+        with patch(
+            "ragstack_common.ingestion.start_ingestion_with_retry"
+        ) as mock_start:
+            mock_start.return_value = {"ingestionJob": {"ingestionJobId": "new-job-123"}}
 
-        module = import_sync_coordinator()
-        result = module.start_sync_job("kb-id", "ds-id")
+            module = import_sync_coordinator()
+            result = module.start_sync_job("kb-id", "ds-id")
 
-        assert result is not None
-        assert result["ingestionJobId"] == "new-job-123"
+            assert result is not None
+            assert result["ingestionJobId"] == "new-job-123"
 
     def test_failed_start_returns_none(self, mock_env, mock_bedrock_agent):
-        """Returns None when start fails."""
-        mock_bedrock_agent.start_ingestion_job.side_effect = ClientError(
-            {"Error": {"Code": "ConflictException", "Message": "Another job running"}},
-            "StartIngestionJob",
-        )
+        """Returns None when start fails after retries exhausted."""
+        with patch(
+            "ragstack_common.ingestion.start_ingestion_with_retry"
+        ) as mock_start:
+            mock_start.side_effect = ClientError(
+                {"Error": {"Code": "ConflictException", "Message": "Another job running"}},
+                "StartIngestionJob",
+            )
 
-        module = import_sync_coordinator()
-        result = module.start_sync_job("kb-id", "ds-id")
-        assert result is None
+            module = import_sync_coordinator()
+            result = module.start_sync_job("kb-id", "ds-id")
+            assert result is None
 
 
 class TestLambdaHandler:
@@ -132,64 +136,69 @@ class TestLambdaHandler:
         """Successfully processes sync request."""
         # No running jobs
         mock_bedrock_agent.list_ingestion_jobs.return_value = {"ingestionJobSummaries": []}
-        # Start succeeds
-        mock_bedrock_agent.start_ingestion_job.return_value = {
-            "ingestionJob": {"ingestionJobId": "new-job-123"}
-        }
 
-        module = import_sync_coordinator()
-        event = {
-            "Records": [
-                {
-                    "body": json.dumps(
-                        {
-                            "kb_id": "test-kb",
-                            "ds_id": "test-ds",
-                            "document_ids": ["doc-1", "doc-2"],
-                            "source": "process_image",
-                        }
-                    )
-                }
-            ]
-        }
+        with patch(
+            "ragstack_common.ingestion.start_ingestion_with_retry"
+        ) as mock_start:
+            mock_start.return_value = {"ingestionJob": {"ingestionJobId": "new-job-123"}}
 
-        result = module.lambda_handler(event, None)
+            module = import_sync_coordinator()
+            event = {
+                "Records": [
+                    {
+                        "body": json.dumps(
+                            {
+                                "kb_id": "test-kb",
+                                "ds_id": "test-ds",
+                                "document_ids": ["doc-1", "doc-2"],
+                                "source": "process_image",
+                            }
+                        )
+                    }
+                ]
+            }
 
-        assert result["status"] == "SYNC_STARTED"
-        assert result["job_id"] == "new-job-123"
-        assert result["documents_affected"] == 2
+            result = module.lambda_handler(event, None)
+
+            assert result["status"] == "SYNC_STARTED"
+            assert result["job_id"] == "new-job-123"
+            assert result["documents_affected"] == 2
 
     def test_sync_start_failure_updates_status(self, mock_env, mock_bedrock_agent, mock_dynamodb):
         """Updates document status to INGESTION_FAILED when sync fails to start."""
         # No running jobs
         mock_bedrock_agent.list_ingestion_jobs.return_value = {"ingestionJobSummaries": []}
-        # Start fails
-        mock_bedrock_agent.start_ingestion_job.side_effect = ClientError(
-            {"Error": {"Code": "ValidationException", "Message": "Invalid request"}},
-            "StartIngestionJob",
-        )
 
-        module = import_sync_coordinator()
-        event = {
-            "Records": [
-                {
-                    "body": json.dumps(
-                        {
-                            "kb_id": "test-kb",
-                            "ds_id": "test-ds",
-                            "document_ids": ["doc-1"],
-                            "source": "process_image",
-                        }
-                    )
-                }
-            ]
-        }
+        with patch(
+            "ragstack_common.ingestion.start_ingestion_with_retry"
+        ) as mock_start:
+            # Start fails after retries exhausted
+            mock_start.side_effect = ClientError(
+                {"Error": {"Code": "ValidationException", "Message": "Invalid request"}},
+                "StartIngestionJob",
+            )
 
-        result = module.lambda_handler(event, None)
+            module = import_sync_coordinator()
+            event = {
+                "Records": [
+                    {
+                        "body": json.dumps(
+                            {
+                                "kb_id": "test-kb",
+                                "ds_id": "test-ds",
+                                "document_ids": ["doc-1"],
+                                "source": "process_image",
+                            }
+                        )
+                    }
+                ]
+            }
 
-        assert result["status"] == "FAILED"
-        # Verify status update was called
-        mock_dynamodb.update_item.assert_called()
+            result = module.lambda_handler(event, None)
+
+            assert result["status"] == "FAILED"
+            # Verify status update was called
+            mock_dynamodb.update_item.assert_called()
 
     def test_missing_env_vars_raises(self, monkeypatch):
         """Raises error when required env vars missing."""
