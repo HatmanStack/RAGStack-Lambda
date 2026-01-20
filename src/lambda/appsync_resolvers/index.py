@@ -79,6 +79,43 @@ def convert_decimals(obj):
     return obj
 
 
+# Reindex lock key - must match reindex_kb/index.py
+REINDEX_LOCK_KEY = "reindex_lock"
+
+
+def check_reindex_lock() -> None:
+    """
+    Check if a full KB reindex is in progress and raise error if so.
+
+    This prevents individual document operations (reindex, reprocess, delete)
+    from interfering with a full KB reindex operation.
+
+    Raises:
+        ValueError: If reindex is in progress.
+    """
+    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not config_table_name:
+        return  # Can't check lock without config table
+
+    try:
+        table = dynamodb.Table(config_table_name)
+        response = table.get_item(Key={"config_key": REINDEX_LOCK_KEY})
+        lock = response.get("Item")
+
+        if lock and lock.get("is_locked"):
+            started_at = lock.get("started_at", "unknown")
+            raise ValueError(
+                f"Operation blocked: Knowledge Base reindex is in progress "
+                f"(started: {started_at}). Please wait for the reindex to complete."
+            )
+    except ClientError as e:
+        # Log but don't block operations if we can't check the lock
+        logger.warning(f"Error checking reindex lock: {e}")
+    except ValueError:
+        # Re-raise ValueError (our lock error)
+        raise
+
+
 TRACKING_TABLE = os.environ["TRACKING_TABLE"]
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
@@ -331,6 +368,9 @@ def delete_documents(args):
     if not document_ids:
         return {"deletedCount": 0, "failedIds": [], "errors": []}
 
+    # Check if full KB reindex is in progress - block deletes to prevent conflicts
+    check_reindex_lock()
+
     # Limit batch size to prevent abuse
     max_batch_size = 100
     if len(document_ids) > max_batch_size:
@@ -576,6 +616,9 @@ def reprocess_document(args):
 
     if not is_valid_uuid(document_id):
         raise ValueError("Invalid document ID format")
+
+    # Check if full KB reindex is in progress - block reprocess to prevent conflicts
+    check_reindex_lock()
 
     # Get document from tracking table
     table = dynamodb.Table(TRACKING_TABLE)
@@ -1140,6 +1183,9 @@ def reindex_document(args):
 
     if not is_valid_uuid(document_id):
         raise ValueError("Invalid document ID format")
+
+    # Check if full KB reindex is in progress - block individual reindex to prevent conflicts
+    check_reindex_lock()
 
     # Get document from tracking table first to check type
     # (scraped docs don't need INGEST_TO_KB_FUNCTION_ARN)
@@ -2426,6 +2472,9 @@ def delete_image(args):
 
         if not is_valid_uuid(image_id):
             raise ValueError("Invalid imageId format")
+
+        # Check if full KB reindex is in progress - block delete to prevent conflicts
+        check_reindex_lock()
 
         table = dynamodb.Table(TRACKING_TABLE)
 

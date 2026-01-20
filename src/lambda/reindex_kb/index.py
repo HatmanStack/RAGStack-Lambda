@@ -48,6 +48,77 @@ _config_manager = None
 # Key: job_id, Value: dict of extracted metadata from seed document
 _job_metadata_cache: dict[str, dict] = {}
 
+# Reindex lock key in configuration table
+REINDEX_LOCK_KEY = "reindex_lock"
+
+
+def acquire_reindex_lock(execution_arn: str) -> bool:
+    """
+    Acquire global reindex lock to prevent concurrent operations.
+
+    Uses conditional write to ensure only one reindex can run at a time.
+    The lock prevents individual document operations (reindex, reprocess, delete)
+    from interfering with the full KB reindex.
+
+    Args:
+        execution_arn: Step Functions execution ARN for tracking.
+
+    Returns:
+        True if lock acquired, False if already locked.
+    """
+    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not config_table_name:
+        logger.warning("CONFIGURATION_TABLE_NAME not set, skipping lock acquisition")
+        return True  # Allow reindex to proceed without lock
+
+    try:
+        table = dynamodb.Table(config_table_name)
+        table.put_item(
+            Item={
+                "config_key": REINDEX_LOCK_KEY,
+                "is_locked": True,
+                "execution_arn": execution_arn,
+                "started_at": datetime.now(UTC).isoformat(),
+            },
+            ConditionExpression="attribute_not_exists(config_key) OR is_locked = :false",
+            ExpressionAttributeValues={":false": False},
+        )
+        logger.info(f"Acquired reindex lock for execution: {execution_arn}")
+        return True
+    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+        logger.error("Failed to acquire reindex lock - another reindex is in progress")
+        return False
+    except Exception as e:
+        logger.warning(f"Error acquiring reindex lock: {e}")
+        return True  # Allow reindex to proceed on error
+
+
+def release_reindex_lock() -> None:
+    """
+    Release the global reindex lock.
+
+    Called after reindex completes (success or failure) to allow
+    individual document operations to resume.
+    """
+    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    if not config_table_name:
+        logger.warning("CONFIGURATION_TABLE_NAME not set, skipping lock release")
+        return
+
+    try:
+        table = dynamodb.Table(config_table_name)
+        table.update_item(
+            Key={"config_key": REINDEX_LOCK_KEY},
+            UpdateExpression="SET is_locked = :false, released_at = :released_at",
+            ExpressionAttributeValues={
+                ":false": False,
+                ":released_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        logger.info("Released reindex lock")
+    except Exception as e:
+        logger.warning(f"Error releasing reindex lock: {e}")
+
 
 def get_key_library() -> KeyLibrary:
     """Get or create KeyLibrary singleton."""
@@ -159,9 +230,10 @@ def handle_init(event: dict) -> dict:
     """
     Initialize the reindex operation.
 
-    1. Count documents to reindex
-    2. Create new Knowledge Base
-    3. Return initial state for processing loop
+    1. Acquire global reindex lock
+    2. Count documents to reindex
+    3. Create new Knowledge Base
+    4. Return initial state for processing loop
     """
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     data_bucket = os.environ.get("DATA_BUCKET")
@@ -171,6 +243,14 @@ def handle_init(event: dict) -> dict:
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
     old_kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+
+    # Acquire global reindex lock to prevent concurrent document operations
+    execution_id = f"reindex-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+    if not acquire_reindex_lock(execution_id):
+        raise RuntimeError(
+            "Cannot start reindex: another reindex operation is already in progress. "
+            "Wait for it to complete or check the configuration table for stale locks."
+        )
 
     # Publish starting status
     publish_reindex_update(
@@ -1078,6 +1158,9 @@ def handle_finalize(event: dict) -> dict:
     except Exception as e:
         logger.warning(f"Failed to deactivate zero-count keys: {e}")
 
+    # Release the global reindex lock to allow individual document operations
+    release_reindex_lock()
+
     # Publish completion status
     publish_reindex_update(
         graphql_endpoint,
@@ -1144,6 +1227,9 @@ def handle_cleanup_failed(event: dict) -> dict:
             logger.info(f"Cleaned up new KB: {new_kb_id}")
         except Exception as e:
             logger.error(f"Failed to clean up new KB {new_kb_id}: {e}")
+
+    # Release the global reindex lock to allow individual document operations
+    release_reindex_lock()
 
     return {
         "status": "FAILED",
