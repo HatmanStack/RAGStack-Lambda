@@ -239,7 +239,7 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
     )
     fallback_model = get_config_manager().get_parameter(
-        "chat_fallback_model", default="us.amazon.nova-micro-v1:0"
+        "chat_fallback_model", default="us.amazon.nova-lite-v1:0"
     )
     global_quota_daily = get_config_manager().get_parameter(
         "chat_global_quota_daily", default=10000
@@ -605,15 +605,14 @@ self-contained using the conversation context.
 RULES:
 - Do NOT add conversation topics that aren't relevant to the current query
 - Do NOT change specific IDs, numbers, or filenames
-- Keep the rewritten query concise (under 100 words)
 - Return ONLY the query, no explanation
 
 QUERY TO USE FOR SEARCH:"""
 
     response = bedrock_runtime.converse(
-        modelId="us.anthropic.claude-3-5-haiku-20241022-v1:0",
+        modelId="us.amazon.nova-lite-v1:0",
         messages=[{"role": "user", "content": [{"text": prompt}]}],
-        inferenceConfig={"maxTokens": 150, "temperature": 0},
+        inferenceConfig={"maxTokens": 1000, "temperature": 0},
     )
 
     result = response.get("output", {}).get("message", {}).get("content", [])

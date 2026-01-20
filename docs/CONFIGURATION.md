@@ -168,7 +168,7 @@ For the complete list of supported languages, see [AWS Transcribe Supported Lang
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
-| `metadata_extraction_model` | See options below | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for metadata extraction |
+| `metadata_extraction_model` | See options below | `us.amazon.nova-lite-v1:0` | Model for metadata extraction |
 | `metadata_max_keys` | number | 8 | Maximum metadata fields per document |
 | `metadata_extraction_mode` | auto, manual | auto | Auto: LLM decides keys. Manual: use specified keys only |
 | `metadata_manual_keys` | string[] | [] | Keys to extract in manual mode |
@@ -288,7 +288,7 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `chat_primary_model` | See options below | claude-haiku-4-5 | Model for chat responses |
-| `chat_fallback_model` | See options below | nova-micro | Used when quota exceeded |
+| `chat_fallback_model` | See options below | nova-lite | Used when quota exceeded |
 | `chat_global_quota_daily` | number | 10000 | Total queries/day for all users |
 | `chat_per_user_quota_daily` | number | 100 | Queries/day per authenticated user |
 | `chat_allow_document_access` | boolean | false | Show "View Document" links in sources |
@@ -305,8 +305,8 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 
 **Fallback model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0`
-- `us.amazon.nova-micro-v1:0` (default)
-- `us.amazon.nova-lite-v1:0`
+- `us.amazon.nova-micro-v1:0`
+- `us.amazon.nova-lite-v1:0` (default)
 
 ## Access Control
 

@@ -133,7 +133,7 @@ The following configuration options control metadata filtering:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `metadata_extraction_enabled` | `true` | Enable/disable metadata extraction |
-| `metadata_extraction_model` | `claude-haiku-4-5` | Model for metadata extraction |
+| `metadata_extraction_model` | `nova-lite` | Model for metadata extraction |
 | `metadata_extraction_mode` | `auto` | `auto`: LLM decides keys. `manual`: use specified keys |
 | `metadata_manual_keys` | `[]` | Keys to extract in manual mode |
 | `metadata_max_keys` | `8` | Maximum metadata keys per document |

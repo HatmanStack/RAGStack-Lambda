@@ -1105,12 +1105,15 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
       Policies:
         - StepFunctionsExecutionPolicy:
             StateMachineName: !GetAtt ProcessingStateMachine.Name
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
       Events:
         SQSTrigger:
           Type: SQS
@@ -4128,7 +4131,7 @@ Resources:
                         'us.amazon.nova-micro-v1:0',
                         'us.amazon.nova-lite-v1:0'
                     ],
-                    'default': 'us.amazon.nova-micro-v1:0'
+                    'default': 'us.amazon.nova-lite-v1:0'
                 },
                 'chat_global_quota_daily': {
                     'type': 'number',
@@ -4214,7 +4217,8 @@ Resources:
                     'description': 'Model for filter generation',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+                        'us.amazon.nova-lite-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
@@ -4270,7 +4274,7 @@ Resources:
                         'us.amazon.nova-micro-v1:0',
                         'us.amazon.nova-lite-v1:0'
                     ],
-                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    'default': 'us.amazon.nova-lite-v1:0'
                 },
                 'metadata_max_keys': {
                     'type': 'number',
