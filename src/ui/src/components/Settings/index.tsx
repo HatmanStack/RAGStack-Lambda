@@ -726,12 +726,10 @@ export function Settings() {
               onChange={({ detail }) => {
                 setFormValues({ ...formValues, metadata_extraction_model: detail.selectedOption.value });
               }}
-              options={[
-                { label: 'us.anthropic.claude-3-5-haiku-20241022-v1:0', value: 'us.anthropic.claude-3-5-haiku-20241022-v1:0' },
-                { label: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', value: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' },
-                { label: 'us.amazon.nova-micro-v1:0', value: 'us.amazon.nova-micro-v1:0' },
-                { label: 'us.amazon.nova-lite-v1:0', value: 'us.amazon.nova-lite-v1:0' },
-              ]}
+              options={
+                ((schema as { properties?: Record<string, SchemaProperty> }).properties?.metadata_extraction_model?.enum || [])
+                  .map(v => ({ label: v, value: v }))
+              }
               disabled={formValues.metadata_extraction_enabled !== true}
             />
           </FormField>
@@ -853,10 +851,10 @@ export function Settings() {
               onChange={({ detail }) => {
                 setFormValues({ ...formValues, filter_generation_model: detail.selectedOption.value });
               }}
-              options={[
-                { label: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', value: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' },
-                { label: 'us.anthropic.claude-3-5-haiku-20241022-v1:0', value: 'us.anthropic.claude-3-5-haiku-20241022-v1:0' },
-              ]}
+              options={
+                ((schema as { properties?: Record<string, SchemaProperty> }).properties?.filter_generation_model?.enum || [])
+                  .map(v => ({ label: v, value: v }))
+              }
               disabled={formValues.filter_generation_enabled !== true}
             />
           </FormField>
