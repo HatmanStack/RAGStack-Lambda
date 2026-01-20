@@ -1105,12 +1105,15 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
+          CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
       Policies:
         - StepFunctionsExecutionPolicy:
             StateMachineName: !GetAtt ProcessingStateMachine.Name
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigurationTable
       Events:
         SQSTrigger:
           Type: SQS
