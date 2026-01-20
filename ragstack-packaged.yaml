@@ -157,6 +157,10 @@ Resources:
           - HEAD
           AllowedOrigins:
           - Fn::Sub: https://${CloudFrontDistribution.DomainName}
+          ExposedHeaders:
+          - ETag
+          - x-amz-meta-auto-process
+          - x-amz-meta-user-caption
           MaxAge: 3000
       Tags:
       - Key: Project
@@ -897,7 +901,7 @@ Resources:
       LayerName:
         Fn::Sub: ${AWS::StackName}-Common
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f0c84691ee56c0b991967fa675d67bff
+      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/0e4048016086f48d78df09293b89c34c
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -908,7 +912,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ed16fe86d4f934037f218262e329d90e
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/876773ce7ebae530ec7e30aa4da4c3e9
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
       Layers:
@@ -971,14 +975,14 @@ Resources:
             Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
     Metadata:
       SamResourceId: ProcessDocumentFunction
-  GetPageInfoFunction:
+  DetectFileTypeFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: ${AWS::StackName}-getpageinfo
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/521e43533f12d1beda332ea0271be77e
+        Fn::Sub: ${AWS::StackName}-detect-file-type
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/bd6e0ff019dc5d08ee0fd3daf0eb90a0
       Handler: index.lambda_handler
-      Description: Count PDF pages and determine processing strategy
+      Description: Detect file type and get page info for OCR routing
       Layers:
       - Ref: RagstackCommonLayer
       Runtime: python3.13
@@ -1001,39 +1005,13 @@ Resources:
           TableName:
             Ref: TrackingTable
     Metadata:
-      SamResourceId: GetPageInfoFunction
-  DetectFileTypeFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${AWS::StackName}-detect-file-type
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f00c71d6696dfedaa5397a92c99ebdb7
-      Handler: index.lambda_handler
-      Description: Detect file type for routing (ocr/text/passthrough)
-      Layers:
-      - Ref: RagstackCommonLayer
-      Runtime: python3.13
-      Timeout: 60
-      MemorySize: 256
-      Environment:
-        Variables:
-          LOG_LEVEL: INFO
-      Tags:
-        Project:
-          Ref: AWS::StackName
-        CostCenter: Engineering
-      Policies:
-      - S3ReadPolicy:
-          BucketName:
-            Ref: DataBucket
-    Metadata:
       SamResourceId: DetectFileTypeFunction
   ProcessTextFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process-text
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5d1c27d088895654a25a4dc006f7a392
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/97328cdc667d4137c4054bec62082464
       Handler: index.lambda_handler
       Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB,
         DOCX, XLSX)
@@ -1071,6 +1049,74 @@ Resources:
             Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
     Metadata:
       SamResourceId: ProcessTextFunction
+  ProcessMediaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-process-media
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/f9fbb659c784b0a5e62695373e207c0b
+      Handler: index.lambda_handler
+      Description: Process video/audio files through AWS Transcribe
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          VECTOR_BUCKET:
+            Ref: VectorBucket
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          INGEST_MEDIA_FUNCTION_ARN:
+            Fn::GetAtt:
+            - IngestMediaFunction
+            - Arn
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - S3CrudPolicy:
+          BucketName:
+            Ref: VectorBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - transcribe:StartTranscriptionJob
+          - transcribe:GetTranscriptionJob
+          - transcribe:DeleteTranscriptionJob
+          Resource: '*'
+      - Statement:
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - IngestMediaFunction
+            - Arn
+    Metadata:
+      SamResourceId: ProcessMediaFunction
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1285,7 +1331,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-ingest
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/a1c44fe2ad2bf1dd5dc79d02d5143df9
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/92f78f50ffbb81fac3f58a3b11f82cce
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
@@ -1301,7 +1347,7 @@ Resources:
           DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - TextDataSourceId
+            - DataSourceId
           TRACKING_TABLE:
             Ref: TrackingTable
           GRAPHQL_ENDPOINT:
@@ -1335,6 +1381,7 @@ Resources:
         - Effect: Allow
           Action:
           - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:GetKnowledgeBaseDocuments
           - bedrock:StartIngestionJob
           - bedrock:GetKnowledgeBase
           - bedrock:GetDataSource
@@ -1358,12 +1405,102 @@ Resources:
           - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
     Metadata:
       SamResourceId: IngestToKBFunction
+  IngestMediaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-ingest-media
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/fab9c6c3949a7d5634f520b4d5f6d69a
+      Handler: index.lambda_handler
+      Description: Ingest media content with dual embeddings (transcript + visual)
+      Runtime: python3.13
+      Timeout: 600
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - DataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          SYNC_REQUEST_QUEUE_URL:
+            Ref: SyncRequestQueue
+      Layers:
+      - Ref: RagstackCommonLayer
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - S3CrudPolicy:
+          BucketName:
+            Ref: VectorBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - SyncRequestQueue
+            - QueueName
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:GetKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          - bedrock:GetKnowledgeBase
+          - bedrock:GetDataSource
+          - bedrock:ListDataSources
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+        - Effect: Allow
+          Action: bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+    Metadata:
+      SamResourceId: IngestMediaFunction
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process-image
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/790f8fa54fb7cb951e0bf6c1d03514ab
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/c409600371d45be7d848096bdf49eafc
       Handler: index.lambda_handler
       Description: Process uploaded images and ingest to Knowledge Base
       Layers:
@@ -1381,7 +1518,7 @@ Resources:
           DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - ImageDataSourceId
+            - DataSourceId
           TRACKING_TABLE:
             Ref: TrackingTable
           GRAPHQL_ENDPOINT:
@@ -1394,6 +1531,8 @@ Resources:
             Ref: ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE:
             Ref: MetadataKeyLibraryTable
+          SYNC_REQUEST_QUEUE_URL:
+            Ref: SyncRequestQueue
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1414,21 +1553,19 @@ Resources:
       - DynamoDBReadPolicy:
           TableName:
             Ref: ConfigurationTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - SyncRequestQueue
+            - QueueName
       - Statement:
         - Effect: Allow
           Action:
           - bedrock:IngestKnowledgeBaseDocuments
-          - bedrock:StartIngestionJob
           - bedrock:GetKnowledgeBase
           - bedrock:GetDataSource
           Resource:
           - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
-        - Effect: Allow
-          Action:
-          - bedrock:StartIngestionJob
-          - bedrock:GetIngestionJob
-          Resource:
-          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
         - Effect: Allow
           Action: appsync:GraphQL
           Resource:
@@ -1446,7 +1583,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-metadata-analyzer
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4c9cd729e3a84ae19c62325422e72cae
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/9f37614fdc877b6b7f80a6113bd66b90
       Handler: index.lambda_handler
       Description: Analyze Knowledge Base vectors to discover metadata fields and
         generate filter examples
@@ -1462,10 +1599,10 @@ Resources:
             Fn::GetAtt:
             - KnowledgeBase
             - KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID:
+          DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - TextDataSourceId
+            - DataSourceId
           DATA_BUCKET:
             Ref: DataBucket
           CONFIGURATION_TABLE_NAME:
@@ -1501,12 +1638,143 @@ Resources:
           - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
     Metadata:
       SamResourceId: MetadataAnalyzerFunction
+  ReindexKBFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-reindex-kb
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/0a71d70abd38484e9dac1e378966ba26
+      Handler: index.lambda_handler
+      Description: Reindex Knowledge Base - creates new KB, re-ingests documents,
+        deletes old KB
+      Layers:
+      - Ref: RagstackCommonLayer
+      Runtime: python3.13
+      Timeout: 900
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
+          VECTOR_BUCKET:
+            Ref: VectorBucket
+          STACK_NAME:
+            Ref: AWS::StackName
+          KB_ROLE_ARN:
+            Fn::GetAtt:
+            - KnowledgeBaseRole
+            - Arn
+          EMBEDDING_MODEL_ARN:
+            Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+          METADATA_KEY_LIBRARY_TABLE:
+            Ref: MetadataKeyLibraryTable
+          SCRAPE_JOBS_TABLE:
+            Ref: ScrapeJobsTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataKeyLibraryTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ScrapeJobsTable
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataBucket
+      - S3CrudPolicy:
+          BucketName:
+            Ref: VectorBucket
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:CreateKnowledgeBase
+          - bedrock:DeleteKnowledgeBase
+          - bedrock:GetKnowledgeBase
+          - bedrock:ListKnowledgeBases
+          - bedrock:CreateDataSource
+          - bedrock:DeleteDataSource
+          - bedrock:GetDataSource
+          - bedrock:ListDataSources
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:CreateKnowledgeBase
+          Resource: '*'
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action:
+          - iam:PassRole
+          Resource:
+            Fn::GetAtt:
+            - KnowledgeBaseRole
+            - Arn
+        - Effect: Allow
+          Action:
+          - s3vectors:CreateVectorBucket
+          - s3vectors:GetVectorBucket
+          - s3vectors:CreateIndex
+          - s3vectors:DeleteIndex
+          - s3vectors:GetIndex
+          - s3vectors:ListVectors
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
+          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+        - Effect: Allow
+          Action:
+          - lambda:GetFunctionConfiguration
+          - lambda:UpdateFunctionConfiguration
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-query
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-search
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest-media
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-reindex-kb
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-image
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-metadata-analyzer
+          - Fn::Sub: arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-zip
+    Metadata:
+      SamResourceId: ReindexKBFunction
   ProcessZipFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-process-zip
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/824ef920324472b699a5d03ef983833b
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4f0c26c5d9bd8b6c15ee84d41f4157c3
       Handler: index.lambda_handler
       Description: Process ZIP archives containing images with optional captions manifest
       Layers:
@@ -1524,7 +1792,7 @@ Resources:
           DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - ImageDataSourceId
+            - DataSourceId
           TRACKING_TABLE:
             Ref: TrackingTable
           GRAPHQL_ENDPOINT:
@@ -1581,7 +1849,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-query
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/666214e32c369e73306d2a9395111d9c
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/3ba6ec275948b5b491e0f8a27f6baaea
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
@@ -1596,14 +1864,10 @@ Resources:
             Fn::GetAtt:
             - KnowledgeBase
             - KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID:
+          DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - TextDataSourceId
-          IMAGE_DATA_SOURCE_ID:
-            Fn::GetAtt:
-            - KnowledgeBase
-            - ImageDataSourceId
+            - DataSourceId
           CONFIGURATION_TABLE_NAME:
             Ref: ConfigurationTable
           CONVERSATION_TABLE_NAME:
@@ -1648,6 +1912,12 @@ Resources:
           Action: bedrock:GetInferenceProfile
           Resource:
             Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+        - Effect: Allow
+          Action: dynamodb:DescribeTable
+          Resource:
+            Fn::GetAtt:
+            - MetadataKeyLibraryTable
+            - Arn
     Metadata:
       SamResourceId: QueryKBFunction
   SearchKBFunction:
@@ -1655,7 +1925,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-search
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/80f20591992548615ddc8f6b5cc0eca7
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/10e31677c4cb6af2332999bf00aa6d6f
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -1670,20 +1940,18 @@ Resources:
             Fn::GetAtt:
             - KnowledgeBase
             - KnowledgeBaseId
-          TEXT_DATA_SOURCE_ID:
+          DATA_SOURCE_ID:
             Fn::GetAtt:
             - KnowledgeBase
-            - TextDataSourceId
-          IMAGE_DATA_SOURCE_ID:
-            Fn::GetAtt:
-            - KnowledgeBase
-            - ImageDataSourceId
+            - DataSourceId
           CONFIGURATION_TABLE_NAME:
             Ref: ConfigurationTable
           TRACKING_TABLE:
             Ref: TrackingTable
           METADATA_KEY_LIBRARY_TABLE:
             Ref: MetadataKeyLibraryTable
+          DATA_BUCKET:
+            Ref: DataBucket
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1707,6 +1975,7 @@ Resources:
           Action:
           - dynamodb:GetItem
           - dynamodb:Scan
+          - dynamodb:DescribeTable
           Resource:
           - Fn::GetAtt:
             - ConfigurationTable
@@ -1717,6 +1986,12 @@ Resources:
           - Fn::GetAtt:
             - MetadataKeyLibraryTable
             - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
+          - s3:GetObject
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:s3:::${DataBucket}/*
     Metadata:
       SamResourceId: SearchKBFunction
   ConfigurationResolverFunction:
@@ -1813,7 +2088,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-scrape-start
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/362af034794abb1885e8856b0da946e8
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/29886d8973632063845913e47fe817b6
       Handler: index.lambda_handler
       Description: Initiate web scraping job
       Layers:
@@ -1836,6 +2111,10 @@ Resources:
             - GraphQLUrl
           CONFIGURATION_TABLE_NAME:
             Ref: ConfigurationTable
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          DATA_BUCKET:
+            Ref: DataBucket
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1844,6 +2123,9 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: ScrapeJobsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
       - DynamoDBReadPolicy:
           TableName:
             Ref: ConfigurationTable
@@ -1941,7 +2223,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-scrape-process
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/fb46d9a38b9a65d94e7bea494a19c744
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/e7d3de71f37a85c763a8a8feac75c6f5
       Handler: index.lambda_handler
       Description: Process scraped pages and save to S3
       Layers:
@@ -1997,7 +2279,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-scrape-status
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/151d7f0aaa4816fa127af21266d27880
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/2c037fd4d10eb708f017a24d64cb9f9d
       Handler: index.lambda_handler
       Description: Return scrape job status for Step Functions polling
       Layers:
@@ -2020,6 +2302,8 @@ Resources:
             Fn::GetAtt:
             - GraphQLApi
             - GraphQLUrl
+          TRACKING_TABLE:
+            Ref: TrackingTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -2031,6 +2315,9 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: ScrapeUrlsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
       - Statement:
         - Effect: Allow
           Action:
@@ -2076,7 +2363,7 @@ Resources:
               - IngestToKBFunction
               - Arn
             - Fn::GetAtt:
-              - GetPageInfoFunction
+              - IngestMediaFunction
               - Arn
             - Fn::GetAtt:
               - EnqueueBatchesFunction
@@ -2086,6 +2373,9 @@ Resources:
               - Arn
             - Fn::GetAtt:
               - ProcessTextFunction
+              - Arn
+            - Fn::GetAtt:
+              - ProcessMediaFunction
               - Arn
       - PolicyName: CloudWatchLogs
         PolicyDocument:
@@ -2112,7 +2402,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-ProcessingPipeline
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public-631094035453
-        Key: ragstack-quicklaunch/d9017f127b7ed336d54ec24aed5dba2d
+        Key: ragstack-quicklaunch/4183cb9d622cf31c2a1fcbacbffd5224
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn:
           Fn::GetAtt:
@@ -2122,9 +2412,9 @@ Resources:
           Fn::GetAtt:
           - IngestToKBFunction
           - Arn
-        GetPageInfoFunctionArn:
+        IngestMediaFunctionArn:
           Fn::GetAtt:
-          - GetPageInfoFunction
+          - IngestMediaFunction
           - Arn
         EnqueueBatchesFunctionArn:
           Fn::GetAtt:
@@ -2137,6 +2427,10 @@ Resources:
         ProcessTextFunctionArn:
           Fn::GetAtt:
           - ProcessTextFunction
+          - Arn
+        ProcessMediaFunctionArn:
+          Fn::GetAtt:
+          - ProcessMediaFunction
           - Arn
       Role:
         Fn::GetAtt:
@@ -2194,6 +2488,17 @@ Resources:
             - Fn::GetAtt:
               - ScrapeJobsTable
               - Arn
+      - PolicyName: SQSAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sqs:SendMessage
+            Resource:
+            - Fn::GetAtt:
+              - SyncRequestQueue
+              - Arn
       - PolicyName: CloudWatchLogs
         PolicyDocument:
           Version: '2012-10-17'
@@ -2219,7 +2524,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-ScrapeWorkflow
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public-631094035453
-        Key: ragstack-quicklaunch/bbc1f04e89c20366d6682046bc86f6e9
+        Key: ragstack-quicklaunch/11b93a830dacffcfe51f973dbfc36880
       DefinitionSubstitutions:
         ScrapeStatusFunctionArn:
           Fn::GetAtt:
@@ -2227,6 +2532,8 @@ Resources:
           - Arn
         ScrapeJobsTable:
           Ref: ScrapeJobsTable
+        SyncRequestQueueUrl:
+          Ref: SyncRequestQueue
       Role:
         Fn::GetAtt:
         - ScrapeStateMachineExecutionRole
@@ -2250,13 +2557,88 @@ Resources:
       RetentionInDays: 30
     Metadata:
       SamResourceId: ScrapeStateMachineLogGroup
+  ReindexStateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambdas
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::GetAtt:
+              - ReindexKBFunction
+              - Arn
+      - PolicyName: CloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogDelivery
+            - logs:GetLogDelivery
+            - logs:UpdateLogDelivery
+            - logs:DeleteLogDelivery
+            - logs:ListLogDeliveries
+            - logs:PutLogEvents
+            - logs:PutResourcePolicy
+            - logs:DescribeResourcePolicies
+            - logs:DescribeLogGroups
+            Resource: '*'
+    Metadata:
+      SamResourceId: ReindexStateMachineExecutionRole
+  ReindexStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ReindexWorkflow
+      DefinitionUri:
+        Bucket: ragstack-quicklaunch-public-631094035453
+        Key: ragstack-quicklaunch/0a41010edf5f655fa6e404bf166b3909
+      DefinitionSubstitutions:
+        ReindexKBFunctionArn:
+          Fn::GetAtt:
+          - ReindexKBFunction
+          - Arn
+      Role:
+        Fn::GetAtt:
+        - ReindexStateMachineExecutionRole
+        - Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+        - CloudWatchLogsLogGroup:
+            LogGroupArn:
+              Fn::GetAtt:
+              - ReindexStateMachineLogGroup
+              - Arn
+    Metadata:
+      SamResourceId: ReindexStateMachine
+  ReindexStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/vendedlogs/states/${AWS::StackName}-ReindexWorkflow
+      RetentionInDays: 30
+    Metadata:
+      SamResourceId: ReindexStateMachineLogGroup
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
       Name:
         Fn::Sub: ${AWS::StackName}-S3UploadTrigger
-      Description: Trigger processing pipeline on S3 upload to input/ prefix (excludes
-        scraped content)
+      Description: Trigger processing pipeline on S3 upload to input/ prefix
       EventPattern:
         source:
         - aws.s3
@@ -2281,7 +2663,7 @@ Resources:
             bucket: $.detail.bucket.name
             key: $.detail.object.key
           InputTemplate: "{\n  \"document_id\": \"<key>\",\n  \"input_s3_uri\": \"\
-            s3://<bucket>/<key>\",\n  \"output_s3_prefix\": \"s3://<bucket>/output/<key>/\"\
+            s3://<bucket>/<key>\",\n  \"output_s3_prefix\": \"s3://<bucket>/content/<key>/\"\
             \n}\n"
         RetryPolicy:
           MaximumRetryAttempts: 2
@@ -2292,7 +2674,7 @@ Resources:
     Properties:
       Name:
         Fn::Sub: ${AWS::StackName}-ImageUploadTrigger
-      Description: Trigger image processing on S3 upload to images/ prefix (metadata.json)
+      Description: Trigger image processing on S3 upload to content/ prefix (metadata.json)
       EventPattern:
         source:
         - aws.s3
@@ -2353,7 +2735,7 @@ Resources:
             - Ref: DataBucket
           object:
             key:
-            - prefix: images/
+            - prefix: content/
       State: ENABLED
       Targets:
       - Arn:
@@ -2432,6 +2814,170 @@ Resources:
         - Arn
     Metadata:
       SamResourceId: ZipUploadRulePermission
+  MediaContentUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-MediaContentTrigger
+      Description: Trigger media processing when video/audio uploaded to content/
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: content/
+            - suffix: .mp4
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessMediaFunction
+          - Arn
+        Id: TriggerProcessMedia
+    Metadata:
+      SamResourceId: MediaContentUploadRule
+  MediaContentWebmRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-MediaContentWebm
+      Description: Trigger media processing for webm files
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: content/
+            - suffix: .webm
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessMediaFunction
+          - Arn
+        Id: TriggerProcessMedia
+    Metadata:
+      SamResourceId: MediaContentWebmRule
+  MediaContentMp3Rule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-MediaContentMp3
+      Description: Trigger media processing for mp3 files
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: content/
+            - suffix: .mp3
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessMediaFunction
+          - Arn
+        Id: TriggerProcessMedia
+    Metadata:
+      SamResourceId: MediaContentMp3Rule
+  MediaContentWavRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-MediaContentWav
+      Description: Trigger media processing for wav files
+      EventPattern:
+        source:
+        - aws.s3
+        detail-type:
+        - Object Created
+        detail:
+          bucket:
+            name:
+            - Ref: DataBucket
+          object:
+            key:
+            - prefix: content/
+            - suffix: .wav
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ProcessMediaFunction
+          - Arn
+        Id: TriggerProcessMedia
+    Metadata:
+      SamResourceId: MediaContentWavRule
+  ProcessMediaFunctionEventBridgePermissionMp4:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - MediaContentUploadRule
+        - Arn
+    Metadata:
+      SamResourceId: ProcessMediaFunctionEventBridgePermissionMp4
+  ProcessMediaFunctionEventBridgePermissionWebm:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - MediaContentWebmRule
+        - Arn
+    Metadata:
+      SamResourceId: ProcessMediaFunctionEventBridgePermissionWebm
+  ProcessMediaFunctionEventBridgePermissionMp3:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - MediaContentMp3Rule
+        - Arn
+    Metadata:
+      SamResourceId: ProcessMediaFunctionEventBridgePermissionMp3
+  ProcessMediaFunctionEventBridgePermissionWav:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessMediaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - MediaContentWavRule
+        - Arn
+    Metadata:
+      SamResourceId: ProcessMediaFunctionEventBridgePermissionWav
   KnowledgeBaseRole:
     Type: AWS::IAM::Role
     Properties:
@@ -2516,7 +3062,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-kb-init
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5c2c92a7399fd60603d4a96b4ad6b77d
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/400ebed864dc589e1fddea220030ba12
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
       Layers:
@@ -2606,9 +3152,49 @@ Resources:
         Ref: AWS::Region
       ProjectName:
         Ref: AWS::StackName
-      Version: '2'
+      Version: '1'
     Metadata:
       SamResourceId: KnowledgeBase
+  InitialSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-initial-sync
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/8e3c34383d656a6d0baf7b49166120ec
+      Handler: index.lambda_handler
+      Description: Triggers initial KB sync on stack creation
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 128
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+    Metadata:
+      SamResourceId: InitialSyncFunction
+  InitialSync:
+    Type: Custom::InitialSync
+    DependsOn:
+    - KnowledgeBase
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - InitialSyncFunction
+        - Arn
+      KnowledgeBaseId:
+        Fn::GetAtt:
+        - KnowledgeBase
+        - KnowledgeBaseId
+      DataSourceId:
+        Fn::GetAtt:
+        - KnowledgeBase
+        - DataSourceId
+    Metadata:
+      SamResourceId: InitialSync
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -2785,7 +3371,7 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/2744ce90c3680b978d3ceb893947119d
+      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/63d08515d8a1f8daed0bad6cbe85e302
     Metadata:
       SamResourceId: GraphQLSchema
   GraphQLApiKey:
@@ -2818,7 +3404,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-appsync
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/614ed05f6e5458c4c62fa437c1a7359d
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/6a735405e08eaceb17a142ea8cd2ce8d
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -2851,6 +3437,18 @@ Resources:
             Fn::GetAtt:
             - MetadataAnalyzerFunction
             - Arn
+          REINDEX_STATE_MACHINE_ARN:
+            Fn::GetAtt:
+            - ReindexStateMachine
+            - Arn
+          PROCESS_IMAGE_FUNCTION_ARN:
+            Fn::GetAtt:
+            - ProcessImageFunction
+            - Arn
+          INGEST_TO_KB_FUNCTION_ARN:
+            Fn::GetAtt:
+            - IngestToKBFunction
+            - Arn
       Tags:
         Project:
           Ref: AWS::StackName
@@ -2867,8 +3465,11 @@ Resources:
           Action:
           - states:StartExecution
           Resource:
-            Fn::GetAtt:
+          - Fn::GetAtt:
             - ProcessingStateMachine
+            - Arn
+          - Fn::GetAtt:
+            - ReindexStateMachine
             - Arn
       - DynamoDBCrudPolicy:
           TableName:
@@ -2898,6 +3499,22 @@ Resources:
       - Statement:
         - Effect: Allow
           Action:
+          - lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - ProcessImageFunction
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - IngestToKBFunction
+            - Arn
+      - Statement:
+        - Effect: Allow
+          Action:
           - states:StopExecution
           Resource:
             Fn::Sub: arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*
@@ -2911,6 +3528,16 @@ Resources:
           Resource:
           - Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/*
           - Fn::Sub: arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:DeleteKnowledgeBaseDocuments
+          - bedrock:IngestKnowledgeBaseDocuments
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
     Metadata:
       SamResourceId: AppSyncResolverFunction
   StartUICodeBuild:
@@ -3139,6 +3766,17 @@ Resources:
           - Arn
     Metadata:
       SamResourceId: ApiKeyResolverDataSource
+  NoneDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: NoneDataSource
+      Type: NONE
+    Metadata:
+      SamResourceId: NoneDataSource
   GetDocumentResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -3555,6 +4193,38 @@ Resources:
         - Name
     Metadata:
       SamResourceId: DeleteDocumentsResolver
+  ReprocessDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: reprocessDocument
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ReprocessDocumentResolver
+  ReindexDocumentResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: reindexDocument
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: ReindexDocumentResolver
   CreateZipUploadUrlResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -3587,6 +4257,106 @@ Resources:
         - Name
     Metadata:
       SamResourceId: AnalyzeMetadataResolver
+  StartReindexResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: startReindex
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: StartReindexResolver
+  PublishReindexUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: publishReindexUpdate
+      DataSourceName:
+        Fn::GetAtt:
+        - NoneDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2018-05-29\",\n  \"payload\": $util.toJson($context.arguments)\n\
+        }\n"
+      ResponseMappingTemplate: '$util.toJson($context.result)
+
+        '
+    Metadata:
+      SamResourceId: PublishReindexUpdateResolver
+  PublishDocumentUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: publishDocumentUpdate
+      DataSourceName:
+        Fn::GetAtt:
+        - NoneDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2018-05-29\",\n  \"payload\": $util.toJson($context.arguments)\n\
+        }\n"
+      ResponseMappingTemplate: '$util.toJson($context.result)
+
+        '
+    Metadata:
+      SamResourceId: PublishDocumentUpdateResolver
+  PublishScrapeUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: publishScrapeUpdate
+      DataSourceName:
+        Fn::GetAtt:
+        - NoneDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2018-05-29\",\n  \"payload\": $util.toJson($context.arguments)\n\
+        }\n"
+      ResponseMappingTemplate: '$util.toJson($context.result)
+
+        '
+    Metadata:
+      SamResourceId: PublishScrapeUpdateResolver
+  PublishImageUpdateResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: publishImageUpdate
+      DataSourceName:
+        Fn::GetAtt:
+        - NoneDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2018-05-29\",\n  \"payload\": $util.toJson($context.arguments)\n\
+        }\n"
+      ResponseMappingTemplate: '$util.toJson($context.result)
+
+        '
+    Metadata:
+      SamResourceId: PublishImageUpdateResolver
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -3739,6 +4509,172 @@ Resources:
           Ref: AWS::StackName
     Metadata:
       SamResourceId: ScrapeProcessingQueue
+  SyncRequestDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-sync-request-dlq.fifo
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: SyncRequestDLQ
+  SyncRequestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-sync-request.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 600
+      MessageRetentionPeriod: 86400
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - SyncRequestDLQ
+          - Arn
+        maxReceiveCount: 3
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: SyncRequestQueue
+  SyncCoordinatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-sync-coordinator
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/cd49fb7f3a46f5bba499498c0c8e2c20
+      Handler: index.lambda_handler
+      Description: Coordinates KB sync requests - waits for running syncs, then starts
+        new one
+      Runtime: python3.13
+      Timeout: 600
+      MemorySize: 256
+      ReservedConcurrentExecutions: 1
+      Layers:
+      - Ref: RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - DataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - SyncRequestQueue
+              - Arn
+            BatchSize: 1
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:ListIngestionJobs
+          - bedrock:GetIngestionJob
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action:
+          - bedrock:StartIngestionJob
+          - bedrock:GetIngestionJob
+          - bedrock:ListIngestionJobs
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*/data-source/*
+    Metadata:
+      SamResourceId: SyncCoordinatorFunction
+  SyncStatusCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-sync-status-checker
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/7fe2e9c7f2353c15f1ffbcfce2414627
+      Handler: index.lambda_handler
+      Description: Checks KB status for SYNC_QUEUED documents and updates tracking
+        table
+      Runtime: python3.13
+      Timeout: 120
+      MemorySize: 256
+      Layers:
+      - Ref: RagstackCommonLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - DataSourceId
+          TRACKING_TABLE:
+            Ref: TrackingTable
+          GRAPHQL_ENDPOINT:
+            Fn::GetAtt:
+            - GraphQLApi
+            - GraphQLUrl
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
+      Tags:
+        Project:
+          Ref: AWS::StackName
+        CostCenter: Engineering
+      Events:
+        ScheduleEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+            Description: Check status of documents waiting for KB sync
+            Enabled: true
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TrackingTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:GetKnowledgeBaseDocuments
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+        - Effect: Allow
+          Action: appsync:GraphQL
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/${GraphQLApi.ApiId}/*
+    Metadata:
+      SamResourceId: SyncStatusCheckerFunction
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -3997,6 +4933,14 @@ Resources:
             Ref: ConfigurationTable
           WC_CDN_URL:
             Fn::Sub: https://${WebComponentDistribution.DomainName}/ragstack-chat.js
+          KNOWLEDGE_BASE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - KnowledgeBaseId
+          DATA_SOURCE_ID:
+            Fn::GetAtt:
+            - KnowledgeBase
+            - DataSourceId
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -4031,8 +4975,8 @@ Resources:
         \            'order': 4,\n            'description': 'Fallback model when\
         \ quotas exceeded',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
         \                'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
-        \            ],\n            'default': 'us.amazon.nova-micro-v1:0'\n    \
-        \    },\n        'chat_global_quota_daily': {\n            'type': 'number',\n\
+        \            ],\n            'default': 'us.amazon.nova-lite-v1:0'\n     \
+        \   },\n        'chat_global_quota_daily': {\n            'type': 'number',\n\
         \            'order': 5,\n            'description': 'Max messages per day\
         \ (all users)',\n            'default': 10000\n        },\n        'chat_per_user_quota_daily':\
         \ {\n            'type': 'number',\n            'order': 6,\n            'description':\
@@ -4072,51 +5016,59 @@ Resources:
         \        'filter_generation_model': {\n            'type': 'string',\n   \
         \         'order': 17,\n            'description': 'Model for filter generation',\n\
         \            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
-        \                'us.anthropic.claude-3-5-haiku-20241022-v1:0'\n         \
-        \   ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
-        \        },\n        'multislice_enabled': {\n            'type': 'boolean',\n\
-        \            'order': 18,\n            'description': 'Enable multi-slice\
-        \ retrieval (parallel filtered/unfiltered queries)',\n            'default':\
-        \ True\n        },\n        'multislice_count': {\n            'type': 'number',\n\
-        \            'order': 19,\n            'description': 'Number of parallel\
-        \ retrieval slices (2-4)',\n            'default': 2\n        },\n       \
-        \ 'multislice_timeout_ms': {\n            'type': 'number',\n            'order':\
-        \ 20,\n            'description': 'Timeout per slice in milliseconds',\n \
-        \           'default': 5000\n        },\n        'metadata_filter_examples':\
-        \ {\n            'type': 'array',\n            'order': 21,\n            'description':\
-        \ 'Filter examples for few-shot learning (JSON array)',\n            'default':\
-        \ []\n        },\n        'metadata_filter_examples_disabled': {\n       \
-        \     'type': 'array',\n            'order': 211,\n            'description':\
-        \ 'Names of disabled filter examples',\n            'default': []\n      \
-        \  },\n        'metadata_filter_examples_updated_at': {\n            'type':\
-        \ 'string',\n            'order': 212,\n            'description': 'Timestamp\
-        \ when filter examples were last generated',\n            'default': ''\n\
-        \        },\n        'metadata_extraction_enabled': {\n            'type':\
-        \ 'boolean',\n            'order': 22,\n            'description': 'Enable\
-        \ LLM metadata extraction during ingestion',\n            'default': True\n\
-        \        },\n        'metadata_extraction_model': {\n            'type': 'string',\n\
-        \            'order': 23,\n            'description': 'Model for metadata\
-        \ extraction',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
         \                'us.anthropic.claude-3-5-haiku-20241022-v1:0',\n        \
-        \        'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
-        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
-        \        },\n        'metadata_max_keys': {\n            'type': 'number',\n\
-        \            'order': 24,\n            'description': 'Maximum metadata fields\
-        \ to extract per document',\n            'default': 8\n        },\n      \
-        \  'metadata_extraction_mode': {\n            'type': 'string',\n        \
-        \    'order': 25,\n            'description': 'Extraction mode: auto (LLM\
-        \ decides) or manual (admin specifies)',\n            'enum': ['auto', 'manual'],\n\
-        \            'default': 'auto'\n        },\n        'metadata_manual_keys':\
-        \ {\n            'type': 'array',\n            'order': 26,\n            'description':\
-        \ 'Keys to extract in manual mode',\n            'default': [],\n        \
-        \    'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}\n\
-        \        }\n    }\n}\n\ndef lambda_handler(event, context):\n    print(f\"\
-        Event: {json.dumps(event)}\")\n    request_type = event.get('RequestType',\
-        \ '')\n\n    try:\n        if request_type in ['Create', 'Update']:\n    \
-        \        # Build defaults from schema\n            defaults = {'Configuration':\
-        \ 'Default'}\n            for key, prop in SCHEMA['properties'].items():\n\
-        \                if 'default' in prop:\n                    defaults[key]\
-        \ = prop['default']\n            defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL',\
+        \        'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
+        \ 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n        'multislice_enabled':\
+        \ {\n            'type': 'boolean',\n            'order': 18,\n          \
+        \  'description': 'Enable multi-slice retrieval (parallel filtered/unfiltered\
+        \ queries)',\n            'default': True\n        },\n        'multislice_count':\
+        \ {\n            'type': 'number',\n            'order': 19,\n           \
+        \ 'description': 'Number of parallel retrieval slices (2-4)',\n          \
+        \  'default': 2\n        },\n        'multislice_timeout_ms': {\n        \
+        \    'type': 'number',\n            'order': 20,\n            'description':\
+        \ 'Timeout per slice in milliseconds',\n            'default': 5000\n    \
+        \    },\n        'metadata_filter_examples': {\n            'type': 'array',\n\
+        \            'order': 21,\n            'description': 'Filter examples for\
+        \ few-shot learning (JSON array)',\n            'default': []\n        },\n\
+        \        'metadata_filter_examples_disabled': {\n            'type': 'array',\n\
+        \            'order': 211,\n            'description': 'Names of disabled\
+        \ filter examples',\n            'default': []\n        },\n        'metadata_filter_examples_updated_at':\
+        \ {\n            'type': 'string',\n            'order': 212,\n          \
+        \  'description': 'Timestamp when filter examples were last generated',\n\
+        \            'default': ''\n        },\n        'metadata_extraction_enabled':\
+        \ {\n            'type': 'boolean',\n            'order': 22,\n          \
+        \  'description': 'Enable LLM metadata extraction during ingestion',\n   \
+        \         'default': True\n        },\n        'metadata_extraction_model':\
+        \ {\n            'type': 'string',\n            'order': 23,\n           \
+        \ 'description': 'Model for metadata extraction',\n            'enum': [\n\
+        \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
+        \        'us.anthropic.claude-3-5-haiku-20241022-v1:0',\n                'us.amazon.nova-micro-v1:0',\n\
+        \                'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
+        \ 'us.amazon.nova-lite-v1:0'\n        },\n        'metadata_max_keys': {\n\
+        \            'type': 'number',\n            'order': 24,\n            'description':\
+        \ 'Maximum metadata fields to extract per document',\n            'default':\
+        \ 8\n        },\n        'metadata_extraction_mode': {\n            'type':\
+        \ 'string',\n            'order': 25,\n            'description': 'Extraction\
+        \ mode: auto (LLM decides) or manual (admin specifies)',\n            'enum':\
+        \ ['auto', 'manual'],\n            'default': 'auto'\n        },\n       \
+        \ 'metadata_manual_keys': {\n            'type': 'array',\n            'order':\
+        \ 26,\n            'description': 'Keys to extract in manual mode',\n    \
+        \        'default': [],\n            'dependsOn': {'field': 'metadata_extraction_mode',\
+        \ 'value': 'manual'}\n        },\n        'knowledge_base_id': {\n       \
+        \     'type': 'string',\n            'order': 100,\n            'description':\
+        \ 'Active Bedrock Knowledge Base ID (updated by reindex)',\n            'readOnly':\
+        \ True\n        },\n        'data_source_id': {\n            'type': 'string',\n\
+        \            'order': 101,\n            'description': 'Active Data Source\
+        \ ID (updated by reindex)',\n            'readOnly': True\n        }\n   \
+        \ }\n}\n\ndef lambda_handler(event, context):\n    print(f\"Event: {json.dumps(event)}\"\
+        )\n    request_type = event.get('RequestType', '')\n\n    try:\n        if\
+        \ request_type in ['Create', 'Update']:\n            # Build defaults from\
+        \ schema\n            defaults = {'Configuration': 'Default'}\n          \
+        \  for key, prop in SCHEMA['properties'].items():\n                if 'default'\
+        \ in prop:\n                    defaults[key] = prop['default']\n        \
+        \    defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')\n       \
+        \     defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID',\
+        \ '')\n            defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID',\
         \ '')\n\n            # Seed Schema (stored as dict, not JSON string)\n   \
         \         table.put_item(Item={\n                'Configuration': 'Schema',\n\
         \                'Schema': SCHEMA\n            })\n\n            # Seed Default\
@@ -4140,7 +5092,7 @@ Resources:
         Fn::GetAtt:
         - ConfigurationSeederFunction
         - Arn
-      SchemaVersion: '3'
+      SchemaVersion: '4'
     Metadata:
       SamResourceId: ConfigurationSeeder
   AdminUserProvisionerFunction:
@@ -4186,7 +5138,7 @@ Resources:
       SamResourceId: AdminUser
 Outputs:
   DataBucketName:
-    Description: S3 bucket for data (input/, output/, working/ prefixes)
+    Description: S3 bucket for data (input/, content/, working/ prefixes)
     Value:
       Ref: DataBucket
     Export:
@@ -4415,24 +5367,6 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-DataSourceId
-  TextDataSourceId:
-    Description: Data Source ID for text documents (output/ prefix)
-    Value:
-      Fn::GetAtt:
-      - KnowledgeBase
-      - TextDataSourceId
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-TextDataSourceId
-  ImageDataSourceId:
-    Description: Data Source ID for images (images/ prefix)
-    Value:
-      Fn::GetAtt:
-      - KnowledgeBase
-      - ImageDataSourceId
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-ImageDataSourceId
   GraphQLApiUrl:
     Description: GraphQL API URL
     Value:
