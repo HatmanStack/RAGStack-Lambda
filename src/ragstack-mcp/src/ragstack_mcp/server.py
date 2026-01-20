@@ -839,7 +839,7 @@ def get_configuration() -> str:
 
         === Chat Settings ===
         chat_primary_model: us.anthropic.claude-haiku-4-5-20251001-v1:0
-        chat_fallback_model: us.amazon.nova-micro-v1:0
+        chat_fallback_model: us.amazon.nova-lite-v1:0
         chat_global_quota_daily: 10000
         chat_per_user_quota_daily: 100
         chat_allow_document_access: false

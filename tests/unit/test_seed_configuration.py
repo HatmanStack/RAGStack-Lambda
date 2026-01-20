@@ -84,7 +84,7 @@ def test_chat_default_values():
         # Verify defaults
         assert default_item["chat_require_auth"] is False
         assert default_item["chat_primary_model"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-        assert default_item["chat_fallback_model"] == "us.amazon.nova-micro-v1:0"
+        assert default_item["chat_fallback_model"] == "us.amazon.nova-lite-v1:0"
         assert default_item["chat_global_quota_daily"] == 10000
         assert default_item["chat_per_user_quota_daily"] == 100
         assert default_item["chat_theme_preset"] == "light"
