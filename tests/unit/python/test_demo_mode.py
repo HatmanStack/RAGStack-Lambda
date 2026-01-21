@@ -10,9 +10,12 @@ import pytest
 from botocore.exceptions import ClientError
 
 from ragstack_common.demo_mode import (
+    DEMO_MAX_FILE_SIZE_BYTES,
     DemoModeError,
     check_demo_mode_feature_allowed,
     demo_quota_check_and_increment,
+    get_demo_max_file_size_mb,
+    get_demo_upload_conditions,
     is_demo_mode_enabled,
 )
 
@@ -258,3 +261,32 @@ class TestDemoModeError:
         assert error.message == "Test message"
         assert error.feature == "test_feature"
         assert str(error) == "Test message"
+
+
+class TestGetDemoUploadConditions:
+    """Tests for get_demo_upload_conditions function."""
+
+    def test_returns_none_when_demo_mode_disabled(self):
+        """Returns None when demo mode is disabled."""
+        with patch.dict(os.environ, {"DEMO_MODE": "false"}):
+            conditions = get_demo_upload_conditions()
+            assert conditions is None
+
+    def test_returns_conditions_when_demo_mode_enabled(self):
+        """Returns content-length-range condition when demo mode enabled."""
+        with patch.dict(os.environ, {"DEMO_MODE": "true"}):
+            conditions = get_demo_upload_conditions()
+            assert conditions is not None
+            assert len(conditions) == 1
+            assert conditions[0][0] == "content-length-range"
+            assert conditions[0][1] == 0
+            assert conditions[0][2] == DEMO_MAX_FILE_SIZE_BYTES
+
+
+class TestGetDemoMaxFileSizeMb:
+    """Tests for get_demo_max_file_size_mb function."""
+
+    def test_returns_correct_mb_value(self):
+        """Returns max file size in MB."""
+        size_mb = get_demo_max_file_size_mb()
+        assert size_mb == 10  # Default is 10 MB

@@ -217,6 +217,9 @@ python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
 
 # Skip ALL UI builds (dashboard and web component)
 python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
+
+# Enable demo mode (rate limits: 5 uploads/day, 30 chats/day; disables reindex/reprocess/delete)
+python publish.py --project-name myapp --admin-email admin@example.com --demo-mode
 ```
 
 ### Publish to AWS Marketplace (Maintainers)

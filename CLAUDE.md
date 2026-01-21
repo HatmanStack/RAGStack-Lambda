@@ -49,6 +49,8 @@ npm run check             # Lint + test (CI equivalent)
 python publish.py --project-name my-docs --admin-email admin@example.com
 python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
 python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
+python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode   # Enable demo mode (rate limits, disabled features)
+python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode    # Enable demo mode
 
 # Development
 sam build
@@ -115,4 +117,5 @@ cd src/ui && npm run dev  # Frontend dev server
 - **OCR Backends:** textract (default) or bedrock. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Web Component:** See [docs/RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) for `<ragstack-chat>` usage
 - **Lambda Layer:** `lib/ragstack_common/` packaged as Lambda layer (Docker required for build)
+- **Demo Mode:** `--demo-mode` enables rate limits (5 uploads/day, 30 chats/day) and disables reindex/reprocess/delete
 - **Troubleshooting:** See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)

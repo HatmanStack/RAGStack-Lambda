@@ -20,6 +20,9 @@ DEMO_QUOTA_TTL_DAYS = 2
 # Features that are completely disabled in demo mode
 DISABLED_FEATURES = frozenset({"reindex_all", "reprocess", "delete_documents"})
 
+# Maximum file size in demo mode (10 MB) - prevents abuse via large documents
+DEMO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 class DemoModeError(Exception):
     """Raised when demo mode blocks an operation."""
@@ -191,6 +194,30 @@ def demo_quota_check_and_increment(
     except Exception as e:
         logger.error(f"Error in demo quota check: {e}")
         raise
+
+
+def get_demo_upload_conditions(config_manager=None) -> list | None:
+    """
+    Get S3 presigned POST conditions for demo mode uploads.
+
+    Returns content-length-range condition to limit file size.
+
+    Args:
+        config_manager: Optional ConfigurationManager instance
+
+    Returns:
+        List of S3 conditions if demo mode enabled, None otherwise
+    """
+    if not is_demo_mode_enabled(config_manager):
+        return None
+
+    # Limit file size in demo mode to prevent abuse
+    return [["content-length-range", 0, DEMO_MAX_FILE_SIZE_BYTES]]
+
+
+def get_demo_max_file_size_mb() -> int:
+    """Get the max file size in MB for demo mode uploads."""
+    return DEMO_MAX_FILE_SIZE_BYTES // (1024 * 1024)
 
 
 def get_demo_quota_remaining(

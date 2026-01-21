@@ -484,7 +484,7 @@ def create_sam_artifact_bucket(stack_name, region):
     return bucket_name
 
 
-def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False):
+def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False, demo_mode=False):
     """
     Deploy SAM application with project-based naming.
 
@@ -496,6 +496,7 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
         ui_source_key: S3 key for UI source zip (if not skip_ui)
         wc_source_key: S3 key for web component source zip
         skip_ui: Whether to skip UI deployment
+        demo_mode: Whether to enable demo mode with rate limits
 
     Returns:
         str: CloudFormation stack name
@@ -507,6 +508,11 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
         f"AdminEmail={admin_email}",
         "BedrockOcrModelId=us.anthropic.claude-haiku-4-5-20251001-v1:0",
     ]
+
+    # Add demo mode if enabled
+    if demo_mode:
+        log_info("Demo mode enabled - rate limits and feature restrictions active")
+        param_overrides.append("DemoMode=true")
 
     # Add UI parameters if building UI
     if not skip_ui and ui_source_key:
@@ -983,6 +989,12 @@ Examples:
         help="Skip all UI builds (dashboard and web component)"
     )
 
+    parser.add_argument(
+        "--demo-mode",
+        action="store_true",
+        help="Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)"
+    )
+
     args = parser.parse_args()
 
     # Handle Marketplace publishing mode
@@ -1093,7 +1105,8 @@ Examples:
             artifact_bucket,
             ui_source_key=ui_source_key,
             wc_source_key=wc_source_key,
-            skip_ui=args.skip_ui
+            skip_ui=args.skip_ui,
+            demo_mode=args.demo_mode
         )
 
         # Get outputs

@@ -497,7 +497,7 @@ export function Settings() {
             <Box>This deployment is running in Demo Mode with the following restrictions:</Box>
             <Box>
               <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                <li><strong>Uploads:</strong> {uploadLimit} per day</li>
+                <li><strong>Uploads:</strong> {uploadLimit} per day, max 10 MB per file</li>
                 <li><strong>Chat messages:</strong> {chatLimit} per day</li>
                 <li><strong>Disabled features:</strong> Reindex All, Reprocess, Delete</li>
               </ul>

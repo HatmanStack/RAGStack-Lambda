@@ -44,6 +44,7 @@ from ragstack_common.demo_mode import (
     DemoModeError,
     check_demo_mode_feature_allowed,
     demo_quota_check_and_increment,
+    get_demo_upload_conditions,
     is_demo_mode_enabled,
 )
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
@@ -1431,11 +1432,13 @@ def create_upload_url(args):
             s3_key = f"input/{document_id}/{filename}"
             doc_type = "document"
 
-        # Create presigned POST
+        # Create presigned POST with demo mode file size limit if applicable
         logger.info(f"Generating presigned POST for S3 key: {s3_key} (type={doc_type})")
+        demo_conditions = get_demo_upload_conditions(get_config_manager())
         presigned = s3.generate_presigned_post(
             Bucket=DATA_BUCKET,
             Key=s3_key,
+            Conditions=demo_conditions,
             ExpiresIn=3600,  # 1 hour
         )
 
@@ -1995,6 +1998,11 @@ def create_image_upload_url(args):
         # Include metadata for auto-processing if requested
         conditions = []
         fields = {}
+
+        # Add demo mode file size limit if applicable
+        demo_conditions = get_demo_upload_conditions(get_config_manager())
+        if demo_conditions:
+            conditions.extend(demo_conditions)
 
         if auto_process:
             # Add metadata fields that will be stored with the S3 object
@@ -2639,11 +2647,13 @@ def create_zip_upload_url(args):
         # Generate S3 key with uploads/ prefix
         s3_key = f"uploads/{upload_id}/archive.zip"
 
-        # Create presigned POST
+        # Create presigned POST with demo mode file size limit if applicable
         logger.info(f"Generating presigned POST for S3 key: {s3_key}")
+        demo_conditions = get_demo_upload_conditions(get_config_manager())
         presigned = s3.generate_presigned_post(
             Bucket=DATA_BUCKET,
             Key=s3_key,
+            Conditions=demo_conditions,
             ExpiresIn=3600,  # 1 hour
         )
 
