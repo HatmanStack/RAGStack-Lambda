@@ -101,15 +101,17 @@ export const useUpload = () => {
       }
 
       // Check for GraphQL errors which may contain demo mode quota messages
-      const gqlError = err as { errors?: Array<{ message: string }> };
+      const gqlError = err as { errors?: Array<{ message: unknown }> };
       if (gqlError?.errors?.length) {
         const firstError = gqlError.errors[0].message;
+        // Guard against non-string message values
+        const errorString = typeof firstError === 'string' ? firstError : String(firstError ?? '');
         // Check for demo mode upload quota error
-        if (firstError.toLowerCase().includes('demo mode') &&
-            firstError.toLowerCase().includes('upload limit')) {
+        if (errorString.toLowerCase().includes('demo mode') &&
+            errorString.toLowerCase().includes('upload limit')) {
           errorMsg = 'Daily upload limit reached in Demo Mode. Please try again tomorrow.';
         } else {
-          errorMsg = firstError;
+          errorMsg = errorString || errorMsg;
         }
       }
 

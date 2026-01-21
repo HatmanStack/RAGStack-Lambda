@@ -56,8 +56,8 @@ export const useDemoMode = (): DemoModeState & { refresh: () => Promise<void> } 
 
       setState({
         isEnabled: merged.demo_mode_enabled === true,
-        uploadLimit: merged.demo_upload_quota_daily || 5,
-        chatLimit: merged.demo_chat_quota_daily || 30,
+        uploadLimit: merged.demo_upload_quota_daily ?? 5,
+        chatLimit: merged.demo_chat_quota_daily ?? 30,
         loading: false,
         error: null,
       });

@@ -155,7 +155,8 @@ def demo_quota_check_and_increment(
                         },
                     }
                 }
-            ]
+            ],
+            ReturnConsumedCapacity="NONE",
         )
 
         user_prefix = user_id[:8] if user_id else "unknown"
@@ -165,11 +166,25 @@ def demo_quota_check_and_increment(
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code == "TransactionCanceledException":
-            logger.info(f"Demo {quota_type} quota exceeded for user")
-            return False, (
-                f"Demo Mode: Daily {friendly_name} limit reached ({quota_limit}/day). "
-                "Please try again tomorrow."
+            # Check CancellationReasons to distinguish quota exceeded from other failures
+            cancellation_reasons = e.response.get("CancellationReasons", [])
+            is_quota_exceeded = any(
+                reason.get("Code") == "ConditionalCheckFailed"
+                for reason in cancellation_reasons
+                if reason
             )
+
+            if is_quota_exceeded:
+                logger.info(f"Demo {quota_type} quota exceeded for user")
+                return False, (
+                    f"Demo Mode: Daily {friendly_name} limit reached ({quota_limit}/day). "
+                    "Please try again tomorrow."
+                )
+
+            # Other transaction cancellation reasons (TransactionConflict, etc.)
+            logger.error(f"Transaction cancelled for non-quota reason: {cancellation_reasons}")
+            raise
+
         logger.error(f"Error in demo quota transaction: {e}")
         raise
 

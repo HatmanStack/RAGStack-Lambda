@@ -155,13 +155,16 @@ class TestDemoQuotaCheckAndIncrement:
             mock_dynamodb_client.transact_write_items.assert_called_once()
 
     def test_returns_false_when_quota_exceeded(self, mock_dynamodb_client, mock_config_manager):
-        """Returns False when quota is exceeded."""
-        # Simulate TransactionCanceledException from condition check failure
+        """Returns False when quota is exceeded (ConditionalCheckFailed)."""
+        # Simulate TransactionCanceledException with ConditionalCheckFailed reason
         error_response = {
             "Error": {
                 "Code": "TransactionCanceledException",
                 "Message": "Transaction cancelled",
-            }
+            },
+            "CancellationReasons": [
+                {"Code": "ConditionalCheckFailed", "Message": "Condition check failed"}
+            ],
         }
         mock_dynamodb_client.transact_write_items.side_effect = ClientError(
             error_response, "TransactWriteItems"
@@ -182,7 +185,10 @@ class TestDemoQuotaCheckAndIncrement:
             "Error": {
                 "Code": "TransactionCanceledException",
                 "Message": "Transaction cancelled",
-            }
+            },
+            "CancellationReasons": [
+                {"Code": "ConditionalCheckFailed", "Message": "Condition check failed"}
+            ],
         }
         mock_dynamodb_client.transact_write_items.side_effect = ClientError(
             error_response, "TransactWriteItems"
@@ -202,7 +208,10 @@ class TestDemoQuotaCheckAndIncrement:
             "Error": {
                 "Code": "TransactionCanceledException",
                 "Message": "Transaction cancelled",
-            }
+            },
+            "CancellationReasons": [
+                {"Code": "ConditionalCheckFailed", "Message": "Condition check failed"}
+            ],
         }
         mock_dynamodb_client.transact_write_items.side_effect = ClientError(
             error_response, "TransactWriteItems"
@@ -215,6 +224,29 @@ class TestDemoQuotaCheckAndIncrement:
 
             assert allowed is False
             assert "5" in message  # Default upload limit
+
+    def test_raises_on_non_quota_transaction_cancellation(
+        self, mock_dynamodb_client, mock_config_manager
+    ):
+        """Re-raises exception for non-quota transaction cancellations."""
+        # Simulate TransactionCanceledException with TransactionConflict reason
+        error_response = {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "Transaction cancelled",
+            },
+            "CancellationReasons": [
+                {"Code": "TransactionConflict", "Message": "Transaction conflict"}
+            ],
+        }
+        mock_dynamodb_client.transact_write_items.side_effect = ClientError(
+            error_response, "TransactWriteItems"
+        )
+
+        with patch.dict(os.environ, {"DEMO_MODE": "true"}), pytest.raises(ClientError):
+            demo_quota_check_and_increment(
+                "user123", "upload", "config-table", mock_dynamodb_client, mock_config_manager
+            )
 
 
 class TestDemoModeError:

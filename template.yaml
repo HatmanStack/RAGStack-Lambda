@@ -4399,7 +4399,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "4"  # v4: added knowledge_base_id and data_source_id
+      SchemaVersion: "5"  # v5: added demo_mode_enabled, demo_upload_quota_daily, demo_chat_quota_daily
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

@@ -1381,17 +1381,6 @@ def create_upload_url(args):
     MEDIA_EXTENSIONS = {".mp4", ".webm", ".mp3", ".wav", ".m4a", ".ogg"}
 
     try:
-        # Check demo mode upload quota
-        if is_demo_mode_enabled(get_config_manager()):
-            user_id = get_current_user_id()
-            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
-            if config_table:
-                allowed, message = demo_quota_check_and_increment(
-                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
-                )
-                if not allowed:
-                    raise ValueError(message)
-
         filename = args["filename"]
         logger.info(f"Creating upload URL for file: {filename}")
 
@@ -1414,6 +1403,17 @@ def create_upload_url(args):
         if len(filename) > MAX_FILENAME_LENGTH:
             logger.warning(f"Invalid filename length: {len(filename)}")
             raise ValueError(f"Filename must be at most {MAX_FILENAME_LENGTH} characters")
+
+        # Check demo mode upload quota (after validation to not consume quota for invalid requests)
+        if is_demo_mode_enabled(get_config_manager()):
+            user_id = get_current_user_id()
+            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+            if config_table:
+                allowed, message = demo_quota_check_and_increment(
+                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                )
+                if not allowed:
+                    raise ValueError(message)
 
         document_id = str(uuid4())
         logger.info(f"Generated document ID: {document_id}")
@@ -1950,17 +1950,6 @@ def create_image_upload_url(args):
             - userCaption: User-provided caption for auto-process (optional)
     """
     try:
-        # Check demo mode upload quota (images count as uploads)
-        if is_demo_mode_enabled(get_config_manager()):
-            user_id = get_current_user_id()
-            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
-            if config_table:
-                allowed, message = demo_quota_check_and_increment(
-                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
-                )
-                if not allowed:
-                    raise ValueError(message)
-
         filename = args["filename"]
         auto_process = args.get("autoProcess", False)
         user_caption = args.get("userCaption", "")
@@ -1984,6 +1973,17 @@ def create_image_upload_url(args):
                 raise ValueError(error_msg)
             # Fallback error if is_supported_image fails but validate_image_type passes
             raise ValueError("Unsupported image file type")
+
+        # Check demo mode upload quota (after validation to not consume quota for invalid requests)
+        if is_demo_mode_enabled(get_config_manager()):
+            user_id = get_current_user_id()
+            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+            if config_table:
+                allowed, message = demo_quota_check_and_increment(
+                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                )
+                if not allowed:
+                    raise ValueError(message)
 
         image_id = str(uuid4())
         logger.info(f"Generated image ID: {image_id}")
@@ -2619,7 +2619,10 @@ def create_zip_upload_url(args):
         Dictionary with uploadUrl, uploadId, and fields
     """
     try:
-        # Check demo mode upload quota (ZIP counts as a single upload)
+        generate_captions = args.get("generateCaptions", False)
+        logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
+
+        # Check demo mode upload quota (after args parsing, ZIP counts as a single upload)
         if is_demo_mode_enabled(get_config_manager()):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
@@ -2629,9 +2632,6 @@ def create_zip_upload_url(args):
                 )
                 if not allowed:
                     raise ValueError(message)
-
-        generate_captions = args.get("generateCaptions", False)
-        logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
 
         upload_id = str(uuid4())
         logger.info(f"Generated upload ID: {upload_id}")
