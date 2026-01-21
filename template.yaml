@@ -105,6 +105,14 @@ Parameters:
       - 'false'
     Description: Build and deploy the embeddable chat web component
 
+  DemoMode:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)
+
 Globals:
   Function:
     Runtime: python3.13
@@ -1623,6 +1631,7 @@ Resources:
           CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           TRACKING_TABLE: !Ref TrackingTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
+          DEMO_MODE: !Ref DemoMode
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -1735,6 +1744,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
           STATE_MACHINE_ARN: !Ref ProcessingStateMachine
+          DEMO_MODE: !Ref DemoMode
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -2911,6 +2921,8 @@ Resources:
           PROCESS_IMAGE_FUNCTION_ARN: !GetAtt ProcessImageFunction.Arn
           # Ingest to KB function for single document reindexing
           INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
+          # Demo mode for rate limiting and feature restrictions
+          DEMO_MODE: !Ref DemoMode
       Tags:
         Project: !Ref AWS::StackName
         CostCenter: Engineering
@@ -4204,6 +4216,26 @@ Resources:
                     'order': 15,
                     'description': 'Enable budget alerts',
                     'default': True
+                },
+                'demo_mode_enabled': {
+                    'type': 'boolean',
+                    'order': 50,
+                    'description': 'Demo mode active (read-only, set via deployment)',
+                    'readOnly': True
+                },
+                'demo_upload_quota_daily': {
+                    'type': 'number',
+                    'order': 51,
+                    'description': 'Max uploads per user per day in demo mode',
+                    'default': 5,
+                    'dependsOn': { 'field': 'demo_mode_enabled', 'value': True }
+                },
+                'demo_chat_quota_daily': {
+                    'type': 'number',
+                    'order': 52,
+                    'description': 'Max chat messages per user per day in demo mode',
+                    'default': 30,
+                    'dependsOn': { 'field': 'demo_mode_enabled', 'value': True }
                 },
                 'filter_generation_enabled': {
                     'type': 'boolean',

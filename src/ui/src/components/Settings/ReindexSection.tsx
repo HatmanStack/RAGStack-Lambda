@@ -8,6 +8,7 @@ import {
   StatusIndicator,
 } from '@cloudscape-design/components';
 import { useReindex } from '../../hooks/useReindex';
+import { useDemoMode } from '../../hooks/useDemoMode';
 import type { ReindexStatus } from '../../types/graphql';
 
 // Status messages for different reindex states
@@ -31,6 +32,7 @@ export function ReindexSection() {
     startReindex,
     clearState,
   } = useReindex();
+  const { isEnabled: isDemoMode } = useDemoMode();
 
   const handleStartReindex = async () => {
     const confirmed = window.confirm(
@@ -127,6 +129,13 @@ export function ReindexSection() {
     <SpaceBetween size="m">
       <Box variant="h3">Reindex Knowledge Base</Box>
 
+      {/* Demo mode info */}
+      {isDemoMode && (
+        <Alert type="info">
+          Reindex All Documents is disabled in Demo Mode.
+        </Alert>
+      )}
+
       {/* Progress display */}
       {isInProgress && renderProgress()}
 
@@ -140,18 +149,20 @@ export function ReindexSection() {
       <Button
         onClick={handleStartReindex}
         loading={isStarting}
-        disabled={isInProgress || isStarting}
+        disabled={isInProgress || isStarting || isDemoMode}
         iconName="refresh"
       >
         {isInProgress ? 'Reindexing...' : 'Reindex All Documents'}
       </Button>
 
       {/* Info alert */}
-      <Alert type="warning">
-        This will regenerate metadata for all documents using current settings.
-        The process may take several minutes for large knowledge bases.
-        During reindexing, queries may return partial results.
-      </Alert>
+      {!isDemoMode && (
+        <Alert type="warning">
+          This will regenerate metadata for all documents using current settings.
+          The process may take several minutes for large knowledge bases.
+          During reindexing, queries may return partial results.
+        </Alert>
+      )}
     </SpaceBetween>
   );
 }

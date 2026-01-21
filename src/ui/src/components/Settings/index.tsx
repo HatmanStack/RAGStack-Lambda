@@ -48,6 +48,7 @@ import {
   validateBudgetThreshold,
 } from '../../utils/validation';
 import { ReindexSection } from './ReindexSection';
+import { useDemoMode } from '../../hooks/useDemoMode';
 import type { GqlResponse } from '../../types/graphql';
 import { MetadataKeyInput } from './MetadataKeyInput';
 import { MetadataPanel } from '../Search/MetadataPanel';
@@ -79,6 +80,9 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Demo mode state
+  const { isEnabled: isDemoMode, uploadLimit, chatLimit } = useDemoMode();
 
   // State for configuration data
   const [schema, setSchema] = useState<Record<string, unknown>>({});
@@ -484,6 +488,21 @@ export function Settings() {
       {success && (
         <Alert type="success" dismissible onDismiss={() => setSuccess(false)}>
           Configuration saved successfully
+        </Alert>
+      )}
+
+      {isDemoMode && (
+        <Alert type="info" header="Demo Mode Active">
+          <SpaceBetween size="xs">
+            <Box>This deployment is running in Demo Mode with the following restrictions:</Box>
+            <Box>
+              <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                <li><strong>Uploads:</strong> {uploadLimit} per day</li>
+                <li><strong>Chat messages:</strong> {chatLimit} per day</li>
+                <li><strong>Disabled features:</strong> Reindex All, Reprocess, Delete</li>
+              </ul>
+            </Box>
+          </SpaceBetween>
         </Alert>
       )}
 

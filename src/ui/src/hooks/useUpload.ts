@@ -94,7 +94,25 @@ export const useUpload = () => {
 
     } catch (err) {
       console.error('Upload failed:', err);
-      const errorMsg = err instanceof Error ? err.message : 'Upload failed';
+      let errorMsg = 'Upload failed';
+
+      if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+
+      // Check for GraphQL errors which may contain demo mode quota messages
+      const gqlError = err as { errors?: Array<{ message: string }> };
+      if (gqlError?.errors?.length) {
+        const firstError = gqlError.errors[0].message;
+        // Check for demo mode upload quota error
+        if (firstError.toLowerCase().includes('demo mode') &&
+            firstError.toLowerCase().includes('upload limit')) {
+          errorMsg = 'Daily upload limit reached in Demo Mode. Please try again tomorrow.';
+        } else {
+          errorMsg = firstError;
+        }
+      }
+
       setError(errorMsg);
       setCurrentUpload({ filename: file.name, progress: 0, status: 'error', error: errorMsg });
       throw err;
