@@ -2,6 +2,51 @@
 
 Quick reference for common issues and solutions.
 
+## Best Practices
+
+Tips from production usage to help you get the most out of RAGStack.
+
+### Model Selection
+
+| Use Case | Recommended | Avoid | Why |
+|----------|-------------|-------|-----|
+| Metadata extraction | Claude Haiku 4.5 | Nova Lite | Nova Lite hallucinates fields and produces generic/template responses |
+| Chat fallback | Nova Lite | Nova Micro | Good balance of cost and quality for fallback |
+| Filter generation | Claude Haiku 4.5 | - | Needs to understand query intent accurately |
+
+### Document Processing
+
+- **Large PDFs (100+ pages)**: Processing is automatic via batch queue. Monitor status in dashboard.
+- **Image-heavy documents**: Consider switching `ocr_backend` to `bedrock` for better accuracy.
+- **Mixed content**: RAGStack handles text, images, and media differently - each optimized for its type.
+
+### Query Quality
+
+- **Multi-slice retrieval**: Keep enabled (default) - runs filtered and unfiltered queries in parallel for better recall.
+- **Metadata filtering**: Works best when documents have consistent metadata. Use manual extraction mode if you need specific keys.
+
+### Filter Generation
+
+- **Filters require initialization**: Filter examples aren't created until you run "Analyze Metadata" in the Settings tab at least once. Without this, query-time filter generation won't have few-shot examples.
+- **Refreshing filter examples**: Filter examples are few-shot prompts that guide the model. If your queries aren't generating good filters, disable the problematic examples and run "Analyze Metadata" again - disabled filters will be replaced with new ones based on current active keys.
+- **Active keys**: A metadata key is "active" if it has an occurrence count > 0 (i.e., at least one document has that key). Only active keys are used for filter generation. After a full reindex, check that your expected keys are active.
+
+### Cost Optimization
+
+**Recommended workflow for large document sets:**
+
+1. **Start small**: Process a representative slice of your data with the default Haiku extraction model
+2. **Curate keys**: Review the extracted metadata keys, then switch to "Manual" extraction mode and select only the keys you want to retain
+3. **Reindex**: Run a reindex to apply manual keys and reset occurrence counts
+4. **Downgrade extraction model**: Switch to Nova Lite for metadata extraction (cheaper, and manual mode constrains its output)
+5. **Process remaining data**: Upload the rest of your documents - they'll use the cheaper model with your curated key list
+6. **Keep Haiku for filters**: Leave filter generation on Haiku - it needs better reasoning to translate queries into filters accurately
+7. **Create targeted filters**: Run "Analyze Metadata" and create filter examples that match your most common query patterns
+
+This approach uses Haiku's quality for discovery and filter generation, while using Nova Lite's lower cost for bulk extraction with known keys.
+
+---
+
 ## Deployment Issues
 
 | Problem | Cause | Solution |
