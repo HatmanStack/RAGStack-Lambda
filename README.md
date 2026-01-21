@@ -17,6 +17,13 @@
 
 Serverless document and media processing with AI chat. Upload documents, images, video, and audio — extract text with OCR or transcription — query using Amazon Bedrock.
 
+<p align="center">
+  <b>QUESTIONS?</b>
+  <a href="https://deepwiki.com/HatmanStack/RAGStack-Lambda/">
+    <sub><img src="https://deepwiki.com/badge.svg" alt="Deep WIKI" height="20" /></sub>
+  </a>
+</p>
+
 ## Features
 
 - ☁️ Fully serverless architecture (Lambda, Step Functions, S3, DynamoDB)
