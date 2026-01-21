@@ -168,7 +168,7 @@ For the complete list of supported languages, see [AWS Transcribe Supported Lang
 | Setting | Values | Default | Notes |
 |---------|--------|---------|-------|
 | `metadata_extraction_enabled` | boolean | true | Enable LLM-based metadata extraction |
-| `metadata_extraction_model` | See options below | `us.amazon.nova-lite-v1:0` | Model for metadata extraction |
+| `metadata_extraction_model` | See options below | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for metadata extraction |
 | `metadata_max_keys` | number | 8 | Maximum metadata fields per document |
 | `metadata_extraction_mode` | auto, manual | auto | Auto: LLM decides keys. Manual: use specified keys only |
 | `metadata_manual_keys` | string[] | [] | Keys to extract in manual mode |

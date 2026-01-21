@@ -20,8 +20,8 @@ from ragstack_common.key_library import KeyLibrary
 
 logger = logging.getLogger(__name__)
 
-# Default model for metadata extraction (cost-efficient)
-DEFAULT_EXTRACTION_MODEL = "us.amazon.nova-lite-v1:0"
+# Default model for metadata extraction (quality over cost)
+DEFAULT_EXTRACTION_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Reserved keys that should not be extracted by LLM
 RESERVED_KEYS = frozenset(

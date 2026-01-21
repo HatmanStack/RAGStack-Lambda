@@ -4274,7 +4274,7 @@ Resources:
                         'us.amazon.nova-micro-v1:0',
                         'us.amazon.nova-lite-v1:0'
                     ],
-                    'default': 'us.amazon.nova-lite-v1:0'
+                    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
                 'metadata_max_keys': {
                     'type': 'number',
