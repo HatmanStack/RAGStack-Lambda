@@ -276,6 +276,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         if (errorMessage.toLowerCase().includes('authentication required')) {
           errorType = 'auth';
           retryable = false;
+        } else if (errorMessage.toLowerCase().includes('demo mode')) {
+          // Demo mode quota errors are not retryable (resets next day)
+          errorType = 'quota';
+          retryable = false;
         } else if (
           errorMessage.toLowerCase().includes('quota exceeded') ||
           errorMessage.toLowerCase().includes('quota')

@@ -40,6 +40,12 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.demo_mode import (
+    DemoModeError,
+    check_demo_mode_feature_allowed,
+    demo_quota_check_and_increment,
+    is_demo_mode_enabled,
+)
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.ingestion import ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
@@ -59,6 +65,12 @@ bedrock_agent = boto3.client("bedrock-agent")
 # Module-level configuration manager (lazy init for resolvers that need access control)
 _config_manager = None
 
+# Module-level event storage for passing identity to resolvers
+_current_event = None
+
+# DynamoDB client for quota operations
+dynamodb_client = boto3.client("dynamodb")
+
 
 def get_config_manager():
     """Lazy initialization of ConfigurationManager."""
@@ -66,6 +78,14 @@ def get_config_manager():
     if _config_manager is None:
         _config_manager = ConfigurationManager()
     return _config_manager
+
+
+def get_current_user_id() -> str | None:
+    """Get user ID from current event's identity."""
+    if not _current_event:
+        return None
+    identity = _current_event.get("identity") or {}
+    return identity.get("sub") or identity.get("username")
 
 
 def convert_decimals(obj):
@@ -190,10 +210,29 @@ def lambda_handler(event, context):
     """
     Route to appropriate resolver based on field name.
     """
+    global _current_event
+    _current_event = event  # Store for use by resolvers that need identity
+
     logger.info(f"AppSync resolver invoked for field: {event['info']['fieldName']}")
     logger.info(f"Arguments: {json.dumps(event.get('arguments', {}))}")
 
     field_name = event["info"]["fieldName"]
+
+    # Demo mode feature restrictions - block certain mutations entirely
+    demo_restricted_features = {
+        "startReindex": "reindex_all",
+        "reprocessDocument": "reprocess",
+        "deleteDocuments": "delete_documents",
+    }
+
+    if field_name in demo_restricted_features:
+        try:
+            check_demo_mode_feature_allowed(
+                demo_restricted_features[field_name], get_config_manager()
+            )
+        except DemoModeError as e:
+            logger.info(f"Demo mode blocked {field_name}: {e.message}")
+            raise ValueError(e.message) from e
 
     # Check public access for upload-related resolvers
     # Map field names to their required access types
@@ -1365,6 +1404,17 @@ def create_upload_url(args):
             logger.warning(f"Invalid filename length: {len(filename)}")
             raise ValueError(f"Filename must be at most {MAX_FILENAME_LENGTH} characters")
 
+        # Check demo mode upload quota (after validation to not consume quota for invalid requests)
+        if is_demo_mode_enabled(get_config_manager()):
+            user_id = get_current_user_id()
+            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+            if config_table:
+                allowed, message = demo_quota_check_and_increment(
+                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                )
+                if not allowed:
+                    raise ValueError(message)
+
         document_id = str(uuid4())
         logger.info(f"Generated document ID: {document_id}")
 
@@ -1923,6 +1973,17 @@ def create_image_upload_url(args):
                 raise ValueError(error_msg)
             # Fallback error if is_supported_image fails but validate_image_type passes
             raise ValueError("Unsupported image file type")
+
+        # Check demo mode upload quota (after validation to not consume quota for invalid requests)
+        if is_demo_mode_enabled(get_config_manager()):
+            user_id = get_current_user_id()
+            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+            if config_table:
+                allowed, message = demo_quota_check_and_increment(
+                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                )
+                if not allowed:
+                    raise ValueError(message)
 
         image_id = str(uuid4())
         logger.info(f"Generated image ID: {image_id}")
@@ -2560,6 +2621,17 @@ def create_zip_upload_url(args):
     try:
         generate_captions = args.get("generateCaptions", False)
         logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
+
+        # Check demo mode upload quota (after args parsing, ZIP counts as a single upload)
+        if is_demo_mode_enabled(get_config_manager()):
+            user_id = get_current_user_id()
+            config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
+            if config_table:
+                allowed, message = demo_quota_check_and_increment(
+                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                )
+                if not allowed:
+                    raise ValueError(message)
 
         upload_id = str(uuid4())
         logger.info(f"Generated upload ID: {upload_id}")

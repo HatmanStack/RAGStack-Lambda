@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   AppLayout as CloudscapeAppLayout,
-  TopNavigation
+  TopNavigation,
 } from '@cloudscape-design/components';
-import type { AppLayoutProps } from '@cloudscape-design/components';
+import type { AppLayoutProps, TopNavigationProps } from '@cloudscape-design/components';
 import { Navigation } from './Navigation';
 import { useAuth } from '../Auth/AuthProvider';
+import { useDemoMode } from '../../hooks/useDemoMode';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,15 +16,29 @@ interface LayoutProps {
 export const AppLayout = ({ children, contentType = 'default' }: LayoutProps) => {
   const [navigationOpen, setNavigationOpen] = useState(true);
   const { user, logout } = useAuth();
+  const { isEnabled: isDemoMode } = useDemoMode();
+
+  // Build utilities - add demo badge as first utility when demo mode is enabled
+  const utilities: TopNavigationProps.Utility[] = [];
+
+  if (isDemoMode) {
+    utilities.push({
+      type: 'button',
+      text: 'DEMO',
+      disableUtilityCollapse: true,
+      variant: 'primary-button',
+    } as TopNavigationProps.Utility);
+  }
 
   return (
     <>
       <TopNavigation
         identity={{
           href: '/',
-          title: 'Document Pipeline'
+          title: isDemoMode ? 'Document Pipeline (Demo)' : 'Document Pipeline'
         }}
         utilities={[
+          ...utilities,
           {
             type: 'button',
             text: user?.username || 'User',

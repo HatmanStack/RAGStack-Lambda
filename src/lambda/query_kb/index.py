@@ -42,6 +42,7 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.demo_mode import is_demo_mode_enabled
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
@@ -226,6 +227,8 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     Uses TransactWriteItems to ensure atomic updates to both global and user
     quotas, preventing race conditions and eliminating rollback failures.
 
+    In demo mode, applies stricter per-user quota (default 30/day) to control costs.
+
     Args:
         tracking_id (str): User identifier for per-user quota
         is_authenticated (bool): Whether user is authenticated
@@ -244,9 +247,18 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
     global_quota_daily = get_config_manager().get_parameter(
         "chat_global_quota_daily", default=10000
     )
-    per_user_quota_daily = get_config_manager().get_parameter(
-        "chat_per_user_quota_daily", default=100
-    )
+
+    # In demo mode, use stricter per-user quota
+    demo_mode = is_demo_mode_enabled(get_config_manager())
+    if demo_mode:
+        per_user_quota_daily = get_config_manager().get_parameter(
+            "demo_chat_quota_daily", default=30
+        )
+        logger.info(f"Demo mode enabled - using quota limit: {per_user_quota_daily}/day")
+    else:
+        per_user_quota_daily = get_config_manager().get_parameter(
+            "chat_per_user_quota_daily", default=100
+        )
 
     # Ensure quotas are integers
     if isinstance(global_quota_daily, Decimal):

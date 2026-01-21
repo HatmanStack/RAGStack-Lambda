@@ -111,6 +111,14 @@ def handle_get_configuration():
         custom_item = get_configuration_item("Custom")
         custom_config = remove_partition_key(custom_item) if custom_item else {}
 
+        # Inject demo_mode_enabled from environment variable
+        # This allows the frontend to detect demo mode without backend changes
+        demo_mode_env = os.environ.get("DEMO_MODE", "").lower() == "true"
+        if demo_mode_env and "demo_mode_enabled" not in default_config:
+            default_config["demo_mode_enabled"] = True
+        elif not demo_mode_env and "demo_mode_enabled" not in default_config:
+            default_config["demo_mode_enabled"] = False
+
         # Convert Decimals to native Python types for JSON serialization
         def convert_decimals(obj):
             if isinstance(obj, dict):

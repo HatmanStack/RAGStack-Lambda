@@ -17,6 +17,7 @@ import {
 import { useCollection } from '@cloudscape-design/collection-hooks';
 import type { DocumentItem } from '../../hooks/useDocuments';
 import type { DocumentTableProps, TablePreferences } from './types';
+import { useDemoMode } from '../../hooks/useDemoMode';
 
 // Date range options for document retention display
 const DATE_RANGE_OPTIONS = [
@@ -131,6 +132,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
   const [selectedItems, setSelectedItems] = useState<DocumentItem[]>([]);
   const [preferences, setPreferences] = useState<TablePreferences>(loadPreferences);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const { isEnabled: isDemoMode } = useDemoMode();
 
   // Save preferences when they change
   useEffect(() => {
@@ -361,8 +363,18 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
               <ButtonDropdown
                 items={[
                   { id: 'reindex', text: 'Reindex', description: 'Re-extract metadata only' },
-                  { id: 'reprocess', text: 'Reprocess', description: 'Full pipeline (OCR + metadata)' },
-                  { id: 'delete', text: 'Delete', description: 'Remove from S3 and KB' }
+                  {
+                    id: 'reprocess',
+                    text: 'Reprocess',
+                    description: isDemoMode ? 'Disabled in Demo Mode' : 'Full pipeline (OCR + metadata)',
+                    disabled: isDemoMode
+                  },
+                  {
+                    id: 'delete',
+                    text: 'Delete',
+                    description: isDemoMode ? 'Disabled in Demo Mode' : 'Remove from S3 and KB',
+                    disabled: isDemoMode
+                  }
                 ]}
                 onItemClick={({ detail }) => handleAction(detail.id)}
                 disabled={selectedItems.length === 0 || actionInProgress !== null}
