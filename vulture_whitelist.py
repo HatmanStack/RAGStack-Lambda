@@ -48,3 +48,6 @@ side_effect
 
 # Test function keyword arguments captured but unused
 kw
+
+# API compatibility parameters (passed by callers but implementation simplified)
+min_per_slice  # merge_slices_with_guaranteed_minimum - kept for API compatibility

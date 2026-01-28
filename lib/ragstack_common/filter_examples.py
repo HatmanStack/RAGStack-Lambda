@@ -9,14 +9,19 @@ import logging
 from datetime import UTC, datetime
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from ragstack_common.config import get_config_manager_or_none
 
 logger = logging.getLogger(__name__)
 
-# Initialize AWS clients
-bedrock_runtime = boto3.client("bedrock-runtime")
+# Initialize AWS clients with consistent timeout settings (matching bedrock.py)
+_bedrock_config = Config(
+    connect_timeout=10,
+    read_timeout=300,  # Allow time for LLM generation
+)
+bedrock_runtime = boto3.client("bedrock-runtime", config=_bedrock_config)
 s3 = boto3.client("s3")
 
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -52,12 +57,15 @@ def generate_filter_examples(
     field_descriptions = []
     for key, stats in sorted(
         field_analysis.items(),
-        key=lambda x: x[1]["count"],
+        key=lambda x: x[1].get("count", 0),
         reverse=True,
     )[:10]:  # Top 10 fields
-        samples = ", ".join(stats["sample_values"][:5])
+        sample_values = stats.get("sample_values", []) or []
+        samples = ", ".join(str(v) for v in sample_values[:5])
+        data_type = stats.get("data_type", "unknown")
+        count = stats.get("count", 0)
         field_descriptions.append(
-            f"- {key} ({stats['data_type']}): {stats['count']} occurrences, samples: [{samples}]"
+            f"- {key} ({data_type}): {count} occurrences, samples: [{samples}]"
         )
 
     fields_text = "\n".join(field_descriptions)
