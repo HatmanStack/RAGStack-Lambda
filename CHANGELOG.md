@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.1.0] - 2026-01-28
+
+### Added
+
+- **Filter keys allowlist**: Users can now select which metadata keys are used for filter generation via a new multiselect UI in the Filter Examples section
+- **Regenerate Examples button**: Manual control over when filter examples are regenerated (decoupled from metadata analysis)
+- **`regenerateFilterExamples` mutation**: New GraphQL mutation for on-demand filter example generation using only allowlisted keys
+
+### Changed
+
+- **Separated key discovery from example generation**: `analyzeMetadata` now only updates key library statistics; filter examples require explicit regeneration
+- **Automatic filter key cleanup**: When a metadata key is deleted, it's automatically removed from the filter keys allowlist
+
+### Fixed
+
+- **Bedrock client timeout consistency**: Filter example generation now uses same timeout config as other Bedrock calls (10s connect, 300s read)
+- **Safe dictionary access in filter generation**: Prevents KeyError when field analysis has missing keys
+- **FilterKeyInput error handling**: Added error state display and retry capability; filters out empty key names
+
 ## [2.0.2] - 2026-01-28
 
 ### Added
