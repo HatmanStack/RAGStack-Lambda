@@ -3428,6 +3428,15 @@ Resources:
       FieldName: analyzeMetadata
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
+  RegenerateFilterExamplesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: regenerateFilterExamples
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
   DeleteMetadataKeyResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
