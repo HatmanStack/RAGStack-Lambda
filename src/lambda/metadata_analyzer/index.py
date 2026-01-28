@@ -438,8 +438,10 @@ def update_key_library_counts(
 
     for key_name, stats in field_analysis.items():
         # When manual keys are configured, only those are active
+        # Normalize key_name for comparison against manual_set
         if manual_set is not None:
-            status = "active" if key_name in manual_set else "inactive"
+            key_name_norm = key_name.lower().replace(" ", "_")
+            status = "active" if key_name_norm in manual_set else "inactive"
         else:
             status = "active"
 

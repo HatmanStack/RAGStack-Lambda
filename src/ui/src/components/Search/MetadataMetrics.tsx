@@ -62,9 +62,12 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
   const handleDelete = async () => {
     if (!confirmKey || !onDeleteKey) return;
     setDeleting(true);
-    await onDeleteKey(confirmKey);
-    setDeleting(false);
-    setConfirmKey(null);
+    try {
+      await onDeleteKey(confirmKey);
+      setConfirmKey(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const { items, collectionProps } = useCollection(stats, {
