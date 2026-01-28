@@ -5,7 +5,7 @@
     "Initialize": {
       "Type": "Task",
       "Resource": "${ReindexKBFunctionArn}",
-      "Comment": "Count documents, create new KB, prepare for processing",
+      "Comment": "Count documents, create new KB, start baseline sync",
       "Parameters": {
         "action": "init"
       },
@@ -26,7 +26,56 @@
           "Next": "PrepareCleanup"
         }
       ],
-      "Next": "ProcessBatch"
+      "Next": "WaitForSync"
+    },
+
+    "WaitForSync": {
+      "Type": "Wait",
+      "Comment": "Wait before checking baseline sync status",
+      "Seconds": 30,
+      "Next": "CheckSyncStatus"
+    },
+
+    "CheckSyncStatus": {
+      "Type": "Task",
+      "Resource": "${ReindexKBFunctionArn}",
+      "Comment": "Check if baseline ingestion sync has completed",
+      "TimeoutSeconds": 60,
+      "ResultPath": "$",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PrepareCleanup"
+        }
+      ],
+      "Next": "IsSyncComplete"
+    },
+
+    "IsSyncComplete": {
+      "Type": "Choice",
+      "Comment": "Route based on baseline sync status",
+      "Choices": [
+        {
+          "Variable": "$.sync_status",
+          "StringEquals": "COMPLETE",
+          "Next": "ProcessBatch"
+        },
+        {
+          "Variable": "$.sync_status",
+          "StringEquals": "FAILED",
+          "Next": "ProcessBatch"
+        }
+      ],
+      "Default": "WaitForSync"
     },
 
     "ProcessBatch": {
@@ -74,14 +123,14 @@
     "Finalize": {
       "Type": "Task",
       "Resource": "${ReindexKBFunctionArn}",
-      "Comment": "Delete old KB and complete reindex",
-      "TimeoutSeconds": 600,
+      "Comment": "Swap config to new KB, start final sync, delete old KB",
+      "TimeoutSeconds": 300,
       "ResultPath": "$",
       "Retry": [
         {
           "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
-          "IntervalSeconds": 5,
-          "MaxAttempts": 2,
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
           "BackoffRate": 2.0
         }
       ],
@@ -92,7 +141,75 @@
           "Next": "FinalizeError"
         }
       ],
-      "Next": "ReindexComplete"
+      "Next": "CheckFinalizeAction"
+    },
+
+    "CheckFinalizeAction": {
+      "Type": "Choice",
+      "Comment": "Route based on finalize result - sync needed or complete",
+      "Choices": [
+        {
+          "Variable": "$.action",
+          "StringEquals": "check_finalize_sync",
+          "Next": "WaitForFinalizeSync"
+        },
+        {
+          "Variable": "$.action",
+          "StringEquals": "finalize",
+          "Comment": "Retry finalize if API operations were busy",
+          "Next": "WaitForFinalizeSync"
+        },
+        {
+          "Variable": "$.action",
+          "StringEquals": "complete",
+          "Next": "ReindexComplete"
+        }
+      ],
+      "Default": "ReindexComplete"
+    },
+
+    "WaitForFinalizeSync": {
+      "Type": "Wait",
+      "Comment": "Wait before checking finalize sync status",
+      "Seconds": 30,
+      "Next": "CheckFinalizeSyncStatus"
+    },
+
+    "CheckFinalizeSyncStatus": {
+      "Type": "Task",
+      "Resource": "${ReindexKBFunctionArn}",
+      "Comment": "Check if finalize ingestion sync has completed",
+      "TimeoutSeconds": 60,
+      "ResultPath": "$",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FinalizeError"
+        }
+      ],
+      "Next": "IsFinalizeSyncComplete"
+    },
+
+    "IsFinalizeSyncComplete": {
+      "Type": "Choice",
+      "Comment": "Route based on finalize sync status",
+      "Choices": [
+        {
+          "Variable": "$.action",
+          "StringEquals": "complete",
+          "Next": "ReindexComplete"
+        }
+      ],
+      "Default": "WaitForFinalizeSync"
     },
 
     "ReindexComplete": {

@@ -75,12 +75,12 @@ def acquire_reindex_lock(execution_arn: str) -> bool:
         table = dynamodb.Table(config_table_name)
         table.put_item(
             Item={
-                "config_key": REINDEX_LOCK_KEY,
+                "Configuration": REINDEX_LOCK_KEY,
                 "is_locked": True,
                 "execution_arn": execution_arn,
                 "started_at": datetime.now(UTC).isoformat(),
             },
-            ConditionExpression="attribute_not_exists(config_key) OR is_locked = :false",
+            ConditionExpression="attribute_not_exists(Configuration) OR is_locked = :false",
             ExpressionAttributeValues={":false": False},
         )
         logger.info(f"Acquired reindex lock for execution: {execution_arn}")
@@ -108,7 +108,7 @@ def release_reindex_lock() -> None:
     try:
         table = dynamodb.Table(config_table_name)
         table.update_item(
-            Key={"config_key": REINDEX_LOCK_KEY},
+            Key={"Configuration": REINDEX_LOCK_KEY},
             UpdateExpression="SET is_locked = :false, released_at = :released_at",
             ExpressionAttributeValues={
                 ":false": False,
@@ -201,10 +201,14 @@ def lambda_handler(event: dict, context: Any) -> dict:
     try:
         if action == "init":
             return handle_init(event)
+        if action == "check_sync_status":
+            return handle_check_sync_status(event)
         if action == "process_batch":
             return handle_process_batch(event)
         if action == "finalize":
             return handle_finalize(event)
+        if action == "check_finalize_sync":
+            return handle_check_finalize_sync(event)
         if action == "cleanup_failed":
             return handle_cleanup_failed(event)
         raise ValueError(f"Unknown action: {action}")
@@ -302,8 +306,7 @@ def handle_init(event: dict) -> dict:
     new_kb = migrator.create_knowledge_base(suffix=timestamp)
     logger.info(f"Created new KB: {new_kb['kb_id']}")
 
-    # Run baseline sync on empty KB and wait for completion
-    # This establishes sync tracking before any API ingestion
+    # Start baseline sync — the state machine will poll for completion
     logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
     baseline_response = bedrock_agent.start_ingestion_job(
         knowledgeBaseId=new_kb["kb_id"],
@@ -312,35 +315,10 @@ def handle_init(event: dict) -> dict:
     baseline_job_id = baseline_response.get("ingestionJob", {}).get("ingestionJobId")
     logger.info(f"Baseline sync started: {baseline_job_id}")
 
-    # Wait for baseline to complete before proceeding
-    if baseline_job_id:
-        max_wait = 120  # 2 minutes max
-        poll_interval = 5
-        elapsed = 0
-
-        while elapsed < max_wait:
-            job_response = bedrock_agent.get_ingestion_job(
-                knowledgeBaseId=new_kb["kb_id"],
-                dataSourceId=new_kb["data_source_id"],
-                ingestionJobId=baseline_job_id,
-            )
-            status = job_response.get("ingestionJob", {}).get("status")
-            logger.info(f"Baseline sync status: {status} ({elapsed}s)")
-
-            if status in ("COMPLETE", "FAILED"):
-                break
-
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-
-        if status == "FAILED":
-            logger.warning("Baseline sync failed, continuing anyway")
-        elif elapsed >= max_wait:
-            logger.warning("Baseline sync timed out, continuing anyway")
-
-    # Return state for processing loop
+    # Return state — the state machine WaitForSync loop will poll until sync completes
     return {
-        "action": "process_batch",
+        "action": "check_sync_status",
+        "baseline_job_id": baseline_job_id,
         "old_kb_id": old_kb_id,
         "new_kb_id": new_kb["kb_id"],
         "new_data_source_id": new_kb["data_source_id"],
@@ -352,6 +330,48 @@ def handle_init(event: dict) -> dict:
         "batch_size": 10,
         "current_batch_index": 0,
     }
+
+
+def handle_check_sync_status(event: dict) -> dict:
+    """
+    Check if the baseline ingestion sync has completed.
+
+    Called by the state machine WaitForSync polling loop.
+    Returns sync_status plus passthrough of all state.
+    """
+    new_kb_id = event.get("new_kb_id")
+    new_data_source_id = event.get("new_data_source_id")
+    baseline_job_id = event.get("baseline_job_id")
+
+    if not baseline_job_id:
+        logger.warning("No baseline_job_id, skipping sync check")
+        return {**event, "action": "process_batch", "sync_status": "COMPLETE"}
+
+    try:
+        job_response = bedrock_agent.get_ingestion_job(
+            knowledgeBaseId=new_kb_id,
+            dataSourceId=new_data_source_id,
+            ingestionJobId=baseline_job_id,
+        )
+        status = job_response.get("ingestionJob", {}).get("status", "UNKNOWN")
+        stats = job_response.get("ingestionJob", {}).get("statistics", {})
+        logger.info(
+            f"Baseline sync status: {status} "
+            f"(scanned={stats.get('numberOfDocumentsScanned', 0)}, "
+            f"indexed={stats.get('numberOfNewDocumentsIndexed', 0)})"
+        )
+    except Exception as e:
+        logger.error(f"Error checking sync status: {e}")
+        # Treat errors as complete to avoid infinite loop
+        return {**event, "action": "process_batch", "sync_status": "COMPLETE"}
+
+    if status in ("COMPLETE", "FAILED", "STOPPED"):
+        if status == "FAILED":
+            logger.warning("Baseline sync failed, proceeding with per-document ingestion")
+        return {**event, "action": "process_batch", "sync_status": status}
+
+    # Still in progress — state machine will loop back to WaitForSync
+    return {**event, "sync_status": status}
 
 
 def handle_process_batch(event: dict) -> dict:
@@ -1092,48 +1112,43 @@ def handle_finalize(event: dict) -> dict:
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
 
     # Start ingestion job for visual embeddings (images/videos)
-    # Wait for any ongoing API operations to complete first
+    finalize_job_id = None
     if new_data_source_id:
         logger.info(f"Starting ingestion job for visual embeddings on {new_kb_id}")
-
-        # Poll until API operations complete (max 5 minutes)
-        max_wait = 300  # 5 minutes
-        poll_interval = 10  # 10 seconds
-        elapsed = 0
-
-        while elapsed < max_wait:
-            try:
-                bedrock_agent.start_ingestion_job(
-                    knowledgeBaseId=new_kb_id,
-                    dataSourceId=new_data_source_id,
-                )
-                logger.info("Ingestion job started successfully")
-                break
-            except bedrock_agent.exceptions.ValidationException as e:
-                if "ongoing KnowledgeBaseDocuments API request" in str(e):
-                    logger.info(f"API operations still in progress, waiting... ({elapsed}s)")
-                    time.sleep(poll_interval)
-                    elapsed += poll_interval
-                else:
-                    raise
-        else:
-            # Timeout - raise to trigger state machine retry
-            raise RuntimeError(
-                f"Timed out waiting for API operations to complete after {max_wait}s"
+        try:
+            resp = bedrock_agent.start_ingestion_job(
+                knowledgeBaseId=new_kb_id,
+                dataSourceId=new_data_source_id,
             )
-
-    # Publish deleting old KB status
-    publish_reindex_update(
-        graphql_endpoint,
-        status="DELETING_OLD_KB",
-        total_documents=total_documents,
-        processed_count=processed_count,
-        error_count=error_count,
-        new_knowledge_base_id=new_kb_id,
-    )
+            finalize_job_id = resp.get("ingestionJob", {}).get("ingestionJobId")
+            logger.info(f"Finalize ingestion job started: {finalize_job_id}")
+        except bedrock_agent.exceptions.ValidationException as e:
+            if "ongoing KnowledgeBaseDocuments API request" in str(e):
+                logger.info("API operations still in progress, will retry via state machine")
+                # Return so state machine can wait and retry
+                return {
+                    "action": "finalize",
+                    "old_kb_id": old_kb_id,
+                    "new_kb_id": new_kb_id,
+                    "new_data_source_id": new_data_source_id,
+                    "total_documents": total_documents,
+                    "processed_count": processed_count,
+                    "error_count": error_count,
+                    "error_messages": error_messages,
+                    "finalize_retry": True,
+                }
+            raise
 
     # Delete old KB if it exists and is different from new
     if old_kb_id and old_kb_id != new_kb_id:
+        publish_reindex_update(
+            graphql_endpoint,
+            status="DELETING_OLD_KB",
+            total_documents=total_documents,
+            processed_count=processed_count,
+            error_count=error_count,
+            new_knowledge_base_id=new_kb_id,
+        )
         try:
             migrator = KBMigrator(
                 data_bucket=data_bucket,
@@ -1146,10 +1161,9 @@ def handle_finalize(event: dict) -> dict:
             logger.info(f"Deleted old KB: {old_kb_id}")
         except Exception as e:
             logger.warning(f"Failed to delete old KB {old_kb_id}: {e}")
-            # Don't fail the operation if old KB deletion fails
             error_messages.append(f"Failed to delete old KB: {str(e)[:100]}")
 
-    # Deactivate metadata keys with zero occurrences (no longer in any documents)
+    # Deactivate metadata keys with zero occurrences
     try:
         key_library = get_key_library()
         deactivated = key_library.deactivate_zero_count_keys()
@@ -1158,10 +1172,23 @@ def handle_finalize(event: dict) -> dict:
     except Exception as e:
         logger.warning(f"Failed to deactivate zero-count keys: {e}")
 
-    # Release the global reindex lock to allow individual document operations
+    # Release the global reindex lock
     release_reindex_lock()
 
-    # Publish completion status
+    # If we started a finalize ingestion job, return for state machine to wait
+    if finalize_job_id:
+        return {
+            "action": "check_finalize_sync",
+            "finalize_job_id": finalize_job_id,
+            "new_kb_id": new_kb_id,
+            "new_data_source_id": new_data_source_id,
+            "total_documents": total_documents,
+            "processed_count": processed_count,
+            "error_count": error_count,
+            "error_messages": error_messages,
+        }
+
+    # No finalize sync needed — complete immediately
     publish_reindex_update(
         graphql_endpoint,
         status="COMPLETED",
@@ -1173,12 +1200,65 @@ def handle_finalize(event: dict) -> dict:
     )
 
     return {
+        "action": "complete",
         "status": "COMPLETED",
         "new_kb_id": new_kb_id,
         "total_documents": total_documents,
         "processed_count": processed_count,
         "error_count": error_count,
     }
+
+
+def handle_check_finalize_sync(event: dict) -> dict:
+    """
+    Check if the finalize ingestion sync has completed.
+
+    Called by the state machine WaitForFinalizeSync polling loop.
+    """
+    new_kb_id = event.get("new_kb_id")
+    new_data_source_id = event.get("new_data_source_id")
+    finalize_job_id = event.get("finalize_job_id")
+    graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+
+    if not finalize_job_id:
+        logger.warning("No finalize_job_id, completing")
+        return {**event, "action": "complete", "finalize_sync_status": "COMPLETE"}
+
+    try:
+        job_response = bedrock_agent.get_ingestion_job(
+            knowledgeBaseId=new_kb_id,
+            dataSourceId=new_data_source_id,
+            ingestionJobId=finalize_job_id,
+        )
+        status = job_response.get("ingestionJob", {}).get("status", "UNKNOWN")
+        stats = job_response.get("ingestionJob", {}).get("statistics", {})
+        logger.info(
+            f"Finalize sync status: {status} "
+            f"(scanned={stats.get('numberOfDocumentsScanned', 0)}, "
+            f"indexed={stats.get('numberOfNewDocumentsIndexed', 0)})"
+        )
+    except Exception as e:
+        logger.error(f"Error checking finalize sync status: {e}")
+        return {**event, "action": "complete", "finalize_sync_status": "COMPLETE"}
+
+    if status in ("COMPLETE", "FAILED", "STOPPED"):
+        if status == "FAILED":
+            logger.warning("Finalize sync failed")
+
+        # Publish completion
+        publish_reindex_update(
+            graphql_endpoint,
+            status="COMPLETED",
+            total_documents=event.get("total_documents", 0),
+            processed_count=event.get("processed_count", 0),
+            error_count=event.get("error_count", 0),
+            new_knowledge_base_id=new_kb_id,
+        )
+
+        return {**event, "action": "complete", "finalize_sync_status": status}
+
+    # Still in progress
+    return {**event, "finalize_sync_status": status}
 
 
 def handle_cleanup_failed(event: dict) -> dict:

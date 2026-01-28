@@ -155,9 +155,12 @@ def ingest_documents_with_retry(
             is_validation_ongoing = (
                 error_code == "ValidationException" and "ongoing" in error_msg.lower()
             )
+            is_throttle = (
+                error_code == "ValidationException" and "can't exceed" in error_msg.lower()
+            )
             is_service_unavailable = error_code == "ServiceUnavailableException"
 
-            if is_conflict or is_validation_ongoing or is_service_unavailable:
+            if is_conflict or is_validation_ongoing or is_throttle or is_service_unavailable:
                 last_error = e
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)  # Exponential backoff
