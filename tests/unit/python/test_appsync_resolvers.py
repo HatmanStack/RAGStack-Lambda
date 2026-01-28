@@ -1261,9 +1261,7 @@ class TestRegenerateFilterExamples:
             assert "No filter keys configured" in result["error"]
             assert result["examplesGenerated"] == 0
 
-    def test_generates_examples_with_allowed_keys_only(
-        self, mock_env_with_key_library, mock_boto3
-    ):
+    def test_generates_examples_with_allowed_keys_only(self, mock_env_with_key_library, mock_boto3):
         """Only uses keys from the filter allowlist."""
         module = _load_appsync_resolvers_module()
         module.dynamodb = mock_boto3["dynamodb"]
@@ -1340,4 +1338,3 @@ class TestRegenerateFilterExamples:
 
             assert result["success"] is False
             assert "None of the configured filter keys are active" in result["error"]
-

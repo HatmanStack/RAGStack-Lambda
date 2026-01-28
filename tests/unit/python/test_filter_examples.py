@@ -140,7 +140,9 @@ class TestStoreFilterExamples:
 
             # Should store both timestamped and latest versions
             assert mock_s3.put_object.call_count == 2
-            assert result == "s3://test-bucket/metadata-filters/test-index/filter-examples-latest.json"
+            assert (
+                result == "s3://test-bucket/metadata-filters/test-index/filter-examples-latest.json"
+            )
 
 
 class TestUpdateConfigWithExamples:

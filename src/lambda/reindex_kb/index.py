@@ -172,6 +172,37 @@ def get_config_manager() -> ConfigurationManager | None:
     return _config_manager
 
 
+def update_tracking_metadata(document_id: str, metadata: dict) -> None:
+    """
+    Update extracted_metadata in the tracking table.
+
+    Called after extracting metadata during reindex to keep the tracking table
+    in sync with S3 sidecars. The UI reads from tracking table, not S3.
+
+    Args:
+        document_id: Document identifier
+        metadata: Extracted metadata dict
+    """
+    tracking_table_name = os.environ.get("TRACKING_TABLE")
+    if not tracking_table_name:
+        logger.warning("TRACKING_TABLE not set, skipping metadata update")
+        return
+
+    try:
+        tracking_table = dynamodb.Table(tracking_table_name)
+        tracking_table.update_item(
+            Key={"document_id": document_id},
+            UpdateExpression="SET extracted_metadata = :metadata, updated_at = :updated_at",
+            ExpressionAttributeValues={
+                ":metadata": metadata,
+                ":updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        logger.debug(f"Updated tracking table metadata for {document_id}")
+    except Exception as e:
+        logger.warning(f"Failed to update tracking metadata for {document_id}: {e}")
+
+
 def lambda_handler(event: dict, context: Any) -> dict:
     """
     Main Lambda handler for reindex operations.
@@ -593,6 +624,9 @@ def process_text_item(
     for uri in text_uris:
         write_metadata_to_s3(uri, metadata)
 
+    # Update tracking table so UI shows fresh metadata
+    update_tracking_metadata(doc_id, metadata)
+
     logger.info(f"Wrote sidecars for {content_type} {doc_id}: {filename} ({len(text_uris)} files)")
     return processed_count + 1, error_count, error_messages
 
@@ -706,6 +740,9 @@ def process_scraped_item(
                 write_metadata_to_s3(content_uri, metadata)
                 files_processed += 1
 
+        # Update tracking table with job-level metadata
+        update_tracking_metadata(job_id, job_metadata)
+
         logger.info(f"Wrote sidecars for scraped job {job_id}: {files_processed} files")
         return processed_count + 1, error_count, error_messages
 
@@ -746,6 +783,9 @@ def process_scraped_item(
 
     # Write metadata sidecar to S3
     write_metadata_to_s3(output_s3_uri, metadata)
+
+    # Update tracking table so UI shows fresh metadata
+    update_tracking_metadata(doc_id, metadata)
 
     logger.info(f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {job_id or 'none'})")
     return processed_count + 1, error_count, error_messages
@@ -857,6 +897,9 @@ def process_media_item(
         except Exception as e:
             logger.warning(f"Failed to write segment sidecars for {doc_id}: {e}")
 
+    # Update tracking table so UI shows fresh metadata
+    update_tracking_metadata(doc_id, metadata)
+
     return processed_count + 1, error_count, error_messages
 
 
@@ -891,23 +934,14 @@ def process_image_item(
     image_s3_uri = item.get("output_s3_uri") or item.get("input_s3_uri")
     caption_s3_uri = item.get("caption_s3_uri")
 
-    if not caption_s3_uri:
-        logger.warning(f"Image {doc_id} has no caption_s3_uri, skipping")
-        return processed_count + 1, error_count, error_messages
-
-    # Read caption text for metadata extraction
-    try:
-        caption_text = read_s3_text(caption_s3_uri)
-    except Exception as e:
-        logger.warning(f"Failed to read caption for {doc_id}: {e}")
-        caption_text = ""
-
-    # Extract metadata from caption using LLM
+    # Extract metadata from caption if available
     metadata = {}
-    if caption_text and caption_text.strip():
+    if caption_s3_uri:
         try:
-            extractor = get_metadata_extractor()
-            metadata = extractor.extract_metadata(caption_text, doc_id)
+            caption_text = read_s3_text(caption_s3_uri)
+            if caption_text and caption_text.strip():
+                extractor = get_metadata_extractor()
+                metadata = extractor.extract_metadata(caption_text, doc_id)
         except Exception as e:
             logger.warning(f"Failed to extract metadata for image {doc_id}: {e}")
 
@@ -921,9 +955,14 @@ def process_image_item(
     if item.get("ai_caption"):
         metadata["has_ai_caption"] = "true"
 
-    # Write metadata sidecars for BOTH files (sync will pick them up)
-    write_metadata_to_s3(caption_s3_uri, metadata)
-    write_metadata_to_s3(image_s3_uri, metadata)
+    # Write metadata sidecars (sync will pick them up)
+    if caption_s3_uri:
+        write_metadata_to_s3(caption_s3_uri, metadata)
+    if image_s3_uri:
+        write_metadata_to_s3(image_s3_uri, metadata)
+
+    # Update tracking table so UI shows fresh metadata
+    update_tracking_metadata(doc_id, metadata)
 
     logger.info(f"Wrote sidecars for image {doc_id}: {filename}")
 

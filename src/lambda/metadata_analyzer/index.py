@@ -23,7 +23,6 @@ Output:
 }
 """
 
-import json
 import logging
 import os
 import time
@@ -355,7 +354,6 @@ def lambda_handler(event: dict, context) -> dict:
                 "executionTimeMs": int((time.time() - start_time) * 1000),
             }
 
-        data_bucket = os.environ.get("DATA_BUCKET")
         key_library_table = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
         # Get configuration options

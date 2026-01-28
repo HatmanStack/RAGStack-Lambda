@@ -168,7 +168,7 @@ _filter_examples_cache_time = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 
-def _get_filter_components():
+def _get_filter_components(filtered_score_boost: float = 1.35):
     """Lazy-load filter generation components."""
     global _key_library, _filter_generator, _multislice_retriever
 
@@ -180,8 +180,16 @@ def _get_filter_components():
         filter_model = get_config_manager().get_parameter("filter_generation_model", default=None)
         _filter_generator = FilterGenerator(key_library=_key_library, model_id=filter_model)
 
-    if _multislice_retriever is None:
-        _multislice_retriever = MultiSliceRetriever(bedrock_agent_client=bedrock_agent)
+    # Recreate retriever if boost changed
+    boost_changed = (
+        _multislice_retriever is not None
+        and _multislice_retriever.filtered_score_boost != filtered_score_boost
+    )
+    if _multislice_retriever is None or boost_changed:
+        _multislice_retriever = MultiSliceRetriever(
+            bedrock_agent_client=bedrock_agent,
+            filtered_score_boost=filtered_score_boost,
+        )
 
     return _key_library, _filter_generator, _multislice_retriever
 
@@ -1458,11 +1466,14 @@ def lambda_handler(event, context):
             "filter_generation_enabled", default=True
         )
         multislice_enabled = get_config_manager().get_parameter("multislice_enabled", default=True)
+        filtered_score_boost = get_config_manager().get_parameter(
+            "filtered_score_boost", default=1.35
+        )
 
         # Generate metadata filter if enabled (includes content_type filtering)
         if filter_enabled:
             try:
-                _, filter_generator, _ = _get_filter_components()
+                _, filter_generator, _ = _get_filter_components(filtered_score_boost)
                 filter_examples = _get_filter_examples()
                 cfg = get_config_manager()
                 manual_keys = cfg.get_parameter("metadata_manual_keys", default=None)
@@ -1483,7 +1494,7 @@ def lambda_handler(event, context):
         try:
             if multislice_enabled and generated_filter:
                 # Use multi-slice retrieval with filter
-                _, _, multislice_retriever = _get_filter_components()
+                _, _, multislice_retriever = _get_filter_components(filtered_score_boost)
                 logger.info(
                     f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
                 )

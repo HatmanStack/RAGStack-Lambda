@@ -4,11 +4,11 @@ Tests the metadata analysis functionality including:
 - Vector sampling from Bedrock KB
 - Metadata field counting and analysis
 - Occurrence rate calculation
-- Filter example generation
-- Results storage in S3 and DynamoDB
+- Key library updates
+
+Filter example generation tests are in test_filter_examples.py.
 """
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

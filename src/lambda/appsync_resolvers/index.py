@@ -40,17 +40,17 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
-from ragstack_common.filter_examples import (
-    generate_filter_examples,
-    store_filter_examples,
-    update_config_with_examples,
-)
 from ragstack_common.demo_mode import (
     DemoModeError,
     check_demo_mode_feature_allowed,
     demo_quota_check_and_increment,
     get_demo_upload_conditions,
     is_demo_mode_enabled,
+)
+from ragstack_common.filter_examples import (
+    generate_filter_examples,
+    store_filter_examples,
+    update_config_with_examples,
 )
 from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
 from ragstack_common.ingestion import ingest_documents_with_retry
