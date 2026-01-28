@@ -3172,7 +3172,7 @@ def regenerate_filter_examples(args):
 
 
 def delete_metadata_key(args):
-    """Delete a metadata key from the key library."""
+    """Delete a metadata key from the key library and filter allowlist."""
     key_name = args.get("keyName", "")
     if not key_name:
         return {"success": False, "keyName": "", "error": "keyName is required"}
@@ -3183,6 +3183,32 @@ def delete_metadata_key(args):
     try:
         key_library = KeyLibrary(table_name=METADATA_KEY_LIBRARY_TABLE)
         success = key_library.delete_key(key_name)
+
+        # Also remove from filter keys allowlist if present
+        try:
+            config_manager = get_config_manager()
+            if config_manager:
+                current_filter_keys = config_manager.get_parameter(
+                    "metadata_filter_keys", default=[]
+                )
+                if current_filter_keys:
+                    # Normalize for comparison
+                    key_name_norm = key_name.lower().replace(" ", "_")
+                    updated_filter_keys = [
+                        k
+                        for k in current_filter_keys
+                        if k.lower().replace(" ", "_") != key_name_norm
+                    ]
+                    # Only update if something was removed
+                    if len(updated_filter_keys) != len(current_filter_keys):
+                        config_manager.update_custom_config(
+                            {"metadata_filter_keys": updated_filter_keys}
+                        )
+                        logger.info(f"Removed '{key_name}' from filter keys allowlist")
+        except Exception as e:
+            # Non-critical - log but don't fail the deletion
+            logger.warning(f"Failed to remove key from filter allowlist: {e}")
+
         return {"success": success, "keyName": key_name, "error": None}
     except Exception as e:
         logger.error(f"Error deleting metadata key '{key_name}': {e}")
