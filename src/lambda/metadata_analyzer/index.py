@@ -413,45 +413,56 @@ def store_filter_examples(
 def update_key_library_counts(
     field_analysis: dict[str, dict],
     table_name: str,
+    manual_keys: list[str] | None = None,
 ) -> None:
     """
-    Update the key library with analyzed field counts.
+    Update the key library with analyzed field statistics.
 
-    Keys with non-zero counts are always marked active. The extraction mode
-    only affects which keys are used for filter example generation, not
-    whether a key is active in the library.
+    Updates sample values, data types, and status for analyzed keys.
+    Preserves occurrence_count from ingestion-time upsert_key() calls.
+
+    When manual_keys is provided, only those keys are marked active;
+    all other keys are marked inactive.
 
     Args:
         field_analysis: Dictionary of field analysis results.
         table_name: DynamoDB table name for key library.
+        manual_keys: Optional list of key names. When set, only these are active.
     """
     table = dynamodb.Table(table_name)
     now = datetime.now(UTC).isoformat()
 
+    manual_set = None
+    if manual_keys:
+        manual_set = {k.lower().replace(" ", "_") for k in manual_keys}
+
     for key_name, stats in field_analysis.items():
-        # Keys with occurrences are always active
-        # (extraction mode only affects filter example generation)
-        status = "active"
+        # When manual keys are configured, only those are active
+        if manual_set is not None:
+            status = "active" if key_name in manual_set else "inactive"
+        else:
+            status = "active"
 
         try:
-            # Update or create key entry
+            # Update sample values and status, but preserve occurrence_count
+            # from ingestion-time upsert_key() calls
             table.update_item(
                 Key={"key_name": key_name},
                 UpdateExpression="""
-                    SET occurrence_count = :count,
-                        data_type = :dtype,
+                    SET data_type = :dtype,
                         sample_values = :samples,
                         last_analyzed = :now,
                         #status = :status,
+                        occurrence_count = if_not_exists(occurrence_count, :zero),
                         first_seen = if_not_exists(first_seen, :now)
                 """,
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={
-                    ":count": stats["count"],
                     ":dtype": stats["data_type"],
                     ":samples": stats["sample_values"][:MAX_SAMPLE_VALUES],
                     ":now": now,
                     ":status": status,
+                    ":zero": 0,
                 },
             )
             logger.debug(f"Updated key library entry: {key_name} (status={status})")
@@ -562,9 +573,16 @@ def lambda_handler(event: dict, context) -> dict:
         keys_analyzed = len(field_analysis)
         logger.info(f"Analyzed {keys_analyzed} metadata fields")
 
-        # Step 4: Update key library with counts (marks all found keys as active)
+        # Step 4: Update key library (respects manual key mode)
+        extraction_mode = None
+        manual_keys = None
+        if config:
+            extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+            if extraction_mode == "manual":
+                manual_keys = config.get_parameter("metadata_manual_keys", default=None)
+
         if key_library_table and field_analysis:
-            update_key_library_counts(field_analysis, key_library_table)
+            update_key_library_counts(field_analysis, key_library_table, manual_keys=manual_keys)
 
         # Step 5: Load existing examples and disabled list, preserve enabled ones
         preserved_examples = []

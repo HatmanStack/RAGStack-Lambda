@@ -500,6 +500,55 @@ def handle_process_batch(event: dict) -> dict:
     }
 
 
+VISUAL_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
+MEDIA_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac"}
+SKIP_EXTENSIONS = VISUAL_EXTENSIONS | MEDIA_EXTENSIONS
+
+
+def _list_text_uris_for_reindex(base_s3_uri: str) -> list[str]:
+    """
+    List all text-based S3 URIs in a document's content folder.
+
+    Scans the content/{uuid}/ folder and returns all files except
+    .metadata.json sidecars and visual/media files.
+    """
+    if not base_s3_uri or not base_s3_uri.startswith("s3://"):
+        return []
+
+    uri_path = base_s3_uri.replace("s3://", "")
+    parts = uri_path.split("/", 1)
+    if len(parts) < 2:
+        return []
+
+    bucket = parts[0]
+    key = parts[1]
+
+    # Determine content folder prefix
+    if not key.startswith("content/"):
+        return []
+    key_parts = key.split("/")
+    if len(key_parts) < 2:
+        return []
+    folder_prefix = f"content/{key_parts[1]}/"
+
+    text_uris = []
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=folder_prefix):
+        for obj in page.get("Contents", []):
+            obj_key = obj["Key"]
+            lower_key = obj_key.lower()
+
+            if lower_key.endswith(".metadata.json"):
+                continue
+
+            if any(lower_key.endswith(ext) for ext in SKIP_EXTENSIONS):
+                continue
+
+            text_uris.append(f"s3://{bucket}/{obj_key}")
+
+    return text_uris
+
+
 def process_text_item(
     item: dict,
     kb_id: str,
@@ -534,7 +583,12 @@ def process_text_item(
         logger.warning(f"Item {doc_id} has no output_s3_uri, skipping")
         return processed_count + 1, error_count, error_messages
 
-    # Re-extract metadata from text content
+    # Find all text files in the content folder (not just output_s3_uri)
+    text_uris = _list_text_uris_for_reindex(output_s3_uri)
+    if not text_uris:
+        text_uris = [output_s3_uri]
+
+    # Re-extract metadata from the primary text content (output_s3_uri)
     metadata = extract_document_metadata(output_s3_uri, doc_id)
 
     # Add base metadata
@@ -546,13 +600,12 @@ def process_text_item(
     if content_type == "web_page" and item.get("source_url"):
         metadata["source_url"] = item["source_url"]
 
-    # Write metadata to S3
-    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
+    # Write metadata and ingest each text file with the same metadata
+    for uri in text_uris:
+        metadata_uri = write_metadata_to_s3(uri, metadata)
+        ingest_document(kb_id, ds_id, uri, metadata_uri)
 
-    # Ingest to new KB
-    ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
-
-    logger.info(f"Reindexed {content_type} {doc_id}: {filename}")
+    logger.info(f"Reindexed {content_type} {doc_id}: {filename} ({len(text_uris)} files)")
     return processed_count + 1, error_count, error_messages
 
 
@@ -1163,10 +1216,16 @@ def handle_finalize(event: dict) -> dict:
             logger.warning(f"Failed to delete old KB {old_kb_id}: {e}")
             error_messages.append(f"Failed to delete old KB: {str(e)[:100]}")
 
-    # Deactivate metadata keys with zero occurrences
+    # Deactivate metadata keys with zero occurrences (preserve manual keys)
     try:
         key_library = get_key_library()
-        deactivated = key_library.deactivate_zero_count_keys()
+        config = get_config_manager()
+        manual_keys = None
+        if config:
+            extraction_mode = config.get_parameter("metadata_extraction_mode", default="auto")
+            if extraction_mode == "manual":
+                manual_keys = config.get_parameter("metadata_manual_keys", default=None)
+        deactivated = key_library.deactivate_zero_count_keys(preserve_keys=manual_keys)
         if deactivated > 0:
             logger.info(f"Deactivated {deactivated} metadata keys with zero occurrences")
     except Exception as e:

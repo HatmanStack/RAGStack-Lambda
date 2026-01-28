@@ -95,6 +95,14 @@ Parameters:
     - 'true'
     - 'false'
     Description: Build and deploy the embeddable chat web component
+  DemoMode:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Description: Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and
+      disabled features (reindex, reprocess, delete)
 Globals:
   Function:
     Runtime: python3.13
@@ -901,7 +909,7 @@ Resources:
       LayerName:
         Fn::Sub: ${AWS::StackName}-Common
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/0e4048016086f48d78df09293b89c34c
+      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ec88253523a93568eca80b4d09a11d4e
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -1173,7 +1181,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-queue-processor
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/6d4062640ee4df55188db37e6c4b363a
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/344321ab09078d937081aa5928d4fcb8
       Handler: index.lambda_handler
       Description: Process SQS messages to start Step Functions executions
       Runtime: python3.13
@@ -1187,6 +1195,8 @@ Resources:
             Fn::GetAtt:
             - ProcessingStateMachine
             - Arn
+          CONFIGURATION_TABLE_NAME:
+            Ref: ConfigurationTable
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1197,6 +1207,9 @@ Resources:
             Fn::GetAtt:
             - ProcessingStateMachine
             - Name
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: ConfigurationTable
       Events:
         SQSTrigger:
           Type: SQS
@@ -1643,7 +1656,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-reindex-kb
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/0a71d70abd38484e9dac1e378966ba26
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/1ff7942f32d7bdbbc49e79cbadc138a5
       Handler: index.lambda_handler
       Description: Reindex Knowledge Base - creates new KB, re-ingests documents,
         deletes old KB
@@ -1849,7 +1862,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-query
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/3ba6ec275948b5b491e0f8a27f6baaea
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/e2404fec0f8656f17ee58d9545d74ec0
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
@@ -1876,6 +1889,8 @@ Resources:
             Ref: TrackingTable
           METADATA_KEY_LIBRARY_TABLE:
             Ref: MetadataKeyLibraryTable
+          DEMO_MODE:
+            Ref: DemoMode
       Tags:
         Project:
           Ref: AWS::StackName
@@ -1925,7 +1940,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-search
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/10e31677c4cb6af2332999bf00aa6d6f
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/45ae041bf5892f929fc29c945ddad2e0
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -1999,7 +2014,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-config
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/85d89ccd20a85758ed845236ace5938a
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/60cb6e28c4d2a692524a5c69fdd3f7a6
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
       Layers:
@@ -2016,6 +2031,8 @@ Resources:
             Ref: TrackingTable
           STATE_MACHINE_ARN:
             Ref: ProcessingStateMachine
+          DEMO_MODE:
+            Ref: DemoMode
       Tags:
         Project:
           Ref: AWS::StackName
@@ -2604,7 +2621,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-ReindexWorkflow
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public-631094035453
-        Key: ragstack-quicklaunch/0a41010edf5f655fa6e404bf166b3909
+        Key: ragstack-quicklaunch/df71a6ccd0ea633fa07a2dbb9fd36b0a
       DefinitionSubstitutions:
         ReindexKBFunctionArn:
           Fn::GetAtt:
@@ -3404,7 +3421,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-appsync
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/6a735405e08eaceb17a142ea8cd2ce8d
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5fd730e63bd0521e008b1c6e2bd20b73
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -3449,6 +3466,8 @@ Resources:
             Fn::GetAtt:
             - IngestToKBFunction
             - Arn
+          DEMO_MODE:
+            Ref: DemoMode
       Tags:
         Project:
           Ref: AWS::StackName
@@ -5010,12 +5029,22 @@ Resources:
         \ threshold (USD)',\n            'default': 100\n        },\n        'budget_alert_enabled':\
         \ {\n            'type': 'boolean',\n            'order': 15,\n          \
         \  'description': 'Enable budget alerts',\n            'default': True\n \
-        \       },\n        'filter_generation_enabled': {\n            'type': 'boolean',\n\
-        \            'order': 16,\n            'description': 'Enable LLM-based metadata\
-        \ filter generation for queries',\n            'default': True\n        },\n\
-        \        'filter_generation_model': {\n            'type': 'string',\n   \
-        \         'order': 17,\n            'description': 'Model for filter generation',\n\
-        \            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \       },\n        'demo_mode_enabled': {\n            'type': 'boolean',\n\
+        \            'order': 50,\n            'description': 'Demo mode active (read-only,\
+        \ set via deployment)',\n            'readOnly': True\n        },\n      \
+        \  'demo_upload_quota_daily': {\n            'type': 'number',\n         \
+        \   'order': 51,\n            'description': 'Max uploads per user per day\
+        \ in demo mode',\n            'default': 5,\n            'dependsOn': { 'field':\
+        \ 'demo_mode_enabled', 'value': True }\n        },\n        'demo_chat_quota_daily':\
+        \ {\n            'type': 'number',\n            'order': 52,\n           \
+        \ 'description': 'Max chat messages per user per day in demo mode',\n    \
+        \        'default': 30,\n            'dependsOn': { 'field': 'demo_mode_enabled',\
+        \ 'value': True }\n        },\n        'filter_generation_enabled': {\n  \
+        \          'type': 'boolean',\n            'order': 16,\n            'description':\
+        \ 'Enable LLM-based metadata filter generation for queries',\n           \
+        \ 'default': True\n        },\n        'filter_generation_model': {\n    \
+        \        'type': 'string',\n            'order': 17,\n            'description':\
+        \ 'Model for filter generation',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
         \                'us.anthropic.claude-3-5-haiku-20241022-v1:0',\n        \
         \        'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
         \ 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n        'multislice_enabled':\
@@ -5044,30 +5073,30 @@ Resources:
         \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
         \        'us.anthropic.claude-3-5-haiku-20241022-v1:0',\n                'us.amazon.nova-micro-v1:0',\n\
         \                'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
-        \ 'us.amazon.nova-lite-v1:0'\n        },\n        'metadata_max_keys': {\n\
-        \            'type': 'number',\n            'order': 24,\n            'description':\
-        \ 'Maximum metadata fields to extract per document',\n            'default':\
-        \ 8\n        },\n        'metadata_extraction_mode': {\n            'type':\
-        \ 'string',\n            'order': 25,\n            'description': 'Extraction\
-        \ mode: auto (LLM decides) or manual (admin specifies)',\n            'enum':\
-        \ ['auto', 'manual'],\n            'default': 'auto'\n        },\n       \
-        \ 'metadata_manual_keys': {\n            'type': 'array',\n            'order':\
-        \ 26,\n            'description': 'Keys to extract in manual mode',\n    \
-        \        'default': [],\n            'dependsOn': {'field': 'metadata_extraction_mode',\
-        \ 'value': 'manual'}\n        },\n        'knowledge_base_id': {\n       \
-        \     'type': 'string',\n            'order': 100,\n            'description':\
-        \ 'Active Bedrock Knowledge Base ID (updated by reindex)',\n            'readOnly':\
-        \ True\n        },\n        'data_source_id': {\n            'type': 'string',\n\
-        \            'order': 101,\n            'description': 'Active Data Source\
-        \ ID (updated by reindex)',\n            'readOnly': True\n        }\n   \
-        \ }\n}\n\ndef lambda_handler(event, context):\n    print(f\"Event: {json.dumps(event)}\"\
-        )\n    request_type = event.get('RequestType', '')\n\n    try:\n        if\
-        \ request_type in ['Create', 'Update']:\n            # Build defaults from\
-        \ schema\n            defaults = {'Configuration': 'Default'}\n          \
-        \  for key, prop in SCHEMA['properties'].items():\n                if 'default'\
-        \ in prop:\n                    defaults[key] = prop['default']\n        \
-        \    defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')\n       \
-        \     defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID',\
+        \ 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n        'metadata_max_keys':\
+        \ {\n            'type': 'number',\n            'order': 24,\n           \
+        \ 'description': 'Maximum metadata fields to extract per document',\n    \
+        \        'default': 8\n        },\n        'metadata_extraction_mode': {\n\
+        \            'type': 'string',\n            'order': 25,\n            'description':\
+        \ 'Extraction mode: auto (LLM decides) or manual (admin specifies)',\n   \
+        \         'enum': ['auto', 'manual'],\n            'default': 'auto'\n   \
+        \     },\n        'metadata_manual_keys': {\n            'type': 'array',\n\
+        \            'order': 26,\n            'description': 'Keys to extract in\
+        \ manual mode',\n            'default': [],\n            'dependsOn': {'field':\
+        \ 'metadata_extraction_mode', 'value': 'manual'}\n        },\n        'knowledge_base_id':\
+        \ {\n            'type': 'string',\n            'order': 100,\n          \
+        \  'description': 'Active Bedrock Knowledge Base ID (updated by reindex)',\n\
+        \            'readOnly': True\n        },\n        'data_source_id': {\n \
+        \           'type': 'string',\n            'order': 101,\n            'description':\
+        \ 'Active Data Source ID (updated by reindex)',\n            'readOnly': True\n\
+        \        }\n    }\n}\n\ndef lambda_handler(event, context):\n    print(f\"\
+        Event: {json.dumps(event)}\")\n    request_type = event.get('RequestType',\
+        \ '')\n\n    try:\n        if request_type in ['Create', 'Update']:\n    \
+        \        # Build defaults from schema\n            defaults = {'Configuration':\
+        \ 'Default'}\n            for key, prop in SCHEMA['properties'].items():\n\
+        \                if 'default' in prop:\n                    defaults[key]\
+        \ = prop['default']\n            defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL',\
+        \ '')\n            defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID',\
         \ '')\n            defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID',\
         \ '')\n\n            # Seed Schema (stored as dict, not JSON string)\n   \
         \         table.put_item(Item={\n                'Configuration': 'Schema',\n\
@@ -5092,7 +5121,7 @@ Resources:
         Fn::GetAtt:
         - ConfigurationSeederFunction
         - Arn
-      SchemaVersion: '4'
+      SchemaVersion: '5'
     Metadata:
       SamResourceId: ConfigurationSeeder
   AdminUserProvisionerFunction:

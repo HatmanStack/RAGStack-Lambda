@@ -404,18 +404,26 @@ class KeyLibrary:
             logger.exception("Error resetting occurrence counts")
             raise
 
-    def deactivate_zero_count_keys(self) -> int:
+    def deactivate_zero_count_keys(self, preserve_keys: list[str] | None = None) -> int:
         """
         Mark all keys with occurrence_count=0 as inactive.
 
         Call this after reindex completes to deactivate keys that
         no longer appear in any documents.
 
+        Args:
+            preserve_keys: Optional list of key names to keep active regardless
+                of occurrence count (e.g., manual keys).
+
         Returns:
             Number of keys deactivated.
         """
         if not self._check_table_exists():
             return 0
+
+        preserve_set = set()
+        if preserve_keys:
+            preserve_set = {k.lower().replace(" ", "_") for k in preserve_keys}
 
         try:
             # Get all keys with count=0 and status=active
@@ -437,11 +445,11 @@ class KeyLibrary:
                 )
                 items.extend(response.get("Items", []))
 
-            # Deactivate each key
+            # Deactivate each key (skip preserved keys)
             deactivated = 0
             for item in items:
                 key_name = item.get("key_name")
-                if key_name:
+                if key_name and key_name not in preserve_set:
                     self.table.update_item(
                         Key={"key_name": key_name},
                         UpdateExpression="SET #status = :inactive",
