@@ -157,7 +157,7 @@ def ingest_documents_with_retry(
             )
             is_throttle = (
                 error_code == "ValidationException" and "can't exceed" in error_msg.lower()
-            )
+            ) or error_code == "ThrottlingException"
             is_service_unavailable = error_code == "ServiceUnavailableException"
 
             if is_conflict or is_validation_ongoing or is_throttle or is_service_unavailable:
