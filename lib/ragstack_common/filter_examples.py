@@ -27,6 +27,39 @@ s3 = boto3.client("s3")
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
+def _validate_filter_keys(filter_obj: dict, valid_keys: set[str]) -> bool:
+    """
+    Check if a filter object only uses keys from the valid set.
+
+    Args:
+        filter_obj: The filter dictionary to validate.
+        valid_keys: Set of allowed key names.
+
+    Returns:
+        True if all keys in the filter are valid, False otherwise.
+    """
+    if not isinstance(filter_obj, dict):
+        return False
+
+    for key, value in filter_obj.items():
+        # Handle logical operators ($and, $or)
+        if key in ("$and", "$or"):
+            if isinstance(value, list):
+                for sub_filter in value:
+                    if not _validate_filter_keys(sub_filter, valid_keys):
+                        return False
+        elif key.startswith("$"):
+            # Other operators at root level are invalid
+            return False
+        else:
+            # This is a field key - check if it's valid
+            if key not in valid_keys:
+                logger.debug(f"Invalid key in filter: {key}, valid keys: {valid_keys}")
+                return False
+
+    return True
+
+
 def generate_filter_examples(
     field_analysis: dict[str, dict],
     model_id: str | None = None,
@@ -143,8 +176,19 @@ Return ONLY a JSON array of filter examples, no explanation. Example format:
             logger.warning("LLM response is not a list")
             return []
 
-        logger.info(f"Generated {len(examples)} filter examples")
-        return examples
+        # Validate examples only use allowed keys
+        valid_keys = set(field_analysis.keys())
+        validated_examples = []
+        for example in examples:
+            filter_obj = example.get("filter", {})
+            if _validate_filter_keys(filter_obj, valid_keys):
+                validated_examples.append(example)
+            else:
+                logger.warning(f"Dropped example with invalid keys: {example.get('name')}")
+
+        dropped = len(examples) - len(validated_examples)
+        logger.info(f"Generated {len(validated_examples)} filter examples (dropped {dropped})")
+        return validated_examples
 
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse filter examples JSON: {e}")
