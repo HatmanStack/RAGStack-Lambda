@@ -348,12 +348,12 @@ def test_delete_key(key_library, mock_dynamodb_table):
 def test_delete_key_clears_cache(key_library, mock_dynamodb_table):
     """Test that deleting a key clears the active keys cache."""
     key_library._active_keys_cache = [{"key_name": "cached"}]
-    key_library._cache_time = 12345
+    key_library._active_keys_cache_time = 12345
 
     key_library.delete_key("some_key")
 
     assert key_library._active_keys_cache is None
-    assert key_library._cache_time is None
+    assert key_library._active_keys_cache_time is None
 
 
 def test_delete_key_no_table(mock_dynamodb_resource):
