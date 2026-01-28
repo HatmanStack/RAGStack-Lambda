@@ -355,6 +355,21 @@ class KeyLibrary:
             logger.exception(f"Error deprecating key '{key_name}'")
             raise
 
+    def delete_key(self, key_name: str) -> bool:
+        """Delete a metadata key from the library."""
+        if not self._check_table_exists():
+            return False
+
+        try:
+            self.table.delete_item(Key={"key_name": key_name})
+            logger.info(f"Deleted key '{key_name}'")
+            self._active_keys_cache = None
+            self._cache_time = None
+            return True
+        except ClientError:
+            logger.exception(f"Error deleting key '{key_name}'")
+            return False
+
     def reset_occurrence_counts(self) -> int:
         """
         Reset occurrence_count to 0 for all keys.

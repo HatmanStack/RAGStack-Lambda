@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Header,
   Table,
   Badge,
   Box,
+  Button,
   ColumnLayout,
+  Modal,
   StatusIndicator,
   SpaceBetween,
   ExpandableSection,
@@ -19,6 +21,7 @@ interface MetadataMetricsProps {
   lastAnalyzed: string | null;
   loading: boolean;
   error: string | null;
+  onDeleteKey?: (keyName: string) => Promise<boolean>;
 }
 
 const formatDate = (isoString: string | null): string => {
@@ -51,7 +54,19 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
   lastAnalyzed,
   loading,
   error,
+  onDeleteKey,
 }) => {
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirmKey || !onDeleteKey) return;
+    setDeleting(true);
+    await onDeleteKey(confirmKey);
+    setDeleting(false);
+    setConfirmKey(null);
+  };
+
   const { items, collectionProps } = useCollection(stats, {
     sorting: {
       defaultState: {
@@ -151,6 +166,19 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                 ),
                 minWidth: 200,
               },
+              ...(onDeleteKey ? [{
+                id: 'actions',
+                header: 'Actions',
+                cell: (item: MetadataKeyStats) => (
+                  <Button
+                    variant="icon"
+                    iconName="remove"
+                    ariaLabel={`Delete ${item.keyName}`}
+                    onClick={() => setConfirmKey(item.keyName)}
+                  />
+                ),
+                width: 70,
+              }] : []),
             ]}
             empty={
               <Box textAlign="center" color="inherit">
@@ -165,6 +193,23 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
           />
         </div>
       </SpaceBetween>
+
+      <Modal
+        visible={confirmKey !== null}
+        onDismiss={() => setConfirmKey(null)}
+        header="Delete metadata key"
+        footer={
+          <Box float="right">
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button variant="link" onClick={() => setConfirmKey(null)}>Cancel</Button>
+              <Button variant="primary" loading={deleting} onClick={handleDelete}>Delete</Button>
+            </SpaceBetween>
+          </Box>
+        }
+      >
+        Delete metadata key <b>{confirmKey}</b>? This removes it from the key library. It will be
+        re-created if documents containing this key are re-ingested.
+      </Modal>
     </ExpandableSection>
   );
 };

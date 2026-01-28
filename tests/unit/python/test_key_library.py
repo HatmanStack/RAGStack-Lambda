@@ -334,6 +334,40 @@ def test_deprecate_key(key_library, mock_dynamodb_table):
     assert call_args.kwargs["ExpressionAttributeValues"][":deprecated"] == "deprecated"
 
 
+# Test: delete_key
+
+
+def test_delete_key(key_library, mock_dynamodb_table):
+    """Test deleting a key."""
+    result = key_library.delete_key("old_key")
+
+    assert result is True
+    mock_dynamodb_table.delete_item.assert_called_once_with(Key={"key_name": "old_key"})
+
+
+def test_delete_key_clears_cache(key_library, mock_dynamodb_table):
+    """Test that deleting a key clears the active keys cache."""
+    key_library._active_keys_cache = [{"key_name": "cached"}]
+    key_library._cache_time = 12345
+
+    key_library.delete_key("some_key")
+
+    assert key_library._active_keys_cache is None
+    assert key_library._cache_time is None
+
+
+def test_delete_key_no_table(mock_dynamodb_resource):
+    """Test delete_key when table doesn't exist."""
+    mock_dynamodb_resource.Table.return_value.table_status  # noqa: B018
+    from lib.ragstack_common.key_library import KeyLibrary
+
+    library = KeyLibrary(table_name="nonexistent")
+    library._table_exists = False
+
+    result = library.delete_key("some_key")
+    assert result is False
+
+
 # Test: get_library_stats
 
 
