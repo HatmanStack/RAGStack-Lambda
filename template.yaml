@@ -4346,6 +4346,12 @@ Resources:
                     'default': [],
                     'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}
                 },
+                'metadata_filter_keys': {
+                    'type': 'array',
+                    'order': 27,
+                    'description': 'Keys to use for filter example generation',
+                    'default': []
+                },
                 'knowledge_base_id': {
                     'type': 'string',
                     'order': 100,
