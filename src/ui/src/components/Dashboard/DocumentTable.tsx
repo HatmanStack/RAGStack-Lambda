@@ -274,11 +274,9 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       id: 'filename',
       header: 'Name',
       cell: (item: DocumentItem) => (
-        <div style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-          <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
-            {item.filename}
-          </Link>
-        </div>
+        <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
+          {item.filename}
+        </Link>
       ),
       sortingField: 'filename',
       isRowHeader: true,
@@ -394,6 +392,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         </Header>
       }
       columnDefinitions={columnDefinitions}
+      wrapLines
       visibleColumns={preferences.visibleContent}
       items={items}
       loading={loading}

@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.1] - 2026-01-27
+
+### Fixed
+
+- OCR fallback paths writing to `output/` instead of `content/` when `output_s3_uri` not set
+- Reindex state machine baseline sync using in-Lambda polling (2-minute limit) instead of Step Functions Wait+Poll loop
+- Reindex finalize timeout from in-Lambda polling exceeding Lambda limits — moved to Step Functions polling
+- Config table reindex lock using wrong partition key (`config_key` instead of `Configuration`)
+- Ingestion retry not catching "can't exceed" concurrent request throttle errors
+- Migration script missing `content_type` backfill for v1 records
+- Migration script using generic `media` content type instead of specific `video`/`audio` types
+
+### Added
+
+- `scripts/copy_stack_data.py` for copying S3 and DynamoDB data between stacks
+- Baseline sync polling loop in reindex state machine (`WaitForSync` → `CheckSyncStatus` → `IsSyncComplete`)
+- Finalize sync polling loop in reindex state machine (`WaitForFinalizeSync` → `CheckFinalizeSyncStatus` → `IsFinalizeSyncComplete`)
+- `ServiceUnavailableException` retry handling in document ingestion
+- `handle_check_sync_status` and `handle_check_finalize_sync` actions in reindex Lambda
+
+### Changed
+
+- Document table filename column now wraps long names across multiple lines (Cloudscape `wrapLines`)
+
 ## [2.0.0] - 2026-01-10
 
 ### Breaking Changes
