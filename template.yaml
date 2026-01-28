@@ -2943,8 +2943,8 @@ Resources:
             TableName: !Ref ScrapeJobsTable
         - DynamoDBReadPolicy:
             TableName: !Ref ScrapeUrlsTable
-        # Metadata key library access
-        - DynamoDBReadPolicy:
+        # Metadata key library access (read + delete keys)
+        - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
         - Statement:
             - Effect: Allow
@@ -3426,6 +3426,15 @@ Resources:
       ApiId: !GetAtt GraphQLApi.ApiId
       TypeName: Mutation
       FieldName: analyzeMetadata
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  DeleteMetadataKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteMetadataKey
       DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
   StartReindexResolver:

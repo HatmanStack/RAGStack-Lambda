@@ -364,7 +364,7 @@ class KeyLibrary:
             self.table.delete_item(Key={"key_name": key_name})
             logger.info(f"Deleted key '{key_name}'")
             self._active_keys_cache = None
-            self._cache_time = None
+            self._active_keys_cache_time = None
             return True
         except ClientError:
             logger.exception(f"Error deleting key '{key_name}'")

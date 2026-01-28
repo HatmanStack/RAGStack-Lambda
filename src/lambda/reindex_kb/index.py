@@ -25,7 +25,6 @@ from kb_migrator import KBMigrator
 
 from ragstack_common.appsync import publish_reindex_update
 from ragstack_common.config import ConfigurationManager
-from ragstack_common.ingestion import ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.storage import read_s3_text, write_metadata_to_s3
@@ -201,14 +200,14 @@ def lambda_handler(event: dict, context: Any) -> dict:
     try:
         if action == "init":
             return handle_init(event)
-        if action == "check_sync_status":
-            return handle_check_sync_status(event)
         if action == "process_batch":
             return handle_process_batch(event)
+        if action == "create_kb":
+            return handle_create_kb(event)
+        if action == "check_sync_status":
+            return handle_check_sync_status(event)
         if action == "finalize":
             return handle_finalize(event)
-        if action == "check_finalize_sync":
-            return handle_check_finalize_sync(event)
         if action == "cleanup_failed":
             return handle_cleanup_failed(event)
         raise ValueError(f"Unknown action: {action}")
@@ -240,11 +239,6 @@ def handle_init(event: dict) -> dict:
     4. Return initial state for processing loop
     """
     tracking_table_name = os.environ.get("TRACKING_TABLE")
-    data_bucket = os.environ.get("DATA_BUCKET")
-    vector_bucket = os.environ.get("VECTOR_BUCKET")
-    stack_name = os.environ.get("STACK_NAME")
-    kb_role_arn = os.environ.get("KB_ROLE_ARN")
-    embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
     old_kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
@@ -285,15 +279,44 @@ def handle_init(event: dict) -> dict:
         f"{doc_count} documents, {image_count} images, {scraped_count} scraped, {media_count} media"
     )
 
-    # Publish creating KB status
+    # Return state — go directly to extraction batches (KB created after extraction)
+    return {
+        "action": "process_batch",
+        "old_kb_id": old_kb_id,
+        "total_documents": total_documents,
+        "processed_count": 0,
+        "error_count": 0,
+        "error_messages": [],
+        "batch_size": 10,
+        "current_batch_index": 0,
+    }
+
+
+def handle_create_kb(event: dict) -> dict:
+    """
+    Create new KB and start baseline sync after all sidecars are written.
+
+    Called after process_batch completes all extraction. The single sync
+    ingests everything (text, images, video, audio) with fresh metadata.
+    """
+    data_bucket = os.environ.get("DATA_BUCKET")
+    vector_bucket = os.environ.get("VECTOR_BUCKET")
+    stack_name = os.environ.get("STACK_NAME")
+    kb_role_arn = os.environ.get("KB_ROLE_ARN")
+    embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
+    graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+    total_documents = event.get("total_documents", 0)
+    processed_count = event.get("processed_count", 0)
+    error_count = event.get("error_count", 0)
+
     publish_reindex_update(
         graphql_endpoint,
         status="CREATING_KB",
         total_documents=total_documents,
-        processed_count=0,
+        processed_count=processed_count,
+        error_count=error_count,
     )
 
-    # Create new Knowledge Base with timestamp suffix
     timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     migrator = KBMigrator(
         data_bucket=data_bucket,
@@ -306,8 +329,7 @@ def handle_init(event: dict) -> dict:
     new_kb = migrator.create_knowledge_base(suffix=timestamp)
     logger.info(f"Created new KB: {new_kb['kb_id']}")
 
-    # Start baseline sync — the state machine will poll for completion
-    logger.info(f"Starting baseline sync on new KB: {new_kb['kb_id']}")
+    # Start single baseline sync — ingests all files with fresh sidecars
     baseline_response = bedrock_agent.start_ingestion_job(
         knowledgeBaseId=new_kb["kb_id"],
         dataSourceId=new_kb["data_source_id"],
@@ -315,20 +337,13 @@ def handle_init(event: dict) -> dict:
     baseline_job_id = baseline_response.get("ingestionJob", {}).get("ingestionJobId")
     logger.info(f"Baseline sync started: {baseline_job_id}")
 
-    # Return state — the state machine WaitForSync loop will poll until sync completes
     return {
+        **event,
         "action": "check_sync_status",
         "baseline_job_id": baseline_job_id,
-        "old_kb_id": old_kb_id,
         "new_kb_id": new_kb["kb_id"],
         "new_data_source_id": new_kb["data_source_id"],
         "vector_index_arn": new_kb["vector_index_arn"],
-        "total_documents": total_documents,
-        "processed_count": 0,
-        "error_count": 0,
-        "error_messages": [],
-        "batch_size": 10,
-        "current_batch_index": 0,
     }
 
 
@@ -337,7 +352,6 @@ def handle_check_sync_status(event: dict) -> dict:
     Check if the baseline ingestion sync has completed.
 
     Called by the state machine WaitForSync polling loop.
-    Returns sync_status plus passthrough of all state.
     """
     new_kb_id = event.get("new_kb_id")
     new_data_source_id = event.get("new_data_source_id")
@@ -345,7 +359,7 @@ def handle_check_sync_status(event: dict) -> dict:
 
     if not baseline_job_id:
         logger.warning("No baseline_job_id, skipping sync check")
-        return {**event, "action": "process_batch", "sync_status": "COMPLETE"}
+        return {**event, "action": "finalize", "sync_status": "COMPLETE"}
 
     try:
         job_response = bedrock_agent.get_ingestion_job(
@@ -356,19 +370,18 @@ def handle_check_sync_status(event: dict) -> dict:
         status = job_response.get("ingestionJob", {}).get("status", "UNKNOWN")
         stats = job_response.get("ingestionJob", {}).get("statistics", {})
         logger.info(
-            f"Baseline sync status: {status} "
+            f"Sync status: {status} "
             f"(scanned={stats.get('numberOfDocumentsScanned', 0)}, "
             f"indexed={stats.get('numberOfNewDocumentsIndexed', 0)})"
         )
     except Exception as e:
         logger.error(f"Error checking sync status: {e}")
-        # Treat errors as complete to avoid infinite loop
-        return {**event, "action": "process_batch", "sync_status": "COMPLETE"}
+        return {**event, "action": "finalize", "sync_status": "COMPLETE"}
 
     if status in ("COMPLETE", "FAILED", "STOPPED"):
         if status == "FAILED":
-            logger.warning("Baseline sync failed, proceeding with per-document ingestion")
-        return {**event, "action": "process_batch", "sync_status": status}
+            logger.warning("Sync failed")
+        return {**event, "action": "finalize", "sync_status": status}
 
     # Still in progress — state machine will loop back to WaitForSync
     return {**event, "sync_status": status}
@@ -385,8 +398,6 @@ def handle_process_batch(event: dict) -> dict:
     data_bucket = os.environ.get("DATA_BUCKET")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
-    new_kb_id = event["new_kb_id"]
-    new_ds_id = event["new_data_source_id"]
     total_documents = event["total_documents"]
     processed_count = event["processed_count"]
     error_count = event["error_count"]
@@ -423,33 +434,24 @@ def handle_process_batch(event: dict) -> dict:
 
         try:
             if item_type == "media":
-                # Media (video/audio): ingest video file + transcript
                 processed_count, error_count, error_messages = process_media_item(
                     item,
-                    new_kb_id,
-                    new_ds_id,
                     data_bucket,
                     processed_count,
                     error_count,
                     error_messages,
                 )
             elif item_type == "image":
-                # Images: read text from caption_s3_uri, ingest both image and caption
                 processed_count, error_count, error_messages = process_image_item(
                     item,
-                    new_kb_id,
-                    new_ds_id,
                     data_bucket,
                     processed_count,
                     error_count,
                     error_messages,
                 )
             elif item_type == "scraped":
-                # Scraped pages: use job-aware metadata extraction
                 processed_count, error_count, error_messages = process_scraped_item(
                     item,
-                    new_kb_id,
-                    new_ds_id,
                     data_bucket,
                     all_content,
                     processed_count,
@@ -457,11 +459,8 @@ def handle_process_batch(event: dict) -> dict:
                     error_messages,
                 )
             else:
-                # Regular documents: read text from output_s3_uri
                 processed_count, error_count, error_messages = process_text_item(
                     item,
-                    new_kb_id,
-                    new_ds_id,
                     data_bucket,
                     "document",
                     processed_count,
@@ -490,10 +489,10 @@ def handle_process_batch(event: dict) -> dict:
             "error_messages": error_messages,
             "current_batch_index": current_batch_index + 1,
         }
-    # All items processed, move to finalize
+    # All items processed, move to KB creation and sync
     return {
         **event,
-        "action": "finalize",
+        "action": "create_kb",
         "processed_count": processed_count,
         "error_count": error_count,
         "error_messages": error_messages,
@@ -505,31 +504,24 @@ MEDIA_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".m
 SKIP_EXTENSIONS = VISUAL_EXTENSIONS | MEDIA_EXTENSIONS
 
 
-def _list_text_uris_for_reindex(base_s3_uri: str) -> list[str]:
+def _list_text_uris_for_reindex(bucket: str, document_id: str) -> list[str]:
     """
     List all text-based S3 URIs in a document's content folder.
 
-    Scans the content/{uuid}/ folder and returns all files except
+    Scans the content/{document_id}/ folder and returns all files except
     .metadata.json sidecars and visual/media files.
+
+    Args:
+        bucket: S3 bucket name
+        document_id: Document UUID
+
+    Returns:
+        List of S3 URIs for text-based files
     """
-    if not base_s3_uri or not base_s3_uri.startswith("s3://"):
+    if not bucket or not document_id:
         return []
 
-    uri_path = base_s3_uri.replace("s3://", "")
-    parts = uri_path.split("/", 1)
-    if len(parts) < 2:
-        return []
-
-    bucket = parts[0]
-    key = parts[1]
-
-    # Determine content folder prefix
-    if not key.startswith("content/"):
-        return []
-    key_parts = key.split("/")
-    if len(key_parts) < 2:
-        return []
-    folder_prefix = f"content/{key_parts[1]}/"
+    folder_prefix = f"content/{document_id}/"
 
     text_uris = []
     paginator = s3_client.get_paginator("list_objects_v2")
@@ -551,8 +543,6 @@ def _list_text_uris_for_reindex(base_s3_uri: str) -> list[str]:
 
 def process_text_item(
     item: dict,
-    kb_id: str,
-    ds_id: str,
     data_bucket: str,
     content_type: str,
     processed_count: int,
@@ -560,12 +550,10 @@ def process_text_item(
     error_messages: list,
 ) -> tuple[int, int, list]:
     """
-    Process a text-based item (document or scraped page).
+    Extract metadata and write sidecars for a text-based item.
 
     Args:
         item: DynamoDB tracking record
-        kb_id: Knowledge Base ID
-        ds_id: Data Source ID
         data_bucket: S3 bucket name
         content_type: "document" or "web_page"
         processed_count: Current processed count
@@ -583,9 +571,10 @@ def process_text_item(
         logger.warning(f"Item {doc_id} has no output_s3_uri, skipping")
         return processed_count + 1, error_count, error_messages
 
-    # Find all text files in the content folder (not just output_s3_uri)
-    text_uris = _list_text_uris_for_reindex(output_s3_uri)
+    # Find all text files in the content folder using document_id (not output_s3_uri)
+    text_uris = _list_text_uris_for_reindex(data_bucket, doc_id)
     if not text_uris:
+        # Fallback to output_s3_uri if folder scan finds nothing
         text_uris = [output_s3_uri]
 
     # Re-extract metadata from the primary text content (output_s3_uri)
@@ -600,19 +589,16 @@ def process_text_item(
     if content_type == "web_page" and item.get("source_url"):
         metadata["source_url"] = item["source_url"]
 
-    # Write metadata and ingest each text file with the same metadata
+    # Write metadata sidecars for each text file (sync will ingest them)
     for uri in text_uris:
-        metadata_uri = write_metadata_to_s3(uri, metadata)
-        ingest_document(kb_id, ds_id, uri, metadata_uri)
+        write_metadata_to_s3(uri, metadata)
 
-    logger.info(f"Reindexed {content_type} {doc_id}: {filename} ({len(text_uris)} files)")
+    logger.info(f"Wrote sidecars for {content_type} {doc_id}: {filename} ({len(text_uris)} files)")
     return processed_count + 1, error_count, error_messages
 
 
 def process_scraped_item(
     item: dict,
-    kb_id: str,
-    ds_id: str,
     data_bucket: str,
     all_content: list[dict],
     processed_count: int,
@@ -620,7 +606,7 @@ def process_scraped_item(
     error_messages: list,
 ) -> tuple[int, int, list]:
     """
-    Process a scraped job or page with job-aware metadata.
+    Extract metadata and write sidecars for a scraped job or page.
 
     New format (single tracking record per job):
     - output_s3_uri ends with "/" (folder: content/{job_id}/)
@@ -634,8 +620,6 @@ def process_scraped_item(
 
     Args:
         item: DynamoDB tracking record
-        kb_id: Knowledge Base ID
-        ds_id: Data Source ID
         data_bucket: S3 bucket name
         all_content: All content items (to find seed document for old format)
         processed_count: Current processed count
@@ -718,19 +702,11 @@ def process_scraped_item(
                 if parsed and parsed.netloc:
                     metadata["source_domain"] = parsed.netloc
 
-                # Write updated metadata
-                metadata_uri = write_metadata_to_s3(content_uri, metadata)
+                # Write updated metadata sidecar
+                write_metadata_to_s3(content_uri, metadata)
+                files_processed += 1
 
-                # Ingest to KB
-                try:
-                    ingest_document(kb_id, ds_id, content_uri, metadata_uri)
-                    files_processed += 1
-                except Exception as e:
-                    error_count += 1
-                    error_messages.append(f"{key}: {str(e)[:50]}")
-                    logger.error(f"Failed to ingest {key}: {e}")
-
-        logger.info(f"Reindexed scraped job {job_id}: {files_processed} files")
+        logger.info(f"Wrote sidecars for scraped job {job_id}: {files_processed} files")
         return processed_count + 1, error_count, error_messages
 
     # OLD FORMAT: Per-page tracking record
@@ -768,37 +744,30 @@ def process_scraped_item(
     if job_id:
         metadata["job_id"] = job_id
 
-    # Write metadata to S3
-    metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
+    # Write metadata sidecar to S3
+    write_metadata_to_s3(output_s3_uri, metadata)
 
-    # Ingest to new KB
-    ingest_document(kb_id, ds_id, output_s3_uri, metadata_uri)
-
-    logger.info(f"Reindexed scraped page {doc_id}: {filename} (job: {job_id or 'none'})")
+    logger.info(f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {job_id or 'none'})")
     return processed_count + 1, error_count, error_messages
 
 
 def process_media_item(
     item: dict,
-    kb_id: str,
-    ds_id: str,
     data_bucket: str,
     processed_count: int,
     error_count: int,
     error_messages: list,
 ) -> tuple[int, int, list]:
     """
-    Process a media item (video/audio).
+    Extract metadata and write sidecars for a media item (video/audio).
 
-    Media is ingested as multiple documents:
+    Writes sidecars for:
     1. The source video file (for visual embeddings via Nova Multimodal)
     2. The transcript text (for semantic text search)
     3. Individual transcript segments with timestamps (for deep linking)
 
     Args:
         item: DynamoDB tracking record
-        kb_id: Knowledge Base ID
-        ds_id: Data Source ID
         data_bucket: S3 bucket name
         processed_count: Current processed count
         error_count: Current error count
@@ -833,23 +802,14 @@ def process_media_item(
     metadata["document_id"] = doc_id
     metadata["filename"] = filename
 
-    # Ingest source video file for visual embeddings (if video)
+    # Write sidecar for source video file (for visual embeddings)
     if input_s3_uri and media_type == "video":
-        try:
-            video_metadata_uri = write_metadata_to_s3(input_s3_uri, metadata)
-            ingest_document(kb_id, ds_id, input_s3_uri, video_metadata_uri)
-            logger.info(f"Reindexed video file {doc_id}: {filename}")
-        except Exception as e:
-            logger.warning(f"Failed to ingest video file for {doc_id}: {e}")
+        write_metadata_to_s3(input_s3_uri, metadata)
+        logger.info(f"Wrote video sidecar for {doc_id}: {filename}")
 
-    # Ingest full transcript for text search
+    # Write sidecar for full transcript
     if output_s3_uri:
-        try:
-            transcript_metadata_uri = write_metadata_to_s3(output_s3_uri, metadata)
-            ingest_document(kb_id, ds_id, output_s3_uri, transcript_metadata_uri)
-            logger.info(f"Reindexed transcript {doc_id}: {filename}")
-        except Exception as e:
-            logger.warning(f"Failed to ingest transcript for {doc_id}: {e}")
+        write_metadata_to_s3(output_s3_uri, metadata)
 
     # Ingest transcript segments with timestamps for deep linking
     # Segments are stored at content/<doc_id>/segment-000.txt, etc.
@@ -888,32 +848,29 @@ def process_media_item(
                 }
 
                 segment_uri = f"s3://{bucket}/{segment_key}"
-                segment_metadata_uri = write_metadata_to_s3(segment_uri, segment_metadata)
-                ingest_document(kb_id, ds_id, segment_uri, segment_metadata_uri)
+                write_metadata_to_s3(segment_uri, segment_metadata)
                 segment_count += 1
 
             if segment_count > 0:
-                logger.info(f"Reindexed {segment_count} transcript segments for {doc_id}")
+                logger.info(f"Wrote {segment_count} segment sidecars for {doc_id}")
 
         except Exception as e:
-            logger.warning(f"Failed to ingest transcript segments for {doc_id}: {e}")
+            logger.warning(f"Failed to write segment sidecars for {doc_id}: {e}")
 
     return processed_count + 1, error_count, error_messages
 
 
 def process_image_item(
     item: dict,
-    kb_id: str,
-    ds_id: str,
     data_bucket: str,
     processed_count: int,
     error_count: int,
     error_messages: list,
 ) -> tuple[int, int, list]:
     """
-    Process an image item.
+    Extract metadata and write sidecars for an image item.
 
-    Images are ingested as TWO documents:
+    Writes sidecars for TWO files:
     1. The image file itself (for visual embeddings)
     2. The caption text (for semantic text search)
 
@@ -921,8 +878,6 @@ def process_image_item(
 
     Args:
         item: DynamoDB tracking record
-        kb_id: Knowledge Base ID
-        ds_id: Data Source ID
         data_bucket: S3 bucket name
         processed_count: Current processed count
         error_count: Current error count
@@ -966,47 +921,11 @@ def process_image_item(
     if item.get("ai_caption"):
         metadata["has_ai_caption"] = "true"
 
-    # Write metadata to S3 for BOTH files (Bedrock requires metadata filename to match content)
-    # Caption metadata
-    caption_metadata_uri = write_metadata_to_s3(caption_s3_uri, metadata)
-    # Image metadata (same content, different filename)
-    image_metadata_uri = write_metadata_to_s3(image_s3_uri, metadata)
+    # Write metadata sidecars for BOTH files (sync will pick them up)
+    write_metadata_to_s3(caption_s3_uri, metadata)
+    write_metadata_to_s3(image_s3_uri, metadata)
 
-    # Ingest both image and caption to KB
-    # Both documents have same metadata content but separate files
-    image_document = {
-        "content": {
-            "dataSourceType": "S3",
-            "s3": {"s3Location": {"uri": image_s3_uri}},
-        },
-        "metadata": {
-            "type": "S3_LOCATION",
-            "s3Location": {"uri": image_metadata_uri},
-        },
-    }
-
-    # Caption document (text embedding with metadata for filtering)
-    caption_document = {
-        "content": {
-            "dataSourceType": "S3",
-            "s3": {"s3Location": {"uri": caption_s3_uri}},
-        },
-        "metadata": {
-            "type": "S3_LOCATION",
-            "s3Location": {"uri": caption_metadata_uri},
-        },
-    }
-
-    # Ingest both documents (with retry for conflicts)
-    response = ingest_documents_with_retry(
-        kb_id=kb_id,
-        ds_id=ds_id,
-        documents=[image_document, caption_document],
-    )
-
-    doc_details = response.get("documentDetails", [])
-    statuses = [d.get("status", "UNKNOWN") for d in doc_details]
-    logger.info(f"Reindexed image {doc_id}: {filename}, statuses: {statuses}")
+    logger.info(f"Wrote sidecars for image {doc_id}: {filename}")
 
     return processed_count + 1, error_count, error_messages
 
@@ -1122,11 +1041,12 @@ def handle_finalize(event: dict) -> dict:
     """
     Finalize the reindex operation.
 
-    1. Update config table with new KB ID and Data Source ID (primary source)
-    2. Update Lambda environment variables (fallback, for backwards compatibility)
-    3. Start initial sync to establish tracking baseline (prevents re-sync on first video upload)
-    4. Delete old KB
-    5. Publish completion status
+    1. Update config table with new KB ID and Data Source ID
+    2. Update Lambda environment variables (fallback)
+    3. Delete old KB
+    4. Deactivate zero-count metadata keys
+    5. Release reindex lock
+    6. Publish completion
     """
     old_kb_id = event.get("old_kb_id")
     new_kb_id = event["new_kb_id"]
@@ -1143,7 +1063,6 @@ def handle_finalize(event: dict) -> dict:
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
 
     # Update config table first (primary source for KB IDs)
-    # Do this BEFORE deleting old KB so queries keep working if update fails
     publish_reindex_update(
         graphql_endpoint,
         status="UPDATING_CONFIG",
@@ -1158,39 +1077,11 @@ def handle_finalize(event: dict) -> dict:
         error_messages.extend(config_errors)
         logger.warning(f"Config table update issues: {config_errors}")
 
-    # Also update Lambda env vars as fallback (for backwards compatibility)
+    # Also update Lambda env vars as fallback
     lambda_errors = update_lambda_kb_env_vars(stack_name, new_kb_id, new_data_source_id)
     if lambda_errors:
         error_messages.extend(lambda_errors)
         logger.warning(f"Some Lambda env var updates failed: {lambda_errors}")
-
-    # Start ingestion job for visual embeddings (images/videos)
-    finalize_job_id = None
-    if new_data_source_id:
-        logger.info(f"Starting ingestion job for visual embeddings on {new_kb_id}")
-        try:
-            resp = bedrock_agent.start_ingestion_job(
-                knowledgeBaseId=new_kb_id,
-                dataSourceId=new_data_source_id,
-            )
-            finalize_job_id = resp.get("ingestionJob", {}).get("ingestionJobId")
-            logger.info(f"Finalize ingestion job started: {finalize_job_id}")
-        except bedrock_agent.exceptions.ValidationException as e:
-            if "ongoing KnowledgeBaseDocuments API request" in str(e):
-                logger.info("API operations still in progress, will retry via state machine")
-                # Return so state machine can wait and retry
-                return {
-                    "action": "finalize",
-                    "old_kb_id": old_kb_id,
-                    "new_kb_id": new_kb_id,
-                    "new_data_source_id": new_data_source_id,
-                    "total_documents": total_documents,
-                    "processed_count": processed_count,
-                    "error_count": error_count,
-                    "error_messages": error_messages,
-                    "finalize_retry": True,
-                }
-            raise
 
     # Delete old KB if it exists and is different from new
     if old_kb_id and old_kb_id != new_kb_id:
@@ -1234,20 +1125,7 @@ def handle_finalize(event: dict) -> dict:
     # Release the global reindex lock
     release_reindex_lock()
 
-    # If we started a finalize ingestion job, return for state machine to wait
-    if finalize_job_id:
-        return {
-            "action": "check_finalize_sync",
-            "finalize_job_id": finalize_job_id,
-            "new_kb_id": new_kb_id,
-            "new_data_source_id": new_data_source_id,
-            "total_documents": total_documents,
-            "processed_count": processed_count,
-            "error_count": error_count,
-            "error_messages": error_messages,
-        }
-
-    # No finalize sync needed — complete immediately
+    # Publish completion
     publish_reindex_update(
         graphql_endpoint,
         status="COMPLETED",
@@ -1266,58 +1144,6 @@ def handle_finalize(event: dict) -> dict:
         "processed_count": processed_count,
         "error_count": error_count,
     }
-
-
-def handle_check_finalize_sync(event: dict) -> dict:
-    """
-    Check if the finalize ingestion sync has completed.
-
-    Called by the state machine WaitForFinalizeSync polling loop.
-    """
-    new_kb_id = event.get("new_kb_id")
-    new_data_source_id = event.get("new_data_source_id")
-    finalize_job_id = event.get("finalize_job_id")
-    graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-
-    if not finalize_job_id:
-        logger.warning("No finalize_job_id, completing")
-        return {**event, "action": "complete", "finalize_sync_status": "COMPLETE"}
-
-    try:
-        job_response = bedrock_agent.get_ingestion_job(
-            knowledgeBaseId=new_kb_id,
-            dataSourceId=new_data_source_id,
-            ingestionJobId=finalize_job_id,
-        )
-        status = job_response.get("ingestionJob", {}).get("status", "UNKNOWN")
-        stats = job_response.get("ingestionJob", {}).get("statistics", {})
-        logger.info(
-            f"Finalize sync status: {status} "
-            f"(scanned={stats.get('numberOfDocumentsScanned', 0)}, "
-            f"indexed={stats.get('numberOfNewDocumentsIndexed', 0)})"
-        )
-    except Exception as e:
-        logger.error(f"Error checking finalize sync status: {e}")
-        return {**event, "action": "complete", "finalize_sync_status": "COMPLETE"}
-
-    if status in ("COMPLETE", "FAILED", "STOPPED"):
-        if status == "FAILED":
-            logger.warning("Finalize sync failed")
-
-        # Publish completion
-        publish_reindex_update(
-            graphql_endpoint,
-            status="COMPLETED",
-            total_documents=event.get("total_documents", 0),
-            processed_count=event.get("processed_count", 0),
-            error_count=event.get("error_count", 0),
-            new_knowledge_base_id=new_kb_id,
-        )
-
-        return {**event, "action": "complete", "finalize_sync_status": status}
-
-    # Still in progress
-    return {**event, "finalize_sync_status": status}
 
 
 def handle_cleanup_failed(event: dict) -> dict:
@@ -1616,36 +1442,3 @@ def extract_document_metadata(output_s3_uri: str, document_id: str) -> dict[str,
     except Exception as e:
         logger.warning(f"Failed to extract metadata for {document_id}: {e}")
         return {}
-
-
-def ingest_document(kb_id: str, ds_id: str, content_uri: str, metadata_uri: str) -> None:
-    """
-    Ingest a single document into the Knowledge Base.
-
-    Args:
-        kb_id: Knowledge Base ID
-        ds_id: Data Source ID
-        content_uri: S3 URI of the content file
-        metadata_uri: S3 URI of the metadata file
-    """
-    document = {
-        "content": {
-            "dataSourceType": "S3",
-            "s3": {"s3Location": {"uri": content_uri}},
-        },
-        "metadata": {
-            "type": "S3_LOCATION",
-            "s3Location": {"uri": metadata_uri},
-        },
-    }
-
-    response = ingest_documents_with_retry(
-        kb_id=kb_id,
-        ds_id=ds_id,
-        documents=[document],
-    )
-
-    doc_details = response.get("documentDetails", [])
-    if doc_details:
-        status = doc_details[0].get("status", "UNKNOWN")
-        logger.info(f"Ingested document: {content_uri}, status: {status}")

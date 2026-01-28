@@ -156,6 +156,19 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                 width: 100,
               },
               {
+                id: 'actions',
+                header: 'Actions',
+                cell: (item) => onDeleteKey ? (
+                  <Button
+                    variant="icon"
+                    iconName="remove"
+                    ariaLabel={`Delete ${item.keyName}`}
+                    onClick={() => setConfirmKey(item.keyName)}
+                  />
+                ) : null,
+                width: 70,
+              },
+              {
                 id: 'sampleValues',
                 header: 'Sample Values',
                 cell: (item) => (
@@ -166,19 +179,6 @@ export const MetadataMetrics: React.FC<MetadataMetricsProps> = ({
                 ),
                 minWidth: 200,
               },
-              ...(onDeleteKey ? [{
-                id: 'actions',
-                header: 'Actions',
-                cell: (item: MetadataKeyStats) => (
-                  <Button
-                    variant="icon"
-                    iconName="remove"
-                    ariaLabel={`Delete ${item.keyName}`}
-                    onClick={() => setConfirmKey(item.keyName)}
-                  />
-                ),
-                width: 70,
-              }] : []),
             ]}
             empty={
               <Box textAlign="center" color="inherit">
