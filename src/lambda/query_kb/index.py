@@ -1488,7 +1488,7 @@ def lambda_handler(event, context):
                     knowledge_base_id=knowledge_base_id,
                     data_source_id=None,  # No data source filtering with unified content/
                     metadata_filter=generated_filter,
-                    num_results=5,
+                    num_results=25,
                 )
                 logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
                 for i, r in enumerate(retrieval_results):
@@ -1499,7 +1499,7 @@ def lambda_handler(event, context):
                 # Standard single-query retrieval
                 retrieval_config = {
                     "vectorSearchConfiguration": {
-                        "numberOfResults": 5,
+                        "numberOfResults": 25,
                     }
                 }
                 # Apply generated filter if available

@@ -47,6 +47,7 @@ class MigrationStats:
     documents_copied: int = 0
     images_copied: int = 0
     tracking_records_updated: int = 0
+    content_types_backfilled: int = 0
     errors: int = 0
     skipped: int = 0
 
@@ -122,6 +123,43 @@ def copy_s3_prefix(
     return copied
 
 
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg"}
+VIDEO_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "webm"}
+AUDIO_EXTENSIONS = {"mp3", "wav", "flac", "ogg", "m4a"}
+
+
+def _infer_content_type(item: dict) -> str | None:
+    """
+    Infer content_type for v1 records that lack it.
+
+    Returns:
+        "document", "image", "web_page", "video", or "audio", or None if already set.
+    """
+    if item.get("content_type"):
+        return None  # Already has content_type
+
+    input_uri = item.get("input_s3_uri", "")
+    filename = item.get("filename", "")
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    # Images: v1 used images/ prefix, or detect by extension
+    if "/images/" in input_uri or ext in IMAGE_EXTENSIONS:
+        return "image"
+
+    # Video/audio: use specific type (matches ingest_media behavior)
+    if ext in VIDEO_EXTENSIONS:
+        return "video"
+    if ext in AUDIO_EXTENSIONS:
+        return "audio"
+
+    # Scraped pages were stored as .md files
+    if ext == "md":
+        return "web_page"
+
+    # Everything else (pdf, txt, docx, etc.) is a document
+    return "document"
+
+
 def update_tracking_record(
     table: Any,
     item: dict,
@@ -129,7 +167,7 @@ def update_tracking_record(
     dry_run: bool = False,
 ) -> str:
     """
-    Update a tracking record with new content/ prefix paths.
+    Update a tracking record with new content/ prefix paths and content_type.
 
     Returns:
         "updated" if record was updated
@@ -164,6 +202,12 @@ def update_tracking_record(
         new_caption_uri = caption_uri.replace("/images/", "/content/")
         update_parts.append("caption_s3_uri = :caption_uri")
         expr_values[":caption_uri"] = new_caption_uri
+
+    # Backfill content_type for v1 records
+    content_type = _infer_content_type(item)
+    if content_type:
+        update_parts.append("content_type = :content_type")
+        expr_values[":content_type"] = content_type
 
     if not update_parts:
         logger.debug(f"No updates needed for {doc_id}")
@@ -250,6 +294,8 @@ def migrate_stack(
         items = response.get("Items", [])
 
         for item in items:
+            if _infer_content_type(item):
+                stats.content_types_backfilled += 1
             result = update_tracking_record(table, item, bucket, dry_run=dry_run)
             if result == "updated":
                 stats.tracking_records_updated += 1
@@ -329,11 +375,12 @@ After migration:
         print("\n" + "=" * 60)
         print("MIGRATION SUMMARY")
         print("=" * 60)
-        print(f"Documents copied:        {stats.documents_copied}")
-        print(f"Images copied:           {stats.images_copied}")
-        print(f"Tracking records updated: {stats.tracking_records_updated}")
-        print(f"Records skipped:         {stats.skipped}")
-        print(f"Errors:                  {stats.errors}")
+        print(f"Documents copied:          {stats.documents_copied}")
+        print(f"Images copied:             {stats.images_copied}")
+        print(f"Tracking records updated:  {stats.tracking_records_updated}")
+        print(f"Content types backfilled:  {stats.content_types_backfilled}")
+        print(f"Records skipped:           {stats.skipped}")
+        print(f"Errors:                    {stats.errors}")
         print("=" * 60)
 
         if args.dry_run:

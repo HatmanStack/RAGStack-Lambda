@@ -202,11 +202,11 @@ class OcrService:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
                 if is_batch_mode:
                     output_key = (
-                        f"output/{document.document_id}/"
+                        f"content/{document.document_id}/"
                         f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
                     )
                 else:
-                    output_key = f"output/{document.document_id}/extracted_text.txt"
+                    output_key = f"content/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
@@ -375,7 +375,7 @@ class OcrService:
                 output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
-                output_key = f"output/{document.document_id}/extracted_text.txt"
+                output_key = f"content/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
@@ -614,11 +614,11 @@ class OcrService:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
                 if is_batch_mode:
                     output_key = (
-                        f"output/{document.document_id}/"
+                        f"content/{document.document_id}/"
                         f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
                     )
                 else:
-                    output_key = f"output/{document.document_id}/extracted_text.txt"
+                    output_key = f"content/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, text)

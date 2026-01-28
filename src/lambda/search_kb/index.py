@@ -210,7 +210,7 @@ def lambda_handler(event, context):
     # AppSync sends: {"arguments": {"query": "...", "maxResults": 5}, ...}
     arguments = event.get("arguments", event)  # Fallback to event for direct invocation
     query = arguments.get("query", "")
-    max_results = arguments.get("maxResults", 5)
+    max_results = arguments.get("maxResults", 25)
 
     # Log safe summary
     safe_summary = {
