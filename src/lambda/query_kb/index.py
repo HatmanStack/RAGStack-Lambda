@@ -1464,9 +1464,13 @@ def lambda_handler(event, context):
             try:
                 _, filter_generator, _ = _get_filter_components()
                 filter_examples = _get_filter_examples()
+                cfg = get_config_manager()
+                manual_keys = cfg.get_parameter("metadata_manual_keys", default=None)
+                extraction_mode = cfg.get_parameter("metadata_extraction_mode", default="auto")
                 generated_filter = filter_generator.generate_filter(
                     retrieval_query,
                     filter_examples=filter_examples,
+                    manual_keys=manual_keys if extraction_mode == "manual" else None,
                 )
                 if generated_filter:
                     logger.info(f"Generated filter: {json.dumps(generated_filter)}")

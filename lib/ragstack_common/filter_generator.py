@@ -25,31 +25,61 @@ DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # S3 Vectors filter syntax documentation for prompts
 S3_VECTORS_FILTER_SYNTAX = """
-S3 Vectors Filter Syntax:
-- Comparison operators: $eq (equals), $ne (not equals), $gt (greater than),
-  $gte (greater or equal), $lt (less than), $lte (less or equal)
-- Set operators: $in (value in list), $nin (value not in list)
-- Existence: $exists (true/false - check if field exists)
-- Logical operators: $and (all conditions must match), $or (any condition matches)
+FILTER OPERATORS:
+- $eq: Exact match. For arrays, matches if ANY element equals the value.
+- $ne: Not equal. For arrays, true if NO element equals the value.
+- $gt, $gte, $lt, $lte: Numeric/date comparisons.
+- $in: Value is in list. Example: {"topic": {"$in": ["genealogy", "immigration"]}}
+- $nin: Value is not in list.
+- $listContains: List membership. Matches if a list contains the exact value as a
+  member. Example: {"surnames": {"$listContains": "wilson"}}
+- $and: All conditions must match. Takes a list of filter conditions.
+- $or: Any condition matches. Takes a list of filter conditions.
 
-ARRAY FIELDS (people_mentioned, surnames, locations, tags):
-- These fields store multiple values as arrays
-- Use $eq to match ANY element in the array
-- Example: {"people_mentioned": {"$eq": "jack"}} matches documents where "jack" is one of the people
+HOW METADATA IS STORED:
+String values are expanded into searchable arrays with component parts:
+- A person name "Jack Wilson" is stored as ["jack wilson", "jack", "wilson"]
+- A location "Chicago, Illinois" is stored as ["chicago, illinois", "chicago", "illinois"]
+- The "surnames" field contains extracted last names from filenames
+
+Because values are expanded, $eq on an array field matches ANY element:
+- {"people_mentioned": {"$eq": "jack wilson"}} matches the full name
+- {"people_mentioned": {"$eq": "jack"}} matches just the first name
+- {"surnames": {"$eq": "wilson"}} matches the surname
+
+CHOOSING THE RIGHT OPERATOR:
+- Use $eq for most filters — it matches any element in expanded arrays
+- Use $listContains when you want explicit list membership check
+- Use $in when checking against multiple possible values
+- For person names: prefer "surnames" with $eq on the last name, or
+  "people_mentioned" with $eq on the full name or first name
 
 Example filters:
-1. Simple equality: {"topic": {"$eq": "genealogy"}}
-2. Match person in array: {"people_mentioned": {"$eq": "jack wilson"}}
-3. Match surname in array: {"surnames": {"$eq": "wilson"}}
-4. Multiple conditions: {"$and": [{"topic": {"$eq": "genealogy"}},
-   {"document_type": {"$eq": "letter"}}]}
-5. Multiple possible values: {"topic": {"$in": ["genealogy", "immigration"]}}
-6. Existence check: {"location": {"$exists": true}}
+1. Exact person: {"people_mentioned": {"$eq": "jack wilson"}}
+2. Surname: {"surnames": {"$eq": "wilson"}}
+3. First name: {"people_mentioned": {"$eq": "jack"}}
+4. Location: {"city": {"$eq": "chicago"}}
+5. Multiple conditions: {"$and": [{"surnames": {"$eq": "wilson"}},
+   {"content_type": {"$eq": "image"}}]}
+6. Multiple values: {"era": {"$in": ["1950s", "1960s"]}}
 """
 
 # Valid filter operators
 VALID_OPERATORS = frozenset(
-    {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin", "$exists", "$and", "$or"}
+    {
+        "$eq",
+        "$ne",
+        "$gt",
+        "$gte",
+        "$lt",
+        "$lte",
+        "$in",
+        "$nin",
+        "$exists",
+        "$listContains",
+        "$and",
+        "$or",
+    }
 )
 
 
@@ -74,22 +104,26 @@ S3 Vectors compatible filter JSON expressions when appropriate.
 
 IMPORTANT RULES:
 1. Return ONLY valid JSON - no explanations or markdown
-2. Return "null" (without quotes) if the query has no clear filter intent
-3. Use only the available metadata keys provided
-4. Prefer simple filters over complex ones
-5. For ARRAY fields (people_mentioned, surnames, locations, tags): use $eq to match elements
-6. For non-array fields: use $eq for exact match, $in for multiple possible values
-7. Do not guess or invent filter values not suggested by the query
-8. ALL STRING VALUES MUST BE LOWERCASE - metadata is stored in lowercase
+2. Use only the available metadata keys provided
+3. Prefer simple filters over complex ones
+4. For ARRAY fields: use $eq to match elements (each element is checked individually)
+5. For non-array fields: use $eq for exact match, $in for multiple possible values
+6. ALL STRING VALUES MUST BE LOWERCASE - metadata is stored in lowercase
+7. BIAS TOWARD GENERATING FILTERS: If the query contains proper nouns (names, places,
+   organizations), dates, or terms that plausibly match any available metadata key,
+   generate a filter. The filter is used alongside vector search, not instead of it,
+   so false positives are acceptable — missing a relevant filter is worse.
+8. Return "null" ONLY for genuinely open-ended queries with no filterable terms
+   (e.g., "what is this about?", "show me everything", "summarize")
 
 OUTPUT FORMAT:
 Return a valid JSON filter object, or the literal string null if no filter applies.
 Examples of valid outputs:
-- {{"topic": {{"$eq": "genealogy"}}}}
-- {{"people_mentioned": {{"$eq": "jack wilson"}}}} (matches if "jack wilson" is in the array)
-- {{"surnames": {{"$eq": "wilson"}}}} (matches if "wilson" is in the surnames array)
-- {{"$and": [{{"document_type": {{"$eq": "letter"}}}}, {{"surnames": {{"$eq": "wilson"}}}}]}}
-- null
+- {{"surnames": {{"$eq": "wilson"}}}}
+- {{"people_mentioned": {{"$eq": "jack wilson"}}}}
+- {{"$and": [{{"content_type": {{"$eq": "image"}}}}, {{"surnames": {{"$eq": "wilson"}}}}]}}
+- {{"city": {{"$eq": "chicago"}}}}
+- null (ONLY for queries with no filterable terms at all)
 
 DO NOT include any text outside the JSON object or null."""
 
@@ -137,6 +171,7 @@ class FilterGenerator:
         self,
         query: str,
         filter_examples: list[dict] | None = None,
+        manual_keys: list[str] | None = None,
     ) -> dict | None:
         """
         Generate a metadata filter from a natural language query.
@@ -144,6 +179,8 @@ class FilterGenerator:
         Args:
             query: The user's natural language query.
             filter_examples: Optional list of example query-filter pairs for few-shot learning.
+            manual_keys: Optional list of key names to restrict filter generation to.
+                When set, only these keys are shown to the LLM.
 
         Returns:
             S3 Vectors compatible filter dict, or None if no filter intent detected.
@@ -163,6 +200,12 @@ class FilterGenerator:
             # Get available keys from library
             keys_start = time.time()
             active_keys = self.key_library.get_active_keys()
+
+            # Restrict to manual keys if configured
+            if manual_keys:
+                manual_set = {k.lower().replace(" ", "_") for k in manual_keys}
+                active_keys = [k for k in active_keys if k["key_name"] in manual_set]
+
             key_names = [k["key_name"] for k in active_keys]
             keys_duration_ms = (time.time() - keys_start) * 1000
 
@@ -254,12 +297,17 @@ class FilterGenerator:
         if filter_examples:
             example_lines = []
             for ex in filter_examples[:5]:  # Limit to 5 examples
-                ex_query = ex.get("query", "")
+                # Support both schema formats:
+                # - {query, filter} for simple examples
+                # - {name, use_case, description, filter} for config-based examples
+                ex_query = ex.get("query") or ex.get("use_case") or ex.get("name", "")
                 ex_filter = ex.get("filter", {})
-                example_lines.append(f'Query: "{ex_query}"')
-                example_lines.append(f"Filter: {json.dumps(ex_filter)}")
-                example_lines.append("")
-            examples_section = "\n\nEXAMPLES:\n" + "\n".join(example_lines)
+                if ex_query and ex_filter:
+                    example_lines.append(f'Query: "{ex_query}"')
+                    example_lines.append(f"Filter: {json.dumps(ex_filter)}")
+                    example_lines.append("")
+            if example_lines:
+                examples_section = "\n\nEXAMPLES:\n" + "\n".join(example_lines)
 
         return f"""Available metadata keys:
 {keys_section}

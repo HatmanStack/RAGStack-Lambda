@@ -80,59 +80,84 @@ def merge_slices_with_guaranteed_minimum(
     total_results: int = 10,
 ) -> list[dict]:
     """
-    Merge multi-slice results ensuring each slice contributes a minimum number.
+    Merge multi-slice results with filtered results prioritized.
 
-    Prevents high-scoring but irrelevant results (e.g., visual similarity matches)
-    from drowning out metadata-filtered results that are more relevant to the query.
+    The filtered slice represents results matching the user's explicit intent
+    (e.g., a person name filter), so its results are placed first. Unfiltered
+    results fill remaining slots sorted by score.
 
     Strategy:
-        1. Reserve min_per_slice slots for each slice (deduplicated within slice).
-        2. Fill remaining slots from all results sorted by score.
-        3. Final result is deduplicated by URI.
+        1. Place filtered slice results first (sorted by score within the slice).
+        2. Guarantee min_per_slice from unfiltered slice (deduplicated).
+        3. Fill remaining slots from all results by score.
 
     Args:
         slice_results: Dict mapping slice name to its result list.
-        min_per_slice: Minimum guaranteed results per slice.
+            The "filtered" key (if present) is prioritized.
+        min_per_slice: Minimum guaranteed results per non-priority slice.
         total_results: Maximum total results to return.
 
     Returns:
-        Merged and deduplicated results.
+        Merged and deduplicated results with filtered results first.
     """
     if not slice_results:
         return []
 
-    # Phase 1: Reserve guaranteed slots per slice
-    seen_uris: set[str] = set()
-    guaranteed: list[dict] = []
+    # Identify filtered vs other slices
+    filtered_results = slice_results.get("filtered", [])
+    other_slices = {k: v for k, v in slice_results.items() if k != "filtered"}
 
-    for _name, results in slice_results.items():
+    # If no filtered slice, fall back to simple score-based merge
+    if not filtered_results:
+        all_results = []
+        seen_uris: set[str] = set()
+        for results in slice_results.values():
+            for result in results:
+                uri = _get_uri(result) or f"_no_uri_{id(result)}"
+                if uri not in seen_uris:
+                    seen_uris.add(uri)
+                    all_results.append(result)
+        all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        return all_results[:total_results]
+
+    # Phase 1: Place filtered results first (sorted by score within slice)
+    seen_uris = set()
+    merged: list[dict] = []
+
+    filtered_sorted = sorted(filtered_results, key=lambda x: x.get("score", 0), reverse=True)
+    for result in filtered_sorted:
+        uri = _get_uri(result) or f"_no_uri_{id(result)}"
+        if uri not in seen_uris:
+            seen_uris.add(uri)
+            merged.append(result)
+
+    # Phase 2: Guarantee min_per_slice from each non-filtered slice
+    for _name, results in other_slices.items():
         count = 0
-        for result in results:
+        for result in sorted(results, key=lambda x: x.get("score", 0), reverse=True):
+            if count >= min_per_slice:
+                break
             uri = _get_uri(result) or f"_no_uri_{id(result)}"
-            if uri not in seen_uris and count < min_per_slice:
+            if uri not in seen_uris:
                 seen_uris.add(uri)
-                guaranteed.append(result)
+                merged.append(result)
                 count += 1
 
-    # Phase 2: Fill remaining slots from all results by score
-    all_results = []
-    for results in slice_results.values():
-        all_results.extend(results)
-    all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    # Phase 3: Fill remaining slots from all non-filtered results by score
+    all_other = []
+    for results in other_slices.values():
+        all_other.extend(results)
+    all_other.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-    remaining_slots = total_results - len(guaranteed)
-    for result in all_results:
-        if remaining_slots <= 0:
+    for result in all_other:
+        if len(merged) >= total_results:
             break
         uri = _get_uri(result) or f"_no_uri_{id(result)}"
         if uri not in seen_uris:
             seen_uris.add(uri)
-            guaranteed.append(result)
-            remaining_slots -= 1
+            merged.append(result)
 
-    # Sort final results by score
-    guaranteed.sort(key=lambda x: x.get("score", 0), reverse=True)
-    return guaranteed
+    return merged[:total_results]
 
 
 class MultiSliceRetriever:
@@ -459,6 +484,8 @@ class MultiSliceRetriever:
                         return {"in": {"key": key, "value": op_value}}
                     if op == "$nin":
                         return {"notIn": {"key": key, "value": op_value}}
+                    if op == "$listContains":
+                        return {"listContains": {"key": key, "value": op_value}}
                     if op == "$exists":
                         # Bedrock KB doesn't have direct exists filter
                         # Skip for now

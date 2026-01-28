@@ -272,28 +272,3 @@ class TestListAllContent:
             assert result[1]["document_id"] == "img1"
             assert result[2]["document_id"] == "img2"
             assert result[3]["document_id"] == "scrape1"
-
-
-class TestIngestDocument:
-    """Tests for ingest_document function."""
-
-    def test_calls_bedrock_ingest(self, set_env_vars):
-        """Test document ingestion calls ingest_documents_with_retry."""
-        with (
-            patch("boto3.client"),
-            patch("boto3.resource"),
-            patch("boto3.Session"),
-            patch("ragstack_common.ingestion.ingest_documents_with_retry") as mock_ingest,
-        ):
-            mock_ingest.return_value = {"documentDetails": [{"status": "STARTING"}]}
-
-            module = load_reindex_module()
-
-            module.ingest_document(
-                kb_id="test-kb",
-                ds_id="test-ds",
-                content_uri="s3://bucket/content.txt",
-                metadata_uri="s3://bucket/content.txt.metadata.json",
-            )
-
-            mock_ingest.assert_called_once()

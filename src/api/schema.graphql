@@ -144,6 +144,9 @@ type Mutation {
   # Samples vectors, analyzes field occurrences, and generates filter examples
   analyzeMetadata: MetadataAnalysisResult @aws_api_key @aws_cognito_user_pools
 
+  # Delete a metadata key from the key library
+  deleteMetadataKey(keyName: String!): DeleteMetadataKeyResponse @aws_api_key @aws_cognito_user_pools
+
   # Start Knowledge Base reindex operation (admin only)
   # Creates new KB, regenerates metadata for all documents, migrates content, deletes old KB
   startReindex: ReindexJob @aws_cognito_user_pools
@@ -612,6 +615,13 @@ type MetadataAnalysisResult @aws_cognito_user_pools {
   keysAnalyzed: Int!
   examplesGenerated: Int!
   executionTimeMs: Int!
+  error: String
+}
+
+# Delete metadata key response
+type DeleteMetadataKeyResponse @aws_api_key @aws_cognito_user_pools {
+  success: Boolean!
+  keyName: String!
   error: String
 }
 

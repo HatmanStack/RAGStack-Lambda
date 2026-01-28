@@ -27,6 +27,7 @@ export const MetadataPanel: React.FC = () => {
     loading: statsLoading,
     error: statsError,
     refetch: refetchStats,
+    deleteKey,
   } = useMetadataStats();
 
   const {
@@ -168,6 +169,7 @@ export const MetadataPanel: React.FC = () => {
               lastAnalyzed={lastAnalyzed}
               loading={statsLoading}
               error={statsError}
+              onDeleteKey={deleteKey}
             />
 
             <FilterExamples

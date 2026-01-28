@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
+import { deleteMetadataKey as deleteMetadataKeyMutation } from '../graphql/mutations/deleteMetadataKey';
 import type { GqlResponse } from '../types/graphql';
 
 interface MetadataStatsResult {
@@ -138,6 +139,27 @@ export const useMetadataStats = () => {
     fetchStats();
   }, [fetchStats]);
 
+  const deleteKey = useCallback(async (keyName: string): Promise<boolean> => {
+    try {
+      const response = (await client.graphql({
+        query: deleteMetadataKeyMutation as unknown as string,
+        variables: { keyName },
+      })) as GqlResponse;
+
+      const result = response.data?.deleteMetadataKey as { success: boolean; error?: string } | undefined;
+      if (result?.success) {
+        setStats(prev => prev.filter(k => k.keyName !== keyName));
+        setTotalKeys(prev => prev - 1);
+        return true;
+      }
+      console.error('Failed to delete metadata key:', result?.error);
+      return false;
+    } catch (err) {
+      console.error('Error deleting metadata key:', err);
+      return false;
+    }
+  }, []);
+
   return {
     stats,
     totalKeys,
@@ -145,6 +167,7 @@ export const useMetadataStats = () => {
     loading,
     error,
     refetch: fetchStats,
+    deleteKey,
   };
 };
 

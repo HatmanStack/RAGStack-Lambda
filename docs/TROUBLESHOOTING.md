@@ -2,6 +2,24 @@
 
 Quick reference for common issues and solutions.
 
+## Recommended Workflow: Better Search Results
+
+For the best search quality, use manual metadata keys. This gives you control over what metadata is extracted and ensures consistent filtering across your documents.
+
+**Steps:**
+
+1. **Initial upload**: Process a representative sample of documents with default settings (Haiku extraction, auto mode)
+2. **Review extracted keys**: Go to Settings → Metadata Key Statistics to see what keys were discovered
+3. **Select manual keys**: Switch to "Manual" extraction mode and select only the keys relevant to your use case (e.g., `surnames`, `topic`, `year`, `location`)
+4. **Run full reindex**: Click "Reindex Knowledge Base" — this re-extracts metadata using only your selected keys and rebuilds the KB with consistent metadata
+5. **Create filter examples**: After reindex, run "Analyze Metadata" to generate few-shot examples for query-time filter generation
+
+**Why this works:** Auto mode discovers many keys, but inconsistent extraction across documents hurts search quality. Manual mode constrains the LLM to extract only your chosen keys, ensuring every document has the same metadata schema. The reindex applies this consistently to all documents.
+
+**After reindex:** Your searches will generate better filters because the filter generator only sees your curated keys, not hundreds of inconsistent auto-discovered ones.
+
+---
+
 ## Best Practices
 
 Tips from production usage to help you get the most out of RAGStack.
@@ -33,17 +51,12 @@ Tips from production usage to help you get the most out of RAGStack.
 
 ### Cost Optimization
 
-**Recommended workflow for large document sets:**
+Once you've set up manual keys (see "Recommended Workflow" above), you can reduce costs:
 
-1. **Start small**: Process a representative slice of your data with the default Haiku extraction model
-2. **Curate keys**: Review the extracted metadata keys, then switch to "Manual" extraction mode and select only the keys you want to retain
-3. **Reindex**: Run a reindex to apply manual keys and reset occurrence counts
-4. **Downgrade extraction model**: Switch to Nova Lite for metadata extraction (cheaper, and manual mode constrains its output)
-5. **Process remaining data**: Upload the rest of your documents - they'll use the cheaper model with your curated key list
-6. **Keep Haiku for filters**: Leave filter generation on Haiku - it needs better reasoning to translate queries into filters accurately
-7. **Create targeted filters**: Run "Analyze Metadata" and create filter examples that match your most common query patterns
+1. **Downgrade extraction model**: Switch to Nova Lite for metadata extraction — manual mode constrains its output so quality remains good
+2. **Keep Haiku for filters**: Leave filter generation on Haiku — it needs better reasoning to translate queries into filters accurately
 
-This approach uses Haiku's quality for discovery and filter generation, while using Nova Lite's lower cost for bulk extraction with known keys.
+This uses Haiku's quality for discovery and filter generation, while using Nova Lite's lower cost for bulk extraction.
 
 ---
 

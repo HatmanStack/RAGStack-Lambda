@@ -1129,3 +1129,67 @@ class TestCheckKeySimilarity:
         assert result["proposedKey"] == "topic"
         assert result["hasSimilar"] is False
         assert len(result["similarKeys"]) == 0
+
+
+class TestDeleteMetadataKey:
+    """Tests for deleteMetadataKey resolver."""
+
+    @pytest.fixture
+    def mock_env_with_key_library(self, monkeypatch):
+        """Set up environment variables including key library table."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
+        monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
+        monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+        monkeypatch.setenv("METADATA_KEY_LIBRARY_TABLE", "test-key-library-table")
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            yield
+
+    def test_delete_metadata_key_success(self, mock_env_with_key_library, mock_boto3):
+        """Test successful key deletion."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        with patch("ragstack_common.key_library.KeyLibrary.delete_key") as mock_delete:
+            mock_delete.return_value = True
+
+            event = {
+                "info": {"fieldName": "deleteMetadataKey"},
+                "arguments": {"keyName": "old_key"},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["success"] is True
+            assert result["keyName"] == "old_key"
+            mock_delete.assert_called_once_with("old_key")
+
+    def test_delete_metadata_key_no_table(self, mock_env, mock_boto3):
+        """Test returns error when table not configured."""
+        module = _load_appsync_resolvers_module()
+        module.METADATA_KEY_LIBRARY_TABLE = None
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "deleteMetadataKey"},
+            "arguments": {"keyName": "old_key"},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["success"] is False
+        assert "not configured" in result["error"]
+
+    def test_delete_metadata_key_missing_key_name(self, mock_env_with_key_library, mock_boto3):
+        """Test returns error when keyName is missing."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        event = {
+            "info": {"fieldName": "deleteMetadataKey"},
+            "arguments": {},
+        }
+
+        result = module.lambda_handler(event, None)
+
+        assert result["success"] is False

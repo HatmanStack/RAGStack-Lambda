@@ -283,6 +283,7 @@ def lambda_handler(event, context):
         "getFilterExamples": get_filter_examples,
         "getKeyLibrary": get_key_library,
         "checkKeySimilarity": check_key_similarity,
+        "deleteMetadataKey": delete_metadata_key,
         # KB Reindex
         "startReindex": start_reindex,
     }
@@ -3054,6 +3055,24 @@ def check_key_similarity(args):
             "similarKeys": [],
             "hasSimilar": False,
         }
+
+
+def delete_metadata_key(args):
+    """Delete a metadata key from the key library."""
+    key_name = args.get("keyName", "")
+    if not key_name:
+        return {"success": False, "keyName": "", "error": "keyName is required"}
+
+    if not METADATA_KEY_LIBRARY_TABLE:
+        return {"success": False, "keyName": key_name, "error": "Key library not configured"}
+
+    try:
+        key_library = KeyLibrary(table_name=METADATA_KEY_LIBRARY_TABLE)
+        success = key_library.delete_key(key_name)
+        return {"success": success, "keyName": key_name, "error": None}
+    except Exception as e:
+        logger.error(f"Error deleting metadata key '{key_name}': {e}")
+        return {"success": False, "keyName": key_name, "error": str(e)}
 
 
 # =========================================================================
