@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.0.2] - 2026-01-28
+
+### Added
+
+- **Delete metadata keys from UI**: New delete button in Metadata Key Statistics table with confirmation modal
+- **`$listContains` filter operator**: Support for filtering on array fields (e.g., `surnames`, `people_mentioned`)
+- **Manual keys in filter generation**: When extraction mode is "manual", filter generator only sees configured keys
+
+### Fixed
+
+- **Reindex flow simplified**: Extract metadata first, create KB after, single baseline sync (removed redundant per-document API ingestion and finalize sync)
+- **Reindex URI parsing**: `_list_text_uris_for_reindex` now uses `document_id` directly instead of parsing from `output_s3_uri` (handles corrupted URIs)
+- **Metadata analyzer preserves counts**: No longer overwrites `occurrence_count` from ingestion with sample counts
+- **Manual keys in analyzer**: When extraction mode is "manual", only configured keys marked active
+- **Delete metadata key auth**: Added `@aws_api_key` directive and `DynamoDBCrudPolicy` for AppSync resolver
+- **Cache attribute typo**: Fixed `_cache_time` → `_active_keys_cache_time` in key library
+
+### Changed
+
+- **Multislice merge prioritizes filtered results**: Filtered slice results appear first, then guaranteed minimum from other slices
+- **Reindex state machine**: Removed `WaitForFinalizeSync` loop, sync happens once after all metadata extraction
+
+### Documentation
+
+- Promoted manual metadata keys workflow as recommended approach for better search results
+
 ## [2.0.1] - 2026-01-27
 
 ### Fixed
