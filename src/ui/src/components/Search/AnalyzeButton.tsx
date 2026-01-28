@@ -88,24 +88,20 @@ const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
               Analysis completed successfully in {(result.executionTimeMs / 1000).toFixed(1)}s
             </StatusIndicator>
 
-            <ColumnLayout columns={3} variant="text-grid">
+            <ColumnLayout columns={2} variant="text-grid">
               <div>
                 <Box variant="awsui-key-label">Vectors Sampled</Box>
                 <Box variant="awsui-value-large">{result.vectorsSampled.toLocaleString()}</Box>
               </div>
               <div>
-                <Box variant="awsui-key-label">Keys Analyzed</Box>
+                <Box variant="awsui-key-label">Keys Discovered</Box>
                 <Box variant="awsui-value-large">{result.keysAnalyzed}</Box>
-              </div>
-              <div>
-                <Box variant="awsui-key-label">Examples Generated</Box>
-                <Box variant="awsui-value-large">{result.examplesGenerated}</Box>
               </div>
             </ColumnLayout>
 
             <Box variant="p" color="text-body-secondary">
-              The metadata statistics and filter examples have been updated. Refresh the page to
-              see the latest data.
+              Metadata key statistics have been updated. To generate filter examples, select keys
+              in the Filter Examples section and click "Regenerate Examples".
             </Box>
           </>
         )}

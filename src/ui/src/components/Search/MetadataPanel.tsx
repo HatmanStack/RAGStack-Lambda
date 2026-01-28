@@ -175,7 +175,7 @@ export const MetadataPanel: React.FC = () => {
         <Popover
           triggerType="custom"
           header="About Metadata Analysis"
-          content="Samples vectors from your Knowledge Base to discover metadata fields and generate filter examples for improved search."
+          content="Samples vectors from your Knowledge Base to discover metadata fields. Use the Filter Examples section to select which keys to use for filter generation."
           dismissButton={false}
           position="right"
           size="medium"
@@ -196,8 +196,8 @@ export const MetadataPanel: React.FC = () => {
               <strong>No metadata analysis available</strong>
             </Box>
             <Box variant="p">
-              Click "Analyze Metadata" to sample your Knowledge Base vectors, discover metadata
-              fields, and generate filter examples. This process typically takes 1-2 minutes.
+              Click "Analyze Metadata" to sample your Knowledge Base vectors and discover metadata
+              fields. Then select keys for filter generation in the Filter Examples section.
             </Box>
           </Alert>
         ) : (
