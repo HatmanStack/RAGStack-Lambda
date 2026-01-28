@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import { deleteMetadataKey as deleteMetadataKeyMutation } from '../graphql/mutations/deleteMetadataKey';
+import { regenerateFilterExamples as regenerateFilterExamplesMutation } from '../graphql/mutations/regenerateFilterExamples';
 import type { GqlResponse } from '../types/graphql';
 
 interface MetadataStatsResult {
@@ -265,4 +266,49 @@ export const useMetadataAnalyzer = () => {
     result,
     error,
   };
+};
+
+export interface RegenerateFilterExamplesResult {
+  success: boolean;
+  examplesGenerated: number;
+  executionTimeMs: number;
+  error: string | null;
+}
+
+export const useRegenerateFilterExamples = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<RegenerateFilterExamplesResult | null>(null);
+
+  const regenerate = useCallback(async (): Promise<RegenerateFilterExamplesResult | null> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = (await client.graphql({
+        query: regenerateFilterExamplesMutation as unknown as string,
+      })) as GqlResponse;
+
+      const regenerateResult = response.data?.regenerateFilterExamples as RegenerateFilterExamplesResult | undefined;
+      if (regenerateResult) {
+        setResult(regenerateResult);
+
+        if (!regenerateResult.success && regenerateResult.error) {
+          setError(regenerateResult.error);
+        }
+
+        return regenerateResult;
+      }
+
+      return null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to regenerate filter examples';
+      setError(message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { regenerate, loading, error, result };
 };

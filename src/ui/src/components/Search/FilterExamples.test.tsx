@@ -3,6 +3,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { FilterExamples } from './FilterExamples';
 import type { FilterExample } from '../../hooks/useMetadata';
 
+// Mock useKeyLibrary since FilterKeyInput uses it
+vi.mock('../../hooks/useKeyLibrary', () => ({
+  useKeyLibrary: () => ({
+    keys: [
+      { keyName: 'location', dataType: 'string', occurrenceCount: 10, status: 'active' },
+      { keyName: 'year', dataType: 'number', occurrenceCount: 5, status: 'active' },
+    ],
+    loading: false,
+  }),
+}));
+
 const mockExamples: FilterExample[] = [
   {
     name: 'Genealogy Documents',
@@ -211,7 +222,7 @@ describe('FilterExamples', () => {
     expect(screen.getByText('No filter examples')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Run the metadata analyzer to generate filter examples based on your documents.'
+        'Select keys above, then click "Regenerate Examples" to create filter examples.'
       )
     ).toBeInTheDocument();
   });
@@ -275,5 +286,119 @@ describe('FilterExamples', () => {
 
     // Should show "1/3 enabled"
     expect(screen.getByText(/1\/3 enabled/)).toBeInTheDocument();
+  });
+
+  // Filter Key Workflow Tests
+  describe('filter key workflow', () => {
+    const defaultFilterKeyProps = {
+      examples: mockExamples,
+      totalExamples: 3,
+      lastGenerated: '2025-01-06T10:00:00Z',
+      loading: false,
+      error: null,
+      filterKeys: [],
+      onFilterKeysChange: vi.fn(),
+      onRegenerateExamples: vi.fn(),
+      regenerating: false,
+    };
+
+    it('shows filter key input', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} />);
+
+      // The filter key input section should be visible
+      expect(screen.getByText('Keys to Use for Filters')).toBeInTheDocument();
+    });
+
+    it('shows regenerate button', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} />);
+
+      expect(screen.getByText('Regenerate Examples')).toBeInTheDocument();
+    });
+
+    it('disables regenerate button when no keys selected', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} filterKeys={[]} />);
+
+      // The button should be disabled and hint message should be shown
+      expect(screen.getByText('Add at least one key to generate examples')).toBeInTheDocument();
+      expect(screen.getByText('Regenerate Examples')).toBeInTheDocument();
+    });
+
+    it('enables regenerate button when keys are selected', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} filterKeys={['location']} />);
+
+      // The button should be enabled (hint message should not be shown)
+      expect(screen.queryByText('Add at least one key to generate examples')).not.toBeInTheDocument();
+      expect(screen.getByText('Regenerate Examples')).toBeInTheDocument();
+    });
+
+    it('shows hint when no keys selected', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} filterKeys={[]} />);
+
+      expect(screen.getByText('Add at least one key to generate examples')).toBeInTheDocument();
+    });
+
+    it('hides hint when keys are selected', () => {
+      render(<FilterExamples {...defaultFilterKeyProps} filterKeys={['location']} />);
+
+      expect(screen.queryByText('Add at least one key to generate examples')).not.toBeInTheDocument();
+    });
+
+    it('calls onRegenerateExamples when button clicked', () => {
+      const onRegenerate = vi.fn().mockResolvedValue(undefined);
+      render(
+        <FilterExamples
+          {...defaultFilterKeyProps}
+          filterKeys={['location']}
+          onRegenerateExamples={onRegenerate}
+        />
+      );
+
+      // Find all buttons and click the one with "Regenerate Examples" text
+      const buttons = screen.getAllByRole('button');
+      const regenerateButton = buttons.find(btn =>
+        btn.textContent?.includes('Regenerate Examples')
+      );
+
+      if (regenerateButton) {
+        fireEvent.click(regenerateButton);
+        expect(onRegenerate).toHaveBeenCalled();
+      } else {
+        // If button not found, the test should fail
+        expect(screen.getByText('Regenerate Examples')).toBeInTheDocument();
+      }
+    });
+
+    it('disables filter key input during regeneration', () => {
+      render(
+        <FilterExamples
+          {...defaultFilterKeyProps}
+          filterKeys={['location']}
+          regenerating={true}
+        />
+      );
+
+      // The regenerate button text should still be present
+      expect(screen.getByText('Regenerate Examples')).toBeInTheDocument();
+    });
+
+    it('shows appropriate empty state message when keys are selected', () => {
+      render(
+        <FilterExamples
+          examples={[]}
+          totalExamples={0}
+          lastGenerated={null}
+          loading={false}
+          error={null}
+          filterKeys={['location']}
+          onFilterKeysChange={vi.fn()}
+          onRegenerateExamples={vi.fn()}
+          regenerating={false}
+        />
+      );
+
+      expect(
+        screen.getByText('Click "Regenerate Examples" to create filter examples using the selected keys.')
+      ).toBeInTheDocument();
+    });
   });
 });

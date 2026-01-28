@@ -141,8 +141,11 @@ type Mutation {
   ): ImageUpdate @aws_iam
 
   # Analyze metadata in Knowledge Base vectors
-  # Samples vectors, analyzes field occurrences, and generates filter examples
+  # Samples vectors, analyzes field occurrences, and updates key library statistics
   analyzeMetadata: MetadataAnalysisResult @aws_api_key @aws_cognito_user_pools
+
+  # Regenerate filter examples using only the configured filter keys
+  regenerateFilterExamples: FilterExamplesResult @aws_api_key @aws_cognito_user_pools
 
   # Delete a metadata key from the key library
   deleteMetadataKey(keyName: String!): DeleteMetadataKeyResponse @aws_api_key @aws_cognito_user_pools
@@ -618,6 +621,14 @@ type MetadataAnalysisResult @aws_cognito_user_pools {
   error: String
 }
 
+# Filter examples regeneration result
+type FilterExamplesResult @aws_api_key @aws_cognito_user_pools {
+  success: Boolean!
+  examplesGenerated: Int!
+  executionTimeMs: Int!
+  error: String
+}
+
 # Delete metadata key response
 type DeleteMetadataKeyResponse @aws_api_key @aws_cognito_user_pools {
   success: Boolean!
@@ -626,7 +637,7 @@ type DeleteMetadataKeyResponse @aws_api_key @aws_cognito_user_pools {
 }
 
 # Metadata statistics response
-type MetadataStatsResponse @aws_cognito_user_pools {
+type MetadataStatsResponse @aws_api_key @aws_cognito_user_pools {
   keys: [MetadataKeyStats!]!
   totalKeys: Int!
   lastAnalyzed: String
@@ -634,7 +645,7 @@ type MetadataStatsResponse @aws_cognito_user_pools {
 }
 
 # Individual metadata key statistics
-type MetadataKeyStats @aws_cognito_user_pools {
+type MetadataKeyStats @aws_api_key @aws_cognito_user_pools {
   keyName: String!
   dataType: String!
   occurrenceCount: Int!

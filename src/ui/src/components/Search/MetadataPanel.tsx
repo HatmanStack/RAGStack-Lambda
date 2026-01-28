@@ -8,7 +8,7 @@ import {
   Button,
 } from '@cloudscape-design/components';
 import { generateClient } from 'aws-amplify/api';
-import { useMetadataStats, useFilterExamples } from '../../hooks/useMetadata';
+import { useMetadataStats, useFilterExamples, useRegenerateFilterExamples } from '../../hooks/useMetadata';
 import { MetadataMetrics } from './MetadataMetrics';
 import { FilterExamples } from './FilterExamples';
 import { AnalyzeButton } from './AnalyzeButton';
@@ -42,9 +42,15 @@ export const MetadataPanel: React.FC = () => {
   // Track DISABLED examples (inverted: all enabled by default, store only disabled)
   const [disabledExamples, setDisabledExamples] = useState<string[]>([]);
 
-  // Load disabled examples from configuration
+  // Track filter keys (allowlist for filter generation)
+  const [filterKeys, setFilterKeys] = useState<string[]>([]);
+
+  // Regenerate filter examples hook
+  const { regenerate, loading: regenerating } = useRegenerateFilterExamples();
+
+  // Load disabled examples and filter keys from configuration
   useEffect(() => {
-    const loadDisabled = async () => {
+    const loadConfig = async () => {
       try {
         const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
         if (response.errors?.length) {
@@ -57,12 +63,15 @@ export const MetadataPanel: React.FC = () => {
           if (Array.isArray(custom.metadata_filter_examples_disabled)) {
             setDisabledExamples(custom.metadata_filter_examples_disabled);
           }
+          if (Array.isArray(custom.metadata_filter_keys)) {
+            setFilterKeys(custom.metadata_filter_keys);
+          }
         }
       } catch (err) {
-        console.error('Failed to load disabled examples:', err);
+        console.error('Failed to load configuration:', err);
       }
     };
-    loadDisabled();
+    loadConfig();
   }, [client]);
 
   // Compute enabled list from examples minus disabled (memoized)
@@ -120,6 +129,36 @@ export const MetadataPanel: React.FC = () => {
     setDisabledExamples([]); // Backend clears disabled after replacement
   }, [refetchStats, refetchExamples]);
 
+  const handleFilterKeysChange = useCallback(async (keys: string[]) => {
+    const previousKeys = [...filterKeys];
+    setFilterKeys(keys);
+
+    try {
+      const response = await client.graphql({
+        query: updateConfiguration,
+        variables: {
+          customConfig: JSON.stringify({
+            metadata_filter_keys: keys,
+          }),
+        },
+      }) as GqlResponse;
+      if (response.errors?.length) {
+        console.error('Failed to save filter keys:', response.errors);
+        setFilterKeys(previousKeys);
+      }
+    } catch (err) {
+      console.error('Failed to save filter keys:', err);
+      setFilterKeys(previousKeys);
+    }
+  }, [client, filterKeys]);
+
+  const handleRegenerateExamples = useCallback(async () => {
+    const result = await regenerate();
+    if (result?.success) {
+      refetchExamples();
+    }
+  }, [regenerate, refetchExamples]);
+
   // Show nothing if both have errors (service not configured)
   const serviceNotConfigured =
     statsError?.includes('not configured') && examplesError?.includes('not configured');
@@ -136,7 +175,7 @@ export const MetadataPanel: React.FC = () => {
         <Popover
           triggerType="custom"
           header="About Metadata Analysis"
-          content="Samples vectors from your Knowledge Base to discover metadata fields and generate filter examples for improved search."
+          content="Samples vectors from your Knowledge Base to discover metadata fields. Use the Filter Examples section to select which keys to use for filter generation."
           dismissButton={false}
           position="right"
           size="medium"
@@ -157,8 +196,8 @@ export const MetadataPanel: React.FC = () => {
               <strong>No metadata analysis available</strong>
             </Box>
             <Box variant="p">
-              Click "Analyze Metadata" to sample your Knowledge Base vectors, discover metadata
-              fields, and generate filter examples. This process typically takes 1-2 minutes.
+              Click "Analyze Metadata" to sample your Knowledge Base vectors and discover metadata
+              fields. Then select keys for filter generation in the Filter Examples section.
             </Box>
           </Alert>
         ) : (
@@ -180,6 +219,10 @@ export const MetadataPanel: React.FC = () => {
               enabledExamples={enabledExamples || []}
               onToggleExample={handleToggleExample}
               error={examplesError}
+              filterKeys={filterKeys}
+              onFilterKeysChange={handleFilterKeysChange}
+              onRegenerateExamples={handleRegenerateExamples}
+              regenerating={regenerating}
             />
           </SpaceBetween>
         )}

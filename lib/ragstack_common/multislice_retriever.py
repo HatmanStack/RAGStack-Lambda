@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Default configuration
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_SLICES = 3
+DEFAULT_FILTERED_SCORE_BOOST = 1.35  # 35% boost to filtered results
 
 
 @dataclass
@@ -78,27 +79,29 @@ def merge_slices_with_guaranteed_minimum(
     slice_results: dict[str, list[dict]],
     min_per_slice: int = 3,
     total_results: int = 10,
+    filtered_score_boost: float = 1.0,
 ) -> list[dict]:
     """
-    Merge multi-slice results with filtered results prioritized.
+    Merge multi-slice results with filtered results prioritized and boosted.
 
     The filtered slice represents results matching the user's explicit intent
-    (e.g., a person name filter), so its results are placed first. Unfiltered
-    results fill remaining slots sorted by score.
+    (e.g., a person name filter), so its results receive a score boost to
+    improve their ranking against unfiltered results.
 
     Strategy:
-        1. Place filtered slice results first (sorted by score within the slice).
-        2. Guarantee min_per_slice from unfiltered slice (deduplicated).
-        3. Fill remaining slots from all results by score.
+        1. Apply score boost to filtered results.
+        2. Merge all results and sort by boosted score.
+        3. Deduplicate by URI, keeping highest boosted score.
 
     Args:
         slice_results: Dict mapping slice name to its result list.
-            The "filtered" key (if present) is prioritized.
+            The "filtered" key (if present) receives the score boost.
         min_per_slice: Minimum guaranteed results per non-priority slice.
         total_results: Maximum total results to return.
+        filtered_score_boost: Multiplier for filtered result scores (e.g., 1.15 = 15% boost).
 
     Returns:
-        Merged and deduplicated results with filtered results first.
+        Merged and deduplicated results sorted by boosted score.
     """
     if not slice_results:
         return []
@@ -107,57 +110,47 @@ def merge_slices_with_guaranteed_minimum(
     filtered_results = slice_results.get("filtered", [])
     other_slices = {k: v for k, v in slice_results.items() if k != "filtered"}
 
-    # If no filtered slice, fall back to simple score-based merge
-    if not filtered_results:
-        all_results = []
-        seen_uris: set[str] = set()
-        for results in slice_results.values():
-            for result in results:
-                uri = _get_uri(result) or f"_no_uri_{id(result)}"
-                if uri not in seen_uris:
-                    seen_uris.add(uri)
-                    all_results.append(result)
-        all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-        return all_results[:total_results]
+    # Apply score boost to filtered results and tag them
+    boosted_filtered = []
+    for result in filtered_results:
+        boosted = result.copy()
+        original_score = result.get("score", 0.0)
+        boosted_score = original_score * filtered_score_boost
+        boosted["_boosted_score"] = boosted_score
+        boosted["_is_filtered"] = True
+        boosted_filtered.append(boosted)
+        if filtered_score_boost != 1.0:
+            logger.debug(f"Boosted filtered score: {original_score:.4f} -> {boosted_score:.4f}")
 
-    # Phase 1: Place filtered results first (sorted by score within slice)
-    seen_uris = set()
+    # Tag unfiltered results (no boost)
+    unfiltered_results = []
+    for results in other_slices.values():
+        for result in results:
+            tagged = result.copy()
+            tagged["_boosted_score"] = result.get("score", 0.0)
+            tagged["_is_filtered"] = False
+            unfiltered_results.append(tagged)
+
+    # Merge all results
+    all_results = boosted_filtered + unfiltered_results
+
+    # Sort by boosted score (descending)
+    all_results.sort(key=lambda x: x.get("_boosted_score", 0), reverse=True)
+
+    # Deduplicate by URI, keeping highest boosted score (already sorted)
+    seen_uris: set[str] = set()
     merged: list[dict] = []
-
-    filtered_sorted = sorted(filtered_results, key=lambda x: x.get("score", 0), reverse=True)
-    for result in filtered_sorted:
+    for result in all_results:
         uri = _get_uri(result) or f"_no_uri_{id(result)}"
         if uri not in seen_uris:
             seen_uris.add(uri)
-            merged.append(result)
-
-    # Phase 2: Guarantee min_per_slice from each non-filtered slice
-    for _name, results in other_slices.items():
-        count = 0
-        for result in sorted(results, key=lambda x: x.get("score", 0), reverse=True):
-            if count >= min_per_slice:
-                break
-            uri = _get_uri(result) or f"_no_uri_{id(result)}"
-            if uri not in seen_uris:
-                seen_uris.add(uri)
-                merged.append(result)
-                count += 1
-
-    # Phase 3: Fill remaining slots from all non-filtered results by score
-    all_other = []
-    for results in other_slices.values():
-        all_other.extend(results)
-    all_other.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-    for result in all_other:
+            # Remove internal tags before returning
+            clean_result = {k: v for k, v in result.items() if not k.startswith("_")}
+            merged.append(clean_result)
         if len(merged) >= total_results:
             break
-        uri = _get_uri(result) or f"_no_uri_{id(result)}"
-        if uri not in seen_uris:
-            seen_uris.add(uri)
-            merged.append(result)
 
-    return merged[:total_results]
+    return merged
 
 
 class MultiSliceRetriever:
@@ -184,6 +177,7 @@ class MultiSliceRetriever:
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_slices: int = DEFAULT_MAX_SLICES,
         enabled: bool = True,
+        filtered_score_boost: float = DEFAULT_FILTERED_SCORE_BOOST,
     ):
         """
         Initialize the multi-slice retriever.
@@ -193,15 +187,17 @@ class MultiSliceRetriever:
             timeout_seconds: Timeout per slice in seconds.
             max_slices: Maximum number of slices to execute.
             enabled: Whether multi-slice is enabled. If False, falls back to single query.
+            filtered_score_boost: Score multiplier for filtered results (e.g., 1.15 = 15% boost).
         """
         self.bedrock_agent = bedrock_agent_client or boto3.client("bedrock-agent-runtime")
         self.timeout_seconds = timeout_seconds
         self.max_slices = max_slices
         self.enabled = enabled
+        self.filtered_score_boost = filtered_score_boost
 
         logger.info(
             f"Initialized MultiSliceRetriever: timeout={timeout_seconds}s, "
-            f"max_slices={max_slices}, enabled={enabled}"
+            f"max_slices={max_slices}, enabled={enabled}, filtered_boost={filtered_score_boost}"
         )
 
     def retrieve(
@@ -275,16 +271,17 @@ class MultiSliceRetriever:
             logger.error(f"Multi-slice retrieval error: {e}")
             # Return whatever we collected
 
-        # Merge with guaranteed minimum per slice
+        # Merge with score boost for filtered results
         total = sum(len(r) for r in slice_results.values())
         merged = merge_slices_with_guaranteed_minimum(
             slice_results,
             min_per_slice=min(3, num_results),
             total_results=num_results * 2,
+            filtered_score_boost=self.filtered_score_boost,
         )
         logger.info(
             f"Multi-slice retrieval complete: {total} total, "
-            f"{len(merged)} after merge (guaranteed min per slice)"
+            f"{len(merged)} after merge (filtered boost={self.filtered_score_boost})"
         )
 
         return merged

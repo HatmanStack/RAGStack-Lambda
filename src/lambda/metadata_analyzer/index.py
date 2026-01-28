@@ -4,8 +4,9 @@ Metadata Analyzer Lambda
 Analyzes vectors in the Knowledge Base to:
 1. Sample vectors and extract metadata fields
 2. Count field occurrences and calculate rates
-3. Generate filter examples using LLM
-4. Store results in S3 and update DynamoDB key library
+3. Update DynamoDB key library with discovered keys
+
+Filter example generation is handled separately by regenerateFilterExamples.
 
 Triggered via AppSync mutation by admins.
 
@@ -16,13 +17,12 @@ Output:
     "success": True,
     "vectorsSampled": 100,
     "keysAnalyzed": 5,
-    "examplesGenerated": 5,
+    "examplesGenerated": 0,
     "executionTimeMs": 1234,
     "error": None
 }
 """
 
-import json
 import logging
 import os
 import time
@@ -239,177 +239,6 @@ def sample_vectors_from_kb(
     return unique_results[:max_samples]
 
 
-def generate_filter_examples(
-    field_analysis: dict[str, dict],
-    model_id: str | None = None,
-    num_examples: int = 6,
-) -> list[dict]:
-    """
-    Generate filter examples using LLM based on discovered fields.
-
-    Args:
-        field_analysis: Dictionary of field analysis results.
-        model_id: Bedrock model ID for generation.
-        num_examples: Number of examples to generate.
-
-    Returns:
-        List of filter example dictionaries.
-    """
-    if not field_analysis:
-        logger.info("No fields to generate examples for")
-        return []
-
-    if num_examples <= 0:
-        logger.info("No new examples requested")
-        return []
-
-    model_id = model_id or DEFAULT_FILTER_MODEL
-
-    # Build field description for prompt
-    field_descriptions = []
-    for key, stats in sorted(
-        field_analysis.items(),
-        key=lambda x: x[1]["count"],
-        reverse=True,
-    )[:10]:  # Top 10 fields
-        samples = ", ".join(stats["sample_values"][:5])
-        field_descriptions.append(
-            f"- {key} ({stats['data_type']}): {stats['count']} occurrences, samples: [{samples}]"
-        )
-
-    fields_text = "\n".join(field_descriptions)
-
-    prompt = f"""You are a metadata filter expert. Based on the following metadata fields
-discovered in a document knowledge base, generate practical filter examples.
-
-DISCOVERED METADATA FIELDS:
-{fields_text}
-
-FILTER SYNTAX (S3 Vectors compatible):
-- Equality: {{"field": {{"$eq": "value"}}}}
-- Not equals: {{"field": {{"$ne": "value"}}}}
-- In list: {{"field": {{"$in": ["a", "b"]}}}}
-- And: {{"$and": [condition1, condition2]}}
-- Or: {{"$or": [condition1, condition2]}}
-
-IMPORTANT: All filter values MUST be lowercase. Metadata is stored in lowercase.
-
-Generate exactly {num_examples} practical filter examples that users might find useful.
-Each example should have:
-- name: Short descriptive name
-- description: What this filter does
-- use_case: When to use this filter
-- filter: The actual filter JSON (all string values lowercase)
-
-Return ONLY a JSON array of filter examples, no explanation. Example format:
-[
-  {{
-    "name": "PDF Documents",
-    "description": "Filter for PDF document type",
-    "use_case": "Finding all PDF files in the knowledge base",
-    "filter": {{"document_type": {{"$eq": "pdf"}}}}
-  }},
-  {{
-    "name": "Letters from John Smith",
-    "description": "Filter for letters mentioning John Smith",
-    "use_case": "Finding correspondence involving a specific person",
-    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}},
-      {{"people_mentioned": {{"$eq": "john smith"}}}}]}}
-  }}
-]"""
-
-    try:
-        response = bedrock_runtime.converse(
-            modelId=model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            system=[{"text": "You are a metadata filter expert. Return only valid JSON arrays."}],
-            inferenceConfig={"maxTokens": 2000, "temperature": 0.3},
-        )
-
-        # Extract response text
-        output = response.get("output", {})
-        message = output.get("message", {})
-        content = message.get("content", [])
-        response_text = ""
-        for block in content:
-            if isinstance(block, dict) and "text" in block:
-                response_text += block["text"]
-
-        # Parse JSON response
-        response_text = response_text.strip()
-        # Remove markdown code blocks if present
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-
-        examples = json.loads(response_text)
-
-        if not isinstance(examples, list):
-            logger.warning("LLM response is not a list")
-            return []
-
-        logger.info(f"Generated {len(examples)} filter examples")
-        return examples
-
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse filter examples JSON: {e}")
-        return []
-    except ClientError as e:
-        logger.error(f"Bedrock API error generating examples: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error generating examples: {e}")
-        return []
-
-
-def store_filter_examples(
-    examples: list[dict],
-    bucket: str,
-    index_name: str = "default",
-) -> str:
-    """
-    Store filter examples to S3.
-
-    Stores both a timestamped version and a 'latest' version.
-
-    Args:
-        examples: List of filter example dictionaries.
-        bucket: S3 bucket name.
-        index_name: Index name for path construction.
-
-    Returns:
-        S3 URI of the stored latest file.
-    """
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    base_path = f"metadata-filters/{index_name}"
-
-    # Store timestamped version
-    timestamped_key = f"{base_path}/filter-examples-{timestamp}.json"
-    s3.put_object(
-        Bucket=bucket,
-        Key=timestamped_key,
-        Body=json.dumps(examples, indent=2),
-        ContentType="application/json",
-    )
-    logger.info(f"Stored timestamped examples: s3://{bucket}/{timestamped_key}")
-
-    # Store latest version
-    latest_key = f"{base_path}/filter-examples-latest.json"
-    s3.put_object(
-        Bucket=bucket,
-        Key=latest_key,
-        Body=json.dumps(examples, indent=2),
-        ContentType="application/json",
-    )
-    logger.info(f"Stored latest examples: s3://{bucket}/{latest_key}")
-
-    return f"s3://{bucket}/{latest_key}"
-
-
 def update_key_library_counts(
     field_analysis: dict[str, dict],
     table_name: str,
@@ -471,30 +300,26 @@ def update_key_library_counts(
         except ClientError as e:
             logger.warning(f"Failed to update key '{key_name}': {e}")
 
-
-def update_config_with_examples(examples: list[dict], clear_disabled: bool = False) -> None:
-    """
-    Update configuration table with filter examples.
-
-    Args:
-        examples: List of filter example dictionaries.
-        clear_disabled: If True, clear the disabled list (after replacement).
-    """
-    from datetime import datetime
-
-    config_manager = get_config_manager_or_none()
-    if config_manager:
-        try:
-            update_data = {
-                "metadata_filter_examples": examples,
-                "metadata_filter_examples_updated_at": datetime.now(UTC).isoformat(),
-            }
-            if clear_disabled:
-                update_data["metadata_filter_examples_disabled"] = []
-            config_manager.update_custom_config(update_data)
-            logger.info(f"Updated config with {len(examples)} filter examples")
-        except Exception as e:
-            logger.warning(f"Failed to update config with examples: {e}")
+    # Mark manual keys as active even if they weren't in the analysis
+    # This handles keys that exist in the library but had no vectors sampled
+    if manual_set:
+        analyzed_keys_norm = {k.lower().replace(" ", "_") for k in field_analysis}
+        for manual_key in manual_keys or []:
+            manual_key_norm = manual_key.lower().replace(" ", "_")
+            if manual_key_norm not in analyzed_keys_norm:
+                try:
+                    table.update_item(
+                        Key={"key_name": manual_key},
+                        UpdateExpression="SET #status = :status, last_analyzed = :now",
+                        ExpressionAttributeNames={"#status": "status"},
+                        ExpressionAttributeValues={
+                            ":status": "active",
+                            ":now": now,
+                        },
+                    )
+                    logger.debug(f"Marked manual key as active: {manual_key}")
+                except ClientError as e:
+                    logger.warning(f"Failed to mark manual key '{manual_key}' as active: {e}")
 
 
 def lambda_handler(event: dict, context) -> dict:
@@ -502,7 +327,8 @@ def lambda_handler(event: dict, context) -> dict:
     Main Lambda handler for metadata analysis.
 
     Analyzes vectors in the Knowledge Base, extracts metadata field statistics,
-    generates filter examples, and stores results.
+    and updates the key library. Filter example generation is handled separately
+    by the regenerateFilterExamples mutation.
 
     Args:
         event: Lambda event (no parameters required).
@@ -528,7 +354,6 @@ def lambda_handler(event: dict, context) -> dict:
                 "executionTimeMs": int((time.time() - start_time) * 1000),
             }
 
-        data_bucket = os.environ.get("DATA_BUCKET")
         key_library_table = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
         # Get configuration options
@@ -586,53 +411,18 @@ def lambda_handler(event: dict, context) -> dict:
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table, manual_keys=manual_keys)
 
-        # Step 5: Load existing examples and disabled list, preserve enabled ones
-        preserved_examples = []
-        disabled_names = set()
-        target_example_count = 6  # Default target
-
-        if config:
-            current_examples = config.get_parameter("metadata_filter_examples", default=[])
-            disabled_list = config.get_parameter("metadata_filter_examples_disabled", default=[])
-            disabled_names = set(disabled_list) if disabled_list else set()
-
-            # Keep examples that are NOT disabled
-            if current_examples and isinstance(current_examples, list):
-                preserved_examples = [
-                    ex for ex in current_examples if ex.get("name") not in disabled_names
-                ]
-                logger.info(f"Preserving {len(preserved_examples)} enabled examples")
-
-        # Step 6: Generate new examples to replace disabled ones (using all active keys)
-        num_to_generate = max(0, target_example_count - len(preserved_examples))
-        new_examples = []
-        if field_analysis and num_to_generate > 0:
-            new_examples = generate_filter_examples(field_analysis, num_examples=num_to_generate)
-            logger.info(f"Generated {len(new_examples)} new examples")
-
-        # Combine preserved + new
-        examples = preserved_examples + new_examples
-
-        # Step 7: Store results
-        if data_bucket and examples:
-            store_filter_examples(examples, data_bucket)
-
-        # Step 8: Update config with examples and clear disabled list
-        if examples:
-            update_config_with_examples(examples, clear_disabled=True)
-
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         logger.info(
-            f"Analysis complete: {len(vectors)} vectors, {keys_analyzed} keys, "
-            f"{len(examples)} examples in {execution_time_ms}ms"
+            f"Analysis complete: {len(vectors)} vectors, {keys_analyzed} keys "
+            f"in {execution_time_ms}ms"
         )
 
         return {
             "success": True,
             "vectorsSampled": len(vectors),
             "keysAnalyzed": keys_analyzed,
-            "examplesGenerated": len(examples),
+            "examplesGenerated": 0,
             "executionTimeMs": execution_time_ms,
         }
 

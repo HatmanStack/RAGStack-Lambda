@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Table,
-  Header,
   Box,
   SpaceBetween,
   StatusIndicator,
@@ -11,8 +10,10 @@ import {
   Popover,
   ExpandableSection,
   CopyToClipboard,
+  FormField,
 } from '@cloudscape-design/components';
 import type { FilterExample } from '../../hooks/useMetadata';
+import { FilterKeyInput } from './FilterKeyInput';
 
 interface FilterExamplesProps {
   examples: FilterExample[];
@@ -22,6 +23,11 @@ interface FilterExamplesProps {
   error: string | null;
   enabledExamples?: string[]; // Names of enabled examples
   onToggleExample?: (name: string, enabled: boolean) => void;
+  // New props for filter keys
+  filterKeys?: string[];
+  onFilterKeysChange?: (keys: string[]) => void;
+  onRegenerateExamples?: () => Promise<void>;
+  regenerating?: boolean;
 }
 
 const formatDate = (isoString: string | null): string => {
@@ -42,6 +48,10 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
   error,
   enabledExamples = [],
   onToggleExample,
+  filterKeys,
+  onFilterKeysChange,
+  onRegenerateExamples,
+  regenerating,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<FilterExample | null>(null);
 
@@ -70,12 +80,47 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerDescription="No examples yet"
         defaultExpanded={false}
       >
-        <Box textAlign="center" color="inherit" padding="l">
-          <b>No filter examples</b>
-          <Box variant="p" color="inherit">
-            Run the metadata analyzer to generate filter examples based on your documents.
+        <SpaceBetween size="l">
+          {/* Filter Keys Configuration */}
+          <FormField
+            label="Keys to Use for Filters"
+            description="Select which metadata keys should be used when generating filter examples. Only these keys will be considered."
+          >
+            <SpaceBetween size="xs">
+              <FilterKeyInput
+                value={filterKeys || []}
+                onChange={(keys) => onFilterKeysChange?.(keys)}
+                disabled={regenerating}
+              />
+              <Box>
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
+                    variant="primary"
+                    onClick={() => onRegenerateExamples?.()}
+                    loading={regenerating}
+                    disabled={!filterKeys || filterKeys.length === 0}
+                  >
+                    Regenerate Examples
+                  </Button>
+                  {filterKeys && filterKeys.length === 0 && (
+                    <Box color="text-status-inactive" variant="small">
+                      Add at least one key to generate examples
+                    </Box>
+                  )}
+                </SpaceBetween>
+              </Box>
+            </SpaceBetween>
+          </FormField>
+
+          <Box textAlign="center" color="inherit" padding="l">
+            <b>No filter examples</b>
+            <Box variant="p" color="inherit">
+              {filterKeys && filterKeys.length > 0
+                ? 'Click "Regenerate Examples" to create filter examples using the selected keys.'
+                : 'Select keys above, then click "Regenerate Examples" to create filter examples.'}
+            </Box>
           </Box>
-        </Box>
+        </SpaceBetween>
       </ExpandableSection>
     );
   }
@@ -101,7 +146,7 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerInfo={
           <Popover
             header="How Filter Examples Work"
-            content="Enabled examples are fed to the LLM as reference patterns when generating metadata filters. Toggle examples on/off to control which patterns guide filter generation. When you run Analyze Metadata again, enabled examples are preserved and new ones replace disabled examples."
+            content="Select which metadata keys to use for filtering, then click 'Regenerate Examples' to create filter patterns. These examples guide the LLM when generating query-time filters. Toggle examples on/off to control which patterns are used."
             triggerType="custom"
             dismissButton={false}
             position="right"
@@ -115,7 +160,39 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerDescription={`${enabledCount}/${totalExamples} enabled • Last generated: ${formatDate(lastGenerated)}`}
         defaultExpanded={false}
       >
-        <div className="table-scroll-container">
+        <SpaceBetween size="l">
+          {/* Filter Keys Configuration */}
+          <FormField
+            label="Keys to Use for Filters"
+            description="Select which metadata keys should be used when generating filter examples. Only these keys will be considered."
+          >
+            <SpaceBetween size="xs">
+              <FilterKeyInput
+                value={filterKeys || []}
+                onChange={(keys) => onFilterKeysChange?.(keys)}
+                disabled={regenerating}
+              />
+              <Box>
+                <SpaceBetween direction="horizontal" size="xs">
+                  <Button
+                    variant="primary"
+                    onClick={() => onRegenerateExamples?.()}
+                    loading={regenerating}
+                    disabled={!filterKeys || filterKeys.length === 0}
+                  >
+                    Regenerate Examples
+                  </Button>
+                  {filterKeys && filterKeys.length === 0 && (
+                    <Box color="text-status-inactive" variant="small">
+                      Add at least one key to generate examples
+                    </Box>
+                  )}
+                </SpaceBetween>
+              </Box>
+            </SpaceBetween>
+          </FormField>
+
+          <div className="table-scroll-container">
           <Table
             loading={loading}
             loadingText="Loading filter examples..."
@@ -175,14 +252,17 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
             <Box textAlign="center" color="inherit">
               <b>No filter examples</b>
               <Box variant="p" color="inherit">
-                Run the analyzer to generate filter examples.
+                {filterKeys && filterKeys.length > 0
+                  ? 'Click "Regenerate Examples" to create filter examples using the selected keys.'
+                  : 'Select keys above, then click "Regenerate Examples" to create filter examples.'}
               </Box>
             </Box>
           }
             variant="embedded"
             stripedRows
           />
-        </div>
+          </div>
+        </SpaceBetween>
       </ExpandableSection>
 
       {selectedFilter && (

@@ -113,10 +113,8 @@ describe('AnalyzeButton', () => {
     await waitFor(() => {
       expect(screen.getByText('Vectors Sampled')).toBeInTheDocument();
       expect(screen.getByText('500')).toBeInTheDocument();
-      expect(screen.getByText('Keys Analyzed')).toBeInTheDocument();
+      expect(screen.getByText('Keys Discovered')).toBeInTheDocument();
       expect(screen.getByText('8')).toBeInTheDocument();
-      expect(screen.getByText('Examples Generated')).toBeInTheDocument();
-      expect(screen.getByText('5')).toBeInTheDocument();
     });
   });
 

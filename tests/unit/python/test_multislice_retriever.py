@@ -12,6 +12,7 @@ from ragstack_common.multislice_retriever import (
     MultiSliceRetriever,
     SliceConfig,
     deduplicate_results,
+    merge_slices_with_guaranteed_minimum,
 )
 
 # Fixtures
@@ -450,3 +451,95 @@ def test_retrieve_no_data_source_id(retriever, mock_bedrock_agent, sample_kb_res
     )
 
     assert len(result) == len(sample_kb_results)
+
+
+# Test: Score boost for filtered results
+
+
+def test_filtered_score_boost_reorders_results():
+    """Test that filtered results with boost outrank unfiltered results."""
+    # Filtered results have lower raw scores
+    filtered_results = [
+        {
+            "content": {"text": "Judy family photo"},
+            "location": {"s3Location": {"uri": "s3://bucket/judy1.jpg"}},
+            "score": 0.65,
+        },
+        {
+            "content": {"text": "Judy at reunion"},
+            "location": {"s3Location": {"uri": "s3://bucket/judy2.jpg"}},
+            "score": 0.63,
+        },
+    ]
+
+    # Unfiltered results have higher raw scores
+    unfiltered_results = [
+        {
+            "content": {"text": "Carol photo"},
+            "location": {"s3Location": {"uri": "s3://bucket/carol1.jpg"}},
+            "score": 0.73,
+        },
+        {
+            "content": {"text": "Carol at event"},
+            "location": {"s3Location": {"uri": "s3://bucket/carol2.jpg"}},
+            "score": 0.71,
+        },
+    ]
+
+    slice_results = {
+        "filtered": filtered_results,
+        "unfiltered": unfiltered_results,
+    }
+
+    # Without boost, unfiltered (Carol) would rank higher
+    merged_no_boost = merge_slices_with_guaranteed_minimum(
+        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.0
+    )
+    # Carol (0.73) should be first when no boost
+    assert "carol1.jpg" in merged_no_boost[0]["location"]["s3Location"]["uri"]
+
+    # With 1.15 boost: Judy 0.65 * 1.15 = 0.7475, still < Carol 0.73
+    # With 1.2 boost: Judy 0.65 * 1.2 = 0.78 > Carol 0.73
+    merged_with_boost = merge_slices_with_guaranteed_minimum(
+        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.2
+    )
+    # Judy should now be first due to boost
+    assert "judy1.jpg" in merged_with_boost[0]["location"]["s3Location"]["uri"]
+
+
+def test_filtered_score_boost_preserves_original_score():
+    """Test that boosted scores don't leak into returned results."""
+    slice_results = {
+        "filtered": [
+            {
+                "content": {"text": "Test"},
+                "location": {"s3Location": {"uri": "s3://bucket/test.jpg"}},
+                "score": 0.65,
+            }
+        ],
+        "unfiltered": [],
+    }
+
+    merged = merge_slices_with_guaranteed_minimum(slice_results, filtered_score_boost=1.5)
+
+    # Original score should be preserved (not boosted score)
+    assert merged[0]["score"] == 0.65
+    # Internal tags should be removed
+    assert "_boosted_score" not in merged[0]
+    assert "_is_filtered" not in merged[0]
+
+
+def test_multislice_retriever_accepts_boost_parameter(mock_bedrock_agent):
+    """Test that MultiSliceRetriever accepts filtered_score_boost parameter."""
+    retriever = MultiSliceRetriever(
+        bedrock_agent_client=mock_bedrock_agent,
+        filtered_score_boost=1.25,
+    )
+    assert retriever.filtered_score_boost == 1.25
+
+
+def test_multislice_retriever_default_boost(mock_bedrock_agent):
+    """Test that MultiSliceRetriever has sensible default boost."""
+    retriever = MultiSliceRetriever(bedrock_agent_client=mock_bedrock_agent)
+    # Default is 1.35 (35% boost)
+    assert retriever.filtered_score_boost == 1.35
