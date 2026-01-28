@@ -3,6 +3,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { FilterExamples } from './FilterExamples';
 import type { FilterExample } from '../../hooks/useMetadata';
 
+// Mock useKeyLibrary since FilterKeyInput uses it
+vi.mock('../../hooks/useKeyLibrary', () => ({
+  useKeyLibrary: () => ({
+    keys: [
+      { keyName: 'location', dataType: 'string', occurrenceCount: 10, status: 'active' },
+      { keyName: 'year', dataType: 'number', occurrenceCount: 5, status: 'active' },
+    ],
+    loading: false,
+  }),
+}));
+
 const mockExamples: FilterExample[] = [
   {
     name: 'Genealogy Documents',
@@ -211,7 +222,7 @@ describe('FilterExamples', () => {
     expect(screen.getByText('No filter examples')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Run the metadata analyzer to generate filter examples based on your documents.'
+        'Select keys above, then click "Regenerate Examples" to create filter examples.'
       )
     ).toBeInTheDocument();
   });
