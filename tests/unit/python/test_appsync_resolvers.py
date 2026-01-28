@@ -1193,3 +1193,151 @@ class TestDeleteMetadataKey:
         result = module.lambda_handler(event, None)
 
         assert result["success"] is False
+
+    def test_delete_metadata_key_removes_from_filter_allowlist(
+        self, mock_env_with_key_library, mock_boto3
+    ):
+        """Test that deleting a key also removes it from filter keys allowlist."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_config = MagicMock()
+        mock_config.get_parameter.return_value = ["location", "year", "author"]
+
+        with (
+            patch("ragstack_common.key_library.KeyLibrary.delete_key") as mock_delete,
+            patch.object(module, "get_config_manager", return_value=mock_config),
+        ):
+            mock_delete.return_value = True
+
+            event = {
+                "info": {"fieldName": "deleteMetadataKey"},
+                "arguments": {"keyName": "location"},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["success"] is True
+            # Verify config was updated without the deleted key
+            mock_config.update_custom_config.assert_called_once()
+            update_call = mock_config.update_custom_config.call_args[0][0]
+            updated_keys = update_call["metadata_filter_keys"]
+            assert "location" not in updated_keys
+            assert "year" in updated_keys
+            assert "author" in updated_keys
+
+
+class TestRegenerateFilterExamples:
+    """Tests for regenerateFilterExamples resolver."""
+
+    @pytest.fixture
+    def mock_env_with_key_library(self, monkeypatch):
+        """Set up environment variables including key library table."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-tracking-table")
+        monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
+        monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+        monkeypatch.setenv("METADATA_KEY_LIBRARY_TABLE", "test-key-library-table")
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            yield
+
+    def test_no_filter_keys_returns_error(self, mock_env_with_key_library, mock_boto3):
+        """When no filter keys configured, returns helpful error."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_config = MagicMock()
+        mock_config.get_parameter.return_value = []
+
+        with patch.object(module, "get_config_manager", return_value=mock_config):
+            event = {
+                "info": {"fieldName": "regenerateFilterExamples"},
+                "arguments": {},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["success"] is False
+            assert "No filter keys configured" in result["error"]
+            assert result["examplesGenerated"] == 0
+
+    def test_generates_examples_with_allowed_keys_only(
+        self, mock_env_with_key_library, mock_boto3
+    ):
+        """Only uses keys from the filter allowlist."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_config = MagicMock()
+
+        def get_param_side_effect(key, default=None):
+            if key == "metadata_filter_keys":
+                return ["location", "year"]
+            return default
+
+        mock_config.get_parameter.side_effect = get_param_side_effect
+
+        # Mock key library
+        mock_key_library = MagicMock()
+        mock_key_library.get_active_keys.return_value = [
+            {"key_name": "location", "data_type": "string", "occurrence_count": 10},
+            {"key_name": "year", "data_type": "number", "occurrence_count": 5},
+            {"key_name": "author", "data_type": "string", "occurrence_count": 3},
+        ]
+
+        # Patch at module level where it's imported
+        with (
+            patch.object(module, "get_config_manager", return_value=mock_config),
+            patch.object(module, "KeyLibrary", return_value=mock_key_library),
+            patch.object(module, "generate_filter_examples") as mock_generate,
+            patch.object(module, "store_filter_examples"),
+            patch.object(module, "update_config_with_examples"),
+        ):
+            mock_generate.return_value = [{"name": "test", "filter": {}}]
+
+            event = {
+                "info": {"fieldName": "regenerateFilterExamples"},
+                "arguments": {},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            # Verify only allowed keys were passed
+            call_args = mock_generate.call_args
+            field_analysis = call_args[0][0]
+            assert "location" in field_analysis
+            assert "year" in field_analysis
+            assert "author" not in field_analysis  # Not in allowlist
+
+            assert result["success"] is True
+            assert result["examplesGenerated"] == 1
+
+    def test_no_active_keys_matching_filter(self, mock_env_with_key_library, mock_boto3):
+        """Returns error when no active keys match the filter allowlist."""
+        module = _load_appsync_resolvers_module()
+        module.dynamodb = mock_boto3["dynamodb"]
+
+        mock_config = MagicMock()
+        mock_config.get_parameter.side_effect = lambda key, default=None: (
+            ["nonexistent_key"] if key == "metadata_filter_keys" else default
+        )
+
+        mock_key_library = MagicMock()
+        mock_key_library.get_active_keys.return_value = [
+            {"key_name": "location", "data_type": "string", "occurrence_count": 10},
+        ]
+
+        with (
+            patch.object(module, "get_config_manager", return_value=mock_config),
+            patch.object(module, "KeyLibrary", return_value=mock_key_library),
+        ):
+            event = {
+                "info": {"fieldName": "regenerateFilterExamples"},
+                "arguments": {},
+            }
+
+            result = module.lambda_handler(event, None)
+
+            assert result["success"] is False
+            assert "None of the configured filter keys are active" in result["error"]
+
