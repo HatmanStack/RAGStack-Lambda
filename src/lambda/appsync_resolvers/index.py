@@ -40,6 +40,11 @@ from botocore.exceptions import ClientError
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
+from ragstack_common.filter_examples import (
+    generate_filter_examples,
+    store_filter_examples,
+    update_config_with_examples,
+)
 from ragstack_common.demo_mode import (
     DemoModeError,
     check_demo_mode_feature_allowed,
@@ -283,6 +288,7 @@ def lambda_handler(event, context):
         "getFilterExamples": get_filter_examples,
         "getKeyLibrary": get_key_library,
         "checkKeySimilarity": check_key_similarity,
+        "regenerateFilterExamples": regenerate_filter_examples,
         "deleteMetadataKey": delete_metadata_key,
         # KB Reindex
         "startReindex": start_reindex,
@@ -3054,6 +3060,114 @@ def check_key_similarity(args):
             "proposedKey": key_name,
             "similarKeys": [],
             "hasSimilar": False,
+        }
+
+
+def regenerate_filter_examples(args):
+    """
+    Regenerate filter examples using only the configured filter keys.
+
+    Reads metadata_filter_keys from config and generates new examples
+    using only those keys. Replaces all existing examples.
+
+    Returns:
+        FilterExamplesResult with success, examplesGenerated, executionTimeMs, error
+    """
+    import time
+
+    start_time = time.time()
+
+    try:
+        # Get config manager
+        config_manager = get_config_manager()
+        if not config_manager:
+            return {
+                "success": False,
+                "examplesGenerated": 0,
+                "executionTimeMs": 0,
+                "error": "Configuration not available",
+            }
+
+        # Get filter keys from config (empty list if not set)
+        filter_keys = config_manager.get_parameter("metadata_filter_keys", default=[])
+
+        if not filter_keys:
+            return {
+                "success": False,
+                "examplesGenerated": 0,
+                "executionTimeMs": int((time.time() - start_time) * 1000),
+                "error": "No filter keys configured. Add keys to generate examples.",
+            }
+
+        # Get key library to fetch key details
+        if not METADATA_KEY_LIBRARY_TABLE:
+            return {
+                "success": False,
+                "examplesGenerated": 0,
+                "executionTimeMs": int((time.time() - start_time) * 1000),
+                "error": "Key library table not configured",
+            }
+
+        # Fetch active keys and filter to only allowed ones
+        key_library = KeyLibrary(table_name=METADATA_KEY_LIBRARY_TABLE)
+        active_keys = key_library.get_active_keys()
+
+        # Normalize filter keys for comparison
+        filter_keys_norm = {k.lower().replace(" ", "_") for k in filter_keys}
+
+        # Filter to only keys in the allowlist
+        allowed_keys = [
+            k
+            for k in active_keys
+            if k.get("key_name", "").lower().replace(" ", "_") in filter_keys_norm
+        ]
+
+        if not allowed_keys:
+            return {
+                "success": False,
+                "examplesGenerated": 0,
+                "executionTimeMs": int((time.time() - start_time) * 1000),
+                "error": "None of the configured filter keys are active in the library",
+            }
+
+        # Build field analysis format expected by generate_filter_examples
+        field_analysis = {}
+        for key in allowed_keys:
+            field_analysis[key.get("key_name")] = {
+                "count": key.get("occurrence_count", 0),
+                "data_type": key.get("data_type", "string"),
+                "sample_values": key.get("sample_values", []),
+            }
+
+        # Generate examples using the shared library function
+        examples = generate_filter_examples(field_analysis, num_examples=6)
+
+        # Store to S3 if bucket configured
+        if DATA_BUCKET and examples:
+            store_filter_examples(examples, DATA_BUCKET)
+
+        # Update config with new examples (clears disabled list)
+        if examples:
+            update_config_with_examples(examples, clear_disabled=True)
+
+        execution_time_ms = int((time.time() - start_time) * 1000)
+
+        logger.info(f"Regenerated {len(examples)} filter examples in {execution_time_ms}ms")
+
+        return {
+            "success": True,
+            "examplesGenerated": len(examples),
+            "executionTimeMs": execution_time_ms,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.exception(f"Failed to regenerate filter examples: {e}")
+        return {
+            "success": False,
+            "examplesGenerated": 0,
+            "executionTimeMs": int((time.time() - start_time) * 1000),
+            "error": str(e),
         }
 
 
