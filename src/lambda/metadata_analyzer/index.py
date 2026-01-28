@@ -4,8 +4,9 @@ Metadata Analyzer Lambda
 Analyzes vectors in the Knowledge Base to:
 1. Sample vectors and extract metadata fields
 2. Count field occurrences and calculate rates
-3. Generate filter examples using LLM
-4. Store results in S3 and update DynamoDB key library
+3. Update DynamoDB key library with discovered keys
+
+Filter example generation is handled separately by regenerateFilterExamples.
 
 Triggered via AppSync mutation by admins.
 
@@ -16,7 +17,7 @@ Output:
     "success": True,
     "vectorsSampled": 100,
     "keysAnalyzed": 5,
-    "examplesGenerated": 5,
+    "examplesGenerated": 0,
     "executionTimeMs": 1234,
     "error": None
 }
@@ -35,11 +36,6 @@ from botocore.exceptions import ClientError
 from ragstack_common.config import (
     get_config_manager_or_none,
     get_knowledge_base_config,
-)
-from ragstack_common.filter_examples import (
-    generate_filter_examples,
-    store_filter_examples,
-    update_config_with_examples,
 )
 from ragstack_common.key_library import KeyLibrary
 
@@ -332,7 +328,8 @@ def lambda_handler(event: dict, context) -> dict:
     Main Lambda handler for metadata analysis.
 
     Analyzes vectors in the Knowledge Base, extracts metadata field statistics,
-    generates filter examples, and stores results.
+    and updates the key library. Filter example generation is handled separately
+    by the regenerateFilterExamples mutation.
 
     Args:
         event: Lambda event (no parameters required).
@@ -416,53 +413,18 @@ def lambda_handler(event: dict, context) -> dict:
         if key_library_table and field_analysis:
             update_key_library_counts(field_analysis, key_library_table, manual_keys=manual_keys)
 
-        # Step 5: Load existing examples and disabled list, preserve enabled ones
-        preserved_examples = []
-        disabled_names = set()
-        target_example_count = 6  # Default target
-
-        if config:
-            current_examples = config.get_parameter("metadata_filter_examples", default=[])
-            disabled_list = config.get_parameter("metadata_filter_examples_disabled", default=[])
-            disabled_names = set(disabled_list) if disabled_list else set()
-
-            # Keep examples that are NOT disabled
-            if current_examples and isinstance(current_examples, list):
-                preserved_examples = [
-                    ex for ex in current_examples if ex.get("name") not in disabled_names
-                ]
-                logger.info(f"Preserving {len(preserved_examples)} enabled examples")
-
-        # Step 6: Generate new examples to replace disabled ones (using all active keys)
-        num_to_generate = max(0, target_example_count - len(preserved_examples))
-        new_examples = []
-        if field_analysis and num_to_generate > 0:
-            new_examples = generate_filter_examples(field_analysis, num_examples=num_to_generate)
-            logger.info(f"Generated {len(new_examples)} new examples")
-
-        # Combine preserved + new
-        examples = preserved_examples + new_examples
-
-        # Step 7: Store results
-        if data_bucket and examples:
-            store_filter_examples(examples, data_bucket)
-
-        # Step 8: Update config with examples and clear disabled list
-        if examples:
-            update_config_with_examples(examples, clear_disabled=True)
-
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         logger.info(
-            f"Analysis complete: {len(vectors)} vectors, {keys_analyzed} keys, "
-            f"{len(examples)} examples in {execution_time_ms}ms"
+            f"Analysis complete: {len(vectors)} vectors, {keys_analyzed} keys "
+            f"in {execution_time_ms}ms"
         )
 
         return {
             "success": True,
             "vectorsSampled": len(vectors),
             "keysAnalyzed": keys_analyzed,
-            "examplesGenerated": len(examples),
+            "examplesGenerated": 0,
             "executionTimeMs": execution_time_ms,
         }
 
