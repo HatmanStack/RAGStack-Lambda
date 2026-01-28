@@ -274,9 +274,11 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       id: 'filename',
       header: 'Name',
       cell: (item: DocumentItem) => (
-        <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
-          {item.filename}
-        </Link>
+        <span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+          <Link onFollow={() => onSelectDocument(item.documentId, item.type)}>
+            {item.filename}
+          </Link>
+        </span>
       ),
       sortingField: 'filename',
       isRowHeader: true,

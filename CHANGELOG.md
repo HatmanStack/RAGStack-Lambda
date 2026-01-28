@@ -11,6 +11,9 @@
 - Ingestion retry not catching "can't exceed" concurrent request throttle errors
 - Migration script missing `content_type` backfill for v1 records
 - Migration script using generic `media` content type instead of specific `video`/`audio` types
+- `listImages` query failing when any image has null `created_at` (`AWSDateTime!` non-nullable) — added fallback to `updated_at`
+- Multislice retriever merging results purely by score, causing filtered metadata matches to be buried by visual similarity matches
+- KB retrieval returning too few results due to Bedrock's stricter relevance cutoff at low `numberOfResults` values
 
 ### Added
 
@@ -19,10 +22,13 @@
 - Finalize sync polling loop in reindex state machine (`WaitForFinalizeSync` → `CheckFinalizeSyncStatus` → `IsFinalizeSyncComplete`)
 - `ServiceUnavailableException` retry handling in document ingestion
 - `handle_check_sync_status` and `handle_check_finalize_sync` actions in reindex Lambda
+- Guaranteed-minimum merge strategy for multislice retrieval — ensures each slice contributes at least 3 results before filling remaining slots by score
+- Baseline `.jpg.metadata.json` sidecars for images missing them (content_type, document_id, filename, surnames)
 
 ### Changed
 
-- Document table filename column now wraps long names across multiple lines (Cloudscape `wrapLines`)
+- Document table filename column now wraps long names across multiple lines (Cloudscape `wrapLines` + CSS override)
+- KB retrieval `numberOfResults` increased from 5 to 25 for both chat and search to improve recall
 
 ## [2.0.0] - 2026-01-10
 

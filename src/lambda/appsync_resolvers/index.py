@@ -2401,8 +2401,8 @@ def format_image(item):
         "extractedText": item.get("extracted_text"),
         "extractedMetadata": extracted_metadata,
         "captionUrl": caption_url,
-        "createdAt": item.get("created_at"),
-        "updatedAt": item.get("updated_at"),
+        "createdAt": item.get("created_at") or item.get("updated_at"),
+        "updatedAt": item.get("updated_at") or item.get("created_at"),
     }
 
 

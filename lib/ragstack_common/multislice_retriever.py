@@ -36,6 +36,13 @@ class SliceConfig:
     description: str = ""
 
 
+def _get_uri(result: dict) -> str:
+    """Extract S3 URI from a retrieval result."""
+    location = result.get("location", {})
+    s3_location = location.get("s3Location", {})
+    return s3_location.get("uri", "")
+
+
 def deduplicate_results(results: list[dict]) -> list[dict]:
     """
     Deduplicate retrieval results by S3 URI, keeping highest score.
@@ -53,15 +60,7 @@ def deduplicate_results(results: list[dict]) -> list[dict]:
     best_by_uri: dict[str, dict] = {}
 
     for result in results:
-        # Extract URI as unique identifier
-        location = result.get("location", {})
-        s3_location = location.get("s3Location", {})
-        uri = s3_location.get("uri", "")
-
-        if not uri:
-            # No URI - include the result anyway
-            uri = f"_no_uri_{id(result)}"
-
+        uri = _get_uri(result) or f"_no_uri_{id(result)}"
         score = result.get("score", 0.0)
 
         # Keep result with highest score
@@ -73,6 +72,67 @@ def deduplicate_results(results: list[dict]) -> list[dict]:
     deduped.sort(key=lambda x: x.get("score", 0), reverse=True)
 
     return deduped
+
+
+def merge_slices_with_guaranteed_minimum(
+    slice_results: dict[str, list[dict]],
+    min_per_slice: int = 3,
+    total_results: int = 10,
+) -> list[dict]:
+    """
+    Merge multi-slice results ensuring each slice contributes a minimum number.
+
+    Prevents high-scoring but irrelevant results (e.g., visual similarity matches)
+    from drowning out metadata-filtered results that are more relevant to the query.
+
+    Strategy:
+        1. Reserve min_per_slice slots for each slice (deduplicated within slice).
+        2. Fill remaining slots from all results sorted by score.
+        3. Final result is deduplicated by URI.
+
+    Args:
+        slice_results: Dict mapping slice name to its result list.
+        min_per_slice: Minimum guaranteed results per slice.
+        total_results: Maximum total results to return.
+
+    Returns:
+        Merged and deduplicated results.
+    """
+    if not slice_results:
+        return []
+
+    # Phase 1: Reserve guaranteed slots per slice
+    seen_uris: set[str] = set()
+    guaranteed: list[dict] = []
+
+    for _name, results in slice_results.items():
+        count = 0
+        for result in results:
+            uri = _get_uri(result) or f"_no_uri_{id(result)}"
+            if uri not in seen_uris and count < min_per_slice:
+                seen_uris.add(uri)
+                guaranteed.append(result)
+                count += 1
+
+    # Phase 2: Fill remaining slots from all results by score
+    all_results = []
+    for results in slice_results.values():
+        all_results.extend(results)
+    all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    remaining_slots = total_results - len(guaranteed)
+    for result in all_results:
+        if remaining_slots <= 0:
+            break
+        uri = _get_uri(result) or f"_no_uri_{id(result)}"
+        if uri not in seen_uris:
+            seen_uris.add(uri)
+            guaranteed.append(result)
+            remaining_slots -= 1
+
+    # Sort final results by score
+    guaranteed.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return guaranteed
 
 
 class MultiSliceRetriever:
@@ -154,7 +214,7 @@ class MultiSliceRetriever:
         slices = self._build_slice_configs(metadata_filter, num_results)
 
         # Execute slices in parallel
-        all_results = []
+        slice_results: dict[str, list[dict]] = {}
 
         try:
             with ThreadPoolExecutor(max_workers=min(len(slices), self.max_slices)) as executor:
@@ -176,7 +236,7 @@ class MultiSliceRetriever:
                     slice_name = futures[future]
                     try:
                         results = future.result(timeout=0.1)
-                        all_results.extend(results)
+                        slice_results[slice_name] = results
                         logger.info(f"Slice '{slice_name}' returned {len(results)} results")
                     except Exception as e:
                         logger.warning(f"Slice '{slice_name}' failed: {e}")
@@ -190,14 +250,19 @@ class MultiSliceRetriever:
             logger.error(f"Multi-slice retrieval error: {e}")
             # Return whatever we collected
 
-        # Deduplicate and return
-        deduped = deduplicate_results(all_results)
+        # Merge with guaranteed minimum per slice
+        total = sum(len(r) for r in slice_results.values())
+        merged = merge_slices_with_guaranteed_minimum(
+            slice_results,
+            min_per_slice=min(3, num_results),
+            total_results=num_results * 2,
+        )
         logger.info(
-            f"Multi-slice retrieval complete: {len(all_results)} total, "
-            f"{len(deduped)} after deduplication"
+            f"Multi-slice retrieval complete: {total} total, "
+            f"{len(merged)} after merge (guaranteed min per slice)"
         )
 
-        return deduped
+        return merged
 
     def _build_slice_configs(
         self,
