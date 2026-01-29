@@ -109,21 +109,21 @@ IMPORTANT RULES:
 4. For ARRAY fields: use $eq to match elements (each element is checked individually)
 5. For non-array fields: use $eq for exact match, $in for multiple possible values
 6. ALL STRING VALUES MUST BE LOWERCASE - metadata is stored in lowercase
-7. BIAS TOWARD GENERATING FILTERS: If the query contains proper nouns (names, places,
-   organizations), dates, or terms that plausibly match any available metadata key,
-   generate a filter. The filter is used alongside vector search, not instead of it,
-   so false positives are acceptable — missing a relevant filter is worse.
-8. Return "null" ONLY for genuinely open-ended queries with no filterable terms
-   (e.g., "what is this about?", "show me everything", "summarize")
+
+CRITICAL - ALWAYS GENERATE A FILTER FOR NAMES:
+- ANY query mentioning a person's name MUST generate a people_mentioned filter
+- "Pictures of Judy" -> {{"people_mentioned": {{"$eq": "judy"}}}}
+- "Show me Bob" -> {{"people_mentioned": {{"$eq": "bob"}}}}
+- "Documents about Mary Smith" -> {{"people_mentioned": {{"$eq": "mary smith"}}}}
+- First names alone are valid filters - do not skip them
+- The filter runs alongside vector search, so false positives are acceptable
+- Missing a filter for a name query is a CRITICAL ERROR - always err toward generating
+
+7. Return "null" ONLY for genuinely open-ended queries with NO names, places, or dates
+   (e.g., "what is this about?", "show me everything", "summarize", "recent uploads")
 
 OUTPUT FORMAT:
 Return a valid JSON filter object, or the literal string null if no filter applies.
-Examples of valid outputs:
-- {{"surnames": {{"$eq": "wilson"}}}}
-- {{"people_mentioned": {{"$eq": "jack wilson"}}}}
-- {{"$and": [{{"content_type": {{"$eq": "image"}}}}, {{"surnames": {{"$eq": "wilson"}}}}]}}
-- {{"city": {{"$eq": "chicago"}}}}
-- null (ONLY for queries with no filterable terms at all)
 
 DO NOT include any text outside the JSON object or null."""
 

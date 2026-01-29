@@ -146,7 +146,7 @@ export const FilterExamples: React.FC<FilterExamplesProps> = ({
         headerInfo={
           <Popover
             header="How Filter Examples Work"
-            content="Select which metadata keys to use for filtering, then click 'Regenerate Examples' to create filter patterns. These examples guide the LLM when generating query-time filters. Toggle examples on/off to control which patterns are used."
+            content="Select which metadata keys to use for filtering, then click 'Regenerate Examples' to create filter patterns. These examples guide the LLM when generating query-time filters. Toggle examples off to exclude them from queries; disabled examples are replaced when you regenerate."
             triggerType="custom"
             dismissButton={false}
             position="right"

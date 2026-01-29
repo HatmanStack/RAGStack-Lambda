@@ -923,6 +923,21 @@ export function Settings() {
                   }}
                 />
               </FormField>
+
+              <FormField
+                label="Filtered Results Boost"
+                description="Score multiplier for results matching metadata filters (1.0 = no boost, 2.0 = double)"
+              >
+                <Input
+                  type="number"
+                  step={0.05}
+                  value={String(formValues.multislice_filtered_boost ?? 1.25)}
+                  onChange={({ detail }) => {
+                    const val = parseFloat(detail.value) || 1.25;
+                    setFormValues({ ...formValues, multislice_filtered_boost: Math.min(2.0, Math.max(1.0, val)) });
+                  }}
+                />
+              </FormField>
             </>
           )}
         </SpaceBetween>

@@ -2971,8 +2971,8 @@ Resources:
               Action:
                 - states:StopExecution
               Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*'
-        # Configuration table read for caption model selection
-        - DynamoDBReadPolicy:
+        # Configuration table for reading config and updating filter examples
+        - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
         # Bedrock InvokeModel for AI caption generation
         - Statement:
@@ -4290,9 +4290,15 @@ Resources:
                     'description': 'Timeout per slice in milliseconds',
                     'default': 5000
                 },
+                'multislice_filtered_boost': {
+                    'type': 'number',
+                    'order': 21,
+                    'description': 'Score multiplier for filtered results (1.0-2.0)',
+                    'default': 1.25
+                },
                 'metadata_filter_examples': {
                     'type': 'array',
-                    'order': 21,
+                    'order': 22,
                     'description': 'Filter examples for few-shot learning (JSON array)',
                     'default': []
                 },
@@ -4345,6 +4351,12 @@ Resources:
                     'description': 'Keys to extract in manual mode',
                     'default': [],
                     'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}
+                },
+                'metadata_filter_keys': {
+                    'type': 'array',
+                    'order': 27,
+                    'description': 'Keys to use for filter example generation',
+                    'default': []
                 },
                 'knowledge_base_id': {
                     'type': 'string',
@@ -4417,7 +4429,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "5"  # v5: added demo_mode_enabled, demo_upload_quota_daily, demo_chat_quota_daily
+      SchemaVersion: "6"  # v6: added multislice_filtered_boost, metadata_filter_examples, metadata_filter_keys
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

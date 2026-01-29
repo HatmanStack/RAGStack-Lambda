@@ -159,7 +159,7 @@ export function ReindexSection() {
       {!isDemoMode && (
         <Alert type="warning">
           This will regenerate metadata for all documents using current settings.
-          The process may take several minutes for large knowledge bases.
+          The process may take several minutes to hours for large knowledge bases.
           During reindexing, queries may return partial results.
         </Alert>
       )}

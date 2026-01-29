@@ -27,6 +27,39 @@ s3 = boto3.client("s3")
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
+def _validate_filter_keys(filter_obj: dict, valid_keys: set[str]) -> bool:
+    """
+    Check if a filter object only uses keys from the valid set.
+
+    Args:
+        filter_obj: The filter dictionary to validate.
+        valid_keys: Set of allowed key names.
+
+    Returns:
+        True if all keys in the filter are valid, False otherwise.
+    """
+    if not isinstance(filter_obj, dict):
+        return False
+
+    for key, value in filter_obj.items():
+        # Handle logical operators ($and, $or)
+        if key in ("$and", "$or"):
+            if isinstance(value, list):
+                for sub_filter in value:
+                    if not _validate_filter_keys(sub_filter, valid_keys):
+                        return False
+        elif key.startswith("$"):
+            # Other operators at root level are invalid
+            return False
+        else:
+            # This is a field key - check if it's valid
+            if key not in valid_keys:
+                logger.debug(f"Invalid key in filter: {key}, valid keys: {valid_keys}")
+                return False
+
+    return True
+
+
 def generate_filter_examples(
     field_analysis: dict[str, dict],
     model_id: str | None = None,
@@ -70,11 +103,17 @@ def generate_filter_examples(
 
     fields_text = "\n".join(field_descriptions)
 
-    prompt = f"""You are a metadata filter expert. Based on the following metadata fields
-discovered in a document knowledge base, generate practical filter examples.
+    # Build list of allowed key names for the prompt
+    allowed_key_names = list(field_analysis.keys())
 
-DISCOVERED METADATA FIELDS:
+    prompt = f"""You are a metadata filter expert. Generate filter examples using ONLY the
+metadata fields listed below. Do NOT use any other field names.
+
+ALLOWED METADATA FIELDS (use ONLY these exact field names):
 {fields_text}
+
+CRITICAL: You may ONLY use these field names in filters: {", ".join(allowed_key_names)}
+Any filter using a field name not in this list will be rejected.
 
 FILTER SYNTAX (S3 Vectors compatible):
 - Equality: {{"field": {{"$eq": "value"}}}}
@@ -83,31 +122,19 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
-IMPORTANT: All filter values MUST be lowercase. Metadata is stored in lowercase.
+RULES:
+1. Use ONLY the field names listed above - no exceptions
+2. All string values MUST be lowercase
+3. Use sample values from the field descriptions when appropriate
 
-Generate exactly {num_examples} practical filter examples that users might find useful.
+Generate exactly {num_examples} practical filter examples.
 Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter
-- filter: The actual filter JSON (all string values lowercase)
+- filter: The actual filter JSON using ONLY the allowed fields
 
-Return ONLY a JSON array of filter examples, no explanation. Example format:
-[
-  {{
-    "name": "PDF Documents",
-    "description": "Filter for PDF document type",
-    "use_case": "Finding all PDF files in the knowledge base",
-    "filter": {{"document_type": {{"$eq": "pdf"}}}}
-  }},
-  {{
-    "name": "Letters from John Smith",
-    "description": "Filter for letters mentioning John Smith",
-    "use_case": "Finding correspondence involving a specific person",
-    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}},
-      {{"people_mentioned": {{"$eq": "john smith"}}}}]}}
-  }}
-]"""
+Return ONLY a JSON array, no explanation."""
 
     try:
         response = bedrock_runtime.converse(
@@ -143,8 +170,19 @@ Return ONLY a JSON array of filter examples, no explanation. Example format:
             logger.warning("LLM response is not a list")
             return []
 
-        logger.info(f"Generated {len(examples)} filter examples")
-        return examples
+        # Validate examples only use allowed keys
+        valid_keys = set(field_analysis.keys())
+        validated_examples = []
+        for example in examples:
+            filter_obj = example.get("filter", {})
+            if _validate_filter_keys(filter_obj, valid_keys):
+                validated_examples.append(example)
+            else:
+                logger.warning(f"Dropped example with invalid keys: {example.get('name')}")
+
+        dropped = len(examples) - len(validated_examples)
+        logger.info(f"Generated {len(validated_examples)} filter examples (dropped {dropped})")
+        return validated_examples
 
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse filter examples JSON: {e}")

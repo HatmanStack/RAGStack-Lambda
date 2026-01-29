@@ -168,7 +168,7 @@ _filter_examples_cache_time = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 
-def _get_filter_components(filtered_score_boost: float = 1.35):
+def _get_filter_components(filtered_score_boost: float = 1.25):
     """Lazy-load filter generation components."""
     global _key_library, _filter_generator, _multislice_retriever
 
@@ -1466,8 +1466,8 @@ def lambda_handler(event, context):
             "filter_generation_enabled", default=True
         )
         multislice_enabled = get_config_manager().get_parameter("multislice_enabled", default=True)
-        filtered_score_boost = get_config_manager().get_parameter(
-            "filtered_score_boost", default=1.35
+        filtered_score_boost = float(
+            get_config_manager().get_parameter("multislice_filtered_boost", default=1.25)
         )
 
         # Generate metadata filter if enabled (includes content_type filtering)
