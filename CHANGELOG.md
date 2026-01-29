@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.2.1] - 2026-01-29
+
+### Fixed
+
+- **Configuration seeder Decimal handling**: Convert float defaults to Decimal when seeding config (fixes deployment failure for `multislice_filtered_boost`)
+
 ## [2.2.0] - 2026-01-29
 
 ### Added
