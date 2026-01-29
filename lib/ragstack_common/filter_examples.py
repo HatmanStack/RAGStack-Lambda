@@ -103,11 +103,17 @@ def generate_filter_examples(
 
     fields_text = "\n".join(field_descriptions)
 
-    prompt = f"""You are a metadata filter expert. Based on the following metadata fields
-discovered in a document knowledge base, generate practical filter examples.
+    # Build list of allowed key names for the prompt
+    allowed_key_names = list(field_analysis.keys())
 
-DISCOVERED METADATA FIELDS:
+    prompt = f"""You are a metadata filter expert. Generate filter examples using ONLY the
+metadata fields listed below. Do NOT use any other field names.
+
+ALLOWED METADATA FIELDS (use ONLY these exact field names):
 {fields_text}
+
+CRITICAL: You may ONLY use these field names in filters: {", ".join(allowed_key_names)}
+Any filter using a field name not in this list will be rejected.
 
 FILTER SYNTAX (S3 Vectors compatible):
 - Equality: {{"field": {{"$eq": "value"}}}}
@@ -116,31 +122,19 @@ FILTER SYNTAX (S3 Vectors compatible):
 - And: {{"$and": [condition1, condition2]}}
 - Or: {{"$or": [condition1, condition2]}}
 
-IMPORTANT: All filter values MUST be lowercase. Metadata is stored in lowercase.
+RULES:
+1. Use ONLY the field names listed above - no exceptions
+2. All string values MUST be lowercase
+3. Use sample values from the field descriptions when appropriate
 
-Generate exactly {num_examples} practical filter examples that users might find useful.
+Generate exactly {num_examples} practical filter examples.
 Each example should have:
 - name: Short descriptive name
 - description: What this filter does
 - use_case: When to use this filter
-- filter: The actual filter JSON (all string values lowercase)
+- filter: The actual filter JSON using ONLY the allowed fields
 
-Return ONLY a JSON array of filter examples, no explanation. Example format:
-[
-  {{
-    "name": "PDF Documents",
-    "description": "Filter for PDF document type",
-    "use_case": "Finding all PDF files in the knowledge base",
-    "filter": {{"document_type": {{"$eq": "pdf"}}}}
-  }},
-  {{
-    "name": "Letters from John Smith",
-    "description": "Filter for letters mentioning John Smith",
-    "use_case": "Finding correspondence involving a specific person",
-    "filter": {{"$and": [{{"document_type": {{"$eq": "letter"}}}},
-      {{"people_mentioned": {{"$eq": "john smith"}}}}]}}
-  }}
-]"""
+Return ONLY a JSON array, no explanation."""
 
     try:
         response = bedrock_runtime.converse(
