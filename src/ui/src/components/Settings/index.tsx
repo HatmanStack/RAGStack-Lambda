@@ -930,12 +930,11 @@ export function Settings() {
               >
                 <Input
                   type="number"
-                  value={String(formValues.multislice_filtered_boost || 1.25)}
+                  step={0.05}
+                  value={String(formValues.multislice_filtered_boost ?? 1.25)}
                   onChange={({ detail }) => {
-                    const val = parseFloat(detail.value);
-                    if (val >= 1.0 && val <= 2.0) {
-                      setFormValues({ ...formValues, multislice_filtered_boost: val });
-                    }
+                    const val = parseFloat(detail.value) || 1.25;
+                    setFormValues({ ...formValues, multislice_filtered_boost: Math.min(2.0, Math.max(1.0, val)) });
                   }}
                 />
               </FormField>
