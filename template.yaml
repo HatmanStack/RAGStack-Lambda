@@ -2971,8 +2971,8 @@ Resources:
               Action:
                 - states:StopExecution
               Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*'
-        # Configuration table read for caption model selection
-        - DynamoDBReadPolicy:
+        # Configuration table for reading config and updating filter examples
+        - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
         # Bedrock InvokeModel for AI caption generation
         - Statement:
