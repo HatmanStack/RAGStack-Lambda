@@ -4374,6 +4374,7 @@ Resources:
         }
 
         def lambda_handler(event, context):
+            from decimal import Decimal
             print(f"Event: {json.dumps(event)}")
             request_type = event.get('RequestType', '')
 
@@ -4383,7 +4384,11 @@ Resources:
                     defaults = {'Configuration': 'Default'}
                     for key, prop in SCHEMA['properties'].items():
                         if 'default' in prop:
-                            defaults[key] = prop['default']
+                            val = prop['default']
+                            # Convert float to Decimal for DynamoDB
+                            if isinstance(val, float):
+                                val = Decimal(str(val))
+                            defaults[key] = val
                     defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')
                     defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID', '')
                     defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID', '')
