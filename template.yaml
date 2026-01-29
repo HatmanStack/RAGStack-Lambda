@@ -4373,6 +4373,17 @@ Resources:
             }
         }
 
+        def convert_floats_to_decimal(obj):
+            """Recursively convert floats to Decimal for DynamoDB."""
+            from decimal import Decimal
+            if isinstance(obj, float):
+                return Decimal(str(obj))
+            if isinstance(obj, dict):
+                return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [convert_floats_to_decimal(i) for i in obj]
+            return obj
+
         def lambda_handler(event, context):
             from decimal import Decimal
             print(f"Event: {json.dumps(event)}")
@@ -4394,9 +4405,10 @@ Resources:
                     defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID', '')
 
                     # Seed Schema (stored as dict, not JSON string)
+                    # Convert floats to Decimal throughout the schema
                     table.put_item(Item={
                         'Configuration': 'Schema',
-                        'Schema': SCHEMA
+                        'Schema': convert_floats_to_decimal(SCHEMA)
                     })
 
                     # Seed Default (values at top level, not nested)
