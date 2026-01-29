@@ -233,6 +233,9 @@ def handle_update_configuration(custom_config):
             # Use : prefix for attribute values (parameterized to prevent injection)
             update_expr_parts.append(f"#{key} = :{key}")
             expr_attr_names[f"#{key}"] = key
+            # Convert float to Decimal for DynamoDB compatibility
+            if isinstance(value, float):
+                value = Decimal(str(value))
             expr_attr_values[f":{key}"] = value
 
         update_expression = "SET " + ", ".join(update_expr_parts)
