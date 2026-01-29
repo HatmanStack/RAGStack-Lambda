@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Default configuration
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_SLICES = 3
-DEFAULT_FILTERED_SCORE_BOOST = 1.35  # 35% boost to filtered results
+DEFAULT_FILTERED_SCORE_BOOST = 1.25  # 25% boost to filtered results
 
 
 @dataclass

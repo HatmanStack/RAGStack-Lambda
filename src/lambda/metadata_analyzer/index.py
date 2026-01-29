@@ -51,7 +51,7 @@ dynamodb = boto3.resource("dynamodb")
 _key_library = None
 
 # Configuration
-DEFAULT_MAX_SAMPLES = 1000
+DEFAULT_MAX_SAMPLES = 300  # Reduced for faster analysis (~30 seconds vs ~90 seconds)
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 MAX_SAMPLE_VALUES = 10
 
@@ -168,9 +168,13 @@ def sample_vectors_from_kb(
     max_samples: int = DEFAULT_MAX_SAMPLES,
 ) -> list[dict]:
     """
-    Sample vectors from the Knowledge Base using retrieve API.
+    Sample vectors from the Knowledge Base using random sampling.
 
-    Uses a generic query to retrieve a sample of vectors with their metadata.
+    Uses random UUID queries to get unbiased samples. Random strings produce
+    uniform coverage because all vectors are equally "distant" from gibberish,
+    avoiding the bias that semantic queries like "document" introduce.
+
+    Queries run in parallel for speed.
 
     Args:
         knowledge_base_id: Bedrock Knowledge Base ID.
@@ -180,30 +184,20 @@ def sample_vectors_from_kb(
     Returns:
         List of retrieval results with metadata.
     """
+    import uuid
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     logger.info(f"Sampling up to {max_samples} vectors from KB {knowledge_base_id[:8]}...")
 
-    all_results = []
+    # Generate random queries for unbiased sampling
+    # Random UUIDs give uniform coverage since nothing semantically matches them
+    num_queries = min(10, max(5, max_samples // 100))
+    random_queries = [str(uuid.uuid4()) for _ in range(num_queries)]
 
-    # Use a set of generic queries to get diverse samples
-    sample_queries = [
-        "*",  # Wildcard query
-        "document",
-        "information",
-        "data",
-        "content",
-    ]
-
-    for query in sample_queries:
-        if len(all_results) >= max_samples:
-            break
-
+    def execute_query(query: str) -> list[dict]:
+        """Execute a single retrieval query."""
         try:
-            # Build retrieval configuration
-            vector_config: dict[str, Any] = {
-                "numberOfResults": min(100, max_samples - len(all_results)),
-            }
-
-            # Add data source filter if provided
+            vector_config: dict[str, Any] = {"numberOfResults": 100}
             if data_source_id:
                 vector_config["filter"] = {
                     "equals": {
@@ -217,17 +211,22 @@ def sample_vectors_from_kb(
                 retrievalQuery={"text": query},
                 retrievalConfiguration={"vectorSearchConfiguration": vector_config},
             )
-
-            results = response.get("retrievalResults", [])
-            all_results.extend(results)
-            logger.debug(f"Query '{query}' returned {len(results)} results")
-
+            return response.get("retrievalResults", [])
         except ClientError as e:
-            logger.warning(f"Retrieve query '{query}' failed: {e}")
-            continue
+            logger.warning(f"Random sample query failed: {e}")
+            return []
 
-    # Deduplicate by S3 URI
-    seen_uris = set()
+    # Run queries in parallel
+    all_results = []
+    with ThreadPoolExecutor(max_workers=num_queries) as executor:
+        futures = {executor.submit(execute_query, q): q for q in random_queries}
+        for future in as_completed(futures):
+            results = future.result()
+            all_results.extend(results)
+            logger.debug(f"Query returned {len(results)} results, total: {len(all_results)}")
+
+    # Deduplicate by URI
+    seen_uris: set[str] = set()
     unique_results = []
     for result in all_results:
         uri = result.get("location", {}).get("s3Location", {}).get("uri", "")
@@ -235,7 +234,9 @@ def sample_vectors_from_kb(
             seen_uris.add(uri)
             unique_results.append(result)
 
-    logger.info(f"Sampled {len(unique_results)} unique vectors")
+    logger.info(
+        f"Sampled {len(unique_results)} unique vectors using {num_queries} parallel queries"
+    )
     return unique_results[:max_samples]
 
 

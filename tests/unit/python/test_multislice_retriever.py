@@ -541,5 +541,5 @@ def test_multislice_retriever_accepts_boost_parameter(mock_bedrock_agent):
 def test_multislice_retriever_default_boost(mock_bedrock_agent):
     """Test that MultiSliceRetriever has sensible default boost."""
     retriever = MultiSliceRetriever(bedrock_agent_client=mock_bedrock_agent)
-    # Default is 1.35 (35% boost)
-    assert retriever.filtered_score_boost == 1.35
+    # Default is 1.25 (25% boost)
+    assert retriever.filtered_score_boost == 1.25
