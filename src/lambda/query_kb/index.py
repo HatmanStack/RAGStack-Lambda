@@ -1466,9 +1466,9 @@ def lambda_handler(event, context):
             "filter_generation_enabled", default=True
         )
         multislice_enabled = get_config_manager().get_parameter("multislice_enabled", default=True)
-        filtered_score_boost = float(get_config_manager().get_parameter(
-            "multislice_filtered_boost", default=1.25
-        ))
+        filtered_score_boost = float(
+            get_config_manager().get_parameter("multislice_filtered_boost", default=1.25)
+        )
 
         # Generate metadata filter if enabled (includes content_type filtering)
         if filter_enabled:

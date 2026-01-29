@@ -507,8 +507,8 @@ def test_filtered_score_boost_reorders_results():
     assert "judy1.jpg" in merged_with_boost[0]["location"]["s3Location"]["uri"]
 
 
-def test_filtered_score_boost_preserves_original_score():
-    """Test that boosted scores don't leak into returned results."""
+def test_filtered_score_boost_returns_boosted_score():
+    """Test that boosted scores are returned to frontend for display."""
     slice_results = {
         "filtered": [
             {
@@ -522,8 +522,8 @@ def test_filtered_score_boost_preserves_original_score():
 
     merged = merge_slices_with_guaranteed_minimum(slice_results, filtered_score_boost=1.5)
 
-    # Original score should be preserved (not boosted score)
-    assert merged[0]["score"] == 0.65
+    # Boosted score should be returned (0.65 * 1.5 = 0.975)
+    assert merged[0]["score"] == 0.65 * 1.5
     # Internal tags should be removed
     assert "_boosted_score" not in merged[0]
     assert "_is_filtered" not in merged[0]

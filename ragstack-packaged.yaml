@@ -909,7 +909,7 @@ Resources:
       LayerName:
         Fn::Sub: ${AWS::StackName}-Common
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/ec88253523a93568eca80b4d09a11d4e
+      ContentUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/7f33bf7858734352aff98f473f386821
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -1596,7 +1596,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-metadata-analyzer
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/9f37614fdc877b6b7f80a6113bd66b90
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/462a34fb1011697cd73edbdcec70f829
       Handler: index.lambda_handler
       Description: Analyze Knowledge Base vectors to discover metadata fields and
         generate filter examples
@@ -1656,7 +1656,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-reindex-kb
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/1ff7942f32d7bdbbc49e79cbadc138a5
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5b0307796cb47bbeb023ed40fea5ccb7
       Handler: index.lambda_handler
       Description: Reindex Knowledge Base - creates new KB, re-ingests documents,
         deletes old KB
@@ -1862,7 +1862,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-query
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/e2404fec0f8656f17ee58d9545d74ec0
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/60fb528eaf7d3648b85fb6cc82114ce1
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
@@ -1940,7 +1940,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-search
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/45ae041bf5892f929fc29c945ddad2e0
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/de060db6d9c83bbaa05b53510dbde19f
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -2014,7 +2014,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-config
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/60cb6e28c4d2a692524a5c69fdd3f7a6
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/370df3138a3d9093ce4e7f839737865b
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
       Layers:
@@ -2621,7 +2621,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-ReindexWorkflow
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public-631094035453
-        Key: ragstack-quicklaunch/df71a6ccd0ea633fa07a2dbb9fd36b0a
+        Key: ragstack-quicklaunch/1b005b7c565ece0d790a61c821947909
       DefinitionSubstitutions:
         ReindexKBFunctionArn:
           Fn::GetAtt:
@@ -3388,7 +3388,7 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/63d08515d8a1f8daed0bad6cbe85e302
+      DefinitionS3Location: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/4d68465e03bbfd783262c6e52e6ed1a3
     Metadata:
       SamResourceId: GraphQLSchema
   GraphQLApiKey:
@@ -3421,7 +3421,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-appsync
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/5fd730e63bd0521e008b1c6e2bd20b73
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/b19e9deb12ff44827030e6289723f1d0
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -3496,7 +3496,7 @@ Resources:
       - DynamoDBReadPolicy:
           TableName:
             Ref: ScrapeUrlsTable
-      - DynamoDBReadPolicy:
+      - DynamoDBCrudPolicy:
           TableName:
             Ref: MetadataKeyLibraryTable
       - Statement:
@@ -3537,7 +3537,7 @@ Resources:
           - states:StopExecution
           Resource:
             Fn::Sub: arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*
-      - DynamoDBReadPolicy:
+      - DynamoDBCrudPolicy:
           TableName:
             Ref: ConfigurationTable
       - Statement:
@@ -4276,6 +4276,38 @@ Resources:
         - Name
     Metadata:
       SamResourceId: AnalyzeMetadataResolver
+  RegenerateFilterExamplesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: regenerateFilterExamples
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: RegenerateFilterExamplesResolver
+  DeleteMetadataKeyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: deleteMetadataKey
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: DeleteMetadataKeyResolver
   StartReindexResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -5056,12 +5088,15 @@ Resources:
         \  'default': 2\n        },\n        'multislice_timeout_ms': {\n        \
         \    'type': 'number',\n            'order': 20,\n            'description':\
         \ 'Timeout per slice in milliseconds',\n            'default': 5000\n    \
-        \    },\n        'metadata_filter_examples': {\n            'type': 'array',\n\
-        \            'order': 21,\n            'description': 'Filter examples for\
-        \ few-shot learning (JSON array)',\n            'default': []\n        },\n\
-        \        'metadata_filter_examples_disabled': {\n            'type': 'array',\n\
-        \            'order': 211,\n            'description': 'Names of disabled\
-        \ filter examples',\n            'default': []\n        },\n        'metadata_filter_examples_updated_at':\
+        \    },\n        'multislice_filtered_boost': {\n            'type': 'number',\n\
+        \            'order': 21,\n            'description': 'Score multiplier for\
+        \ filtered results (1.0-2.0)',\n            'default': 1.25\n        },\n\
+        \        'metadata_filter_examples': {\n            'type': 'array',\n   \
+        \         'order': 22,\n            'description': 'Filter examples for few-shot\
+        \ learning (JSON array)',\n            'default': []\n        },\n       \
+        \ 'metadata_filter_examples_disabled': {\n            'type': 'array',\n \
+        \           'order': 211,\n            'description': 'Names of disabled filter\
+        \ examples',\n            'default': []\n        },\n        'metadata_filter_examples_updated_at':\
         \ {\n            'type': 'string',\n            'order': 212,\n          \
         \  'description': 'Timestamp when filter examples were last generated',\n\
         \            'default': ''\n        },\n        'metadata_extraction_enabled':\
@@ -5083,17 +5118,19 @@ Resources:
         \     },\n        'metadata_manual_keys': {\n            'type': 'array',\n\
         \            'order': 26,\n            'description': 'Keys to extract in\
         \ manual mode',\n            'default': [],\n            'dependsOn': {'field':\
-        \ 'metadata_extraction_mode', 'value': 'manual'}\n        },\n        'knowledge_base_id':\
-        \ {\n            'type': 'string',\n            'order': 100,\n          \
-        \  'description': 'Active Bedrock Knowledge Base ID (updated by reindex)',\n\
-        \            'readOnly': True\n        },\n        'data_source_id': {\n \
-        \           'type': 'string',\n            'order': 101,\n            'description':\
-        \ 'Active Data Source ID (updated by reindex)',\n            'readOnly': True\n\
-        \        }\n    }\n}\n\ndef lambda_handler(event, context):\n    print(f\"\
-        Event: {json.dumps(event)}\")\n    request_type = event.get('RequestType',\
-        \ '')\n\n    try:\n        if request_type in ['Create', 'Update']:\n    \
-        \        # Build defaults from schema\n            defaults = {'Configuration':\
-        \ 'Default'}\n            for key, prop in SCHEMA['properties'].items():\n\
+        \ 'metadata_extraction_mode', 'value': 'manual'}\n        },\n        'metadata_filter_keys':\
+        \ {\n            'type': 'array',\n            'order': 27,\n            'description':\
+        \ 'Keys to use for filter example generation',\n            'default': []\n\
+        \        },\n        'knowledge_base_id': {\n            'type': 'string',\n\
+        \            'order': 100,\n            'description': 'Active Bedrock Knowledge\
+        \ Base ID (updated by reindex)',\n            'readOnly': True\n        },\n\
+        \        'data_source_id': {\n            'type': 'string',\n            'order':\
+        \ 101,\n            'description': 'Active Data Source ID (updated by reindex)',\n\
+        \            'readOnly': True\n        }\n    }\n}\n\ndef lambda_handler(event,\
+        \ context):\n    print(f\"Event: {json.dumps(event)}\")\n    request_type\
+        \ = event.get('RequestType', '')\n\n    try:\n        if request_type in ['Create',\
+        \ 'Update']:\n            # Build defaults from schema\n            defaults\
+        \ = {'Configuration': 'Default'}\n            for key, prop in SCHEMA['properties'].items():\n\
         \                if 'default' in prop:\n                    defaults[key]\
         \ = prop['default']\n            defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL',\
         \ '')\n            defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID',\
