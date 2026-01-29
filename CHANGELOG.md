@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.2.0] - 2026-01-29
+
+### Added
+
+- **Configurable filtered results boost**: New UI setting in Metadata Query section to adjust score multiplier for filtered results (1.0-2.0 range, default 1.25)
+- **Boosted scores in search results**: Frontend now displays boosted relevance scores, reflecting actual ranking
+
+### Fixed
+
+- **Filter generation for name queries**: Strengthened LLM prompt to always generate `people_mentioned` filters when names are mentioned (e.g., "Pictures of Judy" → `{"people_mentioned": {"$eq": "judy"}}`)
+- **Filter examples use only allowed keys**: Validation ensures generated examples don't use keys outside the allowlist; prompt explicitly lists allowed keys
+- **AppSync config write permission**: Changed from `DynamoDBReadPolicy` to `DynamoDBCrudPolicy` so UI can save filter key settings
+- **DynamoDB Decimal handling**: Convert `float` to `Decimal` when writing config, and `Decimal` to `float` when reading boost values
+
+### Changed
+
+- **SchemaVersion bumped to 6**: Existing stacks will re-run seeder on deploy to get new config defaults (`multislice_filtered_boost`, `metadata_filter_examples`, `metadata_filter_keys`)
+- **Reindex time estimate**: UI now says "several minutes to hours" instead of "several minutes"
+- **Filter examples help text**: Clarified that disabled examples are replaced when regenerating
+
 ## [2.1.0] - 2026-01-28
 
 ### Added

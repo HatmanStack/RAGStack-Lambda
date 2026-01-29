@@ -1862,7 +1862,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-query
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/60fb528eaf7d3648b85fb6cc82114ce1
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/3de18f23234719472835c0f172715333
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
@@ -1940,7 +1940,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-search
-      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/de060db6d9c83bbaa05b53510dbde19f
+      CodeUri: s3://ragstack-quicklaunch-public-631094035453/ragstack-quicklaunch/41c66246be32229c76a4bb0635cf42ba
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -5158,7 +5158,7 @@ Resources:
         Fn::GetAtt:
         - ConfigurationSeederFunction
         - Arn
-      SchemaVersion: '5'
+      SchemaVersion: '6'
     Metadata:
       SamResourceId: ConfigurationSeeder
   AdminUserProvisionerFunction:
