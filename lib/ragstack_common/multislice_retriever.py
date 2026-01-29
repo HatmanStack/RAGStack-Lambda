@@ -144,8 +144,9 @@ def merge_slices_with_guaranteed_minimum(
         uri = _get_uri(result) or f"_no_uri_{id(result)}"
         if uri not in seen_uris:
             seen_uris.add(uri)
-            # Remove internal tags before returning
+            # Remove internal tags before returning, but update score with boosted value
             clean_result = {k: v for k, v in result.items() if not k.startswith("_")}
+            clean_result["score"] = result.get("_boosted_score", result.get("score", 0.0))
             merged.append(clean_result)
         if len(merged) >= total_results:
             break
