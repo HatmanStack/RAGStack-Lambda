@@ -155,6 +155,8 @@ Conditions:
   UseCustomPrefix: !Not [!Equals [!Ref StackPrefix, '']]
   # Additional CORS origins provided (for nested stack deployments)
   HasAdditionalCorsOrigins: !Not [!Equals [!Ref AdditionalCorsOrigins, '']]
+  # Inverse of BuildUI for conditional resource creation
+  NotBuildUI: !Not [!Condition BuildUI]
 
 Resources:
   # =========================================================================
@@ -4741,8 +4743,22 @@ Resources:
                 - cognito-idp:AdminCreateUser
               Resource: !GetAtt UserPool.Arn
 
-  AdminUser:
+  # Admin user creation - split into two resources to handle conditional DependsOn
+  # When UI is being built, wait for it to complete before sending invite email
+  AdminUserAfterBuild:
     Type: Custom::AdminUser
+    Condition: BuildUI
+    DependsOn: UICodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
+      ServiceTimeout: 120  # 2 minutes - user creation is fast
+      UserPoolId: !Ref UserPool
+      Email: !Ref AdminEmail
+
+  # When no UI build, create admin user immediately
+  AdminUserImmediate:
+    Type: Custom::AdminUser
+    Condition: NotBuildUI
     Properties:
       ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
       ServiceTimeout: 120  # 2 minutes - user creation is fast

@@ -11,6 +11,7 @@
 - **Custom Cognito email templates**: Admin invite and verification emails now include branding and dashboard URL
   - Invite email includes stack name, dashboard URL, username, and temporary password
   - Verification email includes stack name and verification code
+  - Email delayed until UI build completes (when BuildDashboard=true) so dashboard link works immediately
 
 ### Changed
 
