@@ -17,6 +17,7 @@ Metadata:
       - Label:
           default: Advanced Settings (Optional)
         Parameters:
+          - StackPrefix
           - OcrBackend
           - BedrockOcrModelId
           - CaptionModelId
@@ -30,6 +31,8 @@ Metadata:
         default: Build Dashboard UI
       BuildWebComponent:
         default: Build Chat Widget
+      StackPrefix:
+        default: Stack Prefix (Nested Stack Only)
       OcrBackend:
         default: OCR Backend
       BedrockOcrModelId:
@@ -113,6 +116,14 @@ Parameters:
       - 'false'
     Description: Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)
 
+  StackPrefix:
+    Type: String
+    Default: ''
+    Description: |
+      IMMUTABLE: Optional lowercase prefix for resource names (leave empty to use stack name).
+      Required for nested stack deployments to avoid uppercase characters in bucket names.
+      WARNING: Changing this value after initial deployment will create NEW buckets and orphan existing data.
+
 Globals:
   Function:
     Runtime: python3.13
@@ -129,6 +140,8 @@ Conditions:
   BuildWC: !Equals [!Ref BuildWebComponent, 'true']
   # Build any UI (dashboard or web component) - used for shared resources
   BuildAnyUI: !Or [!Condition BuildUI, !Condition BuildWC]
+  # Use custom prefix instead of stack name (for nested stack deployments)
+  UseCustomPrefix: !Not [!Equals [!Ref StackPrefix, '']]
 
 Resources:
   # =========================================================================
@@ -141,8 +154,12 @@ Resources:
   #   working/ - Temporary files (7-day TTL)
   DataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-data-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-data-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -191,8 +208,12 @@ Resources:
 
   VectorBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-vectors-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-vectors-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -355,8 +376,12 @@ Resources:
 
   UIBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-ui-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-ui-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -453,8 +478,12 @@ Resources:
 
   WebComponentAssetsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-wc-assets-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-wc-assets-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: false  # Allow CloudFront OAI bucket policy
