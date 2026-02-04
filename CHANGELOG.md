@@ -23,6 +23,10 @@
   - Lambda now properly detects EventBridge events and returns early for non-media files
   - Previously logged "Skipping non-media file" but continued execution and crashed
 
+- **Ingestion retry for "running" job errors**: Fixed retry logic to also catch "running ingestion job" errors
+  - Previously only retried on "ongoing" keyword, missing "There is at least one running ingestion job" errors
+  - Documents uploaded during active KB sync now properly retry instead of failing with `OCR_COMPLETE` status
+
 ## [2.3.0] - 2026-02-04
 
 ### Added

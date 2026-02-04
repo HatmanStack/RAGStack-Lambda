@@ -86,7 +86,8 @@ def start_ingestion_with_retry(
             error_msg = e.response.get("Error", {}).get("Message", "")
 
             # Check if this is a retryable concurrent API conflict
-            if error_code == "ValidationException" and "ongoing" in error_msg.lower():
+            is_ongoing = "ongoing" in error_msg.lower() or "running" in error_msg.lower()
+            if error_code == "ValidationException" and is_ongoing:
                 last_error = e
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)  # Exponential backoff
@@ -152,8 +153,8 @@ def ingest_documents_with_retry(
 
             # Check for retryable concurrent API conflict or service unavailable
             is_conflict = error_code == "ConflictException"
-            is_validation_ongoing = (
-                error_code == "ValidationException" and "ongoing" in error_msg.lower()
+            is_validation_ongoing = error_code == "ValidationException" and (
+                "ongoing" in error_msg.lower() or "running" in error_msg.lower()
             )
             is_throttle = (
                 error_code == "ValidationException" and "can't exceed" in error_msg.lower()
