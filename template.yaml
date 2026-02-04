@@ -707,8 +707,12 @@ Resources:
 
   TrackingTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-tracking'
+      TableName: !Sub
+        - '${Prefix}-tracking'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -730,8 +734,12 @@ Resources:
 
   MeteringTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-metering'
+      TableName: !Sub
+        - '${Prefix}-metering'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -762,8 +770,12 @@ Resources:
 
   ConfigurationTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-config'
+      TableName: !Sub
+        - '${Prefix}-config'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -789,8 +801,12 @@ Resources:
 
   ConversationHistoryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-conversations'
+      TableName: !Sub
+        - '${Prefix}-conversations'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -821,8 +837,12 @@ Resources:
 
   MetadataKeyLibraryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-metadata-keys'
+      TableName: !Sub
+        - '${Prefix}-metadata-keys'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -846,8 +866,12 @@ Resources:
 
   ScrapeJobsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-scrape-jobs'
+      TableName: !Sub
+        - '${Prefix}-scrape-jobs'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -884,8 +908,12 @@ Resources:
 
   ScrapeUrlsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-scrape-urls'
+      TableName: !Sub
+        - '${Prefix}-scrape-urls'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -923,7 +951,9 @@ Resources:
   RagstackCommonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub '${AWS::StackName}-Common'
+      LayerName: !Sub
+        - '${Prefix}-Common'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Shared utilities for Lambda functions
       ContentUri: lib/
       CompatibleRuntimes:
@@ -938,7 +968,9 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process'
+      FunctionName: !Sub
+        - '${Prefix}-process'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
@@ -991,7 +1023,9 @@ Resources:
   DetectFileTypeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
+      FunctionName: !Sub
+        - '${Prefix}-detect-file-type'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/detect_file_type/
       Handler: index.lambda_handler
       Description: Detect file type and get page info for OCR routing
@@ -1016,7 +1050,9 @@ Resources:
   ProcessTextFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-text'
+      FunctionName: !Sub
+        - '${Prefix}-process-text'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_text/
       Handler: index.lambda_handler
       Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX)
@@ -1047,7 +1083,9 @@ Resources:
   ProcessMediaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-media'
+      FunctionName: !Sub
+        - '${Prefix}-process-media'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_media/
       Handler: index.lambda_handler
       Description: Process video/audio files through AWS Transcribe
@@ -1095,7 +1133,9 @@ Resources:
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-combinepages'
+      FunctionName: !Sub
+        - '${Prefix}-combinepages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/combine_pages/
       Handler: index.lambda_handler
       Description: Combine partial text files from batch processing
@@ -1130,7 +1170,9 @@ Resources:
   QueueProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-queue-processor'
+      FunctionName: !Sub
+        - '${Prefix}-queue-processor'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/queue_processor/
       Handler: index.lambda_handler
       Description: Process SQS messages to start Step Functions executions
@@ -1163,7 +1205,9 @@ Resources:
   EnqueueBatchesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-enqueue-batches'
+      FunctionName: !Sub
+        - '${Prefix}-enqueue-batches'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/enqueue_batches/
       Handler: index.lambda_handler
       Description: Queue individual batches to SQS for rate-limited processing
@@ -1194,7 +1238,9 @@ Resources:
   BatchProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-batch-processor'
+      FunctionName: !Sub
+        - '${Prefix}-batch-processor'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/batch_processor/
       Handler: index.lambda_handler
       Description: Process individual 10-page batches with global rate limiting
@@ -1249,7 +1295,9 @@ Resources:
   IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest'
+      FunctionName: !Sub
+        - '${Prefix}-ingest'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/ingest_to_kb/
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
@@ -1310,7 +1358,9 @@ Resources:
   IngestMediaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest-media'
+      FunctionName: !Sub
+        - '${Prefix}-ingest-media'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/ingest_media/
       Handler: index.lambda_handler
       Description: Ingest media content with dual embeddings (transcript + visual)
@@ -1375,7 +1425,9 @@ Resources:
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-image'
+      FunctionName: !Sub
+        - '${Prefix}-process-image'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_image/
       Handler: index.lambda_handler
       Description: Process uploaded images and ingest to Knowledge Base
@@ -1435,7 +1487,9 @@ Resources:
   MetadataAnalyzerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-metadata-analyzer'
+      FunctionName: !Sub
+        - '${Prefix}-metadata-analyzer'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/metadata_analyzer/
       Handler: index.lambda_handler
       Description: Analyze Knowledge Base vectors to discover metadata fields and generate filter examples
@@ -1483,7 +1537,9 @@ Resources:
   ReindexKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-reindex-kb'
+      FunctionName: !Sub
+        - '${Prefix}-reindex-kb'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/reindex_kb/
       Handler: index.lambda_handler
       Description: Reindex Knowledge Base - creates new KB, re-ingests documents, deletes old KB
@@ -1583,7 +1639,9 @@ Resources:
   ProcessZipFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-zip'
+      FunctionName: !Sub
+        - '${Prefix}-process-zip'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_zip/
       Handler: index.lambda_handler
       Description: Process ZIP archives containing images with optional captions manifest
@@ -1641,7 +1699,9 @@ Resources:
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-query'
+      FunctionName: !Sub
+        - '${Prefix}-query'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
@@ -1697,7 +1757,9 @@ Resources:
   SearchKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-search'
+      FunctionName: !Sub
+        - '${Prefix}-search'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/search_kb/
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
@@ -1757,7 +1819,9 @@ Resources:
   ConfigurationResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-config'
+      FunctionName: !Sub
+        - '${Prefix}-config'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/configuration_resolver/
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
@@ -1807,7 +1871,9 @@ Resources:
   ApiKeyResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-apikey'
+      FunctionName: !Sub
+        - '${Prefix}-apikey'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/api_key_resolver/
       Handler: index.lambda_handler
       Description: GraphQL resolver for API key management
@@ -1838,7 +1904,9 @@ Resources:
   ScrapeStartFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-start'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-start'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_start/
       Handler: index.lambda_handler
       Description: Initiate web scraping job
@@ -1889,7 +1957,9 @@ Resources:
   ScrapeDiscoverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-discover'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-discover'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_discover/
       Handler: index.lambda_handler
       Description: Discover URLs during web scraping
@@ -1933,7 +2003,9 @@ Resources:
   ScrapeProcessFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-process'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-process'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_process/
       Handler: index.lambda_handler
       Description: Process scraped pages and save to S3
@@ -1974,7 +2046,9 @@ Resources:
   ScrapeStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-status'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-status'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_status/
       Handler: index.lambda_handler
       Description: Return scrape job status for Step Functions polling
@@ -2634,7 +2708,9 @@ Resources:
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-kb-init'
+      FunctionName: !Sub
+        - '${Prefix}-kb-init'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
@@ -2720,7 +2796,9 @@ Resources:
   InitialSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-initial-sync'
+      FunctionName: !Sub
+        - '${Prefix}-initial-sync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/initial_sync/
       Handler: index.lambda_handler
       Description: Triggers initial KB sync on stack creation
@@ -2924,7 +3002,9 @@ Resources:
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-appsync'
+      FunctionName: !Sub
+        - '${Prefix}-appsync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
       Layers:
@@ -3034,7 +3114,9 @@ Resources:
     Type: AWS::Serverless::Function
     Condition: BuildAnyUI
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ui-builder'
+      FunctionName: !Sub
+        - '${Prefix}-ui-builder'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/start_codebuild/
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
@@ -3714,7 +3796,9 @@ Resources:
   SyncCoordinatorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-sync-coordinator'
+      FunctionName: !Sub
+        - '${Prefix}-sync-coordinator'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/sync_coordinator/
       Handler: index.lambda_handler
       Description: Coordinates KB sync requests - waits for running syncs, then starts new one
@@ -3765,7 +3849,9 @@ Resources:
   SyncStatusCheckerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-sync-status-checker'
+      FunctionName: !Sub
+        - '${Prefix}-sync-status-checker'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/sync_status_checker/
       Handler: index.lambda_handler
       Description: Checks KB status for SYNC_QUEUED documents and updates tracking table
@@ -4053,7 +4139,9 @@ Resources:
   BudgetSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-budget-sync'
+      FunctionName: !Sub
+        - '${Prefix}-budget-sync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/budget_sync/
       Handler: index.lambda_handler
       Description: Sync budget configuration changes to AWS Budgets
@@ -4120,7 +4208,9 @@ Resources:
   ConfigurationSeederFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-config-seeder'
+      FunctionName: !Sub
+        - '${Prefix}-config-seeder'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Runtime: python3.13
       Handler: index.lambda_handler
       Timeout: 60
@@ -4488,7 +4578,9 @@ Resources:
   AdminUserProvisionerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-admin-provisioner'
+      FunctionName: !Sub
+        - '${Prefix}-admin-provisioner'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/admin_user_provisioner/
       Handler: index.lambda_handler
       Description: Creates admin user in Cognito idempotently (skips if exists)
