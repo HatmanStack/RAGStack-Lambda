@@ -600,8 +600,12 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*'
-                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*:*'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                  - !Sub
+                    - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*:*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
               # S3 access for web component assets bucket
               - Effect: Allow
                 Action:
@@ -1633,14 +1637,30 @@ Resources:
                 - lambda:GetFunctionConfiguration
                 - lambda:UpdateFunctionConfiguration
               Resource:
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-query'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-search'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest-media'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-reindex-kb'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-image'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-metadata-analyzer'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-zip'
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-query'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-search'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ingest'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ingest-media'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-reindex-kb'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-process-image'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-metadata-analyzer'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-process-zip'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
@@ -2169,7 +2189,9 @@ Resources:
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-Pipeline'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-Pipeline'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2253,7 +2275,9 @@ Resources:
   ScrapeStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-ScrapeWorkflow'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-ScrapeWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2317,7 +2341,9 @@ Resources:
   ReindexStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-ReindexWorkflow'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-ReindexWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2797,7 +2823,9 @@ Resources:
                 - ssm:PutParameter
                 - ssm:DeleteParameter
                 - ssm:GetParameter
-              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/KnowledgeBaseId'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Prefix}/KnowledgeBaseId'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   KnowledgeBase:
     Type: Custom::KnowledgeBase
@@ -3119,7 +3147,9 @@ Resources:
             - Effect: Allow
               Action:
                 - states:StopExecution
-              Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${Prefix}-ScrapeWorkflow:*'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         # Configuration table for reading config and updating filter examples
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -3187,7 +3217,9 @@ Resources:
               Action:
                 - lambda:AddPermission
                 - lambda:RemovePermission
-              Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ui-builder'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ui-builder'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         - Statement:
             - Effect: Allow
               Action:
@@ -4221,7 +4253,9 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: INFO
-          BUDGET_NAME: !Sub '${AWS::StackName}-Monthly-Budget'
+          BUDGET_NAME: !Sub
+            - '${Prefix}-Monthly-Budget'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           ADMIN_EMAIL: !Ref AdminEmail
           PROJECT_NAME: !Ref AWS::StackName
       Events:
