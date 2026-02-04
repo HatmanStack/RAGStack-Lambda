@@ -14,9 +14,7 @@ For the best search quality, use manual metadata keys. This gives you control ov
 4. **Run full reindex**: Click "Reindex Knowledge Base" — this re-extracts metadata using only your selected keys and rebuilds the KB with consistent metadata
 5. **Create filter examples**: After reindex, run "Analyze Metadata" to generate few-shot examples for query-time filter generation
 
-**Why this works:** Auto mode discovers many keys, but inconsistent extraction across documents hurts search quality. Manual mode constrains the LLM to extract only your chosen keys, ensuring every document has the same metadata schema. The reindex applies this consistently to all documents.
-
-**After reindex:** Your searches will generate better filters because the filter generator only sees your curated keys, not hundreds of inconsistent auto-discovered ones.
+**Why this works:** Auto mode creates inconsistent metadata across documents. Manual mode enforces a consistent schema for better filtering.
 
 ---
 

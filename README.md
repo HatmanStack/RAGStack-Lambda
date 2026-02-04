@@ -96,18 +96,7 @@ python publish.py \
 
 ## Web Component Integration
 
-Use AI chat in **any web application** (React, Vue, Angular, Svelte, etc.):
-
-```html
-<script src="https://your-cdn-url/ragstack-chat.js"></script>
-
-<ragstack-chat
-  conversation-id="my-app"
-  header-text="Ask About Documents"
-></ragstack-chat>
-```
-
-Load the CDN script once, then use `<ragstack-chat>` in any framework.
+See [RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) for web component integration guide.
 
 ## API Access
 
