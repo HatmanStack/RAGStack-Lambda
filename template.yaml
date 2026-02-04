@@ -2699,16 +2699,20 @@ Resources:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub '${AWS::StackName}-kb'
+      KnowledgeBaseName: !Sub
+        - '${Prefix}-kb'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
       DataBucket: !Ref DataBucket
       # Nova Multimodal Embeddings - supports text, images, video, audio
       # Currently only available in us-east-1. When available elsewhere, just deploy there.
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
-      IndexName: !Sub '${AWS::StackName}-index'
+      IndexName: !Sub
+        - '${Prefix}-index'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Region: !Ref AWS::Region
-      ProjectName: !Ref AWS::StackName
+      ProjectName: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       # Version property forces custom resource update to return new attributes
       Version: "1"  # Reset for clean deployment
 
