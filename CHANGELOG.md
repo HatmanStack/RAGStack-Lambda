@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.3.1] - 2026-02-04
+
+### Added
+
+- **AdditionalCorsOrigins parameter**: Parent stacks can now pass additional CORS origins for S3 data bucket access
+  - Enables uploads from Amplify-hosted or other external frontends when RAGStack is deployed as nested stack
+  - Accepts comma-separated URLs (e.g., `https://main.d123.amplifyapp.com,https://example.com`)
+
+- **Custom Cognito email templates**: Admin invite and verification emails now include branding and dashboard URL
+  - Invite email includes stack name, dashboard URL, username, and temporary password
+  - Verification email includes stack name and verification code
+
+### Changed
+
+- **`chat_allow_document_access` default**: Changed from `False` to `True` - document sources are now downloadable by default
+
+### Fixed
+
+- **ProcessMedia Lambda non-media file crash**: EventBridge S3 events for non-media files no longer crash with `KeyError: 'document_id'`
+  - Lambda now properly detects EventBridge events and returns early for non-media files
+  - Previously logged "Skipping non-media file" but continued execution and crashed
+
 ## [2.3.0] - 2026-02-04
 
 ### Added
