@@ -4,7 +4,13 @@ Guide for deploying RAGStack as a nested CloudFormation stack.
 
 ## Problem
 
-CloudFormation generates nested stack names with uppercase random suffixes (e.g., `parent-ragstack-84XG2HNPDDZG`). When RAGStack uses this as a bucket name prefix, S3 creation fails because bucket names must be lowercase.
+CloudFormation generates nested stack names with uppercase random suffixes (e.g., `parent-ragstack-84XG2HNPDDZG`). RAGStack uses stack name for several lowercase-only resources:
+- S3 bucket names
+- S3 Vectors index names (Bedrock Knowledge Base)
+
+Without the `StackPrefix` parameter, deployment fails with errors like:
+- `Bucket name should not contain uppercase characters`
+- `Invalid index name` (from S3 Vectors CreateIndex operation)
 
 ## Solution
 
