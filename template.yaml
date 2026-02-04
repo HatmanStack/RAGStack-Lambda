@@ -4748,7 +4748,7 @@ Resources:
   AdminUserAfterBuild:
     Type: Custom::AdminUser
     Condition: BuildUI
-    DependsOn: UICodeBuildRun
+    DependsOn: CodeBuildRun
     Properties:
       ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
       ServiceTimeout: 120  # 2 minutes - user creation is fast
