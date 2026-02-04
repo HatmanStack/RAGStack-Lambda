@@ -4,9 +4,15 @@ Guide for deploying RAGStack as a nested CloudFormation stack.
 
 ## Problem
 
-CloudFormation generates nested stack names with uppercase random suffixes (e.g., `parent-ragstack-84XG2HNPDDZG`). RAGStack uses stack name for several lowercase-only resources:
-- S3 bucket names
-- S3 Vectors index names (Bedrock Knowledge Base)
+CloudFormation generates nested stack names with uppercase random suffixes (e.g., `parent-ragstack-84XG2HNPDDZG`). RAGStack uses stack name as prefix for **all** resource names:
+- S3 bucket names (lowercase requirement)
+- S3 Vectors index names (lowercase requirement)
+- Lambda function names
+- DynamoDB table names
+- Step Functions state machines
+- Log groups
+- SSM parameters
+- All other AWS resources
 
 Without the `StackPrefix` parameter, deployment fails with errors like:
 - `Bucket name should not contain uppercase characters`
@@ -14,7 +20,7 @@ Without the `StackPrefix` parameter, deployment fails with errors like:
 
 ## Solution
 
-Use the `StackPrefix` parameter to provide a lowercase prefix for resource names.
+Use the `StackPrefix` parameter to provide a lowercase prefix for **all** resource names.
 
 ## Parent Stack Template Example
 
@@ -34,7 +40,7 @@ Resources:
     Properties:
       TemplateURL: https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml
       Parameters:
-        # Required: Lowercase prefix for bucket names
+        # Required: Lowercase prefix for all resource names
         StackPrefix: !Sub '${AWS::StackName}-ragstack'
 
         # Required: Admin email
@@ -60,10 +66,11 @@ Outputs:
 
 ### StackPrefix Requirements
 
-1. **Must be lowercase** - S3 bucket names requirement
-2. **Must be unique per AWS account** - Prevents bucket name collisions
-3. **Keep it short** - Final bucket names are `{prefix}-{type}-{accountid}` (63 char max)
+1. **Must be lowercase** - S3 bucket names and S3 Vectors index names require lowercase
+2. **Must be unique per AWS account** - Prevents resource name collisions (especially S3 buckets)
+3. **Keep it short** - S3 bucket names have 63 char max: `{prefix}-{type}-{accountid}`
 4. **Valid characters** - Lowercase letters, numbers, hyphens only
+5. **Applies to all resources** - Lambda functions, DynamoDB tables, Step Functions, log groups, etc.
 
 ### Example Prefix Patterns
 
@@ -80,14 +87,22 @@ StackPrefix: 'MyApp-RAGStack'  # ❌ Will fail
 StackPrefix: 'ragstack'  # ❌ Not unique enough
 ```
 
-### Generated Bucket Names
+### Generated Resource Names
 
 With `StackPrefix: 'my-app-ragstack'` and account ID `123456789012`:
 
+**S3 Buckets:**
 - Data bucket: `my-app-ragstack-data-123456789012`
 - Vector bucket: `my-app-ragstack-vectors-123456789012`
 - UI bucket: `my-app-ragstack-ui-123456789012`
 - Web component bucket: `my-app-ragstack-wc-assets-123456789012`
+
+**Other Resources:**
+- Lambda functions: `my-app-ragstack-process`, `my-app-ragstack-ingest`, etc.
+- DynamoDB tables: `my-app-ragstack-tracking`, `my-app-ragstack-config`, etc.
+- Knowledge Base index: `my-app-ragstack-index`
+- Step Functions: `my-app-ragstack-ProcessingPipeline`, `my-app-ragstack-ScrapeWorkflow`
+- Log groups: `/aws/vendedlogs/states/my-app-ragstack-Pipeline`
 
 ## Deployment Commands
 
@@ -112,7 +127,7 @@ aws cloudformation describe-stacks \
 
 ## Standalone Deployment (No StackPrefix)
 
-For standalone deployments, **leave StackPrefix empty**. RAGStack will use the stack name:
+For standalone deployments, **leave StackPrefix empty**. RAGStack will use the stack name as prefix for all resources:
 
 ```bash
 # Deploy directly (not nested)
@@ -123,7 +138,10 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM
 
 # Stack name must be lowercase
-# Bucket names: my-docs-data-123456789012, my-docs-vectors-123456789012, etc.
+# All resources prefixed with stack name:
+# - Buckets: my-docs-data-123456789012, my-docs-vectors-123456789012
+# - Lambda: my-docs-process, my-docs-ingest
+# - Tables: my-docs-tracking, my-docs-config
 ```
 
 ## Important Warnings
@@ -131,11 +149,14 @@ aws cloudformation deploy \
 ### ⚠️ NEVER Change StackPrefix After Deployment
 
 Changing `StackPrefix` after initial deployment will:
-1. Create **new** buckets with new names
-2. **Orphan** existing buckets with all data
-3. Require manual data migration
+1. Create **new** resources with new names (S3 buckets, DynamoDB tables, Lambda functions, etc.)
+2. **Orphan** existing resources with all data
+3. Require manual data migration and configuration updates
 
-The buckets have `UpdateReplacePolicy: Retain` to prevent data loss, but you'll need to manually copy data from old buckets to new ones.
+S3 buckets and DynamoDB tables have `UpdateReplacePolicy: Retain` to prevent data loss, but you'll need to:
+- Manually copy data from old buckets to new ones
+- Migrate DynamoDB table data
+- Update any external references to Lambda functions, API endpoints, etc.
 
 ### ⚠️ Stack Name Requirements
 
