@@ -153,7 +153,8 @@ class MultiSliceRetriever:
         bedrock_agent_client=None,
         timeout_seconds: float = 5.0,
         max_slices: int = 3,
-        enabled: bool = True
+        enabled: bool = True,
+        filtered_score_boost: float = 1.25
     ) -> None
     def retrieve(
         query: str,
@@ -394,3 +395,31 @@ class MediaFileSizeExceededError(MediaProcessingError)  # Too large
 class AudioExtractionError(MediaProcessingError)  # Audio extraction failed
 class SegmentationError(MediaProcessingError)  # Segmentation failed
 ```
+
+## demo_mode.py
+
+```python
+def check_demo_mode_limit(operation: str, user_id: str | None = None) -> tuple[bool, str | None]
+```
+
+Check if operation allowed under demo mode restrictions.
+
+**Operations:** `upload`, `chat`, `reindex`, `reprocess`, `delete`
+
+**Returns:** `(allowed: bool, error_message: str | None)`
+
+---
+
+## filter_examples.py
+
+```python
+class FilterExampleManager:
+    def __init__(table_name: str | None = None) -> None
+    def get_examples(active_only: bool = True) -> list[dict]
+    def upsert_example(name: str, description: str, use_case: str, filter: dict, active: bool = True) -> None
+    def delete_example(name: str) -> None
+```
+
+Manage metadata filter examples for few-shot learning.
+
+**Environment:** `METADATA_KEY_LIBRARY_TABLE`

@@ -34,6 +34,7 @@ Serverless document and media processing with AI chat. Upload documents, images,
 - 📎 Collapsible source citations with optional document downloads
 - ⏱️ **NEW** Media sources with timestamp links - click to play at exact position
 - 🔍 Metadata filtering - auto-discover document metadata and filter search results
+- 🎯 Relevancy boost for filtered results - prioritize matches from metadata filters
 - 🔄 Knowledge Base reindex - regenerate metadata for existing documents with updated settings
 - 🗑️ Document management - reprocess, reindex, or delete documents from the dashboard
 - 🌐 Web component for any framework (React, Vue, Angular, Svelte)

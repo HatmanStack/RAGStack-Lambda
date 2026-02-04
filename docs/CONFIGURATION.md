@@ -265,6 +265,7 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 | `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
 | `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
 | `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
+| `multislice_filtered_boost` | 1.0-2.0 | 1.25 | Score multiplier for filtered results (1.25 = 25% boost) |
 
 **Filter generation model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
@@ -376,3 +377,21 @@ aws dynamodb update-item \
 - Text-native PDFs skip OCR entirely (free)
 - Haiku is 20x cheaper than Opus
 - Set conservative quotas, increase as needed
+
+## Demo Mode
+
+Demo mode restricts functionality for public showcases and trial deployments.
+
+**Restrictions:**
+- **Upload limit:** 5 documents per day
+- **Chat limit:** 30 queries per day
+- **Disabled features:** Reindex, Reprocess, Delete operations
+
+**Use Cases:**
+- Public demos (prevent abuse)
+- Showcase environments with limited AWS quotas
+- Trial deployments before production
+
+**Enable:** `python publish.py --project-name demo --admin-email admin@example.com --demo-mode`
+
+**Disable:** Redeploy without `--demo-mode` flag.

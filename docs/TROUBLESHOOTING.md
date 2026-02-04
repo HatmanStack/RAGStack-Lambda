@@ -58,6 +58,12 @@ Once you've set up manual keys (see "Recommended Workflow" above), you can reduc
 
 This uses Haiku's quality for discovery and filter generation, while using Nova Lite's lower cost for bulk extraction.
 
+### Filtered Results Ranking
+
+- **Boost filtered results:** Increase `multislice_filtered_boost` (1.3-1.5) if filtered results buried by visual similarity
+- **Disable boost:** Set to 1.0 if filtered results dominate too aggressively
+- **Default is balanced:** 1.25 works well for most use cases
+
 ---
 
 ## Deployment Issues

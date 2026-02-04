@@ -21,9 +21,10 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | ProcessDocument Lambda | OCR extraction (Textract/Bedrock) for PDF/images |
 | ProcessMedia Lambda | Video/audio transcription via AWS Transcribe, 30s segmentation |
 | ProcessText Lambda | Text extraction for HTML, CSV, JSON, XML, EML, EPUB, DOCX, XLSX |
-| EnqueueBatches Lambda | Queue batch jobs to SQS |
-| BatchProcessor Lambda | Process 10-page batches (max 10 concurrent) |
-| CombinePages Lambda | Merge partial outputs into final document |
+| EnqueueBatches Lambda | Queue batch jobs to SQS (internal) |
+| BatchProcessor Lambda | Process 10-page batches (max 10 concurrent, internal) |
+| CombinePages Lambda | Merge partial outputs into final document (internal) |
+| ZipProcessor Lambda | Handle ZIP batch uploads (internal) |
 | IngestToKB Lambda | Trigger Bedrock KB ingestion (Nova Multimodal embeddings) |
 | IngestMedia Lambda | Ingest transcribed media segments to KB |
 | QueryKB Lambda | Query documents, chat with sources |
@@ -32,8 +33,10 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | Scrape Lambdas | Web scraping pipeline (start/discover/process/status) |
 | ReindexKB Lambda | Orchestrate KB reindexing with new metadata settings |
 | MetadataAnalyzer Lambda | Sample KB vectors and generate filter examples |
-| SyncCoordinator Lambda | Coordinate KB sync operations |
-| SyncStatusChecker Lambda | Check KB sync completion status |
+| SyncCoordinator Lambda | Coordinate KB sync operations (internal) |
+| SyncStatusChecker Lambda | Check KB sync completion status (internal) |
+| BudgetSync Lambda | Sync AWS Budget data (internal) |
+| StartCodeBuild Lambda | Trigger web component builds (internal) |
 | ConfigurationResolver Lambda | Resolve DynamoDB configuration |
 | AppSyncResolvers Lambda | GraphQL resolver implementations |
 | ApiKeyResolver Lambda | API key validation and management |
@@ -44,6 +47,16 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | AppSync | GraphQL API with subscriptions |
 | React UI | Web dashboard (Cloudscape) |
 | ragstack-chat | AI chat web component |
+
+## Design Decisions
+
+### S3 Vectors Cost-Performance Trade-Off
+
+RAGStack uses S3 Vectors for ~90% cost savings over traditional vector databases ($46/month vs $660+ for billion vectors). This trade-off introduces:
+
+**Quantization Impact:** 4-bit compression creates ~10% relevancy drop on filtered queries due to quantization noise amplification in smaller candidate pools.
+
+**Solution:** `multislice_filtered_boost` (default 1.25) compensates for this drop by normalizing filtered result scores. See [METADATA_FILTERING.md](./METADATA_FILTERING.md) for technical details.
 
 ## Data Flow
 

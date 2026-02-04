@@ -142,8 +142,61 @@ The following configuration options control metadata filtering:
 | `multislice_enabled` | `true` | Enable parallel filtered/unfiltered queries |
 | `multislice_count` | `2` | Number of parallel retrieval slices (2-4) |
 | `multislice_timeout_ms` | `5000` | Timeout per slice in milliseconds |
+| `multislice_filtered_boost` | `1.25` | Score multiplier for filtered results (1.25 = 25% boost) |
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for details on updating these settings.
+
+## Filtered Results Relevancy Boost
+
+When multi-slice retrieval runs parallel queries, filtered results receive a score boost to improve ranking.
+
+**How it works:**
+- Filtered results match explicit query intent (e.g., "Pictures of Judy" → `people_mentioned: judy`)
+- Unfiltered results provide baseline vector similarity
+- Filtered results multiplied by `multislice_filtered_boost` (default 1.25 = 25% higher score)
+- Results merged and deduplicated by URI, keeping highest score
+
+**Example:**
+- Unfiltered result: score 0.80 (generic match)
+- Filtered result: score 0.75 → boosted to 0.94 (0.75 × 1.25)
+- Final ranking: filtered result ranks first despite lower base score
+
+**Configuration:** Set `multislice_filtered_boost` in Settings → Configuration (1.0 = no boost, 2.0 = double score).
+
+---
+
+### Why Filtered Queries Score Lower
+
+Filtered results consistently score ~10% lower than unfiltered queries, even for identical content. This isn't a bug — it's an expected consequence of S3 Vectors' architecture.
+
+**The Trade-Off:**
+S3 Vectors reduces vector database costs by ~90% (billion vectors: $46/month vs $660+ on alternatives) using aggressive 4-bit Product Quantization. You trade precision for price.
+
+**Two mechanisms cause the relevancy drop:**
+
+1. **Quantization Noise**
+   - S3 Vectors compresses vectors 64x using 4-bit quantization
+   - Unfiltered search: Millions of candidates drown out approximation error
+   - Filtered search: Smaller candidate pool amplifies quantization noise
+   - The ~10% drop corresponds to the noise floor of 4-bit quantization
+
+2. **Graph Disconnection (HNSW)**
+   - S3 Vectors uses HNSW (Hierarchical Navigable Small World) graphs
+   - Search traverses graph edges to find nearest matches
+   - Filtering disables nodes, creating holes in the graph
+   - "Bridge" edges to better regions are filtered out
+   - Algorithm settles for local minima instead of optimal matches
+
+**Why Not Re-Ranking?**
+Cross-encoder re-ranking (e.g., Bedrock Rerank API) works well for text documents but degrades results for image-heavy knowledge bases. Re-rankers evaluate synthesized metadata text (e.g., "people: judy wilson, topic: family_photos"), not visual embeddings. The raw vector similarity scores from multimodal embeddings are better relevance signals.
+
+**The Solution:**
+The 1.25x boost normalizes scores without discarding valuable visual similarity information. It's a simple multiplier that compensates for quantization noise while preserving the semantic relationships captured by embeddings.
+
+**When to Adjust:**
+- **Increase boost (1.3-1.5):** Filtered results buried by visual similarity
+- **Decrease boost (1.1-1.2):** Text-heavy KB where precision matters more
+- **Disable boost (1.0):** Testing pure vector similarity without correction
 
 ## API Access
 
