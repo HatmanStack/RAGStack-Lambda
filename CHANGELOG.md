@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.3.0] - 2026-02-04
+
+### Added
+
+- **Comprehensive nested stack support**: StackPrefix parameter now applies to **all** 127+ AWS resources for complete parent/child stack isolation
+  - Lambda functions, DynamoDB tables, Step Functions, log groups, SSM parameters, S3 Vectors index, and all other resources
+  - Enables deploying RAGStack as a nested CloudFormation stack without uppercase naming conflicts
+  - Fully backward compatible: empty StackPrefix uses stack name (existing deployments unaffected)
+
+### Fixed
+
+- **Hardcoded stack name references in IAM permissions**: All ARN references in IAM policies now use StackPrefix conditional pattern
+  - CodeBuild log group permissions
+  - Lambda ARN permissions for Knowledge Base updates
+  - Step Functions log groups and execution ARNs
+  - SSM parameter ARNs
+  - Budget name environment variables
+
+### Documentation
+
+- **Nested stack deployment guide**: Updated to reflect StackPrefix applies to all resources, not just S3 buckets
+  - Added resource naming examples for Lambda, DynamoDB, Step Functions, log groups
+  - Clarified StackPrefix requirements and warnings apply to all resources
+  - Enhanced troubleshooting section
+
 ## [2.2.1] - 2026-01-29
 
 ### Fixed

@@ -17,6 +17,7 @@ Metadata:
       - Label:
           default: Advanced Settings (Optional)
         Parameters:
+          - StackPrefix
           - OcrBackend
           - BedrockOcrModelId
           - CaptionModelId
@@ -30,6 +31,8 @@ Metadata:
         default: Build Dashboard UI
       BuildWebComponent:
         default: Build Chat Widget
+      StackPrefix:
+        default: Stack Prefix (Nested Stack Only)
       OcrBackend:
         default: OCR Backend
       BedrockOcrModelId:
@@ -113,6 +116,14 @@ Parameters:
       - 'false'
     Description: Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)
 
+  StackPrefix:
+    Type: String
+    Default: ''
+    Description: |
+      IMMUTABLE: Optional lowercase prefix for resource names (leave empty to use stack name).
+      Required for nested stack deployments to avoid uppercase characters in bucket names.
+      WARNING: Changing this value after initial deployment will create NEW buckets and orphan existing data.
+
 Globals:
   Function:
     Runtime: python3.13
@@ -129,6 +140,8 @@ Conditions:
   BuildWC: !Equals [!Ref BuildWebComponent, 'true']
   # Build any UI (dashboard or web component) - used for shared resources
   BuildAnyUI: !Or [!Condition BuildUI, !Condition BuildWC]
+  # Use custom prefix instead of stack name (for nested stack deployments)
+  UseCustomPrefix: !Not [!Equals [!Ref StackPrefix, '']]
 
 Resources:
   # =========================================================================
@@ -141,8 +154,12 @@ Resources:
   #   working/ - Temporary files (7-day TTL)
   DataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-data-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-data-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -191,8 +208,12 @@ Resources:
 
   VectorBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-vectors-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-vectors-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -291,7 +312,9 @@ Resources:
     Condition: BuildUI
     DependsOn: UICodeBuildServiceRole
     Properties:
-      Name: !Sub '${AWS::StackName}-webui-build'
+      Name: !Sub
+        - '${Prefix}-webui-build'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: !Sub 'Web UI build for ${AWS::StackName}'
       ServiceRole: !GetAtt UICodeBuildServiceRole.Arn
       EncryptionKey: alias/aws/s3
@@ -355,8 +378,12 @@ Resources:
 
   UIBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-ui-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-ui-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -453,8 +480,12 @@ Resources:
 
   WebComponentAssetsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-wc-assets-${AWS::AccountId}'
+      BucketName: !Sub
+        - '${Prefix}-wc-assets-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: false  # Allow CloudFront OAI bucket policy
@@ -495,7 +526,9 @@ Resources:
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
       ResponseHeadersPolicyConfig:
-        Name: !Sub '${AWS::StackName}-wc-cors'
+        Name: !Sub
+          - '${Prefix}-wc-cors'
+          - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         Comment: CORS policy for web component CDN
         CorsConfig:
           AccessControlAllowOrigins:
@@ -567,8 +600,12 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*'
-                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*:*'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                  - !Sub
+                    - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*:*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
               # S3 access for web component assets bucket
               - Effect: Allow
                 Action:
@@ -609,7 +646,9 @@ Resources:
     Type: AWS::CodeBuild::Project
     DependsOn: WebComponentBuildRole
     Properties:
-      Name: !Sub '${AWS::StackName}-wc-build'
+      Name: !Sub
+        - '${Prefix}-wc-build'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Build and deploy web component to CDN
       ServiceRole: !GetAtt WebComponentBuildRole.Arn
       EncryptionKey: alias/aws/s3
@@ -678,8 +717,12 @@ Resources:
 
   TrackingTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-tracking'
+      TableName: !Sub
+        - '${Prefix}-tracking'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -701,8 +744,12 @@ Resources:
 
   MeteringTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-metering'
+      TableName: !Sub
+        - '${Prefix}-metering'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -733,8 +780,12 @@ Resources:
 
   ConfigurationTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-config'
+      TableName: !Sub
+        - '${Prefix}-config'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -760,8 +811,12 @@ Resources:
 
   ConversationHistoryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-conversations'
+      TableName: !Sub
+        - '${Prefix}-conversations'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -792,8 +847,12 @@ Resources:
 
   MetadataKeyLibraryTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-metadata-keys'
+      TableName: !Sub
+        - '${Prefix}-metadata-keys'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -817,8 +876,12 @@ Resources:
 
   ScrapeJobsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-scrape-jobs'
+      TableName: !Sub
+        - '${Prefix}-scrape-jobs'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -855,8 +918,12 @@ Resources:
 
   ScrapeUrlsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Sub '${AWS::StackName}-scrape-urls'
+      TableName: !Sub
+        - '${Prefix}-scrape-urls'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -894,7 +961,9 @@ Resources:
   RagstackCommonLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub '${AWS::StackName}-Common'
+      LayerName: !Sub
+        - '${Prefix}-Common'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Shared utilities for Lambda functions
       ContentUri: lib/
       CompatibleRuntimes:
@@ -909,7 +978,9 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process'
+      FunctionName: !Sub
+        - '${Prefix}-process'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_document/
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
@@ -962,7 +1033,9 @@ Resources:
   DetectFileTypeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-detect-file-type'
+      FunctionName: !Sub
+        - '${Prefix}-detect-file-type'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/detect_file_type/
       Handler: index.lambda_handler
       Description: Detect file type and get page info for OCR routing
@@ -987,7 +1060,9 @@ Resources:
   ProcessTextFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-text'
+      FunctionName: !Sub
+        - '${Prefix}-process-text'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_text/
       Handler: index.lambda_handler
       Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB, DOCX, XLSX)
@@ -1018,7 +1093,9 @@ Resources:
   ProcessMediaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-media'
+      FunctionName: !Sub
+        - '${Prefix}-process-media'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_media/
       Handler: index.lambda_handler
       Description: Process video/audio files through AWS Transcribe
@@ -1066,7 +1143,9 @@ Resources:
   CombinePagesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-combinepages'
+      FunctionName: !Sub
+        - '${Prefix}-combinepages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/combine_pages/
       Handler: index.lambda_handler
       Description: Combine partial text files from batch processing
@@ -1101,7 +1180,9 @@ Resources:
   QueueProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-queue-processor'
+      FunctionName: !Sub
+        - '${Prefix}-queue-processor'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/queue_processor/
       Handler: index.lambda_handler
       Description: Process SQS messages to start Step Functions executions
@@ -1134,7 +1215,9 @@ Resources:
   EnqueueBatchesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-enqueue-batches'
+      FunctionName: !Sub
+        - '${Prefix}-enqueue-batches'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/enqueue_batches/
       Handler: index.lambda_handler
       Description: Queue individual batches to SQS for rate-limited processing
@@ -1165,7 +1248,9 @@ Resources:
   BatchProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-batch-processor'
+      FunctionName: !Sub
+        - '${Prefix}-batch-processor'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/batch_processor/
       Handler: index.lambda_handler
       Description: Process individual 10-page batches with global rate limiting
@@ -1220,7 +1305,9 @@ Resources:
   IngestToKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest'
+      FunctionName: !Sub
+        - '${Prefix}-ingest'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/ingest_to_kb/
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
@@ -1281,7 +1368,9 @@ Resources:
   IngestMediaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ingest-media'
+      FunctionName: !Sub
+        - '${Prefix}-ingest-media'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/ingest_media/
       Handler: index.lambda_handler
       Description: Ingest media content with dual embeddings (transcript + visual)
@@ -1346,7 +1435,9 @@ Resources:
   ProcessImageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-image'
+      FunctionName: !Sub
+        - '${Prefix}-process-image'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_image/
       Handler: index.lambda_handler
       Description: Process uploaded images and ingest to Knowledge Base
@@ -1406,7 +1497,9 @@ Resources:
   MetadataAnalyzerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-metadata-analyzer'
+      FunctionName: !Sub
+        - '${Prefix}-metadata-analyzer'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/metadata_analyzer/
       Handler: index.lambda_handler
       Description: Analyze Knowledge Base vectors to discover metadata fields and generate filter examples
@@ -1454,7 +1547,9 @@ Resources:
   ReindexKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-reindex-kb'
+      FunctionName: !Sub
+        - '${Prefix}-reindex-kb'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/reindex_kb/
       Handler: index.lambda_handler
       Description: Reindex Knowledge Base - creates new KB, re-ingests documents, deletes old KB
@@ -1542,19 +1637,37 @@ Resources:
                 - lambda:GetFunctionConfiguration
                 - lambda:UpdateFunctionConfiguration
               Resource:
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-query'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-search'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ingest-media'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-reindex-kb'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-image'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-metadata-analyzer'
-                - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-process-zip'
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-query'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-search'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ingest'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ingest-media'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-reindex-kb'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-process-image'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-metadata-analyzer'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-process-zip'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ProcessZipFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-process-zip'
+      FunctionName: !Sub
+        - '${Prefix}-process-zip'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/process_zip/
       Handler: index.lambda_handler
       Description: Process ZIP archives containing images with optional captions manifest
@@ -1612,7 +1725,9 @@ Resources:
   QueryKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-query'
+      FunctionName: !Sub
+        - '${Prefix}-query'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/query_kb/
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
@@ -1668,7 +1783,9 @@ Resources:
   SearchKBFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-search'
+      FunctionName: !Sub
+        - '${Prefix}-search'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/search_kb/
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
@@ -1728,7 +1845,9 @@ Resources:
   ConfigurationResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-config'
+      FunctionName: !Sub
+        - '${Prefix}-config'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/configuration_resolver/
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
@@ -1778,7 +1897,9 @@ Resources:
   ApiKeyResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-apikey'
+      FunctionName: !Sub
+        - '${Prefix}-apikey'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/api_key_resolver/
       Handler: index.lambda_handler
       Description: GraphQL resolver for API key management
@@ -1809,7 +1930,9 @@ Resources:
   ScrapeStartFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-start'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-start'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_start/
       Handler: index.lambda_handler
       Description: Initiate web scraping job
@@ -1860,7 +1983,9 @@ Resources:
   ScrapeDiscoverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-discover'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-discover'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_discover/
       Handler: index.lambda_handler
       Description: Discover URLs during web scraping
@@ -1904,7 +2029,9 @@ Resources:
   ScrapeProcessFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-process'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-process'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_process/
       Handler: index.lambda_handler
       Description: Process scraped pages and save to S3
@@ -1945,7 +2072,9 @@ Resources:
   ScrapeStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-scrape-status'
+      FunctionName: !Sub
+        - '${Prefix}-scrape-status'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/scrape_status/
       Handler: index.lambda_handler
       Description: Return scrape job status for Step Functions polling
@@ -2037,7 +2166,9 @@ Resources:
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub '${AWS::StackName}-ProcessingPipeline'
+      Name: !Sub
+        - '${Prefix}-ProcessingPipeline'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DefinitionUri: src/statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         ProcessDocumentFunctionArn: !GetAtt ProcessDocumentFunction.Arn
@@ -2058,7 +2189,9 @@ Resources:
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-Pipeline'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-Pipeline'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2123,7 +2256,9 @@ Resources:
   ScrapeStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub '${AWS::StackName}-ScrapeWorkflow'
+      Name: !Sub
+        - '${Prefix}-ScrapeWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DefinitionUri: src/statemachine/scrape.asl.json
       DefinitionSubstitutions:
         ScrapeStatusFunctionArn: !GetAtt ScrapeStatusFunction.Arn
@@ -2140,7 +2275,9 @@ Resources:
   ScrapeStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-ScrapeWorkflow'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-ScrapeWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2187,7 +2324,9 @@ Resources:
   ReindexStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: !Sub '${AWS::StackName}-ReindexWorkflow'
+      Name: !Sub
+        - '${Prefix}-ReindexWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DefinitionUri: src/statemachine/reindex.asl.json
       DefinitionSubstitutions:
         ReindexKBFunctionArn: !GetAtt ReindexKBFunction.Arn
@@ -2202,7 +2341,9 @@ Resources:
   ReindexStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vendedlogs/states/${AWS::StackName}-ReindexWorkflow'
+      LogGroupName: !Sub
+        - '/aws/vendedlogs/states/${Prefix}-ReindexWorkflow'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
 
   # =========================================================================
@@ -2212,7 +2353,9 @@ Resources:
   S3UploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-S3UploadTrigger'
+      Name: !Sub
+        - '${Prefix}-S3UploadTrigger'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger processing pipeline on S3 upload to input/ prefix
       EventPattern:
         source:
@@ -2251,7 +2394,9 @@ Resources:
   ImageUploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-ImageUploadTrigger'
+      Name: !Sub
+        - '${Prefix}-ImageUploadTrigger'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger image processing on S3 upload to content/ prefix (metadata.json)
       EventPattern:
         source:
@@ -2296,7 +2441,9 @@ Resources:
   ImageAutoProcessRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-ImageAutoProcess'
+      Name: !Sub
+        - '${Prefix}-ImageAutoProcess'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger image processing on direct image upload (for API/MCP with autoProcess=true)
       EventPattern:
         source:
@@ -2340,7 +2487,9 @@ Resources:
   ZipUploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-zip-upload'
+      Name: !Sub
+        - '${Prefix}-zip-upload'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger ZIP processing on S3 upload to uploads/ prefix (.zip files)
       EventPattern:
         source:
@@ -2389,7 +2538,9 @@ Resources:
   MediaContentUploadRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-MediaContentTrigger'
+      Name: !Sub
+        - '${Prefix}-MediaContentTrigger'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger media processing when video/audio uploaded to content/
       EventPattern:
         source:
@@ -2413,7 +2564,9 @@ Resources:
   MediaContentWebmRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-MediaContentWebm'
+      Name: !Sub
+        - '${Prefix}-MediaContentWebm'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger media processing for webm files
       EventPattern:
         source:
@@ -2437,7 +2590,9 @@ Resources:
   MediaContentMp3Rule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-MediaContentMp3'
+      Name: !Sub
+        - '${Prefix}-MediaContentMp3'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger media processing for mp3 files
       EventPattern:
         source:
@@ -2461,7 +2616,9 @@ Resources:
   MediaContentWavRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${AWS::StackName}-MediaContentWav'
+      Name: !Sub
+        - '${Prefix}-MediaContentWav'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Description: Trigger media processing for wav files
       EventPattern:
         source:
@@ -2605,7 +2762,9 @@ Resources:
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-kb-init'
+      FunctionName: !Sub
+        - '${Prefix}-kb-init'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/kb_custom_resource/
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
@@ -2664,22 +2823,28 @@ Resources:
                 - ssm:PutParameter
                 - ssm:DeleteParameter
                 - ssm:GetParameter
-              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/KnowledgeBaseId'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Prefix}/KnowledgeBaseId'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   KnowledgeBase:
     Type: Custom::KnowledgeBase
     Properties:
       ServiceToken: !GetAtt KnowledgeBaseCustomResourceFunction.Arn
-      KnowledgeBaseName: !Sub '${AWS::StackName}-kb'
+      KnowledgeBaseName: !Sub
+        - '${Prefix}-kb'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
       VectorBucket: !Ref VectorBucket
       DataBucket: !Ref DataBucket
       # Nova Multimodal Embeddings - supports text, images, video, audio
       # Currently only available in us-east-1. When available elsewhere, just deploy there.
       EmbedModelArn: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
-      IndexName: !Sub '${AWS::StackName}-index'
+      IndexName: !Sub
+        - '${Prefix}-index'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Region: !Ref AWS::Region
-      ProjectName: !Ref AWS::StackName
+      ProjectName: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       # Version property forces custom resource update to return new attributes
       Version: "1"  # Reset for clean deployment
 
@@ -2687,7 +2852,9 @@ Resources:
   InitialSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-initial-sync'
+      FunctionName: !Sub
+        - '${Prefix}-initial-sync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/initial_sync/
       Handler: index.lambda_handler
       Description: Triggers initial KB sync on stack creation
@@ -2719,7 +2886,9 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub '${AWS::StackName}-Users'
+      UserPoolName: !Sub
+        - '${Prefix}-Users'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -2748,7 +2917,9 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub '${AWS::StackName}-WebClient'
+      ClientName: !Sub
+        - '${Prefix}-WebClient'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       UserPoolId: !Ref UserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -2766,7 +2937,9 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub '${AWS::StackName}Identity'
+      IdentityPoolName: !Sub
+        - '${Prefix}Identity'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AllowUnauthenticatedIdentities: true  # Enable guest access for chat widget
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -2847,7 +3020,9 @@ Resources:
   GraphQLApi:
     Type: AWS::AppSync::GraphQLApi
     Properties:
-      Name: !Sub '${AWS::StackName}-API'
+      Name: !Sub
+        - '${Prefix}-API'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AuthenticationType: AMAZON_COGNITO_USER_POOLS
       UserPoolConfig:
         UserPoolId: !Ref UserPool
@@ -2891,7 +3066,9 @@ Resources:
   AppSyncResolverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-appsync'
+      FunctionName: !Sub
+        - '${Prefix}-appsync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/appsync_resolvers/
       Handler: index.lambda_handler
       Layers:
@@ -2970,7 +3147,9 @@ Resources:
             - Effect: Allow
               Action:
                 - states:StopExecution
-              Resource: !Sub 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-ScrapeWorkflow:*'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${Prefix}-ScrapeWorkflow:*'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         # Configuration table for reading config and updating filter examples
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -3001,7 +3180,9 @@ Resources:
     Type: AWS::Serverless::Function
     Condition: BuildAnyUI
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ui-builder'
+      FunctionName: !Sub
+        - '${Prefix}-ui-builder'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/start_codebuild/
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
@@ -3036,7 +3217,9 @@ Resources:
               Action:
                 - lambda:AddPermission
                 - lambda:RemovePermission
-              Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ui-builder'
+              Resource: !Sub
+                - 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${Prefix}-ui-builder'
+                - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         - Statement:
             - Effect: Allow
               Action:
@@ -3527,7 +3710,9 @@ Resources:
   ProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-Processing-DLQ'
+      QueueName: !Sub
+        - '${Prefix}-Processing-DLQ'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
@@ -3539,7 +3724,9 @@ Resources:
   DocumentProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-doc-processing'
+      QueueName: !Sub
+        - '${Prefix}-doc-processing'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       VisibilityTimeout: 1800  # 30 min - longer than Step Functions execution
       MessageRetentionPeriod: 86400  # 1 day
       SqsManagedSseEnabled: true
@@ -3573,7 +3760,9 @@ Resources:
   BatchProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-batch-processing-dlq'
+      QueueName: !Sub
+        - '${Prefix}-batch-processing-dlq'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       MessageRetentionPeriod: 1209600  # 14 days
       SqsManagedSseEnabled: true
       Tags:
@@ -3583,7 +3772,9 @@ Resources:
   BatchProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-batch-processing'
+      QueueName: !Sub
+        - '${Prefix}-batch-processing'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       VisibilityTimeout: 960  # 16 min (Lambda 900s timeout + buffer)
       MessageRetentionPeriod: 86400  # 1 day
       SqsManagedSseEnabled: true
@@ -3601,7 +3792,9 @@ Resources:
   ScrapeDiscoveryDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-scrape-discovery-dlq'
+      QueueName: !Sub
+        - '${Prefix}-scrape-discovery-dlq'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       MessageRetentionPeriod: 1209600  # 14 days
       SqsManagedSseEnabled: true
       Tags:
@@ -3611,7 +3804,9 @@ Resources:
   ScrapeDiscoveryQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-scrape-discovery'
+      QueueName: !Sub
+        - '${Prefix}-scrape-discovery'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       VisibilityTimeout: 300  # 5 minutes - matches Lambda timeout
       MessageRetentionPeriod: 86400  # 1 day
       SqsManagedSseEnabled: true
@@ -3625,7 +3820,9 @@ Resources:
   ScrapeProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-scrape-processing-dlq'
+      QueueName: !Sub
+        - '${Prefix}-scrape-processing-dlq'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       MessageRetentionPeriod: 1209600  # 14 days
       SqsManagedSseEnabled: true
       Tags:
@@ -3635,7 +3832,9 @@ Resources:
   ScrapeProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-scrape-processing'
+      QueueName: !Sub
+        - '${Prefix}-scrape-processing'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       VisibilityTimeout: 900  # 15 minutes - matches Lambda timeout for Playwright
       MessageRetentionPeriod: 86400  # 1 day
       SqsManagedSseEnabled: true
@@ -3653,7 +3852,9 @@ Resources:
   SyncRequestDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-sync-request-dlq.fifo'
+      QueueName: !Sub
+        - '${Prefix}-sync-request-dlq.fifo'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       FifoQueue: true
       MessageRetentionPeriod: 1209600  # 14 days
       SqsManagedSseEnabled: true
@@ -3664,7 +3865,9 @@ Resources:
   SyncRequestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-sync-request.fifo'
+      QueueName: !Sub
+        - '${Prefix}-sync-request.fifo'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       FifoQueue: true
       ContentBasedDeduplication: true  # Dedup identical messages within 5-min window
       VisibilityTimeout: 600  # 10 min - enough for sync coordinator to complete
@@ -3681,7 +3884,9 @@ Resources:
   SyncCoordinatorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-sync-coordinator'
+      FunctionName: !Sub
+        - '${Prefix}-sync-coordinator'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/sync_coordinator/
       Handler: index.lambda_handler
       Description: Coordinates KB sync requests - waits for running syncs, then starts new one
@@ -3732,7 +3937,9 @@ Resources:
   SyncStatusCheckerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-sync-status-checker'
+      FunctionName: !Sub
+        - '${Prefix}-sync-status-checker'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/sync_status_checker/
       Handler: index.lambda_handler
       Description: Checks KB status for SYNC_QUEUED documents and updates tracking table
@@ -3781,8 +3988,12 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${AWS::StackName}-Alarms'
-      DisplayName: !Sub '${AWS::StackName} CloudWatch Alarms'
+      TopicName: !Sub
+        - '${Prefix}-Alarms'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      DisplayName: !Sub
+        - '${Prefix} CloudWatch Alarms'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       KmsMasterKeyId: alias/aws/sns
       Subscription:
         - Endpoint: !Ref AdminEmail
@@ -3795,7 +4006,9 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub '${AWS::StackName}-Monitor'
+      DashboardName: !Sub
+        - '${Prefix}-Monitor'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -3931,7 +4144,9 @@ Resources:
   ProcessDocumentErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-ProcessDocument-Errors'
+      AlarmName: !Sub
+        - '${Prefix}-ProcessDocument-Errors'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AlarmDescription: Alert when ProcessDocument Lambda has errors
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -3952,7 +4167,9 @@ Resources:
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-DLQ-Messages'
+      AlarmName: !Sub
+        - '${Prefix}-DLQ-Messages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AlarmDescription: Alert when messages appear in DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -3973,7 +4190,9 @@ Resources:
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-StepFunctions-Failures'
+      AlarmName: !Sub
+        - '${Prefix}-StepFunctions-Failures'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AlarmDescription: Alert when Step Functions executions fail
       MetricName: ExecutionsFailed
       Namespace: AWS/States
@@ -3994,7 +4213,9 @@ Resources:
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-ProcessDocument-Throttles'
+      AlarmName: !Sub
+        - '${Prefix}-ProcessDocument-Throttles'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       AlarmDescription: Alert when ProcessDocument Lambda is throttled
       MetricName: Throttles
       Namespace: AWS/Lambda
@@ -4020,7 +4241,9 @@ Resources:
   BudgetSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-budget-sync'
+      FunctionName: !Sub
+        - '${Prefix}-budget-sync'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/budget_sync/
       Handler: index.lambda_handler
       Description: Sync budget configuration changes to AWS Budgets
@@ -4030,7 +4253,9 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: INFO
-          BUDGET_NAME: !Sub '${AWS::StackName}-Monthly-Budget'
+          BUDGET_NAME: !Sub
+            - '${Prefix}-Monthly-Budget'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           ADMIN_EMAIL: !Ref AdminEmail
           PROJECT_NAME: !Ref AWS::StackName
       Events:
@@ -4087,7 +4312,9 @@ Resources:
   ConfigurationSeederFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-config-seeder'
+      FunctionName: !Sub
+        - '${Prefix}-config-seeder'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       Runtime: python3.13
       Handler: index.lambda_handler
       Timeout: 60
@@ -4455,7 +4682,9 @@ Resources:
   AdminUserProvisionerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-admin-provisioner'
+      FunctionName: !Sub
+        - '${Prefix}-admin-provisioner'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       CodeUri: src/lambda/admin_user_provisioner/
       Handler: index.lambda_handler
       Description: Creates admin user in Cognito idempotently (skips if exists)
@@ -4487,214 +4716,282 @@ Outputs:
     Description: S3 bucket for data (input/, content/, working/ prefixes)
     Value: !Ref DataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-DataBucket'
+      Name: !Sub
+        - '${Prefix}-DataBucket'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   VectorBucketName:
     Description: S3 bucket for embeddings and vectors
     Value: !Ref VectorBucket
     Export:
-      Name: !Sub '${AWS::StackName}-VectorBucket'
+      Name: !Sub
+        - '${Prefix}-VectorBucket'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   UIBucketName:
     Description: S3 bucket for WebUI hosting
     Value: !Ref UIBucket
     Export:
-      Name: !Sub '${AWS::StackName}-UIBucket'
+      Name: !Sub
+        - '${Prefix}-UIBucket'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ArtifactBucketName:
     Condition: BuildUI
     Description: S3 bucket for deployment artifacts (UI source, web component source)
     Value: !Ref UISourceBucket
     Export:
-      Name: !Sub '${AWS::StackName}-ArtifactBucket'
+      Name: !Sub
+        - '${Prefix}-ArtifactBucket'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # DynamoDB Tables
   TrackingTableName:
     Description: DynamoDB table for document tracking
     Value: !Ref TrackingTable
     Export:
-      Name: !Sub '${AWS::StackName}-TrackingTable'
+      Name: !Sub
+        - '${Prefix}-TrackingTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   MeteringTableName:
     Description: DynamoDB table for usage metering
     Value: !Ref MeteringTable
     Export:
-      Name: !Sub '${AWS::StackName}-MeteringTable'
+      Name: !Sub
+        - '${Prefix}-MeteringTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ConfigurationTableName:
     Description: Configuration DynamoDB Table Name
     Value: !Ref ConfigurationTable
     Export:
-      Name: !Sub '${AWS::StackName}-ConfigurationTable'
+      Name: !Sub
+        - '${Prefix}-ConfigurationTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ConfigurationTableArn:
     Description: Configuration DynamoDB Table ARN
     Value: !GetAtt ConfigurationTable.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ConfigurationTableArn'
+      Name: !Sub
+        - '${Prefix}-ConfigurationTableArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ConversationHistoryTableName:
     Description: DynamoDB table for conversation history
     Value: !Ref ConversationHistoryTable
     Export:
-      Name: !Sub '${AWS::StackName}-ConversationHistoryTable'
+      Name: !Sub
+        - '${Prefix}-ConversationHistoryTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ConversationHistoryTableArn:
     Description: DynamoDB table ARN for conversation history
     Value: !GetAtt ConversationHistoryTable.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ConversationHistoryTableArn'
+      Name: !Sub
+        - '${Prefix}-ConversationHistoryTableArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Scrape DynamoDB Tables
   ScrapeJobsTableName:
     Description: DynamoDB table for scrape job tracking
     Value: !Ref ScrapeJobsTable
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeJobsTable'
+      Name: !Sub
+        - '${Prefix}-ScrapeJobsTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeJobsTableArn:
     Description: DynamoDB table ARN for scrape job tracking
     Value: !GetAtt ScrapeJobsTable.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeJobsTableArn'
+      Name: !Sub
+        - '${Prefix}-ScrapeJobsTableArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeUrlsTableName:
     Description: DynamoDB table for scrape URL tracking
     Value: !Ref ScrapeUrlsTable
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeUrlsTable'
+      Name: !Sub
+        - '${Prefix}-ScrapeUrlsTable'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeUrlsTableArn:
     Description: DynamoDB table ARN for scrape URL tracking
     Value: !GetAtt ScrapeUrlsTable.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeUrlsTableArn'
+      Name: !Sub
+        - '${Prefix}-ScrapeUrlsTableArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Scrape SQS Queues
   ScrapeDiscoveryQueueUrl:
     Description: SQS queue URL for scrape URL discovery
     Value: !Ref ScrapeDiscoveryQueue
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeDiscoveryQueueUrl'
+      Name: !Sub
+        - '${Prefix}-ScrapeDiscoveryQueueUrl'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeDiscoveryQueueArn:
     Description: SQS queue ARN for scrape URL discovery
     Value: !GetAtt ScrapeDiscoveryQueue.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeDiscoveryQueueArn'
+      Name: !Sub
+        - '${Prefix}-ScrapeDiscoveryQueueArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeProcessingQueueUrl:
     Description: SQS queue URL for scrape page processing
     Value: !Ref ScrapeProcessingQueue
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeProcessingQueueUrl'
+      Name: !Sub
+        - '${Prefix}-ScrapeProcessingQueueUrl'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeProcessingQueueArn:
     Description: SQS queue ARN for scrape page processing
     Value: !GetAtt ScrapeProcessingQueue.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeProcessingQueueArn'
+      Name: !Sub
+        - '${Prefix}-ScrapeProcessingQueueArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Lambda Functions
   ProcessDocumentFunctionArn:
     Description: Process document Lambda ARN
     Value: !GetAtt ProcessDocumentFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ProcessDocumentFunction'
+      Name: !Sub
+        - '${Prefix}-ProcessDocumentFunction'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   QueryKBFunctionArn:
     Description: Query Knowledge Base Lambda ARN
     Value: !GetAtt QueryKBFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-QueryKBFunction'
+      Name: !Sub
+        - '${Prefix}-QueryKBFunction'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   SearchKBFunctionArn:
     Description: Search Knowledge Base Lambda ARN
     Value: !GetAtt SearchKBFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-SearchKBFunction'
+      Name: !Sub
+        - '${Prefix}-SearchKBFunction'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Step Functions
   StateMachineArn:
     Description: Step Functions state machine ARN
     Value: !GetAtt ProcessingStateMachine.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-StateMachine'
+      Name: !Sub
+        - '${Prefix}-StateMachine'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeStateMachineArn:
     Description: Scrape workflow Step Functions state machine ARN
     Value: !GetAtt ScrapeStateMachine.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeStateMachine'
+      Name: !Sub
+        - '${Prefix}-ScrapeStateMachine'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Scrape Lambda Functions
   ScrapeStartFunctionArn:
     Description: Scrape start Lambda ARN
     Value: !GetAtt ScrapeStartFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeStartFunction'
+      Name: !Sub
+        - '${Prefix}-ScrapeStartFunction'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   ScrapeStatusFunctionArn:
     Description: Scrape status Lambda ARN
     Value: !GetAtt ScrapeStatusFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-ScrapeStatusFunction'
+      Name: !Sub
+        - '${Prefix}-ScrapeStatusFunction'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Knowledge Base
   KnowledgeBaseId:
     Description: Bedrock Knowledge Base ID
     Value: !GetAtt KnowledgeBase.KnowledgeBaseId
     Export:
-      Name: !Sub '${AWS::StackName}-KnowledgeBaseId'
+      Name: !Sub
+        - '${Prefix}-KnowledgeBaseId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   KnowledgeBaseArn:
     Description: Bedrock Knowledge Base ARN
     Value: !GetAtt KnowledgeBase.KnowledgeBaseArn
     Export:
-      Name: !Sub '${AWS::StackName}-KnowledgeBaseArn'
+      Name: !Sub
+        - '${Prefix}-KnowledgeBaseArn'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   DataSourceId:
     Description: Bedrock Knowledge Base Data Source ID (text documents - backwards compatible)
     Value: !GetAtt KnowledgeBase.DataSourceId
     Export:
-      Name: !Sub '${AWS::StackName}-DataSourceId'
+      Name: !Sub
+        - '${Prefix}-DataSourceId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # API & Authentication
   GraphQLApiUrl:
     Description: GraphQL API URL
     Value: !GetAtt GraphQLApi.GraphQLUrl
     Export:
-      Name: !Sub '${AWS::StackName}-GraphQLApiUrl'
+      Name: !Sub
+        - '${Prefix}-GraphQLApiUrl'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   GraphQLApiId:
     Description: GraphQL API ID
     Value: !GetAtt GraphQLApi.ApiId
     Export:
-      Name: !Sub '${AWS::StackName}-GraphQLApiId'
+      Name: !Sub
+        - '${Prefix}-GraphQLApiId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   GraphQLApiKey:
     Description: GraphQL API Key for public theme config access
     Value: !GetAtt GraphQLApiKey.ApiKey
     Export:
-      Name: !Sub '${AWS::StackName}-GraphQLApiKey'
+      Name: !Sub
+        - '${Prefix}-GraphQLApiKey'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref UserPool
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolId'
+      Name: !Sub
+        - '${Prefix}-UserPoolId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   UserPoolClientId:
     Description: Cognito User Pool Client ID
     Value: !Ref UserPoolClient
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+      Name: !Sub
+        - '${Prefix}-UserPoolClientId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   IdentityPoolId:
     Description: Cognito Identity Pool ID
     Value: !Ref IdentityPool
     Export:
-      Name: !Sub '${AWS::StackName}-IdentityPoolId'
+      Name: !Sub
+        - '${Prefix}-IdentityPoolId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   # Configuration
   Region:
@@ -4723,23 +5020,31 @@ Outputs:
     Description: CDN URL for embeddable chat web component
     Value: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
     Export:
-      Name: !Sub '${AWS::StackName}-WebComponentCDNUrl'
+      Name: !Sub
+        - '${Prefix}-WebComponentCDNUrl'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   WebComponentDistributionId:
     Description: CloudFront distribution ID for web component
     Value: !Ref WebComponentDistribution
     Export:
-      Name: !Sub '${AWS::StackName}-WebComponentDistributionId'
+      Name: !Sub
+        - '${Prefix}-WebComponentDistributionId'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   WebComponentBuildProjectName:
     Description: CodeBuild project name for web component deployment
     Value: !Ref WebComponentBuildProject
     Export:
-      Name: !Sub '${AWS::StackName}-WebComponentBuildProject'
+      Name: !Sub
+        - '${Prefix}-WebComponentBuildProject'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   WebComponentAssetsBucketName:
     Description: S3 bucket for web component assets
     Value: !Ref WebComponentAssetsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-WebComponentAssetsBucket'
+      Name: !Sub
+        - '${Prefix}-WebComponentAssetsBucket'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 

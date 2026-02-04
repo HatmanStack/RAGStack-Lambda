@@ -94,6 +94,22 @@ python publish.py \
   --admin-email admin@example.com
 ```
 
+### Option 3: Nested Stack Deployment
+
+Deploy RAGStack as part of a larger CloudFormation stack. See [Nested Stack Deployment Guide](docs/NESTED_STACK_DEPLOYMENT.md) for details.
+
+**Quick example:**
+```yaml
+Resources:
+  RAGStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml
+      Parameters:
+        StackPrefix: 'my-app-ragstack'  # Required: lowercase prefix
+        AdminEmail: admin@example.com
+```
+
 ## Web Component Integration
 
 See [RAGSTACK_CHAT.md](docs/RAGSTACK_CHAT.md) for web component integration guide.
@@ -187,6 +203,7 @@ Ask questions about your content. Sources show where answers came from.
 ## Documentation
 
 - [Configuration](docs/CONFIGURATION.md) - Settings, quotas, API keys & document management
+- [Nested Stack Deployment](docs/NESTED_STACK_DEPLOYMENT.md) - Deploy as part of larger CloudFormation stack
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Metadata Filtering](docs/METADATA_FILTERING.md) - Auto-discover metadata and filter results
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
