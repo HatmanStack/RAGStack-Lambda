@@ -18,6 +18,7 @@ Metadata:
           default: Advanced Settings (Optional)
         Parameters:
           - StackPrefix
+          - AdditionalCorsOrigins
           - OcrBackend
           - BedrockOcrModelId
           - CaptionModelId
@@ -33,6 +34,8 @@ Metadata:
         default: Build Chat Widget
       StackPrefix:
         default: Stack Prefix (Nested Stack Only)
+      AdditionalCorsOrigins:
+        default: Additional CORS Origins (Nested Stack Only)
       OcrBackend:
         default: OCR Backend
       BedrockOcrModelId:
@@ -124,6 +127,14 @@ Parameters:
       Required for nested stack deployments to avoid uppercase characters in bucket names.
       WARNING: Changing this value after initial deployment will create NEW buckets and orphan existing data.
 
+  AdditionalCorsOrigins:
+    Type: String
+    Default: ''
+    Description: |
+      Additional CORS origins for cross-domain access (comma-separated URLs).
+      Use when embedding RAGStack in a parent stack with a different frontend domain.
+      Example: https://main.d1234567890.amplifyapp.com,https://example.com
+
 Globals:
   Function:
     Runtime: python3.13
@@ -142,6 +153,10 @@ Conditions:
   BuildAnyUI: !Or [!Condition BuildUI, !Condition BuildWC]
   # Use custom prefix instead of stack name (for nested stack deployments)
   UseCustomPrefix: !Not [!Equals [!Ref StackPrefix, '']]
+  # Additional CORS origins provided (for nested stack deployments)
+  HasAdditionalCorsOrigins: !Not [!Equals [!Ref AdditionalCorsOrigins, '']]
+  # Inverse of BuildUI for conditional resource creation
+  NotBuildUI: !Not [!Condition BuildUI]
 
 Resources:
   # =========================================================================
@@ -193,8 +208,12 @@ Resources:
               - POST
               - GET
               - HEAD
-            AllowedOrigins:
-              - !Sub 'https://${CloudFrontDistribution.DomainName}'
+            AllowedOrigins: !Split
+              - ','
+              - !If
+                - HasAdditionalCorsOrigins
+                - !Sub 'https://${CloudFrontDistribution.DomainName},${AdditionalCorsOrigins}'
+                - !Sub 'https://${CloudFrontDistribution.DomainName}'
             ExposedHeaders:
               - ETag
               - x-amz-meta-auto-process
@@ -2913,6 +2932,28 @@ Resources:
             Priority: 1
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: true
+        InviteMessageTemplate:
+          EmailSubject: !Sub
+            - 'Welcome to ${Prefix} - RAGStack Document AI'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+          EmailMessage: !Sub
+            - |
+              <h2>Welcome to RAGStack Document AI</h2>
+              <p>You've been invited to join <strong>${Prefix}</strong>.</p>
+              <p><strong>Dashboard URL:</strong> <a href="https://${CloudFrontDomain}">https://${CloudFrontDomain}</a></p>
+              <p><strong>Username:</strong> {username}</p>
+              <p><strong>Temporary Password:</strong> {####}</p>
+              <p>Please log in and change your password on first sign-in.</p>
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+              CloudFrontDomain: !GetAtt CloudFrontDistribution.DomainName
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: !Sub
+          - '${Prefix} - Verify your email'
+          - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+        EmailMessage: !Sub
+          - 'Your ${Prefix} verification code is: {####}'
+          - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -4412,7 +4453,7 @@ Resources:
                     'type': 'boolean',
                     'order': 8,
                     'description': 'Allow document downloads via presigned URLs',
-                    'default': False
+                    'default': True
                 },
                 'public_access_chat': {
                     'type': 'boolean',
@@ -4702,8 +4743,22 @@ Resources:
                 - cognito-idp:AdminCreateUser
               Resource: !GetAtt UserPool.Arn
 
-  AdminUser:
+  # Admin user creation - split into two resources to handle conditional DependsOn
+  # When UI is being built, wait for it to complete before sending invite email
+  AdminUserAfterBuild:
     Type: Custom::AdminUser
+    Condition: BuildUI
+    DependsOn: CodeBuildRun
+    Properties:
+      ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
+      ServiceTimeout: 120  # 2 minutes - user creation is fast
+      UserPoolId: !Ref UserPool
+      Email: !Ref AdminEmail
+
+  # When no UI build, create admin user immediately
+  AdminUserImmediate:
+    Type: Custom::AdminUser
+    Condition: NotBuildUI
     Properties:
       ServiceToken: !GetAtt AdminUserProvisionerFunction.Arn
       ServiceTimeout: 120  # 2 minutes - user creation is fast

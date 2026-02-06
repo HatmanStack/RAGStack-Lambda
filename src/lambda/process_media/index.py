@@ -55,6 +55,16 @@ VIDEO_EXTENSIONS = {".mp4", ".webm"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 
 
+def _is_eventbridge_event(event: dict) -> bool:
+    """Check if this is an EventBridge S3 event (vs Step Functions)."""
+    detail = event.get("detail", {})
+    if not detail:
+        return False
+    bucket_info = detail.get("bucket", {})
+    object_info = detail.get("object", {})
+    return bool(bucket_info.get("name") and object_info.get("key"))
+
+
 def _parse_eventbridge_event(event: dict) -> dict | None:
     """
     Parse EventBridge S3 event to extract media processing parameters.
@@ -64,20 +74,14 @@ def _parse_eventbridge_event(event: dict) -> dict | None:
 
     Returns:
         Dict with document_id, input_s3_uri, output_s3_prefix, detectedType
-        or None if not an EventBridge event
+        or None if not a media file (caller should skip processing)
     """
     detail = event.get("detail", {})
-    if not detail:
-        return None
-
     bucket_info = detail.get("bucket", {})
     object_info = detail.get("object", {})
 
     bucket = bucket_info.get("name")
     key = object_info.get("key")
-
-    if not bucket or not key:
-        return None
 
     # Expected key format: content/{docId}/{filename}
     # e.g., content/abc123/video.mp4
@@ -155,14 +159,22 @@ def lambda_handler(event, context):
     filename = None
 
     try:
-        # Try parsing as EventBridge S3 event first (direct upload to content/)
-        eb_event = _parse_eventbridge_event(event)
-        if eb_event:
-            document_id = eb_event["document_id"]
-            input_s3_uri = eb_event["input_s3_uri"]
-            output_s3_prefix = eb_event["output_s3_prefix"]
-            detected_type = eb_event["detectedType"]
-            logger.info(f"EventBridge trigger: {document_id}, type={detected_type}")
+        # Check if this is an EventBridge S3 event (vs Step Functions)
+        is_eventbridge = _is_eventbridge_event(event)
+
+        if is_eventbridge:
+            # Try parsing as EventBridge S3 event (direct upload to content/)
+            eb_event = _parse_eventbridge_event(event)
+            if eb_event:
+                document_id = eb_event["document_id"]
+                input_s3_uri = eb_event["input_s3_uri"]
+                output_s3_prefix = eb_event["output_s3_prefix"]
+                detected_type = eb_event["detectedType"]
+                logger.info(f"EventBridge trigger: {document_id}, type={detected_type}")
+            else:
+                # EventBridge event but not a media file - skip processing
+                logger.info("EventBridge event is not a media file, skipping")
+                return {"status": "skipped", "reason": "not a media file"}
         else:
             # Legacy Step Functions event format
             document_id = event["document_id"]
@@ -385,7 +397,7 @@ def lambda_handler(event, context):
 
         # If triggered via EventBridge (not Step Functions), invoke IngestMedia directly
         ingest_media_arn = os.environ.get("INGEST_MEDIA_FUNCTION_ARN")
-        if eb_event and ingest_media_arn:
+        if is_eventbridge and ingest_media_arn:
             logger.info(f"EventBridge trigger: invoking IngestMedia for {document_id}")
             try:
                 lambda_client.invoke(
