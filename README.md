@@ -15,7 +15,7 @@
 <a href="https://aws.amazon.com/cognito/"><img src="https://img.shields.io/badge/AWS-Cognito-DD344C" alt="AWS Cognito" /></a>
 </p>
 
-Serverless document and media processing with AI chat. Upload documents, images, video, and audio — extract text with OCR or transcription — query using Amazon Bedrock.
+Serverless document and media processing with AI chat. Scale-to-zero architecture — no vector database fees, no idle costs. Upload documents, images, video, and audio — extract text with OCR or transcription — query using Amazon Bedrock or your AI assistant via MCP.
 
 <p align="center">
   <b>QUESTIONS?</b>
@@ -60,7 +60,7 @@ Serverless document and media processing with AI chat. Upload documents, images,
 
 Deploy directly from the AWS Console - no local setup required:
 
-1. [Subscribe to RAGStack on AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-5afdiw2zrht6o) (free, limited visibility need to be signed in to aws)
+1. [Subscribe to RAGStack on AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-5afdiw2zrht6o) (free)
 2. [Click here to deploy](https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml&stackName=my-docs)
 3. Enter a stack name (**lowercase only**, e.g., "my-docs") and your admin email
 4. Click **Create Stack** (deployment takes ~10 minutes)
