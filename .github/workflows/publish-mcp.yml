@@ -16,14 +16,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Set version
+      - name: Check version
         working-directory: src/ragstack-mcp
         run: |
-          # Get base version and append .dev + run number (PEP 440 requires .devN where N is numeric)
-          BASE_VERSION=$(grep '^version' pyproject.toml | cut -d'"' -f2)
-          NEW_VERSION="${BASE_VERSION}.dev${GITHUB_RUN_NUMBER}"
-          sed -i "s/^version = .*/version = \"${NEW_VERSION}\"/" pyproject.toml
-          echo "Version: ${NEW_VERSION}"
+          VERSION=$(grep '^version' pyproject.toml | cut -d'"' -f2)
+          echo "Version: ${VERSION}"
 
       - name: Build package
         working-directory: src/ragstack-mcp
