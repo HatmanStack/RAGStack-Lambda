@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.2] - 2026-02-06
+
+### Added
+
+- **MCP Registry submission**: Prepared ragstack-mcp for the official Model Context Protocol Registry
+  - Added `mcp-name` verification marker for PyPI package validation
+  - Created `server.json` with registry schema, environment variable definitions, and transport config
+  - Registry name: `io.github.hatmanstack/ragstack`
+  - Bumped ragstack-mcp to v0.1.3
+
 ## [2.3.1] - 2026-02-04
 
 ### Added
