@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.hatmanstack/ragstack",
-  "description": "MCP server for RAGStack knowledge bases. Search, chat, upload documents/media, and scrape websites into a serverless RAG pipeline on AWS. Supports 30+ file types including video/audio with timestamp search.",
+  "name": "io.github.HatmanStack/ragstack",
+  "description": "Search, chat, upload, and scrape a serverless RAGStack knowledge base on AWS.",
   "repository": {
     "url": "https://github.com/HatmanStack/RAGStack-Lambda",
     "source": "github"
   },
-  "version": "0.1.3",
+  "version": "0.1.4",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "ragstack-mcp",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
