@@ -1,5 +1,7 @@
 # RAGStack MCP Server
 
+<!-- mcp-name: io.github.hatmanstack/ragstack -->
+
 MCP (Model Context Protocol) server for RAGStack knowledge bases. Enables AI assistants to search, chat, upload documents/media, and scrape your knowledge base.
 
 ## Installation
