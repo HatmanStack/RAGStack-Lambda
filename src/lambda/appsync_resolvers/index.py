@@ -177,39 +177,27 @@ bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AW
 # Validation constants
 MAX_FILENAME_LENGTH = 255
 MAX_DOCUMENTS_LIMIT = 100
-FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\- ()]+$")
-# Pattern to match invalid characters for sanitization (literal space only, not \s)
-INVALID_CHARS_PATTERN = re.compile(r"[^a-zA-Z0-9._\- ()]")
+# Strip ASCII control characters (0x00-0x1F, 0x7F) — everything else is valid in S3 keys
+CONTROL_CHARS_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def sanitize_filename(filename: str) -> str:
     """
-    Sanitize filename by replacing invalid characters with underscores.
+    Sanitize filename by stripping control characters.
 
-    Preserves the file extension and replaces any characters not in the
-    allowed set (alphanumeric, dots, dashes, underscores, spaces, parentheses).
-    Returns "unnamed" + extension if the sanitized name would be empty or unsafe.
+    S3 keys accept any UTF-8 character, so only ASCII control characters
+    are removed. Path traversal is handled separately in the upload resolvers.
+    Returns "unnamed" if the result would be empty.
     """
     if not filename:
         return "unnamed"
 
-    # Replace invalid characters with underscores
-    sanitized = INVALID_CHARS_PATTERN.sub("_", filename)
+    sanitized = CONTROL_CHARS_PATTERN.sub("", filename).strip()
 
-    # Collapse multiple consecutive underscores
-    while "__" in sanitized:
-        sanitized = sanitized.replace("__", "_")
+    if not sanitized:
+        return "unnamed"
 
-    # Strip leading/trailing spaces and underscores (but preserve extension)
-    path = Path(sanitized)
-    name = path.stem.strip(" _")
-    ext = path.suffix
-
-    # Check if name is empty or consists only of dots/underscores
-    if not name or all(c in "._" for c in name):
-        name = "unnamed"
-
-    return f"{name}{ext}"
+    return sanitized
 
 
 def lambda_handler(event, context):

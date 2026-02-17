@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.3] - 2026-02-17
+
+### Fixed
+
+- **Square brackets stripped from filenames during upload**: `sanitize_filename()` in `createUploadUrl` used an overly aggressive allowlist that replaced `[`, `]`, and other valid characters with underscores, causing `inputS3Uri` in DynamoDB to not match the actual S3 object key. Presigned URL downloads then failed with `NoSuchKey`. Replaced allowlist sanitization with minimal control character stripping — path traversal is already handled separately.
+
 ## [2.3.2] - 2026-02-06
 
 ### Added
