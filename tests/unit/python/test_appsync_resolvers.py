@@ -191,7 +191,7 @@ class TestCreateImageUploadUrl:
             "arguments": {"filename": "../../../etc/passwd.png"},
         }
 
-        with pytest.raises(ValueError, match="invalid path"):
+        with pytest.raises(ValueError, match="invalid characters"):
             module.lambda_handler(event, None)
 
     def test_create_image_upload_url_reject_forward_slash(self, mock_env, mock_boto3):
@@ -205,7 +205,7 @@ class TestCreateImageUploadUrl:
             "arguments": {"filename": "path/to/image.png"},
         }
 
-        with pytest.raises(ValueError, match="invalid path"):
+        with pytest.raises(ValueError, match="invalid characters"):
             module.lambda_handler(event, None)
 
     def test_create_image_upload_url_reject_long_filename(self, mock_env, mock_boto3):

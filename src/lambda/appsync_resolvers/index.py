@@ -1384,10 +1384,11 @@ def create_upload_url(args):
         if not filename:
             raise ValueError("Filename is required")
 
-        # Check for path traversal (security - must reject)
-        if "/" in filename or "\\" in filename or ".." in filename:
-            logger.warning(f"Filename contains path traversal characters: {filename}")
-            raise ValueError("Filename contains invalid path characters")
+        # Check for path traversal and JSON-unsafe characters (security - must reject)
+        # Double-quotes break EventBridge InputTransformer JSON templates
+        if "/" in filename or "\\" in filename or ".." in filename or '"' in filename:
+            logger.warning(f"Filename contains invalid characters: {filename}")
+            raise ValueError("Filename contains invalid characters")
 
         # Sanitize filename - replace invalid characters instead of rejecting
         sanitized_filename = sanitize_filename(filename)
@@ -1958,10 +1959,10 @@ def create_image_upload_url(args):
             logger.warning(f"Invalid filename length: {len(filename) if filename else 0}")
             raise ValueError(f"Filename must be between 1 and {MAX_FILENAME_LENGTH} characters")
 
-        # Check for path traversal and invalid characters
-        if "/" in filename or "\\" in filename or ".." in filename:
-            logger.warning(f"Filename contains invalid path characters: {filename}")
-            raise ValueError("Filename contains invalid path characters")
+        # Check for path traversal and JSON-unsafe characters
+        if "/" in filename or "\\" in filename or ".." in filename or '"' in filename:
+            logger.warning(f"Filename contains invalid characters: {filename}")
+            raise ValueError("Filename contains invalid characters")
 
         # Validate it's a supported image type
         if not is_supported_image(filename):
