@@ -140,6 +140,8 @@ Globals:
     Runtime: python3.13
     Timeout: 30  # Default 30s, override per-function as needed
     MemorySize: 256  # Default 256MB, override per-function as needed
+    Tags:
+      Project: !Ref AWS::StackName
     Environment:
       Variables:
         LOG_LEVEL: INFO
@@ -222,8 +224,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   VectorBucket:
     Type: AWS::S3::Bucket
@@ -256,8 +256,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   # =========================================================================
   # CodeBuild Resources for UI Deployment
@@ -325,6 +323,9 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   UICodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -390,6 +391,9 @@ Resources:
           - Name: CLOUDFRONT_DOMAIN
             Value: !GetAtt CloudFrontDistribution.DomainName
       TimeoutInMinutes: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # UI S3 Bucket
@@ -418,8 +422,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   # =========================================================================
   # CloudFront Distribution for UI
@@ -492,6 +494,9 @@ Resources:
           # AcmCertificateArn: !Ref CertificateArn
           # SslSupportMethod: sni-only
           # MinimumProtocolVersion: TLSv1.2_2021
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # Web Component CDN Infrastructure
@@ -520,8 +525,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   WebComponentOriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -594,8 +597,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   WebComponentBuildRole:
     Type: AWS::IAM::Role
@@ -758,8 +759,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   MeteringTable:
     Type: AWS::DynamoDB::Table
@@ -790,8 +789,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: CostCenter
-          Value: Engineering
 
   ##########################################################################
   # Configuration Table - Runtime configurable parameters
@@ -821,8 +818,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: Purpose
-          Value: Runtime Configuration Storage
 
   ##########################################################################
   # Conversation History Table - Stores multi-turn chat context
@@ -857,8 +852,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: Purpose
-          Value: Conversation History Storage
 
   ##########################################################################
   # Metadata Key Library Table - Tracks discovered metadata fields
@@ -886,8 +879,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: Purpose
-          Value: Metadata Key Library
 
   ##########################################################################
   # Scrape Jobs Table - Tracks web scraping job state
@@ -928,8 +919,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: Purpose
-          Value: Web Scraping Job Tracking
 
   ##########################################################################
   # Scrape URLs Table - Tracks individual URLs within scrape jobs
@@ -970,8 +959,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
-        - Key: Purpose
-          Value: Web Scraping URL Tracking
 
   # =========================================================================
   # Lambda Layers
@@ -1019,9 +1006,6 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1067,9 +1051,6 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
@@ -1096,9 +1077,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1131,9 +1109,6 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           INGEST_MEDIA_FUNCTION_ARN: !GetAtt IngestMediaFunction.Arn
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1179,9 +1154,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1214,9 +1186,6 @@ Resources:
           LOG_LEVEL: INFO
           STATE_MACHINE_ARN: !GetAtt ProcessingStateMachine.Arn
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - StepFunctionsExecutionPolicy:
             StateMachineName: !GetAtt ProcessingStateMachine.Name
@@ -1251,9 +1220,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           BATCH_QUEUE_URL: !Ref BatchProcessingQueue
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
@@ -1286,9 +1252,6 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1345,9 +1308,6 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
       Layers:
         - !Ref RagstackCommonLayer
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
@@ -1408,9 +1368,6 @@ Resources:
           SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Layers:
         - !Ref RagstackCommonLayer
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1477,9 +1434,6 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
@@ -1535,9 +1489,6 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
@@ -1591,9 +1542,6 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
@@ -1705,9 +1653,6 @@ Resources:
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           DATA_BUCKET: !Ref DataBucket
           CAPTION_MODEL_ID: !Ref CaptionModelId
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
@@ -1766,9 +1711,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DEMO_MODE: !Ref DemoMode
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -1823,9 +1765,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DATA_BUCKET: !Ref DataBucket
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -1883,9 +1822,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           STATE_MACHINE_ARN: !Ref ProcessingStateMachine
           DEMO_MODE: !Ref DemoMode
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -1930,9 +1866,6 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           APPSYNC_API_ID: !GetAtt GraphQLApi.ApiId
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -1971,9 +1904,6 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
@@ -2022,9 +1952,6 @@ Resources:
           SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
           SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Events:
         SQSTrigger:
           Type: SQS
@@ -2067,9 +1994,6 @@ Resources:
           SCRAPE_URLS_TABLE: !Ref ScrapeUrlsTable
           DATA_BUCKET: !Ref DataBucket
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Events:
         SQSTrigger:
           Type: SQS
@@ -2112,9 +2036,6 @@ Resources:
           SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           TRACKING_TABLE: !Ref TrackingTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
@@ -2181,6 +2102,9 @@ Resources:
                   - logs:DescribeResourcePolicies
                   - logs:DescribeLogGroups
                 Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
@@ -2204,6 +2128,8 @@ Resources:
         Destinations:
           - CloudWatchLogsLogGroup:
               LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+      Tags:
+        Project: !Ref AWS::StackName
 
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
@@ -2212,6 +2138,9 @@ Resources:
         - '/aws/vendedlogs/states/${Prefix}-Pipeline'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # Scrape Workflow State Machine
@@ -2271,6 +2200,9 @@ Resources:
                   - logs:DescribeResourcePolicies
                   - logs:DescribeLogGroups
                 Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ScrapeStateMachine:
     Type: AWS::Serverless::StateMachine
@@ -2290,6 +2222,8 @@ Resources:
         Destinations:
           - CloudWatchLogsLogGroup:
               LogGroupArn: !GetAtt ScrapeStateMachineLogGroup.Arn
+      Tags:
+        Project: !Ref AWS::StackName
 
   ScrapeStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
@@ -2298,6 +2232,9 @@ Resources:
         - '/aws/vendedlogs/states/${Prefix}-ScrapeWorkflow'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # KB Reindex State Machine
@@ -2339,6 +2276,9 @@ Resources:
                   - logs:DescribeResourcePolicies
                   - logs:DescribeLogGroups
                 Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ReindexStateMachine:
     Type: AWS::Serverless::StateMachine
@@ -2356,6 +2296,8 @@ Resources:
         Destinations:
           - CloudWatchLogsLogGroup:
               LogGroupArn: !GetAtt ReindexStateMachineLogGroup.Arn
+      Tags:
+        Project: !Ref AWS::StackName
 
   ReindexStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
@@ -2364,6 +2306,9 @@ Resources:
         - '/aws/vendedlogs/states/${Prefix}-ReindexWorkflow'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # EventBridge Rule for S3 Upload Trigger
@@ -2405,6 +2350,9 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # EventBridge Rule for Image Upload Trigger
@@ -2444,6 +2392,9 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ImageUploadRulePermission:
     Type: AWS::Lambda::Permission
@@ -2493,6 +2444,9 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 0
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ImageAutoProcessRulePermission:
     Type: AWS::Lambda::Permission
@@ -2538,6 +2492,9 @@ Resources:
               }
           RetryPolicy:
             MaximumRetryAttempts: 2
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ZipUploadRulePermission:
     Type: AWS::Lambda::Permission
@@ -2578,6 +2535,9 @@ Resources:
       Targets:
         - Arn: !GetAtt ProcessMediaFunction.Arn
           Id: TriggerProcessMedia
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # Rule for .webm video files
   MediaContentWebmRule:
@@ -2604,6 +2564,9 @@ Resources:
       Targets:
         - Arn: !GetAtt ProcessMediaFunction.Arn
           Id: TriggerProcessMedia
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # Rule for .mp3 audio files
   MediaContentMp3Rule:
@@ -2630,6 +2593,9 @@ Resources:
       Targets:
         - Arn: !GetAtt ProcessMediaFunction.Arn
           Id: TriggerProcessMedia
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # Rule for .wav audio files
   MediaContentWavRule:
@@ -2656,6 +2622,9 @@ Resources:
       Targets:
         - Arn: !GetAtt ProcessMediaFunction.Arn
           Id: TriggerProcessMedia
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ProcessMediaFunctionEventBridgePermissionMp4:
     Type: AWS::Lambda::Permission
@@ -2777,6 +2746,9 @@ Resources:
                   - bedrock:GetAsyncInvoke
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:async-invoke/*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   KnowledgeBaseCustomResourceFunction:
     Type: AWS::Serverless::Function
@@ -2796,9 +2768,6 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: INFO
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -2954,6 +2923,8 @@ Resources:
         EmailMessage: !Sub
           - 'Your ${Prefix} verification code is: {####}'
           - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      UserPoolTags:
+        Project: !Ref AWS::StackName
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -3021,6 +2992,9 @@ Resources:
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
                   - !Sub 'arn:${AWS::Partition}:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/*/fields/*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   AuthenticatedRole:
     Type: AWS::IAM::Role
@@ -3053,6 +3027,9 @@ Resources:
                   - appsync:GraphQL
                 Resource:
                   - !Sub '${GraphQLApi.Arn}/*'
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # AppSync GraphQL API
@@ -3075,6 +3052,9 @@ Resources:
       LogConfig:
         CloudWatchLogsRoleArn: !GetAtt AppSyncLogsRole.Arn
         FieldLogLevel: ERROR
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   GraphQLSchema:
     Type: AWS::AppSync::GraphQLSchema
@@ -3102,6 +3082,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # AppSync resolver Lambda - main CRUD operations
   AppSyncResolverFunction:
@@ -3141,9 +3124,6 @@ Resources:
           INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
           # Demo mode for rate limiting and feature restrictions
           DEMO_MODE: !Ref DemoMode
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
@@ -3321,6 +3301,9 @@ Resources:
                   - !GetAtt SearchKBFunction.Arn
                   - !GetAtt ConfigurationResolverFunction.Arn
                   - !GetAtt ApiKeyResolverFunction.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # Data source for KB queries
   KBQueryDataSource:
@@ -3757,6 +3740,9 @@ Resources:
       MessageRetentionPeriod: 1209600  # 14 days
       VisibilityTimeout: 300
       SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # Document Processing Queue (SQS → Step Functions)
@@ -3944,9 +3930,6 @@ Resources:
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
           TRACKING_TABLE: !Ref TrackingTable
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Events:
         SQSEvent:
           Type: SQS
@@ -3997,9 +3980,6 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Events:
         ScheduleEvent:
           Type: Schedule
@@ -4039,6 +4019,9 @@ Resources:
       Subscription:
         - Endpoint: !Ref AdminEmail
           Protocol: email
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # CloudWatch Dashboard
@@ -4204,6 +4187,9 @@ Resources:
         - !Ref AlarmTopic
       OKActions:
         - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -4227,6 +4213,9 @@ Resources:
         - !Ref AlarmTopic
       OKActions:
         - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -4250,6 +4239,9 @@ Resources:
         - !Ref AlarmTopic
       OKActions:
         - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   ProcessDocumentThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -4273,6 +4265,9 @@ Resources:
         - !Ref AlarmTopic
       OKActions:
         - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
 
   # =========================================================================
   # Budget Sync Function - Creates and syncs budget via Lambda
@@ -4309,9 +4304,6 @@ Resources:
             FilterCriteria:
               Filters:
                 - Pattern: '{"dynamodb":{"Keys":{"Configuration":{"S":["Custom"]}}}}'
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
@@ -4732,9 +4724,6 @@ Resources:
       Runtime: python3.13
       Timeout: 30
       MemorySize: 128
-      Tags:
-        Project: !Ref AWS::StackName
-        CostCenter: Engineering
       Policies:
         - Statement:
             - Effect: Allow
