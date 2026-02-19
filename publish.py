@@ -816,7 +816,7 @@ def publish_to_marketplace(region="us-east-1"):
     Package and publish template for AWS Marketplace one-click deployment.
 
     Updates the template at:
-    https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml
+    https://ragstack-quicklaunch-public.s3.us-east-1.amazonaws.com/ragstack-template.yaml
 
     Args:
         region: AWS region (default: us-east-1)
@@ -825,7 +825,7 @@ def publish_to_marketplace(region="us-east-1"):
     print(f"{Colors.HEADER}RAGStack-Lambda Marketplace Publishing{Colors.ENDC}")
     print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
-    marketplace_bucket = "ragstack-quicklaunch-public-631094035453"
+    marketplace_bucket = "ragstack-quicklaunch-public"
     template_key = "ragstack-template.yaml"
 
     try:

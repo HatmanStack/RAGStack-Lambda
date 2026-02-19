@@ -77,7 +77,7 @@ Parameters:
   UISourceBucket:
     Type: String
     Description: S3 bucket containing UI source code zip
-    Default: 'ragstack-quicklaunch-public-631094035453'
+    Default: 'ragstack-quicklaunch-public'
 
   UISourceKey:
     Type: String

@@ -38,7 +38,7 @@ Resources:
   RAGStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://ragstack-quicklaunch-public-631094035453.s3.us-east-1.amazonaws.com/ragstack-template.yaml
+      TemplateURL: https://ragstack-quicklaunch-public.s3.us-east-1.amazonaws.com/ragstack-template.yaml
       Parameters:
         # Required: Lowercase prefix for all resource names
         StackPrefix: !Sub '${AWS::StackName}-ragstack'
