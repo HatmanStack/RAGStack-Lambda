@@ -24,14 +24,14 @@ class MultiSliceRetriever:
 def deduplicate_results(results: list[dict]) -> list[dict]
 ```
 
-**Strategy:** Runs filtered + unfiltered slices in parallel, deduplicates by S3 URI keeping highest score.
+**Strategy:** Runs filtered + unfiltered slices in parallel, applies adaptive boost from actual score gap, deduplicates by S3 URI keeping highest score.
 
 ## Overview
 
 `MultiSliceRetriever` improves retrieval quality by running parallel queries:
 1. **Unfiltered query**: Baseline vector similarity
 2. **Filtered query**: Query with metadata filter applied
-3. **Boost filtered results**: Apply score multiplier to filtered results
+3. **Adaptive boost**: Compute boost from score gap between slices, capped at `filtered_score_boost`
 4. **Merge and deduplicate**: Combine results, keep highest score per document
 
 ## Usage
@@ -123,26 +123,27 @@ unique_results = deduplicate_results(all_results)
 # Keeps highest score for each unique S3 URI
 ```
 
-## Filtered Score Boost
+## Adaptive Filtered Score Boost
 
-When multi-slice retrieval runs parallel queries, filtered results receive a score boost:
+When multi-slice retrieval runs parallel queries, filtered results receive an adaptive score boost computed from the actual score gap between slices:
 
 **How it works:**
 1. Filtered results match explicit query intent (metadata filter)
 2. Unfiltered results provide baseline vector similarity
-3. Filtered scores multiplied by `filtered_score_boost` (default 1.25)
+3. Adaptive boost computed: `(best_unfiltered / best_filtered) * 1.10`, clamped to `filtered_score_boost` ceiling
 4. Results merged and deduplicated, keeping highest score
 
 **Example:**
 ```python
 # Unfiltered result: score 0.80
-# Filtered result: score 0.75 → boosted to 0.94 (0.75 × 1.25)
-# Final ranking: filtered result ranks first despite lower base score
+# Filtered result: score 0.72
+# Adaptive boost: (0.80 / 0.72) * 1.10 = 1.22
+# Filtered result: 0.72 * 1.22 = 0.88 → ranks first
 ```
 
-**Configuration:**
-- **Increase boost (1.3-1.5)**: Filtered results buried by visual similarity
-- **Decrease boost (1.1-1.2)**: Text-heavy KB where precision matters
+**Configuration** (`filtered_score_boost` sets the max ceiling):
+- **Increase ceiling (1.3-1.5)**: Allow larger boosts when filtered results are buried
+- **Decrease ceiling (1.1-1.2)**: Text-heavy KB where precision matters
 - **Disable boost (1.0)**: Testing pure vector similarity
 
 See [METADATA_FILTERING.md](../METADATA_FILTERING.md) for technical details on S3 Vectors quantization.

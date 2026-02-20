@@ -265,7 +265,7 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 | `multislice_enabled` | boolean | true | Enable parallel filtered/unfiltered queries |
 | `multislice_count` | number | 2 | Number of parallel retrieval slices (2-4) |
 | `multislice_timeout_ms` | number | 5000 | Timeout per slice in milliseconds |
-| `multislice_filtered_boost` | 1.0-2.0 | 1.25 | Score multiplier for filtered results (1.25 = 25% boost) |
+| `multislice_filtered_boost` | 1.0-2.0 | 1.25 | Max boost ceiling for adaptive filtered score boost |
 
 **Filter generation model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)

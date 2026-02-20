@@ -119,6 +119,8 @@ def compute_adaptive_boost(
         return max_boost
 
     required_boost = (best_unfiltered / best_filtered) * ADAPTIVE_BOOST_MARGIN
+    # max_boost takes precedence over floor — if the user sets max_boost below
+    # ADAPTIVE_BOOST_FLOOR, we respect the ceiling (effectively disabling boost)
     boost = min(max(required_boost, ADAPTIVE_BOOST_FLOOR), max_boost)
 
     logger.info(
@@ -143,20 +145,26 @@ def merge_slices_with_guaranteed_minimum(
     Merge multi-slice results with filtered results prioritized and boosted.
 
     The filtered slice represents results matching the user's explicit intent
-    (e.g., a person name filter), so its results receive a score boost to
-    improve their ranking against unfiltered results.
+    (e.g., a person name filter), so its results receive an adaptive score
+    boost to improve their ranking against unfiltered results.
 
     Strategy:
-        1. Apply score boost to filtered results.
-        2. Merge all results and sort by boosted score.
-        3. Deduplicate by URI, keeping highest boosted score.
+        1. Compute adaptive boost from actual score gap between slices.
+        2. Apply boost to filtered results.
+        3. Merge all results and sort by boosted score.
+        4. Deduplicate by URI, keeping highest boosted score.
+
+    Note: Returned results have their ``score`` field set to the boosted
+    value, not the raw KB similarity score. This is intentional — downstream
+    consumers see the ranking-adjusted score.
 
     Args:
         slice_results: Dict mapping slice name to its result list.
             The "filtered" key (if present) receives the score boost.
-        min_per_slice: Minimum guaranteed results per non-priority slice.
+        min_per_slice: Unused, kept for API compatibility.
         total_results: Maximum total results to return.
-        filtered_score_boost: Multiplier for filtered result scores (e.g., 1.15 = 15% boost).
+        filtered_score_boost: Max boost ceiling for adaptive computation
+            (e.g., 1.25 = up to 25% boost). Configurable at runtime.
 
     Returns:
         Merged and deduplicated results sorted by boosted score.
@@ -186,7 +194,7 @@ def merge_slices_with_guaranteed_minimum(
         boosted["_is_filtered"] = True
         boosted_filtered.append(boosted)
         if adaptive_boost != 1.0:
-            logger.debug(f"Boosted filtered score: {original_score:.4f} -> {boosted_score:.4f}")
+            logger.debug("Boosted filtered score: %.4f -> %.4f", original_score, boosted_score)
 
     # Tag unfiltered results (no boost)
     unfiltered_results = []
@@ -218,8 +226,11 @@ def merge_slices_with_guaranteed_minimum(
             break
 
     # Structured log for empirical tuning
+    # total_results is 2x per-slice num_results (set by caller), so //2
+    # approximates the per-slice request count for fill_rate calculation
     num_requested = total_results // 2 if total_results > 0 else 1
     fill_rate = len(filtered_results) / max(num_requested, 1)
+    # score_ratio < 1.0 means filtered scored lower; adaptive_boost (its inverse) compensates
     score_ratio = (
         (filtered_results[0].get("score", 0) / all_unfiltered[0].get("score", 1))
         if filtered_results and all_unfiltered and all_unfiltered[0].get("score", 0) > 0

@@ -58,9 +58,9 @@ This uses Haiku's quality for discovery and filter generation, while using Nova 
 
 ### Filtered Results Ranking
 
-- **Boost filtered results:** Increase `multislice_filtered_boost` (1.3-1.5) if filtered results buried by visual similarity
+- **Increase boost ceiling:** Raise `multislice_filtered_boost` (1.3-1.5) if filtered results still buried by visual similarity
 - **Disable boost:** Set to 1.0 if filtered results dominate too aggressively
-- **Default is balanced:** 1.25 works well for most use cases
+- **Default is balanced:** 1.25 ceiling works well for most use cases
 
 ---
 
