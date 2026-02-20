@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 # Default configuration
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_SLICES = 3
-DEFAULT_FILTERED_SCORE_BOOST = 1.25  # 25% boost to filtered results
+DEFAULT_FILTERED_SCORE_BOOST = 1.25  # default max boost ceiling (configurable via settings)
+ADAPTIVE_BOOST_MARGIN = 1.10  # 10% margin above parity to ensure filtered beats unfiltered
+ADAPTIVE_BOOST_FLOOR = 1.05  # minimum boost even when filtered scores are already higher
 
 
 @dataclass
@@ -75,6 +77,62 @@ def deduplicate_results(results: list[dict]) -> list[dict]:
     return deduped
 
 
+def compute_adaptive_boost(
+    filtered_results: list[dict],
+    unfiltered_results: list[dict],
+    max_boost: float,
+) -> float:
+    """
+    Compute a reactive score boost from actual score distributions.
+
+    Instead of a static multiplier, computes the exact boost needed to ensure
+    the best filtered result scores above the best unfiltered result, plus a
+    margin. Clamps between ADAPTIVE_BOOST_FLOOR and max_boost.
+
+    Falls back to max_boost (static behavior) when either slice is empty or
+    filtered scores are zero.
+
+    Args:
+        filtered_results: Results from the filtered slice (sorted by score desc).
+        unfiltered_results: Results from the unfiltered slice (sorted by score desc).
+        max_boost: Maximum allowed boost (from user config).
+
+    Returns:
+        Computed boost multiplier.
+    """
+    if not filtered_results or not unfiltered_results:
+        logger.info(
+            "adaptive_boost fallback=static reason=%s max_boost=%.4f",
+            "empty_filtered" if not filtered_results else "empty_unfiltered",
+            max_boost,
+        )
+        return max_boost
+
+    best_filtered = filtered_results[0].get("score", 0.0)
+    best_unfiltered = unfiltered_results[0].get("score", 0.0)
+
+    if best_filtered <= 0:
+        logger.info(
+            "adaptive_boost fallback=static reason=zero_filtered_score max_boost=%.4f",
+            max_boost,
+        )
+        return max_boost
+
+    required_boost = (best_unfiltered / best_filtered) * ADAPTIVE_BOOST_MARGIN
+    boost = min(max(required_boost, ADAPTIVE_BOOST_FLOOR), max_boost)
+
+    logger.info(
+        "adaptive_boost best_filtered=%.4f best_unfiltered=%.4f "
+        "required_boost=%.4f final_boost=%.4f max_boost=%.4f",
+        best_filtered,
+        best_unfiltered,
+        required_boost,
+        boost,
+        max_boost,
+    )
+    return boost
+
+
 def merge_slices_with_guaranteed_minimum(
     slice_results: dict[str, list[dict]],
     min_per_slice: int = 3,
@@ -110,16 +168,24 @@ def merge_slices_with_guaranteed_minimum(
     filtered_results = slice_results.get("filtered", [])
     other_slices = {k: v for k, v in slice_results.items() if k != "filtered"}
 
-    # Apply score boost to filtered results and tag them
+    # Collect unfiltered results for adaptive boost computation
+    all_unfiltered = [r for results in other_slices.values() for r in results]
+    all_unfiltered.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    # Compute adaptive boost from actual score distributions
+    # filtered_score_boost param serves as the max_boost ceiling
+    adaptive_boost = compute_adaptive_boost(filtered_results, all_unfiltered, filtered_score_boost)
+
+    # Apply adaptive boost to filtered results and tag them
     boosted_filtered = []
     for result in filtered_results:
         boosted = result.copy()
         original_score = result.get("score", 0.0)
-        boosted_score = original_score * filtered_score_boost
+        boosted_score = original_score * adaptive_boost
         boosted["_boosted_score"] = boosted_score
         boosted["_is_filtered"] = True
         boosted_filtered.append(boosted)
-        if filtered_score_boost != 1.0:
+        if adaptive_boost != 1.0:
             logger.debug(f"Boosted filtered score: {original_score:.4f} -> {boosted_score:.4f}")
 
     # Tag unfiltered results (no boost)
@@ -150,6 +216,27 @@ def merge_slices_with_guaranteed_minimum(
             merged.append(clean_result)
         if len(merged) >= total_results:
             break
+
+    # Structured log for empirical tuning
+    num_requested = total_results // 2 if total_results > 0 else 1
+    fill_rate = len(filtered_results) / max(num_requested, 1)
+    score_ratio = (
+        (filtered_results[0].get("score", 0) / all_unfiltered[0].get("score", 1))
+        if filtered_results and all_unfiltered and all_unfiltered[0].get("score", 0) > 0
+        else 0.0
+    )
+    logger.info(
+        "merge_slices fill_rate=%.4f score_ratio=%.4f "
+        "adaptive_boost=%.4f max_boost=%.4f "
+        "filtered_count=%d unfiltered_count=%d merged_count=%d",
+        fill_rate,
+        score_ratio,
+        adaptive_boost,
+        filtered_score_boost,
+        len(filtered_results),
+        len(all_unfiltered),
+        len(merged),
+    )
 
     return merged
 

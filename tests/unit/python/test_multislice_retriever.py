@@ -9,8 +9,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ragstack_common.multislice_retriever import (
+    ADAPTIVE_BOOST_FLOOR,
+    ADAPTIVE_BOOST_MARGIN,
     MultiSliceRetriever,
     SliceConfig,
+    compute_adaptive_boost,
     deduplicate_results,
     merge_slices_with_guaranteed_minimum,
 )
@@ -457,7 +460,7 @@ def test_retrieve_no_data_source_id(retriever, mock_bedrock_agent, sample_kb_res
 
 
 def test_filtered_score_boost_reorders_results():
-    """Test that filtered results with boost outrank unfiltered results."""
+    """Test that filtered results with adaptive boost outrank unfiltered results."""
     # Filtered results have lower raw scores
     filtered_results = [
         {
@@ -491,19 +494,18 @@ def test_filtered_score_boost_reorders_results():
         "unfiltered": unfiltered_results,
     }
 
-    # Without boost, unfiltered (Carol) would rank higher
-    merged_no_boost = merge_slices_with_guaranteed_minimum(
+    # With max_boost=1.0, adaptive boost clamps to ADAPTIVE_BOOST_FLOOR (1.05)
+    # Judy 0.65 * 1.05 = 0.6825, still < Carol 0.73
+    merged_min_boost = merge_slices_with_guaranteed_minimum(
         slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.0
     )
-    # Carol (0.73) should be first when no boost
-    assert "carol1.jpg" in merged_no_boost[0]["location"]["s3Location"]["uri"]
+    assert "carol1.jpg" in merged_min_boost[0]["location"]["s3Location"]["uri"]
 
-    # With 1.15 boost: Judy 0.65 * 1.15 = 0.7475, still < Carol 0.73
-    # With 1.2 boost: Judy 0.65 * 1.2 = 0.78 > Carol 0.73
+    # With max_boost=1.5, adaptive boost = (0.73/0.65)*1.10 = 1.2338
+    # Judy 0.65 * 1.2338 = 0.802 > Carol 0.73
     merged_with_boost = merge_slices_with_guaranteed_minimum(
-        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.2
+        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.5
     )
-    # Judy should now be first due to boost
     assert "judy1.jpg" in merged_with_boost[0]["location"]["s3Location"]["uri"]
 
 
@@ -520,9 +522,9 @@ def test_filtered_score_boost_returns_boosted_score():
         "unfiltered": [],
     }
 
+    # With empty unfiltered, adaptive boost falls back to max_boost (1.5)
     merged = merge_slices_with_guaranteed_minimum(slice_results, filtered_score_boost=1.5)
 
-    # Boosted score should be returned (0.65 * 1.5 = 0.975)
     assert merged[0]["score"] == 0.65 * 1.5
     # Internal tags should be removed
     assert "_boosted_score" not in merged[0]
@@ -543,3 +545,125 @@ def test_multislice_retriever_default_boost(mock_bedrock_agent):
     retriever = MultiSliceRetriever(bedrock_agent_client=mock_bedrock_agent)
     # Default is 1.25 (25% boost)
     assert retriever.filtered_score_boost == 1.25
+
+
+# Test: Adaptive boost computation
+
+
+def test_compute_adaptive_boost_basic():
+    """Test adaptive boost with typical score distributions."""
+    filtered = [{"score": 0.72}, {"score": 0.65}]
+    unfiltered = [{"score": 0.85}, {"score": 0.80}]
+
+    boost = compute_adaptive_boost(filtered, unfiltered, max_boost=1.5)
+
+    # Expected: (0.85 / 0.72) * 1.10 = 1.2986
+    expected = (0.85 / 0.72) * ADAPTIVE_BOOST_MARGIN
+    assert boost == pytest.approx(expected, abs=0.001)
+    assert ADAPTIVE_BOOST_FLOOR < boost < 1.5
+
+
+def test_compute_adaptive_boost_filtered_higher():
+    """Test that boost clamps to floor when filtered scores are already higher."""
+    filtered = [{"score": 0.90}, {"score": 0.85}]
+    unfiltered = [{"score": 0.70}, {"score": 0.65}]
+
+    boost = compute_adaptive_boost(filtered, unfiltered, max_boost=1.5)
+
+    # required = (0.70 / 0.90) * 1.10 = 0.856 -> clamps to ADAPTIVE_BOOST_FLOOR
+    assert boost == ADAPTIVE_BOOST_FLOOR
+
+
+def test_compute_adaptive_boost_empty_filtered():
+    """Test fallback to max_boost when filtered slice is empty."""
+    boost = compute_adaptive_boost([], [{"score": 0.85}], max_boost=1.5)
+    assert boost == 1.5
+
+
+def test_compute_adaptive_boost_empty_unfiltered():
+    """Test fallback to max_boost when unfiltered slice is empty."""
+    boost = compute_adaptive_boost([{"score": 0.72}], [], max_boost=1.5)
+    assert boost == 1.5
+
+
+def test_compute_adaptive_boost_zero_filtered_score():
+    """Test fallback to max_boost when best filtered score is zero."""
+    boost = compute_adaptive_boost([{"score": 0.0}], [{"score": 0.85}], max_boost=1.5)
+    assert boost == 1.5
+
+
+def test_compute_adaptive_boost_clamps_to_max():
+    """Test that large score gaps clamp to max_boost."""
+    # Huge gap: unfiltered far higher than filtered
+    filtered = [{"score": 0.20}]
+    unfiltered = [{"score": 0.90}]
+
+    boost = compute_adaptive_boost(filtered, unfiltered, max_boost=1.5)
+
+    # required = (0.90 / 0.20) * 1.10 = 4.95 -> clamps to 1.5
+    assert boost == 1.5
+
+
+def test_compute_adaptive_boost_equal_scores():
+    """Test boost when filtered and unfiltered scores are equal."""
+    filtered = [{"score": 0.80}]
+    unfiltered = [{"score": 0.80}]
+
+    boost = compute_adaptive_boost(filtered, unfiltered, max_boost=1.5)
+
+    # required = (0.80 / 0.80) * 1.10 = 1.10
+    assert boost == pytest.approx(ADAPTIVE_BOOST_MARGIN, abs=0.001)
+
+
+def test_adaptive_boost_structured_logging(caplog):
+    """Test that adaptive boost logs structured fields for empirical tuning."""
+    import logging
+
+    filtered = [{"score": 0.72}]
+    unfiltered = [{"score": 0.85}]
+
+    with caplog.at_level(logging.INFO, logger="ragstack_common.multislice_retriever"):
+        compute_adaptive_boost(filtered, unfiltered, max_boost=1.5)
+
+    # Verify structured log fields are present
+    log_text = caplog.text
+    assert "adaptive_boost" in log_text
+    assert "best_filtered=" in log_text
+    assert "best_unfiltered=" in log_text
+    assert "required_boost=" in log_text
+    assert "final_boost=" in log_text
+    assert "max_boost=" in log_text
+
+
+def test_merge_slices_structured_logging(caplog):
+    """Test that merge function logs structured fields for empirical tuning."""
+    import logging
+
+    slice_results = {
+        "filtered": [
+            {
+                "content": {"text": "Test"},
+                "location": {"s3Location": {"uri": "s3://bucket/f1.txt"}},
+                "score": 0.72,
+            }
+        ],
+        "unfiltered": [
+            {
+                "content": {"text": "Test"},
+                "location": {"s3Location": {"uri": "s3://bucket/u1.txt"}},
+                "score": 0.85,
+            }
+        ],
+    }
+
+    with caplog.at_level(logging.INFO, logger="ragstack_common.multislice_retriever"):
+        merge_slices_with_guaranteed_minimum(
+            slice_results, total_results=4, filtered_score_boost=1.5
+        )
+
+    log_text = caplog.text
+    assert "merge_slices" in log_text
+    assert "fill_rate=" in log_text
+    assert "score_ratio=" in log_text
+    assert "adaptive_boost=" in log_text
+    assert "max_boost=" in log_text
