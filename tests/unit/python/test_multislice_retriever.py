@@ -501,8 +501,8 @@ def test_filtered_score_boost_reorders_results():
     )
     assert "carol1.jpg" in merged_min_boost[0]["location"]["s3Location"]["uri"]
 
-    # max_boost=1.5, adaptive boost = (0.73/0.65)*1.10 = 1.2338
-    # filtered 0.65 * 1.2338 = 0.802 > unfiltered 0.73, so filtered ranks first
+    # max_boost=1.5, adaptive boost = (0.73/0.65)*1.10 ≈ 1.2354
+    # filtered 0.65 * 1.2354 ≈ 0.803 > unfiltered 0.73, so filtered ranks first
     merged_with_boost = merge_slices_with_guaranteed_minimum(
         slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.5
     )

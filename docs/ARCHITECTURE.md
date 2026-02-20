@@ -56,7 +56,7 @@ RAGStack uses S3 Vectors for ~90% cost savings over traditional vector databases
 
 **Quantization Impact:** 4-bit compression creates ~10% relevancy drop on filtered queries due to quantization noise amplification in smaller candidate pools.
 
-**Solution:** `multislice_filtered_boost` (default 1.25) compensates for this drop by normalizing filtered result scores. See [METADATA_FILTERING.md](./METADATA_FILTERING.md) for technical details.
+**Solution:** An adaptive boost computes the exact multiplier needed from the score gap between filtered and unfiltered results, capped by `multislice_filtered_boost` (default 1.25). See [METADATA_FILTERING.md](./METADATA_FILTERING.md) for technical details.
 
 ## Data Flow
 
