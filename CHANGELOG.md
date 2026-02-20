@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.3.4] - 2026-02-20
+
+### Added
+
+- **Adaptive filtered score boost**: Replaced static 1.25x multiplier with a reactive boost computed from the actual score gap between filtered and unfiltered results. The boost ensures filtered results (user intent) rank above unfiltered results regardless of KB size. `multislice_filtered_boost` now serves as the max boost ceiling. Falls back to static max boost when either slice is empty.
+- **Structured retrieval logging**: Multi-slice merge now logs `fill_rate`, `score_ratio`, `adaptive_boost`, and `max_boost` at INFO level for empirical tuning via CloudWatch Logs Insights.
+- **Project cost tracking**: All SAM stack resources tagged with `Project=stack-name` for AWS cost allocation.
+- **GitHub release automation**: CI workflow creates GitHub releases from version tags.
+- **Claude Code GitHub Action**: `@claude` mention handler for PR and issue assistance.
+
+### Fixed
+
+- **AWS account ID removed from quicklaunch bucket name**: Bucket name no longer contains the account ID.
+
+### Removed
+
+- **Claude code review workflow**: Removed unused (previously disabled) auto-review workflow.
+
 ## [2.3.3] - 2026-02-17
 
 ### Fixed

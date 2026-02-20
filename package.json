@@ -1,6 +1,6 @@
 {
   "name": "ragstack-lambda",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "description": "Serverless OCR-to-Knowledge Base pipeline on AWS",
   "private": true,
   "scripts": {
