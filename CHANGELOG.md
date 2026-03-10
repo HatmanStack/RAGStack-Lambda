@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.6] - 2026-03-10
+
+### Fixed
+
+- **Textract batch processing fails on scanned PDFs**: The Textract OCR path never set `pages_succeeded`/`pages_failed` (both defaulted to 0), ignored `page_start`/`page_end` page range filtering, and used wrong output filename in batch mode. All batches reported "0 succeeded, 0 failed" causing documents to fail the 95% threshold. The Bedrock and text-native PDF paths were unaffected.
+
 ## [2.3.5] - 2026-03-10
 
 ### Changed
