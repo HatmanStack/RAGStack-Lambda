@@ -4,5 +4,5 @@
   "output_s3_prefix": "s3://test-output-bucket/processed/test-doc-123/",
   "filename": "sample.pdf",
   "ocr_backend": "textract",
-  "bedrock_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0"
+  "bedrock_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }

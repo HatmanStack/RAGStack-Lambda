@@ -45,7 +45,7 @@ class OcrService:
         """
         self.region = region
         self.backend = backend
-        self.bedrock_model_id = bedrock_model_id or "anthropic.claude-3-5-haiku-20241022-v1:0"
+        self.bedrock_model_id = bedrock_model_id or "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
         # Lazy-load clients
         self._textract_client = None

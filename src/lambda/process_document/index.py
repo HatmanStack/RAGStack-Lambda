@@ -221,7 +221,7 @@ def lambda_handler(event, context):
         config_mgr = _get_config_manager()
         ocr_backend = config_mgr.get_parameter("ocr_backend", default="textract")
         bedrock_model_id = config_mgr.get_parameter(
-            "bedrock_ocr_model_id", default="anthropic.claude-3-5-haiku-20241022-v1:0"
+            "bedrock_ocr_model_id", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
         )
 
         # Force Bedrock for formats not supported by Textract (WebP, AVIF)

@@ -22,7 +22,7 @@ const sampleSchema = {
     bedrock_ocr_model_id: {
       type: 'string',
       enum: [
-        'anthropic.claude-3-5-haiku-20241022-v1:0',
+        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
         'anthropic.claude-3-5-sonnet-20241022-v2:0',
         'anthropic.claude-3-haiku-20240307-v1:0',
         'anthropic.claude-3-sonnet-20240229-v1:0'
@@ -41,7 +41,7 @@ const sampleSchema = {
         'amazon.nova-lite-v1:0',
         'amazon.nova-micro-v1:0',
         'anthropic.claude-3-5-sonnet-20241022-v2:0',
-        'anthropic.claude-3-5-haiku-20241022-v1:0'
+        'us.anthropic.claude-haiku-4-5-20251001-v1:0'
       ],
       description: 'Chat Model',
       order: 3
@@ -51,7 +51,7 @@ const sampleSchema = {
 
 const sampleDefault = {
   ocr_backend: 'textract',
-  bedrock_ocr_model_id: 'anthropic.claude-3-5-haiku-20241022-v1:0',
+  bedrock_ocr_model_id: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
   chat_model_id: 'amazon.nova-pro-v1:0'
 };
 
