@@ -39,7 +39,7 @@ from ragstack_common.key_library import KeyLibrary
 extractor = MetadataExtractor(
     bedrock_client=BedrockClient(),
     key_library=KeyLibrary(),
-    model_id="anthropic.claude-3-5-haiku-20241022-v1:0",
+    model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0",
     max_keys=8,
     extraction_mode="auto"
 )
@@ -386,7 +386,7 @@ from ragstack_common.key_library import KeyLibrary
 generator = FilterGenerator(
     bedrock_client=BedrockClient(),
     key_library=KeyLibrary(),
-    model_id="anthropic.claude-3-5-haiku-20241022-v1:0",
+    model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0",
     enabled=True
 )
 ```

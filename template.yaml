@@ -60,13 +60,13 @@ Parameters:
 
   BedrockOcrModelId:
     Type: String
-    Default: meta.llama3-2-90b-instruct-v1:0
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
-      - meta.llama3-2-90b-instruct-v1:0
-      - meta.llama3-2-11b-instruct-v1:0
-      - us.anthropic.claude-sonnet-4-20250514-v1:0
       - us.anthropic.claude-haiku-4-5-20251001-v1:0
+      - us.anthropic.claude-sonnet-4-6
+      - us.meta.llama4-scout-17b-instruct-v1:0
+      - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
 
   CaptionModelId:
@@ -1274,6 +1274,8 @@ Resources:
               Action:
                 - textract:DetectDocumentText
                 - textract:AnalyzeDocument
+                - textract:StartDocumentTextDetection
+                - textract:GetDocumentTextDetection
               Resource: '*'
       Events:
         SQSTrigger:
@@ -4358,6 +4360,7 @@ Resources:
           WC_CDN_URL: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -4387,9 +4390,9 @@ Resources:
                     'description': 'Bedrock model for OCR (only if backend is bedrock)',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
-                        'meta.llama3-2-90b-instruct-v1:0',
-                        'meta.llama3-2-11b-instruct-v1:0'
+                        'us.anthropic.claude-sonnet-4-6',
+                        'us.meta.llama4-scout-17b-instruct-v1:0',
+                        'us.meta.llama4-maverick-17b-instruct-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                     'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}
@@ -4405,10 +4408,13 @@ Resources:
                     'order': 3,
                     'description': 'Primary chat model',
                     'enum': [
-                        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                        'us.anthropic.claude-sonnet-4-6',
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.amazon.nova-pro-v1:0',
-                        'us.amazon.nova-lite-v1:0'
+                        'us.amazon.nova-premier-v1:0',
+                        'us.amazon.nova-lite-v1:0',
+                        'us.meta.llama4-maverick-17b-instruct-v1:0',
+                        'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
@@ -4419,7 +4425,9 @@ Resources:
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.amazon.nova-micro-v1:0',
-                        'us.amazon.nova-lite-v1:0'
+                        'us.amazon.nova-lite-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
+                        'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
                     'default': 'us.amazon.nova-lite-v1:0'
                 },
@@ -4527,8 +4535,8 @@ Resources:
                     'description': 'Model for filter generation',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-                        'us.amazon.nova-lite-v1:0'
+                        'us.amazon.nova-lite-v1:0',
+                        'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
@@ -4586,9 +4594,9 @@ Resources:
                     'description': 'Model for metadata extraction',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
                         'us.amazon.nova-micro-v1:0',
-                        'us.amazon.nova-lite-v1:0'
+                        'us.amazon.nova-lite-v1:0',
+                        'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
                     'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
                 },
@@ -4663,16 +4671,54 @@ Resources:
                     defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')
                     defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID', '')
                     defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID', '')
+                    
+                    # Override Bedrock OCR model from parameter if provided
+                    if os.environ.get('BEDROCK_OCR_MODEL'):
+                        defaults['bedrock_ocr_model_id'] = os.environ.get('BEDROCK_OCR_MODEL')
 
                     # Seed Schema (stored as dict, not JSON string)
+                    # Use parameter value for schema default too if provided
+                    if os.environ.get('BEDROCK_OCR_MODEL'):
+                        SCHEMA['properties']['bedrock_ocr_model_id']['default'] = os.environ.get('BEDROCK_OCR_MODEL')
+                        
                     # Convert floats to Decimal throughout the schema
                     table.put_item(Item={
                         'Configuration': 'Schema',
                         'Schema': convert_floats_to_decimal(SCHEMA)
                     })
 
-                    # Seed Default (values at top level, not nested)
-                    table.put_item(Item=defaults)
+                    # Seed Default: merge defaults into existing item to preserve
+                    # admin-edited runtime settings (only backfill missing keys)
+                    try:
+                        existing = table.get_item(Key={'Configuration': 'Default'}).get('Item', {})
+                    except Exception:
+                        existing = {}
+
+                    if existing:
+                        # Only write keys that don't already exist in the item
+                        missing = {k: v for k, v in defaults.items() if k not in existing}
+                        if missing:
+                            update_expr_parts = []
+                            attr_names = {}
+                            attr_values = {}
+                            for i, (k, v) in enumerate(missing.items()):
+                                alias = f'#k{i}'
+                                val_alias = f':v{i}'
+                                update_expr_parts.append(f'{alias} = {val_alias}')
+                                attr_names[alias] = k
+                                attr_values[val_alias] = v
+                            table.update_item(
+                                Key={'Configuration': 'Default'},
+                                UpdateExpression='SET ' + ', '.join(update_expr_parts),
+                                ExpressionAttributeNames=attr_names,
+                                ExpressionAttributeValues=attr_values,
+                            )
+                            print(f"Backfilled {len(missing)} missing keys into existing config")
+                        else:
+                            print("All default keys already present, no changes needed")
+                    else:
+                        # No existing config - fresh deployment, write all defaults
+                        table.put_item(Item=defaults)
 
                     print("Configuration seeded successfully")
 
@@ -4705,8 +4751,9 @@ Resources:
     Type: Custom::ConfigurationSeeder
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
+      BedrockOcrModelId: !Ref BedrockOcrModelId
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "6"  # v6: added multislice_filtered_boost, metadata_filter_examples, metadata_filter_keys
+      SchemaVersion: "8"  # v8: seeder merges defaults instead of overwriting admin-edited config
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

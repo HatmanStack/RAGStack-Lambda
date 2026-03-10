@@ -45,7 +45,7 @@ class OcrService:
         """
         self.region = region
         self.backend = backend
-        self.bedrock_model_id = bedrock_model_id or "anthropic.claude-3-5-haiku-20241022-v1:0"
+        self.bedrock_model_id = bedrock_model_id or "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
         # Lazy-load clients
         self._textract_client = None
@@ -150,15 +150,19 @@ class OcrService:
         """
         try:
             pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            total_pages = len(pdf_doc)
-            document.total_pages = total_pages
+            full_pdf_total = len(pdf_doc)
 
             # Determine page range (convert 1-indexed to 0-indexed for PyMuPDF)
             start_idx = (document.page_start - 1) if document.page_start else 0
-            end_idx = document.page_end if document.page_end else total_pages
+            end_idx = document.page_end if document.page_end else full_pdf_total
+
+            # Compute actual batch size for this segment
+            page_count = end_idx - start_idx
+            document.total_pages = page_count
 
             pages = []
             full_text_parts = []
+            processed_count = 0
 
             for page_num in range(start_idx, end_idx):
                 page = pdf_doc[page_num]
@@ -175,8 +179,14 @@ class OcrService:
                     confidence=100.0,  # Direct text extraction is 100% accurate
                 )
                 pages.append(page_obj)
+                processed_count += 1
 
             pdf_doc.close()
+
+            # Populate batch counters
+            document.pages_succeeded = processed_count
+            document.pages_failed = page_count - processed_count
+            document.pages = pages
 
             # Save text to S3
             full_text = "\n".join(full_text_parts)
@@ -211,7 +221,6 @@ class OcrService:
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
 
-            document.pages = pages
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
@@ -222,7 +231,7 @@ class OcrService:
                     f"({pages_processed} pages, text-native PDF)"
                 )
             else:
-                logger.info(f"Extracted text from {total_pages} pages (text-native PDF)")
+                logger.info(f"Extracted text from {page_count} pages (text-native PDF)")
             return document
 
         except (fitz.FileDataError, RuntimeError, IndexError) as e:
@@ -255,12 +264,18 @@ class OcrService:
         For multi-page PDFs, uses the async API (StartDocumentTextDetection)
         which requires the document to be in S3. For single images, uses
         the sync API (DetectDocumentText).
+
+        Supports batch mode via document.page_start and document.page_end.
+        When set, only pages in that range are kept from Textract results.
         """
         try:
             logger.info(f"Processing with Textract: {document.document_id}")
 
             document.pages = []
             all_text_parts = []
+
+            # Determine if this is batch mode
+            is_batch_mode = document.page_start is not None and document.page_end is not None
 
             # Check if this is a PDF
             is_pdf = document_bytes[:4] == b"%PDF"
@@ -317,10 +332,22 @@ class OcrService:
                 for block in all_blocks:
                     if block["BlockType"] == "LINE":
                         page_num = block.get("Page", 1)
+                        # In batch mode, filter to only the requested page range
+                        if is_batch_mode and (
+                            page_num < document.page_start or page_num > document.page_end
+                        ):
+                            continue
                         if page_num not in pages_dict:
                             pages_dict[page_num] = {"lines": [], "confidences": []}
                         pages_dict[page_num]["lines"].append(block.get("Text", ""))
                         pages_dict[page_num]["confidences"].append(block.get("Confidence", 0))
+
+                # In batch mode, ensure every page in the range has an entry
+                # (blank scanned pages produce no LINE blocks but need Page objects)
+                if is_batch_mode:
+                    for page_num in range(document.page_start, document.page_end + 1):
+                        if page_num not in pages_dict:
+                            pages_dict[page_num] = {"lines": [], "confidences": []}
 
                 # Create Page objects
                 for page_num in sorted(pages_dict.keys()):
@@ -338,7 +365,15 @@ class OcrService:
                         confidence=avg_confidence,
                     )
                     document.pages.append(page)
-                    all_text_parts.append(text)
+                    all_text_parts.append(f"--- Page {page_num} ---\n{text}")
+
+                # In batch mode, set counts for the requested page range
+                # (blank scanned pages produce no LINE blocks but aren't failures)
+                if is_batch_mode:
+                    pages_in_batch = document.page_end - document.page_start + 1
+                    document.total_pages = pages_in_batch
+                    document.pages_succeeded = len(document.pages)
+                    document.pages_failed = pages_in_batch - len(document.pages)
             else:
                 # Single image - use sync API
                 response = self.textract_client.detect_document_text(
@@ -360,8 +395,13 @@ class OcrService:
                 )
                 document.pages.append(page)
                 all_text_parts.append(text)
+                document.pages_succeeded = 1
+                document.pages_failed = 0
 
-            document.total_pages = len(document.pages)
+            # Set total_pages from actual pages list (non-batch modes only;
+            # batch mode already set total_pages = pages_in_batch above)
+            if not is_batch_mode:
+                document.total_pages = len(document.pages)
 
             # Combine all pages for S3 output
             full_text = "\n\n".join(all_text_parts)
@@ -371,11 +411,21 @@ class OcrService:
                 bucket, base_key = parse_s3_uri(document.output_s3_uri)
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                # base_key already includes document_id/ from caller
-                output_key = f"{base_key}extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"{base_key}pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
-                output_key = f"content/{document.document_id}/extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"content/{document.document_id}/"
+                        f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"content/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
@@ -383,9 +433,15 @@ class OcrService:
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
-            logger.info(
-                f"Textract OCR complete: {document.total_pages} pages, {len(full_text)} chars"
-            )
+            if is_batch_mode:
+                logger.info(
+                    f"Textract OCR complete for pages {document.page_start}-{document.page_end}: "
+                    f"{document.pages_succeeded} pages, {len(full_text)} chars"
+                )
+            else:
+                logger.info(
+                    f"Textract OCR complete: {document.total_pages} pages, {len(full_text)} chars"
+                )
             return document
 
         except (fitz.FileDataError, RuntimeError, ClientError) as e:
@@ -415,19 +471,18 @@ class OcrService:
 
         from PIL import Image
 
-        # Try different DPI levels until image is under size limit
+        # Bedrock receives base64-encoded images which are ~33% larger than raw bytes.
+        # Use 75% of the limit so images still fit after base64 encoding (raw * 4/3).
+        effective_limit = int(max_size_bytes * 0.75)
+
+        # Try JPEG first — much smaller for photo-heavy scanned content
+        # (150 DPI JPEG ~1MB vs 4.7MB PNG for photo album pages)
         for dpi in [150, 120, 100, 72, 50]:
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = pdf_page.get_pixmap(matrix=mat)
-            img_bytes = pix.tobytes("png")
-
-            if len(img_bytes) <= max_size_bytes:
-                logger.info(f"Page rendered at {dpi} DPI: {len(img_bytes) / 1024:.0f} KB")
-                return img_bytes
-
-            # Try JPEG compression if PNG is too large
             img_bytes = pix.tobytes("jpeg")
-            if len(img_bytes) <= max_size_bytes:
+
+            if len(img_bytes) <= effective_limit:
                 logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
@@ -441,7 +496,7 @@ class OcrService:
             buffer = BytesIO()
             pil_image.save(buffer, format="JPEG", quality=quality, optimize=True)
             img_bytes = buffer.getvalue()
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 size_kb = len(img_bytes) / 1024
                 logger.info(f"Page compressed to JPEG quality {quality}: {size_kb:.0f} KB")
                 return img_bytes
@@ -454,7 +509,7 @@ class OcrService:
             buffer = BytesIO()
             resized.save(buffer, format="JPEG", quality=50, optimize=True)
             img_bytes = buffer.getvalue()
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 logger.info(f"Page resized to {scale * 100:.0f}%: {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
@@ -570,6 +625,10 @@ class OcrService:
                 document.pages = pages
                 document.pages_succeeded = pages_succeeded
                 document.pages_failed = pages_failed
+
+                # Update total_pages to reflect batch scope (previously set to full PDF)
+                document.total_pages = pages_succeeded + pages_failed
+
                 text = "\n\n".join(all_text_parts)
             else:
                 # Single image - process directly

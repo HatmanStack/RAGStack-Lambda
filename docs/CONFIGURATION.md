@@ -175,9 +175,9 @@ For the complete list of supported languages, see [AWS Transcribe Supported Lang
 
 **Extraction model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
-- `us.anthropic.claude-3-5-haiku-20241022-v1:0`
 - `us.amazon.nova-micro-v1:0`
 - `us.amazon.nova-lite-v1:0`
+- `us.meta.llama4-scout-17b-instruct-v1:0`
 
 **How it works:**
 1. During document ingestion, content is analyzed by an LLM
@@ -269,7 +269,8 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 
 **Filter generation model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
-- `us.anthropic.claude-3-5-haiku-20241022-v1:0`
+- `us.amazon.nova-lite-v1:0`
+- `us.meta.llama4-scout-17b-instruct-v1:0`
 
 **Filter examples:** Managed via Settings → Metadata Analysis panel. Run "Analyze Metadata" to generate examples, then enable/disable individual examples to control few-shot learning patterns. See [METADATA_FILTERING.md](./METADATA_FILTERING.md) for details.
 
@@ -299,15 +300,20 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 > You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn't contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.
 
 **Primary model options:**
-- `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- `us.anthropic.claude-sonnet-4-6`
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
 - `us.amazon.nova-pro-v1:0`
+- `us.amazon.nova-premier-v1:0`
 - `us.amazon.nova-lite-v1:0`
+- `us.meta.llama4-maverick-17b-instruct-v1:0`
+- `us.meta.llama4-scout-17b-instruct-v1:0`
 
 **Fallback model options:**
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0`
 - `us.amazon.nova-micro-v1:0`
 - `us.amazon.nova-lite-v1:0` (default)
+- `us.amazon.nova-2-lite-v1:0`
+- `us.meta.llama4-scout-17b-instruct-v1:0`
 
 ## Access Control
 

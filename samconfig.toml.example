@@ -17,7 +17,7 @@ parameter_overrides = [
   "ProjectName=RAGStack-dev",
   "AdminEmail=your-email@example.com",
   "OcrBackend=textract",
-  "BedrockOcrModelId=anthropic.claude-3-5-haiku-20241022-v1:0"
+  "BedrockOcrModelId=us.anthropic.claude-haiku-4-5-20251001-v1:0"
 ]
 
 [default.package.parameters]
@@ -44,5 +44,5 @@ parameter_overrides = [
   "ProjectName=RAGStack-prod",
   "AdminEmail=your-email@example.com",
   "OcrBackend=textract",
-  "BedrockOcrModelId=anthropic.claude-3-5-haiku-20241022-v1:0"
+  "BedrockOcrModelId=us.anthropic.claude-haiku-4-5-20251001-v1:0"
 ]

@@ -119,7 +119,7 @@ def test_lambda_handler_success(
     def config_side_effect_1(key, default=None):
         config_map = {
             "ocr_backend": "textract",
-            "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "bedrock_ocr_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         }
         return config_map.get(key, default)
 
@@ -149,7 +149,7 @@ def test_lambda_handler_success(
     mock_ocr_service_class.assert_called_once_with(
         region="us-east-1",
         backend="textract",
-        bedrock_model_id="anthropic.claude-3-5-haiku-20241022-v1:0",
+        bedrock_model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
 
@@ -352,7 +352,7 @@ def test_lambda_handler_uses_runtime_config(
     assert mock_config_manager.get_parameter.call_count == 2
     mock_config_manager.get_parameter.assert_any_call("ocr_backend", default="textract")
     mock_config_manager.get_parameter.assert_any_call(
-        "bedrock_ocr_model_id", default="anthropic.claude-3-5-haiku-20241022-v1:0"
+        "bedrock_ocr_model_id", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
     )
 
     # Verify OCR service was initialized with config from ConfigurationManager
@@ -396,7 +396,7 @@ def test_lambda_handler_uses_textract_from_config(
     def config_side_effect(key, default=None):
         config_map = {
             "ocr_backend": "textract",
-            "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "bedrock_ocr_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         }
         return config_map.get(key, default)
 
@@ -422,7 +422,7 @@ def test_lambda_handler_uses_textract_from_config(
     mock_ocr_service_class.assert_called_once_with(
         region="us-east-1",
         backend="textract",
-        bedrock_model_id="anthropic.claude-3-5-haiku-20241022-v1:0",
+        bedrock_model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
     # Verify successful result

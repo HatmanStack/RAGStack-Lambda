@@ -54,7 +54,7 @@ def sample_schema():
                 },
                 "bedrock_ocr_model_id": {
                     "type": "string",
-                    "enum": ["anthropic.claude-3-5-haiku-20241022-v1:0"],
+                    "enum": ["us.anthropic.claude-haiku-4-5-20251001-v1:0"],
                     "description": "Bedrock OCR model",
                 },
                 "chat_model_id": {
@@ -73,7 +73,7 @@ def sample_default_config():
     return {
         "Configuration": "Default",
         "ocr_backend": "textract",
-        "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "bedrock_ocr_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
@@ -174,7 +174,7 @@ def test_get_effective_config_with_custom_override(
     assert result["ocr_backend"] == "bedrock"  # From Custom
     assert result["chat_model_id"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"  # From Custom
     # From Default
-    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
+    assert result["bedrock_ocr_model_id"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Configuration key should be removed
     assert "Configuration" not in result
@@ -320,7 +320,7 @@ def test_get_effective_config_with_new_fields(config_manager):
     default_config = {
         "Configuration": "Default",
         "ocr_backend": "textract",
-        "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "bedrock_ocr_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
@@ -345,7 +345,7 @@ def test_get_effective_config_with_new_fields(config_manager):
     assert result["ocr_backend"] == "bedrock"  # Custom override
     assert result["chat_model_id"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"  # Custom override
     # Default (no override)
-    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
+    assert result["bedrock_ocr_model_id"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def test_get_effective_config_defaults_only_new_fields(config_manager):
@@ -353,7 +353,7 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
     default_config = {
         "Configuration": "Default",
         "ocr_backend": "textract",
-        "bedrock_ocr_model_id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "bedrock_ocr_model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
         "chat_model_id": "us.amazon.nova-pro-v1:0",
     }
 
@@ -368,5 +368,5 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
 
     # Assert all values are from Default
     assert result["ocr_backend"] == "textract"
-    assert result["bedrock_ocr_model_id"] == "anthropic.claude-3-5-haiku-20241022-v1:0"
+    assert result["bedrock_ocr_model_id"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     assert result["chat_model_id"] == "us.amazon.nova-pro-v1:0"

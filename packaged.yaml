@@ -49,13 +49,13 @@ Parameters:
     Description: OCR backend to use (textract or bedrock)
   BedrockOcrModelId:
     Type: String
-    Default: meta.llama3-2-90b-instruct-v1:0
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
-    - meta.llama3-2-90b-instruct-v1:0
-    - meta.llama3-2-11b-instruct-v1:0
-    - us.anthropic.claude-sonnet-4-20250514-v1:0
     - us.anthropic.claude-haiku-4-5-20251001-v1:0
+    - us.anthropic.claude-sonnet-4-6
+    - us.meta.llama4-scout-17b-instruct-v1:0
+    - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
   CaptionModelId:
     Type: String
@@ -228,6 +228,12 @@ Resources:
       Runtime: python3.13
       Timeout: 60
       MemorySize: 128
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Fn::Sub: ${ProjectName}-config-${GeneratedSuffix.Suffix}
+          BEDROCK_OCR_MODEL:
+            Ref: BedrockOcrModelId
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -871,6 +877,8 @@ Resources:
         - Arn
       TableName:
         Ref: ConfigurationTable
+      BedrockOcrModelId:
+        Ref: BedrockOcrModelId
       WebComponentCDNUrl:
         Fn::If:
         - BuildWC

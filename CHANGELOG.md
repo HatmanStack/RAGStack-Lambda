@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.3.6] - 2026-03-10
+
+### Fixed
+
+- **Textract batch processing fails on scanned PDFs**: The Textract OCR path never set `pages_succeeded`/`pages_failed` (both defaulted to 0), ignored `page_start`/`page_end` page range filtering, and used wrong output filename in batch mode. All batches reported "0 succeeded, 0 failed" causing documents to fail the 95% threshold. The Bedrock and text-native PDF paths were unaffected.
+- **Missing Textract async API permissions on BatchProcessor**: IAM role only had sync actions (`DetectDocumentText`, `AnalyzeDocument`). Added `StartDocumentTextDetection` and `GetDocumentTextDetection` required for multi-page PDF OCR.
+- **Blank scanned pages omitted from Textract results**: Pages with no extractable text (e.g., photos) produced no LINE blocks and were missing from `document.pages`. Now backfills empty Page objects for all pages in the batch range.
+- **Base64 overhead in Bedrock image size limit**: `_render_page_to_image` checked raw bytes against 5MB but Bedrock receives base64-encoded images (~33% larger). Now uses 75% of the limit as the effective threshold.
+- **Config seeder overwrites admin-edited settings**: `put_item` on every stack update reset runtime settings changed via the Settings UI. Now merges defaults into existing config, only backfilling missing keys.
+- **Stale variable reference in text-native PDF log**: `total_pages` renamed to `page_count` but log line not updated, causing `NameError` at runtime.
+- **Unused `BEDROCK_OCR_MODEL` env var on ProcessDocument and BatchProcessor**: Both Lambdas read OCR model from DynamoDB, not env vars. Removed unused env var (kept on ConfigSeeder which actually uses it).
+- **packaged.yaml BedrockOcrModelId default mismatch**: Default was Maverick instead of Haiku, inconsistent with template.yaml.
+
+### Changed
+
+- **JPEG-first page rendering for Bedrock OCR**: Renders scanned pages as JPEG instead of PNG first (~1MB vs 4.7MB at 150 DPI for photo-heavy content). Most pages fit at highest DPI on first attempt.
+
+## [2.3.5] - 2026-03-10
+
+### Changed
+
+- **Updated Bedrock models to latest versions**: Replaced legacy model IDs across the stack
+  - Claude Sonnet 4 → Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`)
+  - Claude 3.5 Haiku → Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) with cross-region `us.` prefix
+  - Llama 3.2 (90b/11b) → Llama 4 Maverick/Scout (`us.meta.llama4-maverick-17b-instruct-v1:0`, `us.meta.llama4-scout-17b-instruct-v1:0`)
+- **Expanded model options for all configurable use cases**:
+  - Chat primary: Added Nova Premier, Llama 4 Maverick, Llama 4 Scout
+  - Chat fallback: Added Nova 2 Lite, Llama 4 Scout
+  - Metadata extraction: Added Llama 4 Scout, removed legacy Claude 3.5 Haiku
+  - Filter generation: Added Llama 4 Scout, removed legacy Claude 3.5 Haiku
+
 ## [2.3.4] - 2026-02-20
 
 ### Added

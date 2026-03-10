@@ -104,7 +104,7 @@ def test_lambda_handler_success(
     """Test successful Knowledge Base query."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Setup mock
     mock_bedrock_agent = Mock()
@@ -188,7 +188,7 @@ def test_lambda_handler_ignores_extra_parameters(
     """Test that handler ignores unknown parameters gracefully."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Event with extra parameter (legacy max_results)
     event = {"query": "test query", "max_results": 10}
@@ -220,7 +220,7 @@ def test_lambda_handler_minimal_request(
     """Test minimal request with just query parameter."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     event = {"query": "test query"}  # Only required field
 
@@ -248,7 +248,7 @@ def test_lambda_handler_no_results(
     """Test handling when Knowledge Base returns no results."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Mock empty response
     mock_bedrock_agent = mock_boto3_client.return_value
@@ -279,7 +279,7 @@ def test_lambda_handler_bedrock_error(
     """Test handling of Bedrock API error."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Mock Bedrock error
     # Use index.ClientError to ensure we're using the same one the handler uses
@@ -315,7 +315,7 @@ def test_lambda_handler_missing_content_fields(
     """Test handling of incomplete retrieval results."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Mock response with missing fields
     incomplete_response = {
@@ -364,7 +364,7 @@ def test_lambda_handler_result_count_logged(
     """Test that result count is logged."""
 
     # Setup config mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     mock_bedrock_agent = mock_boto3_client.return_value
     mock_bedrock_agent.retrieve_and_generate.return_value = mock_bedrock_response
@@ -441,7 +441,7 @@ def test_lambda_handler_uses_correct_region_in_model_arn(
     """Test that handler uses correct AWS region in model ARN."""
 
     # Setup config manager mock
-    mock_config_manager.get_parameter.return_value = "anthropic.claude-3-5-haiku-20241022-v1:0"
+    mock_config_manager.get_parameter.return_value = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Setup Bedrock mock
     mock_bedrock_agent = Mock()

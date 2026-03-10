@@ -89,7 +89,7 @@ class BedrockClient:
         Invoke a Bedrock model with retry logic.
 
         Args:
-            model_id: The Bedrock model ID (e.g., 'anthropic.claude-3-5-haiku-20241022-v1:0')
+            model_id: The Bedrock model ID (e.g., 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
             system_prompt: The system prompt as string or list of content objects
             content: The content for the user message (can include text and images)
             temperature: The temperature parameter for model inference
