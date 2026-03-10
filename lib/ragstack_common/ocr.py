@@ -351,10 +351,11 @@ class OcrService:
                     document.pages.append(page)
                     all_text_parts.append(f"--- Page {page_num} ---\n{text}")
 
-                # In batch mode, also count pages with no Textract output as succeeded
+                # In batch mode, set counts for the requested page range
                 # (blank scanned pages produce no LINE blocks but aren't failures)
                 if is_batch_mode:
                     pages_in_batch = document.page_end - document.page_start + 1
+                    document.total_pages = pages_in_batch
                     document.pages_succeeded = pages_in_batch
                     document.pages_failed = 0
             else:
@@ -381,7 +382,10 @@ class OcrService:
                 document.pages_succeeded = 1
                 document.pages_failed = 0
 
-            document.total_pages = len(document.pages)
+            # Set total_pages from actual pages list (non-batch modes only;
+            # batch mode already set total_pages = pages_in_batch above)
+            if not is_batch_mode:
+                document.total_pages = len(document.pages)
 
             # Combine all pages for S3 output
             full_text = "\n\n".join(all_text_parts)
