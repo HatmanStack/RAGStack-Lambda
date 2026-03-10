@@ -155,7 +155,7 @@ class OcrService:
             # Determine page range (convert 1-indexed to 0-indexed for PyMuPDF)
             start_idx = (document.page_start - 1) if document.page_start else 0
             end_idx = document.page_end if document.page_end else full_pdf_total
-            
+
             # Compute actual batch size for this segment
             page_count = end_idx - start_idx
             document.total_pages = page_count
@@ -182,7 +182,7 @@ class OcrService:
                 processed_count += 1
 
             pdf_doc.close()
-            
+
             # Populate batch counters
             document.pages_succeeded = processed_count
             document.pages_failed = page_count - processed_count
@@ -232,7 +232,7 @@ class OcrService:
                     f"({pages_processed} pages, text-native PDF)"
                 )
             else:
-                logger.info(f"Extracted text from {total_pages} pages (text-native PDF)")
+                logger.info(f"Extracted text from {page_count} pages (text-native PDF)")
             return document
 
         except (fitz.FileDataError, RuntimeError, IndexError) as e:
@@ -620,10 +620,10 @@ class OcrService:
                 document.pages = pages
                 document.pages_succeeded = pages_succeeded
                 document.pages_failed = pages_failed
-                
+
                 # Update total_pages to reflect batch scope (previously set to full PDF)
                 document.total_pages = pages_succeeded + pages_failed
-                
+
                 text = "\n\n".join(all_text_parts)
             else:
                 # Single image - process directly
