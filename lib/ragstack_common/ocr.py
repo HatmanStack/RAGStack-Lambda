@@ -465,19 +465,23 @@ class OcrService:
 
         from PIL import Image
 
+        # Bedrock receives base64-encoded images which are ~33% larger than raw bytes.
+        # Use 75% of the limit so images still fit after base64 encoding (raw * 4/3).
+        effective_limit = int(max_size_bytes * 0.75)
+
         # Try different DPI levels until image is under size limit
         for dpi in [150, 120, 100, 72, 50]:
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = pdf_page.get_pixmap(matrix=mat)
             img_bytes = pix.tobytes("png")
 
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 logger.info(f"Page rendered at {dpi} DPI: {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
             # Try JPEG compression if PNG is too large
             img_bytes = pix.tobytes("jpeg")
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
@@ -491,7 +495,7 @@ class OcrService:
             buffer = BytesIO()
             pil_image.save(buffer, format="JPEG", quality=quality, optimize=True)
             img_bytes = buffer.getvalue()
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 size_kb = len(img_bytes) / 1024
                 logger.info(f"Page compressed to JPEG quality {quality}: {size_kb:.0f} KB")
                 return img_bytes
@@ -504,7 +508,7 @@ class OcrService:
             buffer = BytesIO()
             resized.save(buffer, format="JPEG", quality=50, optimize=True)
             img_bytes = buffer.getvalue()
-            if len(img_bytes) <= max_size_bytes:
+            if len(img_bytes) <= effective_limit:
                 logger.info(f"Page resized to {scale * 100:.0f}%: {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
 
