@@ -469,18 +469,13 @@ class OcrService:
         # Use 75% of the limit so images still fit after base64 encoding (raw * 4/3).
         effective_limit = int(max_size_bytes * 0.75)
 
-        # Try different DPI levels until image is under size limit
+        # Try JPEG first — much smaller for photo-heavy scanned content
+        # (150 DPI JPEG ~1MB vs 4.7MB PNG for photo album pages)
         for dpi in [150, 120, 100, 72, 50]:
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = pdf_page.get_pixmap(matrix=mat)
-            img_bytes = pix.tobytes("png")
-
-            if len(img_bytes) <= effective_limit:
-                logger.info(f"Page rendered at {dpi} DPI: {len(img_bytes) / 1024:.0f} KB")
-                return img_bytes
-
-            # Try JPEG compression if PNG is too large
             img_bytes = pix.tobytes("jpeg")
+
             if len(img_bytes) <= effective_limit:
                 logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
                 return img_bytes
