@@ -300,7 +300,7 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 > You are a helpful assistant that answers questions based on information from a knowledge base. Always base your answers on the provided knowledge base information. If the provided information doesn't contain the answer, clearly state that and provide what relevant information you can. Be concise but thorough.
 
 **Primary model options:**
-- `us.anthropic.claude-sonnet-4-6-v1:0`
+- `us.anthropic.claude-sonnet-4-6`
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default)
 - `us.amazon.nova-pro-v1:0`
 - `us.amazon.nova-premier-v1:0`

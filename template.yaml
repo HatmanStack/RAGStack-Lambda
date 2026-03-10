@@ -64,7 +64,7 @@ Parameters:
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
       - us.anthropic.claude-haiku-4-5-20251001-v1:0
-      - us.anthropic.claude-sonnet-4-6-v1:0
+      - us.anthropic.claude-sonnet-4-6
       - us.meta.llama4-scout-17b-instruct-v1:0
       - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
@@ -1006,6 +1006,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
+          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1252,6 +1253,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
+          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -4360,6 +4362,7 @@ Resources:
           WC_CDN_URL: !Sub 'https://${WebComponentDistribution.DomainName}/ragstack-chat.js'
           KNOWLEDGE_BASE_ID: !GetAtt KnowledgeBase.KnowledgeBaseId
           DATA_SOURCE_ID: !GetAtt KnowledgeBase.DataSourceId
+          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
@@ -4389,7 +4392,7 @@ Resources:
                     'description': 'Bedrock model for OCR (only if backend is bedrock)',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-                        'us.anthropic.claude-sonnet-4-6-v1:0',
+                        'us.anthropic.claude-sonnet-4-6',
                         'us.meta.llama4-scout-17b-instruct-v1:0',
                         'us.meta.llama4-maverick-17b-instruct-v1:0'
                     ],
@@ -4407,7 +4410,7 @@ Resources:
                     'order': 3,
                     'description': 'Primary chat model',
                     'enum': [
-                        'us.anthropic.claude-sonnet-4-6-v1:0',
+                        'us.anthropic.claude-sonnet-4-6',
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.amazon.nova-pro-v1:0',
                         'us.amazon.nova-premier-v1:0',
@@ -4670,8 +4673,16 @@ Resources:
                     defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL', '')
                     defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID', '')
                     defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID', '')
+                    
+                    # Override Bedrock OCR model from parameter if provided
+                    if os.environ.get('BEDROCK_OCR_MODEL'):
+                        defaults['bedrock_ocr_model_id'] = os.environ.get('BEDROCK_OCR_MODEL')
 
                     # Seed Schema (stored as dict, not JSON string)
+                    # Use parameter value for schema default too if provided
+                    if os.environ.get('BEDROCK_OCR_MODEL'):
+                        SCHEMA['properties']['bedrock_ocr_model_id']['default'] = os.environ.get('BEDROCK_OCR_MODEL')
+                        
                     # Convert floats to Decimal throughout the schema
                     table.put_item(Item={
                         'Configuration': 'Schema',
@@ -4712,8 +4723,9 @@ Resources:
     Type: Custom::ConfigurationSeeder
     Properties:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
+      BedrockOcrModelId: !Ref BedrockOcrModelId
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "6"  # v6: added multislice_filtered_boost, metadata_filter_examples, metadata_filter_keys
+      SchemaVersion: "7"  # v7: updated Bedrock OCR model profile ID and passed via parameter
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

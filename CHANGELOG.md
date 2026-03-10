@@ -11,7 +11,7 @@
 ### Changed
 
 - **Updated Bedrock models to latest versions**: Replaced legacy model IDs across the stack
-  - Claude Sonnet 4 → Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6-v1:0`)
+  - Claude Sonnet 4 → Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`)
   - Claude 3.5 Haiku → Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) with cross-region `us.` prefix
   - Llama 3.2 (90b/11b) → Llama 4 Maverick/Scout (`us.meta.llama4-maverick-17b-instruct-v1:0`, `us.meta.llama4-scout-17b-instruct-v1:0`)
 - **Expanded model options for all configurable use cases**:

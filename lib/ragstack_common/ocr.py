@@ -150,15 +150,19 @@ class OcrService:
         """
         try:
             pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            total_pages = len(pdf_doc)
-            document.total_pages = total_pages
+            full_pdf_total = len(pdf_doc)
 
             # Determine page range (convert 1-indexed to 0-indexed for PyMuPDF)
             start_idx = (document.page_start - 1) if document.page_start else 0
-            end_idx = document.page_end if document.page_end else total_pages
+            end_idx = document.page_end if document.page_end else full_pdf_total
+            
+            # Compute actual batch size for this segment
+            page_count = end_idx - start_idx
+            document.total_pages = page_count
 
             pages = []
             full_text_parts = []
+            processed_count = 0
 
             for page_num in range(start_idx, end_idx):
                 page = pdf_doc[page_num]
@@ -175,8 +179,14 @@ class OcrService:
                     confidence=100.0,  # Direct text extraction is 100% accurate
                 )
                 pages.append(page_obj)
+                processed_count += 1
 
             pdf_doc.close()
+            
+            # Populate batch counters
+            document.pages_succeeded = processed_count
+            document.pages_failed = page_count - processed_count
+            document.pages = pages
 
             # Save text to S3
             full_text = "\n".join(full_text_parts)
@@ -610,6 +620,10 @@ class OcrService:
                 document.pages = pages
                 document.pages_succeeded = pages_succeeded
                 document.pages_failed = pages_failed
+                
+                # Update total_pages to reflect batch scope (previously set to full PDF)
+                document.total_pages = pages_succeeded + pages_failed
+                
                 text = "\n\n".join(all_text_parts)
             else:
                 # Single image - process directly
