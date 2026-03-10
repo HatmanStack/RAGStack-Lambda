@@ -1006,7 +1006,6 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
-          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
@@ -1253,7 +1252,6 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
-          BEDROCK_OCR_MODEL: !Ref BedrockOcrModelId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket

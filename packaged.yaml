@@ -1035,8 +1035,6 @@ Resources:
             Fn::GetAtt:
             - GraphQLApi
             - GraphQLUrl
-          BEDROCK_OCR_MODEL:
-            Ref: BedrockOcrModelId
       Tags:
         Project:
           Ref: ProjectName
@@ -1266,8 +1264,6 @@ Resources:
             Fn::GetAtt:
             - CombinePagesFunction
             - Arn
-          BEDROCK_OCR_MODEL:
-            Ref: BedrockOcrModelId
       Tags:
         Project:
           Ref: ProjectName
