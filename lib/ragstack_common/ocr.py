@@ -343,6 +343,13 @@ class OcrService:
                         pages_dict[page_num]["lines"].append(block.get("Text", ""))
                         pages_dict[page_num]["confidences"].append(block.get("Confidence", 0))
 
+                # In batch mode, ensure every page in the range has an entry
+                # (blank scanned pages produce no LINE blocks but need Page objects)
+                if is_batch_mode:
+                    for page_num in range(document.page_start, document.page_end + 1):
+                        if page_num not in pages_dict:
+                            pages_dict[page_num] = {"lines": [], "confidences": []}
+
                 # Create Page objects
                 for page_num in sorted(pages_dict.keys()):
                     page_data = pages_dict[page_num]
