@@ -1274,6 +1274,8 @@ Resources:
               Action:
                 - textract:DetectDocumentText
                 - textract:AnalyzeDocument
+                - textract:StartDocumentTextDetection
+                - textract:GetDocumentTextDetection
               Resource: '*'
       Events:
         SQSTrigger:
