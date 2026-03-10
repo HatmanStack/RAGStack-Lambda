@@ -255,12 +255,18 @@ class OcrService:
         For multi-page PDFs, uses the async API (StartDocumentTextDetection)
         which requires the document to be in S3. For single images, uses
         the sync API (DetectDocumentText).
+
+        Supports batch mode via document.page_start and document.page_end.
+        When set, only pages in that range are kept from Textract results.
         """
         try:
             logger.info(f"Processing with Textract: {document.document_id}")
 
             document.pages = []
             all_text_parts = []
+
+            # Determine if this is batch mode
+            is_batch_mode = document.page_start is not None and document.page_end is not None
 
             # Check if this is a PDF
             is_pdf = document_bytes[:4] == b"%PDF"
@@ -317,6 +323,11 @@ class OcrService:
                 for block in all_blocks:
                     if block["BlockType"] == "LINE":
                         page_num = block.get("Page", 1)
+                        # In batch mode, filter to only the requested page range
+                        if is_batch_mode and (
+                            page_num < document.page_start or page_num > document.page_end
+                        ):
+                            continue
                         if page_num not in pages_dict:
                             pages_dict[page_num] = {"lines": [], "confidences": []}
                         pages_dict[page_num]["lines"].append(block.get("Text", ""))
@@ -338,7 +349,14 @@ class OcrService:
                         confidence=avg_confidence,
                     )
                     document.pages.append(page)
-                    all_text_parts.append(text)
+                    all_text_parts.append(f"--- Page {page_num} ---\n{text}")
+
+                # In batch mode, also count pages with no Textract output as succeeded
+                # (blank scanned pages produce no LINE blocks but aren't failures)
+                if is_batch_mode:
+                    pages_in_batch = document.page_end - document.page_start + 1
+                    document.pages_succeeded = pages_in_batch
+                    document.pages_failed = 0
             else:
                 # Single image - use sync API
                 response = self.textract_client.detect_document_text(
@@ -360,6 +378,8 @@ class OcrService:
                 )
                 document.pages.append(page)
                 all_text_parts.append(text)
+                document.pages_succeeded = 1
+                document.pages_failed = 0
 
             document.total_pages = len(document.pages)
 
@@ -371,11 +391,21 @@ class OcrService:
                 bucket, base_key = parse_s3_uri(document.output_s3_uri)
                 if base_key and not base_key.endswith("/"):
                     base_key += "/"
-                # base_key already includes document_id/ from caller
-                output_key = f"{base_key}extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"{base_key}pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"{base_key}extracted_text.txt"
             else:
                 bucket, _ = parse_s3_uri(document.input_s3_uri)
-                output_key = f"content/{document.document_id}/extracted_text.txt"
+                if is_batch_mode:
+                    output_key = (
+                        f"content/{document.document_id}/"
+                        f"pages_{document.page_start:03d}-{document.page_end:03d}.txt"
+                    )
+                else:
+                    output_key = f"content/{document.document_id}/extracted_text.txt"
 
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
@@ -383,9 +413,15 @@ class OcrService:
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
-            logger.info(
-                f"Textract OCR complete: {document.total_pages} pages, {len(full_text)} chars"
-            )
+            if is_batch_mode:
+                logger.info(
+                    f"Textract OCR complete for pages {document.page_start}-{document.page_end}: "
+                    f"{document.pages_succeeded} pages, {len(full_text)} chars"
+                )
+            else:
+                logger.info(
+                    f"Textract OCR complete: {document.total_pages} pages, {len(full_text)} chars"
+                )
             return document
 
         except (fitz.FileDataError, RuntimeError, ClientError) as e:
