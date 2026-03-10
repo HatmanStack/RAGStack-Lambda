@@ -221,7 +221,6 @@ class OcrService:
             output_uri = f"s3://{bucket}/{output_key}"
             write_s3_text(output_uri, full_text)
 
-            document.pages = pages
             document.output_s3_uri = output_uri
             document.status = Status.OCR_COMPLETE
 
@@ -373,8 +372,8 @@ class OcrService:
                 if is_batch_mode:
                     pages_in_batch = document.page_end - document.page_start + 1
                     document.total_pages = pages_in_batch
-                    document.pages_succeeded = pages_in_batch
-                    document.pages_failed = 0
+                    document.pages_succeeded = len(document.pages)
+                    document.pages_failed = pages_in_batch - len(document.pages)
             else:
                 # Single image - use sync API
                 response = self.textract_client.detect_document_text(

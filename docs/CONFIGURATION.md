@@ -312,7 +312,6 @@ Reindex allows you to regenerate metadata for **all** existing documents using c
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0`
 - `us.amazon.nova-micro-v1:0`
 - `us.amazon.nova-lite-v1:0` (default)
-- `us.amazon.nova-2-lite-v1:0`
 - `us.meta.llama4-scout-17b-instruct-v1:0`
 
 ## Access Control
