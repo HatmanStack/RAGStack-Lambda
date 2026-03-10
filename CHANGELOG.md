@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.5] - 2026-03-10
+
+### Changed
+
+- **Updated Bedrock models to latest versions**: Replaced legacy model IDs across the stack
+  - Claude Sonnet 4 → Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6-v1:0`)
+  - Claude 3.5 Haiku → Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) with cross-region `us.` prefix
+  - Llama 3.2 (90b/11b) → Llama 4 Maverick/Scout (`us.meta.llama4-maverick-17b-instruct-v1:0`, `us.meta.llama4-scout-17b-instruct-v1:0`)
+- **Expanded model options for all configurable use cases**:
+  - Chat primary: Added Nova Premier, Llama 4 Maverick, Llama 4 Scout
+  - Chat fallback: Added Nova 2 Lite, Llama 4 Scout
+  - Metadata extraction: Added Llama 4 Scout, removed legacy Claude 3.5 Haiku
+  - Filter generation: Added Llama 4 Scout, removed legacy Claude 3.5 Haiku
+
 ## [2.3.4] - 2026-02-20
 
 ### Added
