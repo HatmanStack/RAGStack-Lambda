@@ -60,7 +60,7 @@ Serverless document and media processing with AI chat. Scale-to-zero architectur
 
 Deploy directly from the AWS Console - no local setup required:
 
-1. [Subscribe to RAGStack on AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-5afdiw2zrht6o) (free, not required — document processing Lambdas auto-accept Bedrock model agreements; public-facing endpoints require admin pre-acceptance)
+1. [Subscribe to RAGStack on AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-5afdiw2zrht6o) (free, not required - If subscribed Lambda roles auto-accept Bedrock model agreements on first invocation)
 2. [Click here to deploy](https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://ragstack-quicklaunch-public.s3.us-east-1.amazonaws.com/ragstack-template.yaml&stackName=my-docs)
 3. Enter a stack name (**lowercase only**, e.g., "my-docs") and your admin email
 4. Click **Create Stack** (deployment takes ~10 minutes)
