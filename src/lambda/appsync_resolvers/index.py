@@ -950,9 +950,12 @@ MEDIA_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".m
 SKIP_REINDEX_EXTENSIONS = VISUAL_EXTENSIONS | MEDIA_EXTENSIONS
 
 
-def _list_text_uris_for_reindex(input_s3_uri: str) -> list[str]:
+def _list_text_uris_for_reindex(bucket: str, document_id: str) -> list[str]:
     """
     List all text-based S3 URIs in a document's content folder for reindexing.
+
+    Searches content/{document_id}/ directly by document_id rather than parsing
+    URIs, which avoids issues with input/ vs content/ prefixes and legacy paths.
 
     Excludes:
     - .metadata.json files (sidecars, not content)
@@ -960,68 +963,55 @@ def _list_text_uris_for_reindex(input_s3_uri: str) -> list[str]:
     - Media files (.mp4, .mp3, etc.) - same reason
 
     Args:
-        input_s3_uri: S3 URI of any file in the document's content folder.
+        bucket: S3 bucket name.
+        document_id: Document UUID.
 
     Returns:
         List of text-based S3 URIs to reindex.
     """
-    if not input_s3_uri or not input_s3_uri.startswith("s3://"):
+    if not bucket or not document_id:
         return []
 
     try:
-        uri_path = input_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) < 2:
-            return []
+        # Try standard path first, then legacy path (content/input/{doc_id}/)
+        prefixes = [f"content/{document_id}/"]
 
-        bucket = parts[0]
-        key = parts[1]
+        # Legacy format: EventBridge used to produce content/input/{doc_id}/
+        # before the output_s3_prefix fix in process_document
+        prefixes.append(f"content/input/{document_id}/")
 
-        # Determine folder prefix (content/{doc_id}/)
-        folder_prefix = None
-        if key.startswith("content/"):
-            key_parts = key.split("/")
-            if len(key_parts) >= 2:
-                folder_prefix = f"content/{key_parts[1]}/"
-
-        if not folder_prefix:
-            # Not a content folder - check if it's a text file
-            lower_uri = input_s3_uri.lower()
-            if lower_uri.endswith(".metadata.json"):
-                return []
-            for ext in SKIP_REINDEX_EXTENSIONS:
-                if lower_uri.endswith(ext):
-                    return []
-            return [input_s3_uri]
-
-        # List all objects in the folder
         text_uris = []
         paginator = s3.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=bucket, Prefix=folder_prefix):
-            for obj in page.get("Contents", []):
-                obj_key = obj["Key"]
-                lower_key = obj_key.lower()
+        for folder_prefix in prefixes:
+            for page in paginator.paginate(Bucket=bucket, Prefix=folder_prefix):
+                for obj in page.get("Contents", []):
+                    obj_key = obj["Key"]
+                    lower_key = obj_key.lower()
 
-                # Skip metadata sidecar files
-                if lower_key.endswith(".metadata.json"):
-                    continue
+                    # Skip metadata sidecar files
+                    if lower_key.endswith(".metadata.json"):
+                        continue
 
-                # Skip visual/media files
-                skip = False
-                for ext in SKIP_REINDEX_EXTENSIONS:
-                    if lower_key.endswith(ext):
-                        skip = True
-                        break
-                if skip:
-                    continue
+                    # Skip visual/media files
+                    skip = False
+                    for ext in SKIP_REINDEX_EXTENSIONS:
+                        if lower_key.endswith(ext):
+                            skip = True
+                            break
+                    if skip:
+                        continue
 
-                text_uris.append(f"s3://{bucket}/{obj_key}")
+                    text_uris.append(f"s3://{bucket}/{obj_key}")
 
-        logger.info(f"Found {len(text_uris)} text URIs for reindex in {folder_prefix}")
+            if text_uris:
+                logger.info(f"Found {len(text_uris)} text URIs for reindex in {folder_prefix}")
+                return text_uris
+
+        logger.info(f"No text URIs found for reindex of {document_id}")
         return text_uris
 
     except ClientError as e:
-        logger.warning(f"Failed to list text URIs for {input_s3_uri}: {e}")
+        logger.warning(f"Failed to list text URIs for {document_id}: {e}")
         return []
 
 
@@ -1242,17 +1232,9 @@ def reindex_document(args):
     if current_status in ("processing", "transcribing", "pending"):
         raise ValueError(f"Document is already being processed (status: {current_status})")
 
-    # Get base S3 URI to find content folder
-    input_s3_uri = item.get("input_s3_uri", "")
-    output_s3_uri = item.get("output_s3_uri", "")
-    caption_s3_uri = item.get("caption_s3_uri", "")
-    base_uri = input_s3_uri or output_s3_uri or caption_s3_uri
-
-    if not base_uri:
-        raise ValueError("Document has no S3 URI - it may not have been processed yet")
-
     # List all text-based files to reindex (excludes visual/media files)
-    text_uris = _list_text_uris_for_reindex(base_uri)
+    # Use document_id to search content/{doc_id}/ directly
+    text_uris = _list_text_uris_for_reindex(DATA_BUCKET, document_id)
 
     if not text_uris:
         raise ValueError("No text files found to reindex")
