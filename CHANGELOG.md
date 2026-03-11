@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.7] - 2026-03-11
+
+### Fixed
+
+- **Remove unnecessary `AWS::S3::Bucket` VectorBucket resource**: The template created a regular S3 bucket for vector storage, but actual vectors are stored in an S3 Vectors bucket (different AWS service) created by the KnowledgeBase custom resource. The regular bucket was always empty and unused. When manually deleted, it caused CloudFormation update failures (S3Control 404 on every subsequent stack update). Replaced `!Ref VectorBucket` with a constructed name string, removed unused regular S3 IAM permissions (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`) from KnowledgeBaseRole and `S3CrudPolicy` from three Lambda functions. Bedrock KB with S3 Vectors only requires `s3vectors:` permissions per AWS documentation.
+
+### Migration Note
+
+- Existing deployments update cleanly — CloudFormation deregisters the regular S3 bucket (`DeletionPolicy: Retain`) without deleting it. The only incompatibility is if a user manually deleted the regular S3 vector bucket outside of CloudFormation; in that case, recreate the empty bucket before deploying this update.
+
 ## [2.3.6] - 2026-03-10
 
 ### Fixed

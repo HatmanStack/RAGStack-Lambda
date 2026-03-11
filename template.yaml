@@ -65,6 +65,8 @@ Parameters:
     AllowedValues:
       - us.anthropic.claude-haiku-4-5-20251001-v1:0
       - us.anthropic.claude-sonnet-4-6
+      - us.amazon.nova-2-lite-v1:0
+      - us.amazon.nova-pro-v1:0
       - us.meta.llama4-scout-17b-instruct-v1:0
       - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
@@ -221,38 +223,6 @@ Resources:
               - x-amz-meta-auto-process
               - x-amz-meta-user-caption
             MaxAge: 3000
-      Tags:
-        - Key: Project
-          Value: !Ref AWS::StackName
-
-  VectorBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub
-        - '${Prefix}-vectors-${AWS::AccountId}'
-        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: CleanupOldVectors
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
@@ -1105,15 +1075,15 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
-          VECTOR_BUCKET: !Ref VectorBucket
+          VECTOR_BUCKET: !Sub
+            - '${Prefix}-vectors-${AWS::AccountId}'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           INGEST_MEDIA_FUNCTION_ARN: !GetAtt IngestMediaFunction.Arn
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBReadPolicy:
@@ -1373,8 +1343,6 @@ Resources:
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1535,7 +1503,9 @@ Resources:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
-          VECTOR_BUCKET: !Ref VectorBucket
+          VECTOR_BUCKET: !Sub
+            - '${Prefix}-vectors-${AWS::AccountId}'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           STACK_NAME: !Ref AWS::StackName
           KB_ROLE_ARN: !GetAtt KnowledgeBaseRole.Arn
           EMBEDDING_MODEL_ARN: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
@@ -1555,8 +1525,6 @@ Resources:
             TableName: !Ref ScrapeJobsTable
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1599,8 +1567,12 @@ Resources:
                 - s3vectors:GetIndex
                 - s3vectors:ListVectors
               Resource:
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
             - Effect: Allow
               Action:
                 - lambda:GetFunctionConfiguration
@@ -2710,17 +2682,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:ListBucket
-                Resource:
-                  - !Sub '${VectorBucket.Arn}'
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource:
-                  - !Sub '${VectorBucket.Arn}/*'
-              - Effect: Allow
-                Action:
                   - s3vectors:DescribeIndex
                   - s3vectors:ReadVectors
                   - s3vectors:WriteVectors
@@ -2729,8 +2690,12 @@ Resources:
                   - s3vectors:GetVectors
                   - s3vectors:DeleteVectors
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         - PolicyName: BedrockModelAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -2802,8 +2767,12 @@ Resources:
                 - s3vectors:DescribeIndex
                 - s3vectors:ListIndices
               Resource:
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
             - Effect: Allow
               Action:
                 - iam:PassRole
@@ -2825,7 +2794,9 @@ Resources:
         - '${Prefix}-kb'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
-      VectorBucket: !Ref VectorBucket
+      VectorBucket: !Sub
+        - '${Prefix}-vectors-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DataBucket: !Ref DataBucket
       # Nova Multimodal Embeddings - supports text, images, video, audio
       # Currently only available in us-east-1. When available elsewhere, just deploy there.
@@ -4391,6 +4362,8 @@ Resources:
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.anthropic.claude-sonnet-4-6',
+                        'us.amazon.nova-2-lite-v1:0',
+                        'us.amazon.nova-pro-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0',
                         'us.meta.llama4-maverick-17b-instruct-v1:0'
                     ],
@@ -4412,6 +4385,7 @@ Resources:
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.amazon.nova-pro-v1:0',
                         'us.amazon.nova-premier-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-maverick-17b-instruct-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
@@ -4535,6 +4509,7 @@ Resources:
                     'description': 'Model for filter generation',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
@@ -4594,6 +4569,7 @@ Resources:
                     'description': 'Model for metadata extraction',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-micro-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
@@ -4815,8 +4791,10 @@ Outputs:
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   VectorBucketName:
-    Description: S3 bucket for embeddings and vectors
-    Value: !Ref VectorBucket
+    Description: S3 Vectors bucket for embeddings and vectors
+    Value: !Sub
+      - '${Prefix}-vectors-${AWS::AccountId}'
+      - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
     Export:
       Name: !Sub
         - '${Prefix}-VectorBucket'
