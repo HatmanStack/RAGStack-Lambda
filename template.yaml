@@ -4687,6 +4687,9 @@ Resources:
                         'Schema': convert_floats_to_decimal(SCHEMA)
                     })
 
+                    # Ensure all values in defaults are DynamoDB-safe (no floats)
+                    defaults = convert_floats_to_decimal(defaults)
+
                     # Seed Default: merge defaults into existing item to preserve
                     # admin-edited runtime settings (only backfill missing keys)
                     try:
