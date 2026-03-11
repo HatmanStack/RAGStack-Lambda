@@ -948,6 +948,25 @@ Resources:
       BuildMethod: python3.13
 
   # =========================================================================
+  # Shared IAM Policies
+  # =========================================================================
+
+  # Third-party models (Anthropic, etc.) on Bedrock require a one-time
+  # Marketplace agreement acceptance per model. This policy lets Lambda roles
+  # auto-accept so new models work without manual console intervention.
+  BedrockMarketplacePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - aws-marketplace:ViewSubscriptions
+              - aws-marketplace:Subscribe
+            Resource: '*'
+
+  # =========================================================================
   # Lambda Functions
   # =========================================================================
 
@@ -977,6 +996,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1223,6 +1243,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1281,6 +1302,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1341,6 +1363,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1405,6 +1428,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1460,6 +1484,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBCrudPolicy:
@@ -1515,6 +1540,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1628,6 +1654,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CAPTION_MODEL_ID: !Ref CaptionModelId
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1686,6 +1713,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DEMO_MODE: !Ref DemoMode
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
         - DynamoDBCrudPolicy:
@@ -1740,6 +1768,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DATA_BUCKET: !Ref DataBucket
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - Statement:
             - Effect: Allow
               Action:
@@ -1879,6 +1908,7 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
         - DynamoDBCrudPolicy:
@@ -3098,6 +3128,7 @@ Resources:
           # Demo mode for rate limiting and feature restrictions
           DEMO_MODE: !Ref DemoMode
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - S3CrudPolicy:

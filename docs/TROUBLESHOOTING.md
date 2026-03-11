@@ -24,11 +24,13 @@ Tips from production usage to help you get the most out of RAGStack.
 
 ### Model Selection
 
-| Use Case | Recommended | Avoid | Why |
-|----------|-------------|-------|-----|
-| Metadata extraction | Claude Haiku 4.5 | Nova Lite | Nova Lite hallucinates fields and produces generic/template responses |
-| Chat fallback | Nova Lite | Nova Micro | Good balance of cost and quality for fallback |
-| Filter generation | Claude Haiku 4.5 | - | Needs to understand query intent accurately |
+| Use Case | Recommended | Also Good | Avoid | Why |
+|----------|-------------|-----------|-------|-----|
+| Chat primary | Claude Haiku 4.5 / Sonnet 4.6 | Nova 2 Lite, Nova Pro | Nova Micro | Quality and multimodal support matter for chat |
+| Chat fallback | Nova Lite | Nova 2 Lite | Nova Micro | Good balance of cost and quality for fallback |
+| Metadata extraction | Claude Haiku 4.5 | Nova 2 Lite (with manual keys) | Nova Lite | Nova Lite hallucinates fields; Nova 2 Lite has better reasoning |
+| Filter generation | Claude Haiku 4.5 | Nova 2 Lite | Nova Lite | Needs accurate query intent understanding |
+| OCR (Bedrock backend) | Claude Haiku 4.5 | Nova 2 Lite, Nova Pro | - | Vision-capable models required |
 
 ### Document Processing
 
@@ -64,11 +66,40 @@ This uses Haiku's quality for discovery and filter generation, while using Nova 
 
 ---
 
+## Bedrock Model Access Issues
+
+Anthropic and some other third-party models on Bedrock are offered through AWS Marketplace and require a **one-time agreement acceptance** per model. Once an admin accepts the agreement, all IAM roles in the account can invoke that model without needing Marketplace permissions.
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `Model access is denied due to IAM user or service role is not authorized to perform the required AWS Marketplace actions` | The Marketplace agreement for this model hasn't been accepted yet. New models (e.g., Claude Sonnet 4.6) need a one-time acceptance even though the old model catalog is retired. | An admin with `aws-marketplace:Subscribe` permissions must invoke the model once (via console playground or CLI) to accept the agreement. After that, all Lambda roles can use it. |
+| Error after upgrading models in config | New model added but Marketplace agreement not accepted | Check Lambda logs to identify which model (`aws logs filter-log-events --log-group-name /aws/lambda/<stack>-query --filter-pattern "ERROR"`). Then accept the agreement — see diagnostic below. |
+| Error only on chat, not other features | `chat_primary_model` points to a model without accepted agreement | Either accept the agreement for the model, or change `chat_primary_model` in Settings to a model that already works. |
+
+**Quick diagnostic — accept agreement and test access:**
+```bash
+# Test from CLI (your IAM user likely has marketplace permissions).
+# If this succeeds, the agreement is accepted for the account and Lambda roles will work too.
+echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
+  | aws bedrock-runtime invoke-model \
+    --model-id "us.anthropic.claude-sonnet-4-6" \
+    --region us-east-1 \
+    --body fileb:///dev/stdin \
+    --content-type "application/json" /dev/null
+
+# If this also fails with AccessDeniedException, your IAM user needs:
+#   aws-marketplace:ViewSubscriptions
+#   aws-marketplace:Subscribe
+# Or use the Bedrock console playground to invoke the model (triggers agreement acceptance).
+```
+
+---
+
 ## Deployment Issues
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Stack creation fails with `ROLLBACK_COMPLETE` | Bedrock models not enabled | Enable models: AWS Console → Bedrock → Model access. Enable Claude 3.5 Haiku, Titan embed models. Wait 5-10 min. |
+| Stack creation fails with `ROLLBACK_COMPLETE` | Bedrock model agreement not accepted | Accept Marketplace agreements for required models (Anthropic Claude, etc.) by invoking them once from the CLI or Bedrock console playground. See "Bedrock Model Access Issues" above. |
 | `Invalid email address` error | Bad email format | Use valid email: `python publish.py --admin-email valid@example.com` |
 | `User is not authorized` | Insufficient IAM permissions | Need: `iam:*`, `cloudformation:*`, `lambda:*`, `s3:*` |
 | S3 bucket name exists | Bucket name collision | Change project name: `python publish.py --project-name <unique-name>` |
