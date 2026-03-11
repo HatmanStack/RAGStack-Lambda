@@ -4561,7 +4561,7 @@ Resources:
                 'multislice_filtered_boost': {
                     'type': 'number',
                     'order': 21,
-                    'description': 'Score multiplier for filtered results (1.0-2.0)',
+                    'description': 'Max boost ceiling for adaptive filtered score boost (1.0-2.0)',
                     'default': 1.25
                 },
                 'metadata_filter_examples': {
