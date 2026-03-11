@@ -25,8 +25,8 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
     """
     Expand a string value into a searchable array with component parts.
 
-    Includes the original value plus word components for flexible matching.
-    For example: "chicago, illinois" -> ["chicago, illinois", "chicago", "illinois"]
+    Includes word tokens first (best for $eq filtering), then the original
+    phrase. For example: "chicago, illinois" -> ["chicago", "illinois", "chicago, illinois"]
 
     Args:
         value: The string value to expand.
@@ -40,32 +40,39 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
 
     # Truncate input value to prevent excessively long strings
     value = value.strip().lower()[:MAX_VALUE_LENGTH]
-    items = {value}  # Always include original
+    seen: set[str] = set()
+    words: list[str] = []
+    phrases: list[str] = []
 
-    # Split on commas first (highest priority after original)
+    # Collect comma-separated parts
     if "," in value:
         for part in value.split(","):
             part = part.strip()
-            if part and len(part) >= min_word_length:
-                items.add(part)
+            if part and len(part) >= min_word_length and part not in seen:
+                seen.add(part)
+                if " " in part:
+                    phrases.append(part)
+                else:
+                    words.append(part)
 
-    # Split on spaces for word components
+    # Collect individual word tokens (source order preserved)
     for word in value.replace(",", " ").split():
         word = word.strip()
-        if len(word) >= min_word_length:
-            items.add(word)
+        if len(word) >= min_word_length and word not in seen:
+            seen.add(word)
+            words.append(word)
 
     # Extract 4-digit years from date-like strings (e.g., "2016-01-15" -> "2016")
     year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", value)
-    if year_match:
-        items.add(year_match.group(1))
+    if year_match and year_match.group(1) not in seen:
+        words.append(year_match.group(1))
 
-    # Prioritize: original value first, then sorted remaining items
-    result = [value]
-    remaining = sorted(items - {value})
-    result.extend(remaining)
+    # Original phrase last (tokens are more useful for $eq filtering)
+    if value not in seen:
+        phrases.append(value)
 
-    return result[:MAX_ARRAY_ITEMS]
+    # Words first, then phrases (including original)
+    return (words + phrases)[:MAX_ARRAY_ITEMS]
 
 
 def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -96,29 +103,34 @@ def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
             continue
 
         if isinstance(value, list):
-            # Already a list - expand each item and flatten
-            # Use consistent normalization: str().lower().strip()
-            expanded = set()
+            # Tokens-first: prioritize individual word tokens over full phrases.
+            # For $eq filtering, single words ("dwight", "tillotson") are more
+            # useful than multi-word phrases ("dwight sheldon tillotson") which
+            # require exact match. This maximizes filterability when the list
+            # has many items that would otherwise exhaust the MAX_ARRAY_ITEMS
+            # budget with only full phrases and no searchable word tokens.
+            seen: set[str] = set()
+            words: list[str] = []
+            phrases: list[str] = []
             for item in value:
                 if item is None:
                     continue
                 if isinstance(item, str):
-                    expanded.update(expand_to_searchable_array(item))
+                    tokens = expand_to_searchable_array(item)
                 else:
                     # Preserve falsy values like 0 or False
-                    expanded.add(str(item).lower().strip())
-            if expanded:
-                # Keep original items first, then additional expansions
-                # Preserve falsy values (0, False) - only skip None and empty strings
-                original_items = []
-                for v in value:
-                    if v is None:
+                    tokens = [str(item).lower().strip()]
+                for token in tokens:
+                    if not token or token in seen:
                         continue
-                    s = str(v).lower().strip()
-                    if s:  # Skip empty strings after normalization
-                        original_items.append(s)
-                additional = sorted(expanded - set(original_items))
-                result = original_items + additional
+                    seen.add(token)
+                    if " " in token:
+                        phrases.append(token)
+                    else:
+                        words.append(token)
+            # Words first (best for $eq filtering), then phrases
+            result = words + phrases
+            if result:
                 normalized[key] = result[:MAX_ARRAY_ITEMS]
 
         elif isinstance(value, str):

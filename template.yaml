@@ -65,6 +65,8 @@ Parameters:
     AllowedValues:
       - us.anthropic.claude-haiku-4-5-20251001-v1:0
       - us.anthropic.claude-sonnet-4-6
+      - us.amazon.nova-2-lite-v1:0
+      - us.amazon.nova-pro-v1:0
       - us.meta.llama4-scout-17b-instruct-v1:0
       - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
@@ -221,38 +223,6 @@ Resources:
               - x-amz-meta-auto-process
               - x-amz-meta-user-caption
             MaxAge: 3000
-      Tags:
-        - Key: Project
-          Value: !Ref AWS::StackName
-
-  VectorBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub
-        - '${Prefix}-vectors-${AWS::AccountId}'
-        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: CleanupOldVectors
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
@@ -978,6 +948,38 @@ Resources:
       BuildMethod: python3.13
 
   # =========================================================================
+  # Shared IAM Policies
+  # =========================================================================
+
+  # Runtime Lambdas need ViewSubscriptions to check model access.
+  # Subscribe is intentionally excluded from runtime roles — agreement
+  # acceptance is an admin pre-deployment step, not a runtime auto-accept.
+  BedrockMarketplacePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - aws-marketplace:ViewSubscriptions
+            Resource: '*'
+
+  # Processing/admin Lambdas (document pipeline) can auto-accept Marketplace
+  # agreements for new models. Not attached to public-facing request-path roles.
+  BedrockMarketplaceAdminPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - aws-marketplace:ViewSubscriptions
+              - aws-marketplace:Subscribe
+            Resource: '*'
+
+  # =========================================================================
   # Lambda Functions
   # =========================================================================
 
@@ -1007,6 +1009,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1105,15 +1108,15 @@ Resources:
         Variables:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
-          VECTOR_BUCKET: !Ref VectorBucket
+          VECTOR_BUCKET: !Sub
+            - '${Prefix}-vectors-${AWS::AccountId}'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           INGEST_MEDIA_FUNCTION_ARN: !GetAtt IngestMediaFunction.Arn
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBReadPolicy:
@@ -1253,6 +1256,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1311,6 +1315,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1371,10 +1376,9 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1437,6 +1441,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1492,6 +1497,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBCrudPolicy:
@@ -1535,7 +1541,9 @@ Resources:
           LOG_LEVEL: INFO
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
-          VECTOR_BUCKET: !Ref VectorBucket
+          VECTOR_BUCKET: !Sub
+            - '${Prefix}-vectors-${AWS::AccountId}'
+            - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
           STACK_NAME: !Ref AWS::StackName
           KB_ROLE_ARN: !GetAtt KnowledgeBaseRole.Arn
           EMBEDDING_MODEL_ARN: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0'
@@ -1545,6 +1553,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1555,8 +1564,6 @@ Resources:
             TableName: !Ref ScrapeJobsTable
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
-        - S3CrudPolicy:
-            BucketName: !Ref VectorBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -1599,8 +1606,12 @@ Resources:
                 - s3vectors:GetIndex
                 - s3vectors:ListVectors
               Resource:
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
             - Effect: Allow
               Action:
                 - lambda:GetFunctionConfiguration
@@ -1656,6 +1667,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CAPTION_MODEL_ID: !Ref CaptionModelId
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1714,6 +1726,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DEMO_MODE: !Ref DemoMode
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigurationTable
         - DynamoDBCrudPolicy:
@@ -1768,6 +1781,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           DATA_BUCKET: !Ref DataBucket
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - Statement:
             - Effect: Allow
               Action:
@@ -1907,6 +1921,7 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
       Policies:
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
         - DynamoDBCrudPolicy:
@@ -2710,17 +2725,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:ListBucket
-                Resource:
-                  - !Sub '${VectorBucket.Arn}'
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource:
-                  - !Sub '${VectorBucket.Arn}/*'
-              - Effect: Allow
-                Action:
                   - s3vectors:DescribeIndex
                   - s3vectors:ReadVectors
                   - s3vectors:WriteVectors
@@ -2729,8 +2733,12 @@ Resources:
                   - s3vectors:GetVectors
                   - s3vectors:DeleteVectors
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                  - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                    - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
         - PolicyName: BedrockModelAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -2802,8 +2810,12 @@ Resources:
                 - s3vectors:DescribeIndex
                 - s3vectors:ListIndices
               Resource:
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}'
-                - !Sub 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*'
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+                - !Sub
+                  - 'arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*'
+                  - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
             - Effect: Allow
               Action:
                 - iam:PassRole
@@ -2825,7 +2837,9 @@ Resources:
         - '${Prefix}-kb'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       RoleArn: !GetAtt KnowledgeBaseRole.Arn
-      VectorBucket: !Ref VectorBucket
+      VectorBucket: !Sub
+        - '${Prefix}-vectors-${AWS::AccountId}'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
       DataBucket: !Ref DataBucket
       # Nova Multimodal Embeddings - supports text, images, video, audio
       # Currently only available in us-east-1. When available elsewhere, just deploy there.
@@ -3127,6 +3141,7 @@ Resources:
           # Demo mode for rate limiting and feature restrictions
           DEMO_MODE: !Ref DemoMode
       Policies:
+        - !Ref BedrockMarketplacePolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - S3CrudPolicy:
@@ -4391,6 +4406,8 @@ Resources:
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.anthropic.claude-sonnet-4-6',
+                        'us.amazon.nova-2-lite-v1:0',
+                        'us.amazon.nova-pro-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0',
                         'us.meta.llama4-maverick-17b-instruct-v1:0'
                     ],
@@ -4412,6 +4429,7 @@ Resources:
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
                         'us.amazon.nova-pro-v1:0',
                         'us.amazon.nova-premier-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-maverick-17b-instruct-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
@@ -4535,6 +4553,7 @@ Resources:
                     'description': 'Model for filter generation',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
                     ],
@@ -4561,7 +4580,7 @@ Resources:
                 'multislice_filtered_boost': {
                     'type': 'number',
                     'order': 21,
-                    'description': 'Score multiplier for filtered results (1.0-2.0)',
+                    'description': 'Max boost ceiling for adaptive filtered score boost (1.0-2.0)',
                     'default': 1.25
                 },
                 'metadata_filter_examples': {
@@ -4594,6 +4613,7 @@ Resources:
                     'description': 'Model for metadata extraction',
                     'enum': [
                         'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+                        'us.amazon.nova-2-lite-v1:0',
                         'us.amazon.nova-micro-v1:0',
                         'us.amazon.nova-lite-v1:0',
                         'us.meta.llama4-scout-17b-instruct-v1:0'
@@ -4687,6 +4707,9 @@ Resources:
                         'Schema': convert_floats_to_decimal(SCHEMA)
                     })
 
+                    # Ensure all values in defaults are DynamoDB-safe (no floats)
+                    defaults = convert_floats_to_decimal(defaults)
+
                     # Seed Default: merge defaults into existing item to preserve
                     # admin-edited runtime settings (only backfill missing keys)
                     try:
@@ -4753,7 +4776,7 @@ Resources:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       BedrockOcrModelId: !Ref BedrockOcrModelId
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "8"  # v8: seeder merges defaults instead of overwriting admin-edited config
+      SchemaVersion: "9"  # v9: new model options (Nova 2 Lite, Nova Pro), split marketplace policies
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently
@@ -4812,8 +4835,10 @@ Outputs:
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
 
   VectorBucketName:
-    Description: S3 bucket for embeddings and vectors
-    Value: !Ref VectorBucket
+    Description: S3 Vectors bucket for embeddings and vectors
+    Value: !Sub
+      - '${Prefix}-vectors-${AWS::AccountId}'
+      - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
     Export:
       Name: !Sub
         - '${Prefix}-VectorBucket'
