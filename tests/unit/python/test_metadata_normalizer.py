@@ -18,18 +18,23 @@ class TestExpandToSearchableArray:
         assert result == ["genealogy"]
 
     def test_comma_separated(self):
-        """Comma-separated values are split into elements."""
+        """Comma-separated values are split into elements, tokens before phrases."""
         result = expand_to_searchable_array("chicago, illinois")
-        assert "chicago, illinois" in result  # Original
         assert "chicago" in result
         assert "illinois" in result
+        assert "chicago, illinois" in result
+        # Words before phrases
+        assert result.index("chicago") < result.index("chicago, illinois")
 
     def test_space_separated_words(self):
-        """Words are split and included if >= 3 chars."""
+        """Words are split and included if >= 3 chars, tokens before original."""
         result = expand_to_searchable_array("jack wilson")
-        assert "jack wilson" in result  # Original
         assert "jack" in result
         assert "wilson" in result
+        assert "jack wilson" in result
+        # Tokens before phrase
+        assert result.index("jack") < result.index("jack wilson")
+        assert result.index("wilson") < result.index("jack wilson")
 
     def test_short_words_excluded(self):
         """Words shorter than 3 chars are excluded."""

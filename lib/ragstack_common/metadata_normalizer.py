@@ -25,8 +25,8 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
     """
     Expand a string value into a searchable array with component parts.
 
-    Includes the original value plus word components for flexible matching.
-    For example: "chicago, illinois" -> ["chicago, illinois", "chicago", "illinois"]
+    Includes word tokens first (best for $eq filtering), then the original
+    phrase. For example: "chicago, illinois" -> ["chicago", "illinois", "chicago, illinois"]
 
     Args:
         value: The string value to expand.
@@ -40,30 +40,39 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
 
     # Truncate input value to prevent excessively long strings
     value = value.strip().lower()[:MAX_VALUE_LENGTH]
-    seen: set[str] = {value}
-    result: list[str] = [value]  # Original always first
+    seen: set[str] = set()
+    words: list[str] = []
+    phrases: list[str] = []
 
-    # Split on commas first (highest priority after original)
+    # Collect comma-separated parts
     if "," in value:
         for part in value.split(","):
             part = part.strip()
             if part and len(part) >= min_word_length and part not in seen:
                 seen.add(part)
-                result.append(part)
+                if " " in part:
+                    phrases.append(part)
+                else:
+                    words.append(part)
 
-    # Split on spaces for word components (source order preserved)
+    # Collect individual word tokens (source order preserved)
     for word in value.replace(",", " ").split():
         word = word.strip()
         if len(word) >= min_word_length and word not in seen:
             seen.add(word)
-            result.append(word)
+            words.append(word)
 
     # Extract 4-digit years from date-like strings (e.g., "2016-01-15" -> "2016")
     year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", value)
     if year_match and year_match.group(1) not in seen:
-        result.append(year_match.group(1))
+        words.append(year_match.group(1))
 
-    return result[:MAX_ARRAY_ITEMS]
+    # Original phrase last (tokens are more useful for $eq filtering)
+    if value not in seen:
+        phrases.append(value)
+
+    # Words first, then phrases (including original)
+    return (words + phrases)[:MAX_ARRAY_ITEMS]
 
 
 def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
