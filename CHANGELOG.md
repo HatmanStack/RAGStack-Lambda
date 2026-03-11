@@ -2,10 +2,20 @@
 
 ## [2.3.7] - 2026-03-11
 
+### Added
+
+- **Auto-accept Bedrock Marketplace agreements**: Lambda roles now include `aws-marketplace:Subscribe` and `aws-marketplace:ViewSubscriptions` permissions via a shared managed policy. Third-party models (Anthropic Claude, etc.) are auto-accepted on first invocation — no manual console steps needed when new models are added.
+- **Expanded model options**: Added Nova 2 Lite and Nova Pro as options for OCR, chat primary, metadata extraction, and filter generation. Nova 2 Lite offers a cost-effective multimodal alternative with better reasoning than Nova Lite.
+
 ### Fixed
 
 - **Metadata word tokens lost on name-heavy documents**: When a list metadata field (e.g., `people_mentioned`) had many multi-word entries, the original full phrases consumed the entire 10-item AWS STRING_LIST budget, silently dropping all word-level tokens. For example, a document with 10 people stored `["dwight sheldon tillotson", "charles m. tillotson", ...]` but never `"dwight"` or `"tillotson"`, making `$eq` filters on individual names fail. Now prioritizes single-word tokens over multi-word phrases, preserving insertion order from the source list so tokens from earlier (more important) names take priority.
 - **Remove unnecessary `AWS::S3::Bucket` VectorBucket resource**: The template created a regular S3 bucket for vector storage, but actual vectors are stored in an S3 Vectors bucket (different AWS service) created by the KnowledgeBase custom resource. The regular bucket was always empty and unused. When manually deleted, it caused CloudFormation update failures (S3Control 404 on every subsequent stack update). Replaced `!Ref VectorBucket` with a constructed name string, removed unused regular S3 IAM permissions (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`) from KnowledgeBaseRole and `S3CrudPolicy` from three Lambda functions. Bedrock KB with S3 Vectors only requires `s3vectors:` permissions per AWS documentation.
+
+### Docs
+
+- **Bedrock model access troubleshooting**: New section explaining Marketplace agreement requirements for third-party models, with diagnostic commands and resolution steps.
+- **Updated model selection guide**: Expanded recommendations table with Nova 2 Lite placement across all use cases.
 
 ### Migration Note
 
