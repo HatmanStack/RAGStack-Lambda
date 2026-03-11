@@ -951,10 +951,23 @@ Resources:
   # Shared IAM Policies
   # =========================================================================
 
-  # Third-party models (Anthropic, etc.) on Bedrock require a one-time
-  # Marketplace agreement acceptance per model. This policy lets Lambda roles
-  # auto-accept so new models work without manual console intervention.
+  # Runtime Lambdas need ViewSubscriptions to check model access.
+  # Subscribe is intentionally excluded from runtime roles — agreement
+  # acceptance is an admin pre-deployment step, not a runtime auto-accept.
   BedrockMarketplacePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - aws-marketplace:ViewSubscriptions
+            Resource: '*'
+
+  # Processing/admin Lambdas (document pipeline) can auto-accept Marketplace
+  # agreements for new models. Not attached to public-facing request-path roles.
+  BedrockMarketplaceAdminPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
@@ -996,7 +1009,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           GRAPHQL_ENDPOINT: !GetAtt GraphQLApi.GraphQLUrl
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1243,7 +1256,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           COMBINE_PAGES_FUNCTION_ARN: !GetAtt CombinePagesFunction.Arn
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1302,7 +1315,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1363,7 +1376,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3CrudPolicy:
             BucketName: !Ref DataBucket
         - DynamoDBCrudPolicy:
@@ -1428,7 +1441,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SYNC_REQUEST_QUEUE_URL: !Ref SyncRequestQueue
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1484,7 +1497,7 @@ Resources:
           CONFIGURATION_TABLE_NAME: !Ref ConfigurationTable
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref MetadataKeyLibraryTable
         - DynamoDBCrudPolicy:
@@ -1540,7 +1553,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE: !Ref MetadataKeyLibraryTable
           SCRAPE_JOBS_TABLE: !Ref ScrapeJobsTable
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref TrackingTable
         - DynamoDBCrudPolicy:
@@ -1654,7 +1667,7 @@ Resources:
           DATA_BUCKET: !Ref DataBucket
           CAPTION_MODEL_ID: !Ref CaptionModelId
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
         - S3WritePolicy:
@@ -1908,7 +1921,7 @@ Resources:
           TRACKING_TABLE: !Ref TrackingTable
           DATA_BUCKET: !Ref DataBucket
       Policies:
-        - !Ref BedrockMarketplacePolicy
+        - !Ref BedrockMarketplaceAdminPolicy
         - DynamoDBCrudPolicy:
             TableName: !Ref ScrapeJobsTable
         - DynamoDBCrudPolicy:
@@ -4763,7 +4776,7 @@ Resources:
       ServiceToken: !GetAtt ConfigurationSeederFunction.Arn
       BedrockOcrModelId: !Ref BedrockOcrModelId
       # Increment when schema changes to force CloudFormation to re-seed config
-      SchemaVersion: "8"  # v8: seeder merges defaults instead of overwriting admin-edited config
+      SchemaVersion: "9"  # v9: new model options (Nova 2 Lite, Nova Pro), split marketplace policies
 
   # =========================================================================
   # Admin User Provisioner - Creates admin user idempotently

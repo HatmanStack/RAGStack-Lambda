@@ -68,11 +68,11 @@ This uses Haiku's quality for discovery and filter generation, while using Nova 
 
 ## Bedrock Model Access Issues
 
-Anthropic and some other third-party models on Bedrock are offered through AWS Marketplace and require a **one-time agreement acceptance** per model. Once an admin accepts the agreement, all IAM roles in the account can invoke that model without needing Marketplace permissions.
+Anthropic and some other third-party models on Bedrock are offered through AWS Marketplace and require a **one-time agreement acceptance** per model. This is a **runtime** issue — stack creation itself does not invoke third-party chat, OCR, or filter models, so missing agreements won't cause deployment failures. The errors surface when Lambdas first try to call a model that hasn't been accepted yet.
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| `Model access is denied due to IAM user or service role is not authorized to perform the required AWS Marketplace actions` | The Marketplace agreement for this model hasn't been accepted yet. New models (e.g., Claude Sonnet 4.6) need a one-time acceptance even though the old model catalog is retired. | An admin with `aws-marketplace:Subscribe` permissions must invoke the model once (via console playground or CLI) to accept the agreement. After that, all Lambda roles can use it. |
+| `Model access is denied due to IAM user or service role is not authorized to perform the required AWS Marketplace actions` | The Marketplace agreement for this model hasn't been accepted yet. New models (e.g., Claude Sonnet 4.6) need a one-time acceptance even though the old model catalog is retired. | An admin with `aws-marketplace:Subscribe` permissions must accept the agreement via CLI or Bedrock console playground. After that, all Lambda roles can invoke the model with just `ViewSubscriptions`. |
 | Error after upgrading models in config | New model added but Marketplace agreement not accepted | Check Lambda logs to identify which model (`aws logs filter-log-events --log-group-name /aws/lambda/<stack>-query --filter-pattern "ERROR"`). Then accept the agreement — see diagnostic below. |
 | Error only on chat, not other features | `chat_primary_model` points to a model without accepted agreement | Either accept the agreement for the model, or change `chat_primary_model` in Settings to a model that already works. |
 
@@ -93,13 +93,15 @@ echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":10,"messages":[{"ro
 # Or use the Bedrock console playground to invoke the model (triggers agreement acceptance).
 ```
 
+**Note:** Runtime Lambda roles have `ViewSubscriptions` only. The `Subscribe` action is restricted to processing/admin roles (document pipeline Lambdas). For public-facing endpoints (chat, search), accepting agreements is an admin pre-deployment step, not a runtime auto-accept.
+
 ---
 
 ## Deployment Issues
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| Stack creation fails with `ROLLBACK_COMPLETE` | Bedrock model agreement not accepted | Accept Marketplace agreements for required models (Anthropic Claude, etc.) by invoking them once from the CLI or Bedrock console playground. See "Bedrock Model Access Issues" above. |
+| Stack creation fails with `ROLLBACK_COMPLETE` | IAM, S3, or CloudFormation permission issue | Check CloudFormation events for the specific failing resource. Stack creation does not invoke Bedrock models, so this is not a model agreement issue. |
 | `Invalid email address` error | Bad email format | Use valid email: `python publish.py --admin-email valid@example.com` |
 | `User is not authorized` | Insufficient IAM permissions | Need: `iam:*`, `cloudformation:*`, `lambda:*`, `s3:*` |
 | S3 bucket name exists | Bucket name collision | Change project name: `python publish.py --project-name <unique-name>` |

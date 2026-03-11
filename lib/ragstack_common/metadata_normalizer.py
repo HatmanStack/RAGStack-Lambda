@@ -40,30 +40,28 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
 
     # Truncate input value to prevent excessively long strings
     value = value.strip().lower()[:MAX_VALUE_LENGTH]
-    items = {value}  # Always include original
+    seen: set[str] = {value}
+    result: list[str] = [value]  # Original always first
 
     # Split on commas first (highest priority after original)
     if "," in value:
         for part in value.split(","):
             part = part.strip()
-            if part and len(part) >= min_word_length:
-                items.add(part)
+            if part and len(part) >= min_word_length and part not in seen:
+                seen.add(part)
+                result.append(part)
 
-    # Split on spaces for word components
+    # Split on spaces for word components (source order preserved)
     for word in value.replace(",", " ").split():
         word = word.strip()
-        if len(word) >= min_word_length:
-            items.add(word)
+        if len(word) >= min_word_length and word not in seen:
+            seen.add(word)
+            result.append(word)
 
     # Extract 4-digit years from date-like strings (e.g., "2016-01-15" -> "2016")
     year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", value)
-    if year_match:
-        items.add(year_match.group(1))
-
-    # Prioritize: original value first, then sorted remaining items
-    result = [value]
-    remaining = sorted(items - {value})
-    result.extend(remaining)
+    if year_match and year_match.group(1) not in seen:
+        result.append(year_match.group(1))
 
     return result[:MAX_ARRAY_ITEMS]
 
