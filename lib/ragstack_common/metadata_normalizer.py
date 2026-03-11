@@ -96,29 +96,34 @@ def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
             continue
 
         if isinstance(value, list):
-            # Already a list - expand each item and flatten
-            # Use consistent normalization: str().lower().strip()
-            expanded = set()
+            # Tokens-first: prioritize individual word tokens over full phrases.
+            # For $eq filtering, single words ("dwight", "tillotson") are more
+            # useful than multi-word phrases ("dwight sheldon tillotson") which
+            # require exact match. This maximizes filterability when the list
+            # has many items that would otherwise exhaust the MAX_ARRAY_ITEMS
+            # budget with only full phrases and no searchable word tokens.
+            seen: set[str] = set()
+            words: list[str] = []
+            phrases: list[str] = []
             for item in value:
                 if item is None:
                     continue
                 if isinstance(item, str):
-                    expanded.update(expand_to_searchable_array(item))
+                    tokens = expand_to_searchable_array(item)
                 else:
                     # Preserve falsy values like 0 or False
-                    expanded.add(str(item).lower().strip())
-            if expanded:
-                # Keep original items first, then additional expansions
-                # Preserve falsy values (0, False) - only skip None and empty strings
-                original_items = []
-                for v in value:
-                    if v is None:
+                    tokens = [str(item).lower().strip()]
+                for token in tokens:
+                    if not token or token in seen:
                         continue
-                    s = str(v).lower().strip()
-                    if s:  # Skip empty strings after normalization
-                        original_items.append(s)
-                additional = sorted(expanded - set(original_items))
-                result = original_items + additional
+                    seen.add(token)
+                    if " " in token:
+                        phrases.append(token)
+                    else:
+                        words.append(token)
+            # Words first (best for $eq filtering), then phrases
+            result = words + phrases
+            if result:
                 normalized[key] = result[:MAX_ARRAY_ITEMS]
 
         elif isinstance(value, str):

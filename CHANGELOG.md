@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Metadata word tokens lost on name-heavy documents**: When a list metadata field (e.g., `people_mentioned`) had many multi-word entries, the original full phrases consumed the entire 10-item AWS STRING_LIST budget, silently dropping all word-level tokens. For example, a document with 10 people stored `["dwight sheldon tillotson", "charles m. tillotson", ...]` but never `"dwight"` or `"tillotson"`, making `$eq` filters on individual names fail. Now prioritizes single-word tokens over multi-word phrases, preserving insertion order from the source list so tokens from earlier (more important) names take priority.
 - **Remove unnecessary `AWS::S3::Bucket` VectorBucket resource**: The template created a regular S3 bucket for vector storage, but actual vectors are stored in an S3 Vectors bucket (different AWS service) created by the KnowledgeBase custom resource. The regular bucket was always empty and unused. When manually deleted, it caused CloudFormation update failures (S3Control 404 on every subsequent stack update). Replaced `!Ref VectorBucket` with a constructed name string, removed unused regular S3 IAM permissions (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`) from KnowledgeBaseRole and `S3CrudPolicy` from three Lambda functions. Bedrock KB with S3 Vectors only requires `s3vectors:` permissions per AWS documentation.
 
 ### Migration Note

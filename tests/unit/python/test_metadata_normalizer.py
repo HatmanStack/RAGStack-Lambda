@@ -78,15 +78,61 @@ class TestNormalizeMetadataForS3:
         assert "genealogy" in result["topic"]
 
     def test_list_values_expanded(self):
-        """List values are expanded with components."""
+        """List values are expanded with word tokens prioritized over phrases."""
         metadata = {"people_mentioned": ["jack wilson", "mary jones"]}
         result = normalize_metadata_for_s3(metadata)
 
         assert isinstance(result["people_mentioned"], list)
-        assert "jack wilson" in result["people_mentioned"]
-        assert "mary jones" in result["people_mentioned"]
+        # Word tokens appear before phrases (tokens-first ordering)
         assert "jack" in result["people_mentioned"]
         assert "wilson" in result["people_mentioned"]
+        assert "mary" in result["people_mentioned"]
+        assert "jones" in result["people_mentioned"]
+        # Full phrases still included when budget allows
+        assert "jack wilson" in result["people_mentioned"]
+        assert "mary jones" in result["people_mentioned"]
+        # Words come before phrases
+        word_indices = [
+            result["people_mentioned"].index(w) for w in ["jack", "wilson", "mary", "jones"]
+        ]
+        phrase_indices = [
+            result["people_mentioned"].index(p) for p in ["jack wilson", "mary jones"]
+        ]
+        assert max(word_indices) < min(phrase_indices)
+
+    def test_list_tokens_first_under_budget_pressure(self):
+        """With many list items, word tokens are kept even when budget is tight."""
+        # 10 names would fill MAX_ARRAY_ITEMS with just originals in old code
+        metadata = {
+            "people_mentioned": [
+                "dwight sheldon tillotson",
+                "charles m. tillotson",
+                "rudy valle",
+                "edwin i. thompson",
+                "j. k. tillotson",
+                "hugh a. thompson",
+                "harry d. van roop",
+                "k. maurin b. thomas",
+                "billy c. sucher",
+                "everett j. tarr",
+            ]
+        }
+        result = normalize_metadata_for_s3(metadata)
+        values = result["people_mentioned"]
+
+        assert len(values) <= MAX_ARRAY_ITEMS
+        # Individual name tokens must be present for $eq filtering
+        assert "dwight" in values
+        assert "tillotson" in values
+        assert "thompson" in values
+        # Words should appear before any multi-word phrases
+        words = [v for v in values if " " not in v]
+        phrases = [v for v in values if " " in v]
+        assert len(words) > 0
+        if phrases:
+            first_phrase_idx = values.index(phrases[0])
+            last_word_idx = max(values.index(w) for w in words)
+            assert last_word_idx < first_phrase_idx
 
     def test_boolean_preserved(self):
         """Boolean values are preserved as-is."""
