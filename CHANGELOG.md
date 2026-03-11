@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Auto-accept Bedrock Marketplace agreements**: Lambda roles now include `aws-marketplace:Subscribe` and `aws-marketplace:ViewSubscriptions` permissions via a shared managed policy. Third-party models (Anthropic Claude, etc.) are auto-accepted on first invocation — no manual console steps needed when new models are added.
+- **Bedrock Marketplace permissions**: Processing/admin Lambda roles include `aws-marketplace:Subscribe` and `ViewSubscriptions` via `BedrockMarketplaceAdminPolicy`. Runtime request-path roles (QueryKB, SearchKB, AppSyncResolver) receive only `ViewSubscriptions` via `BedrockMarketplacePolicy`. Third-party model agreements (Anthropic Claude, etc.) must be accepted by an admin or during the document processing pipeline — public-facing endpoints do not have Subscribe permissions.
 - **Expanded model options**: Added Nova 2 Lite and Nova Pro as options for OCR, chat primary, metadata extraction, and filter generation. Nova 2 Lite offers a cost-effective multimodal alternative with better reasoning than Nova Lite.
 
 ### Fixed
