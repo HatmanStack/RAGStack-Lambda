@@ -16,15 +16,16 @@ def load_configuration_resolver_module():
     """Load the configuration_resolver index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "configuration_resolver" / "index.py"
+        / "src"
+        / "lambda"
+        / "configuration_resolver"
+        / "index.py"
     ).resolve()
 
     if "configuration_resolver_index" in sys.modules:
         del sys.modules["configuration_resolver_index"]
 
-    spec = importlib.util.spec_from_file_location(
-        "configuration_resolver_index", str(module_path)
-    )
+    spec = importlib.util.spec_from_file_location("configuration_resolver_index", str(module_path))
     module = importlib.util.module_from_spec(spec)
     sys.modules["configuration_resolver_index"] = module
     spec.loader.exec_module(module)
@@ -98,7 +99,13 @@ class TestGetConfiguration:
     def test_decimal_conversion(self, mock_table):
         mock_table.get_item.side_effect = [
             {"Item": {"Configuration": "Schema", "Schema": {}}},
-            {"Item": {"Configuration": "Default", "int_val": Decimal("42"), "float_val": Decimal("3.14")}},
+            {
+                "Item": {
+                    "Configuration": "Default",
+                    "int_val": Decimal("42"),
+                    "float_val": Decimal("3.14"),
+                }
+            },
             {},
         ]
 
@@ -268,9 +275,7 @@ class TestGeneralHandler:
     def test_unsupported_operation_raises(self, mock_table):
         module = _load_with_mocked_table(mock_table)
         with pytest.raises(ValueError, match="Unsupported operation"):
-            module.lambda_handler(
-                {"info": {"fieldName": "unknownOp"}, "arguments": {}}, None
-            )
+            module.lambda_handler({"info": {"fieldName": "unknownOp"}, "arguments": {}}, None)
 
     def test_missing_config_table_raises(self):
         with patch.dict(os.environ, {"CONFIGURATION_TABLE_NAME": ""}):

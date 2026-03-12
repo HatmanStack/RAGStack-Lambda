@@ -13,7 +13,10 @@ def load_enqueue_batches_module():
     """Load the enqueue_batches index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "enqueue_batches" / "index.py"
+        / "src"
+        / "lambda"
+        / "enqueue_batches"
+        / "index.py"
     ).resolve()
 
     if "enqueue_batches_index" in sys.modules:
@@ -34,8 +37,7 @@ def _make_event(num_batches):
         "output_s3_prefix": "s3://bucket/content/doc-123/",
         "total_pages": num_batches * 10,
         "batches": [
-            {"page_start": i * 10 + 1, "page_end": (i + 1) * 10}
-            for i in range(num_batches)
+            {"page_start": i * 10 + 1, "page_end": (i + 1) * 10} for i in range(num_batches)
         ],
     }
 

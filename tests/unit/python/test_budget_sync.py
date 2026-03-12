@@ -9,14 +9,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
 
 
 def load_budget_sync_module():
     """Load the budget_sync index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "budget_sync" / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "budget_sync" / "index.py"
     ).resolve()
 
     if "budget_sync_index" in sys.modules:
@@ -95,7 +93,7 @@ class TestProcessRecord:
     def test_skips_non_custom_config(self, mock_boto3_client):
         mock_budgets = MagicMock()
         mock_sts = MagicMock()
-        mock_boto3_client.side_effect = lambda svc, **kw: {
+        mock_boto3_client.side_effect = lambda svc, **_kw: {
             "budgets": mock_budgets,
             "sts": mock_sts,
         }[svc]
@@ -131,7 +129,7 @@ class TestProcessRecord:
         }
         mock_sts = MagicMock()
         mock_sts.get_caller_identity.return_value = {"Account": "123456789"}
-        mock_boto3_client.side_effect = lambda svc, **kw: {
+        mock_boto3_client.side_effect = lambda svc, **_kw: {
             "budgets": mock_budgets,
             "sts": mock_sts,
         }[svc]
@@ -170,7 +168,7 @@ class TestProcessRecord:
         }
         mock_sts = MagicMock()
         mock_sts.get_caller_identity.return_value = {"Account": "123456789"}
-        mock_boto3_client.side_effect = lambda svc, **kw: {
+        mock_boto3_client.side_effect = lambda svc, **_kw: {
             "budgets": mock_budgets,
             "sts": mock_sts,
         }[svc]
@@ -207,15 +205,15 @@ class TestUpdateBudget:
 
     @patch("boto3.client")
     def test_creates_budget_when_not_found(self, mock_boto3_client):
-        class NotFoundException(Exception):
+        class NotFoundError(Exception):
             pass
 
         mock_budgets = MagicMock()
-        mock_budgets.exceptions.NotFoundException = NotFoundException
-        mock_budgets.describe_budget.side_effect = NotFoundException("not found")
+        mock_budgets.exceptions.NotFoundException = NotFoundError
+        mock_budgets.describe_budget.side_effect = NotFoundError("not found")
         mock_sts = MagicMock()
         mock_sts.get_caller_identity.return_value = {"Account": "123456789"}
-        mock_boto3_client.side_effect = lambda svc, **kw: {
+        mock_boto3_client.side_effect = lambda svc, **_kw: {
             "budgets": mock_budgets,
             "sts": mock_sts,
         }[svc]
@@ -283,9 +281,7 @@ class TestLambdaHandler:
 
     @patch("urllib.request.urlopen")
     @patch("boto3.client")
-    def test_cfn_unhandled_error_sends_failed(
-        self, mock_boto3_client, mock_urlopen, mock_context
-    ):
+    def test_cfn_unhandled_error_sends_failed(self, mock_boto3_client, mock_urlopen, mock_context):
         mock_boto3_client.return_value = MagicMock()
 
         mock_resp = MagicMock()

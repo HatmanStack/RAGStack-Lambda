@@ -1,7 +1,6 @@
 """Unit tests for logging_utils module."""
 
 from ragstack_common.logging_utils import (
-    DEFAULT_SENSITIVE_KEYS,
     log_summary,
     mask_value,
     safe_log_event,

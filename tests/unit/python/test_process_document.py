@@ -1,7 +1,6 @@
 """Unit tests for ProcessDocument Lambda."""
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

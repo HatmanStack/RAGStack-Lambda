@@ -1,11 +1,10 @@
 """Unit tests for combine_pages Lambda."""
 
 import importlib.util
-import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,8 +12,7 @@ import pytest
 def load_combine_pages_module():
     """Load the combine_pages index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "combine_pages" / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "combine_pages" / "index.py"
     ).resolve()
 
     if "combine_pages_index" in sys.modules:

@@ -2,7 +2,6 @@
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,8 +13,7 @@ from botocore.exceptions import ClientError
 def load_initial_sync_module():
     """Load the initial_sync index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "initial_sync" / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "initial_sync" / "index.py"
     ).resolve()
 
     if "initial_sync_index" in sys.modules:
@@ -179,9 +177,7 @@ class TestLambdaHandler:
 
     @patch("urllib.request.urlopen")
     @patch("boto3.client")
-    def test_unknown_request_type(
-        self, mock_boto3_client, mock_urlopen, base_event, mock_context
-    ):
+    def test_unknown_request_type(self, mock_boto3_client, mock_urlopen, base_event, mock_context):
         mock_boto3_client.return_value = MagicMock()
         base_event["RequestType"] = "Invalid"
 

@@ -2,7 +2,6 @@
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,7 +13,10 @@ def load_admin_user_provisioner_module():
     """Load the admin_user_provisioner index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "admin_user_provisioner" / "index.py"
+        / "src"
+        / "lambda"
+        / "admin_user_provisioner"
+        / "index.py"
     ).resolve()
 
     if "admin_user_provisioner_index" in sys.modules:
@@ -81,16 +83,16 @@ class TestSendResponse:
 def _make_mock_cognito(user_exists=True):
     """Create a mock cognito client with proper exception class."""
 
-    class UserNotFoundException(Exception):
+    class UserNotFoundError(Exception):
         pass
 
     mock_cognito = MagicMock()
-    mock_cognito.exceptions.UserNotFoundException = UserNotFoundException
+    mock_cognito.exceptions.UserNotFoundException = UserNotFoundError
 
     if user_exists:
         mock_cognito.admin_get_user.return_value = {"Username": "admin@example.com"}
     else:
-        mock_cognito.admin_get_user.side_effect = UserNotFoundException(
+        mock_cognito.admin_get_user.side_effect = UserNotFoundError(
             {"Error": {"Code": "UserNotFoundException", "Message": "User not found"}},
             "AdminGetUser",
         )
@@ -221,9 +223,7 @@ class TestLambdaHandler:
 
     @patch("urllib.request.urlopen")
     @patch("boto3.client")
-    def test_delete_sends_success(
-        self, mock_boto3_client, mock_urlopen, base_event, mock_context
-    ):
+    def test_delete_sends_success(self, mock_boto3_client, mock_urlopen, base_event, mock_context):
         mock_boto3_client.return_value = MagicMock()
         module = load_admin_user_provisioner_module()
 
@@ -296,7 +296,9 @@ class TestLambdaHandler:
             "AdminGetUser",
         )
         # Make exceptions attribute not have UserNotFoundException
-        mock_cognito.exceptions.UserNotFoundException = type("UserNotFoundException", (Exception,), {})
+        mock_cognito.exceptions.UserNotFoundException = type(
+            "UserNotFoundException", (Exception,), {}
+        )
         mock_boto3_client.return_value = mock_cognito
 
         module = load_admin_user_provisioner_module()

@@ -14,7 +14,10 @@ def load_batch_processor_module():
     """Load the batch_processor index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "batch_processor" / "index.py"
+        / "src"
+        / "lambda"
+        / "batch_processor"
+        / "index.py"
     ).resolve()
 
     if "batch_processor_index" in sys.modules:
@@ -53,16 +56,18 @@ def _make_sqs_event(
         "Records": [
             {
                 "messageId": "msg-001",
-                "body": json.dumps({
-                    "document_id": document_id,
-                    "batch_index": batch_index,
-                    "input_s3_uri": f"s3://bucket/input/{document_id}/report.pdf",
-                    "output_s3_prefix": f"s3://bucket/content/{document_id}/",
-                    "page_start": page_start,
-                    "page_end": page_end,
-                    "total_batches": total_batches,
-                    "total_pages": total_pages,
-                }),
+                "body": json.dumps(
+                    {
+                        "document_id": document_id,
+                        "batch_index": batch_index,
+                        "input_s3_uri": f"s3://bucket/input/{document_id}/report.pdf",
+                        "output_s3_prefix": f"s3://bucket/content/{document_id}/",
+                        "page_start": page_start,
+                        "page_end": page_end,
+                        "total_batches": total_batches,
+                        "total_pages": total_pages,
+                    }
+                ),
             }
         ]
     }
@@ -159,9 +164,7 @@ class TestLambdaHandler:
             patch.object(module, "dynamodb", mock_dynamodb),
             patch.object(module, "_config_manager", mock_config),
         ):
-            result = module.lambda_handler(
-                _make_sqs_event(batch_index=4, page_start=41, page_end=50), None
-            )
+            module.lambda_handler(_make_sqs_event(batch_index=4, page_start=41, page_end=50), None)
 
         # CombinePages should be invoked
         mock_lambda.invoke.assert_called_once()
@@ -248,7 +251,7 @@ class TestLambdaHandler:
             patch.object(module, "dynamodb", mock_dynamodb),
             patch.object(module, "_config_manager", mock_config),
         ):
-            result = module.lambda_handler(_make_sqs_event(), None)
+            module.lambda_handler(_make_sqs_event(), None)
 
         # Should call update_item a second time to mark as failed
         assert mock_table.update_item.call_count == 2
@@ -289,7 +292,7 @@ class TestLambdaHandler:
             patch.object(module, "dynamodb", mock_dynamodb),
             patch.object(module, "_config_manager", mock_config),
         ):
-            result = module.lambda_handler(_make_sqs_event(), None)
+            module.lambda_handler(_make_sqs_event(), None)
 
         # Should mark as failed, not trigger CombinePages
         assert mock_table.update_item.call_count == 2  # tracking + mark_failed

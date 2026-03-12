@@ -31,7 +31,10 @@ def load_start_codebuild_module():
 
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "start_codebuild" / "index.py"
+        / "src"
+        / "lambda"
+        / "start_codebuild"
+        / "index.py"
     ).resolve()
 
     if "start_codebuild_index" in sys.modules:
@@ -85,9 +88,7 @@ class TestCreateOrUpdate:
     @patch("boto3.client")
     def test_starts_build_happy_path(self, mock_boto3_client):
         mock_codebuild = MagicMock()
-        mock_codebuild.start_build.return_value = {
-            "build": {"id": "project:build-123"}
-        }
+        mock_codebuild.start_build.return_value = {"build": {"id": "project:build-123"}}
         mock_codebuild.meta.region_name = "us-east-1"
         mock_boto3_client.return_value = mock_codebuild
 
@@ -120,9 +121,7 @@ class TestCreateOrUpdate:
     @patch("boto3.client")
     def test_source_location_override(self, mock_boto3_client):
         mock_codebuild = MagicMock()
-        mock_codebuild.start_build.return_value = {
-            "build": {"id": "project:build-456"}
-        }
+        mock_codebuild.start_build.return_value = {"build": {"id": "project:build-456"}}
         mock_codebuild.meta.region_name = "us-east-1"
         mock_boto3_client.return_value = mock_codebuild
 
@@ -169,9 +168,7 @@ class TestPollCreateOrUpdate:
     @patch("boto3.client")
     def test_build_succeeded(self, mock_boto3_client):
         mock_codebuild = MagicMock()
-        mock_codebuild.batch_get_builds.return_value = {
-            "builds": [{"buildStatus": "SUCCEEDED"}]
-        }
+        mock_codebuild.batch_get_builds.return_value = {"builds": [{"buildStatus": "SUCCEEDED"}]}
         mock_boto3_client.return_value = mock_codebuild
 
         module = load_start_codebuild_module()
@@ -184,9 +181,7 @@ class TestPollCreateOrUpdate:
     @patch("boto3.client")
     def test_build_in_progress(self, mock_boto3_client):
         mock_codebuild = MagicMock()
-        mock_codebuild.batch_get_builds.return_value = {
-            "builds": [{"buildStatus": "IN_PROGRESS"}]
-        }
+        mock_codebuild.batch_get_builds.return_value = {"builds": [{"buildStatus": "IN_PROGRESS"}]}
         mock_boto3_client.return_value = mock_codebuild
 
         module = load_start_codebuild_module()
@@ -199,9 +194,7 @@ class TestPollCreateOrUpdate:
     @patch("boto3.client")
     def test_build_failed_raises(self, mock_boto3_client):
         mock_codebuild = MagicMock()
-        mock_codebuild.batch_get_builds.return_value = {
-            "builds": [{"buildStatus": "FAILED"}]
-        }
+        mock_codebuild.batch_get_builds.return_value = {"builds": [{"buildStatus": "FAILED"}]}
         mock_boto3_client.return_value = mock_codebuild
 
         module = load_start_codebuild_module()
@@ -209,9 +202,7 @@ class TestPollCreateOrUpdate:
             patch.object(module, "codebuild_client", mock_codebuild),
             pytest.raises(RuntimeError, match="FAILED"),
         ):
-            module.poll_create_or_update(
-                {"CrHelperData": {"build_id": "project:build-123"}}, None
-            )
+            module.poll_create_or_update({"CrHelperData": {"build_id": "project:build-123"}}, None)
 
     @patch("boto3.client")
     def test_missing_build_id_raises(self, mock_boto3_client):

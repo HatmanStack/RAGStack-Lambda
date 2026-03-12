@@ -2,7 +2,6 @@
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -15,7 +14,10 @@ def load_kb_custom_resource_module():
     """Load the kb_custom_resource index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "kb_custom_resource" / "index.py"
+        / "src"
+        / "lambda"
+        / "kb_custom_resource"
+        / "index.py"
     ).resolve()
 
     if "kb_custom_resource_index" in sys.modules:
@@ -64,9 +66,7 @@ class TestLambdaHandlerCreate:
 
     @patch("urllib.request.urlopen")
     @patch("boto3.client")
-    def test_create_happy_path(
-        self, mock_boto3_client, mock_urlopen, base_event, mock_context
-    ):
+    def test_create_happy_path(self, mock_boto3_client, mock_urlopen, base_event, mock_context):
         mock_bedrock = MagicMock()
         mock_s3vectors = MagicMock()
         mock_sts = MagicMock()
@@ -79,9 +79,7 @@ class TestLambdaHandlerCreate:
                 "knowledgeBaseArn": "arn:aws:bedrock:us-east-1:123:knowledge-base/kb-123",
             }
         }
-        mock_bedrock.create_data_source.return_value = {
-            "dataSource": {"dataSourceId": "ds-456"}
-        }
+        mock_bedrock.create_data_source.return_value = {"dataSource": {"dataSourceId": "ds-456"}}
 
         def client_factory(svc, **kwargs):
             return {
@@ -129,9 +127,7 @@ class TestLambdaHandlerCreate:
                 "knowledgeBaseArn": "arn:aws:bedrock:us-east-1:123:knowledge-base/kb-123",
             }
         }
-        mock_bedrock.create_data_source.return_value = {
-            "dataSource": {"dataSourceId": "ds-456"}
-        }
+        mock_bedrock.create_data_source.return_value = {"dataSource": {"dataSourceId": "ds-456"}}
 
         def client_factory(svc, **kwargs):
             return {
@@ -226,9 +222,7 @@ class TestLambdaHandlerDelete:
 
     @patch("urllib.request.urlopen")
     @patch("boto3.client")
-    def test_delete_happy_path(
-        self, mock_boto3_client, mock_urlopen, base_event, mock_context
-    ):
+    def test_delete_happy_path(self, mock_boto3_client, mock_urlopen, base_event, mock_context):
         mock_bedrock = MagicMock()
         mock_bedrock.list_data_sources.return_value = {
             "dataSourceSummaries": [{"dataSourceId": "ds-456"}]

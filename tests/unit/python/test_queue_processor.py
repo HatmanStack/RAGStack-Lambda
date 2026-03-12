@@ -15,7 +15,10 @@ def load_queue_processor_module():
     """Load the queue_processor index module dynamically."""
     module_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "lambda" / "queue_processor" / "index.py"
+        / "src"
+        / "lambda"
+        / "queue_processor"
+        / "index.py"
     ).resolve()
 
     if "queue_processor_index" in sys.modules:
@@ -55,10 +58,12 @@ def sqs_event():
         "Records": [
             {
                 "messageId": "msg-abc123",
-                "body": json.dumps({
-                    "document_id": "input/doc-uuid/report.pdf",
-                    "input_s3_uri": "s3://bucket/input/doc-uuid/report.pdf",
-                }),
+                "body": json.dumps(
+                    {
+                        "document_id": "input/doc-uuid/report.pdf",
+                        "input_s3_uri": "s3://bucket/input/doc-uuid/report.pdf",
+                    }
+                ),
             }
         ]
     }
@@ -164,9 +169,7 @@ class TestLambdaHandler:
 
     @patch("boto3.resource")
     @patch("boto3.client")
-    def test_execution_name_sanitized(
-        self, mock_boto3_client, mock_boto3_resource, mock_context
-    ):
+    def test_execution_name_sanitized(self, mock_boto3_client, mock_boto3_resource, mock_context):
         mock_sfn = MagicMock()
         mock_boto3_client.return_value = mock_sfn
 
@@ -204,9 +207,7 @@ class TestLambdaHandler:
         mock_boto3_client.return_value = mock_sfn
 
         mock_table = MagicMock()
-        mock_table.get_item.return_value = {
-            "Item": {"is_locked": True, "started_at": "2026-01-01"}
-        }
+        mock_table.get_item.return_value = {"Item": {"is_locked": True, "started_at": "2026-01-01"}}
         mock_dynamodb = MagicMock()
         mock_dynamodb.Table.return_value = mock_table
         mock_boto3_resource.return_value = mock_dynamodb
