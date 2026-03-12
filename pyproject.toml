@@ -97,6 +97,30 @@ skip-magic-trailing-comma = false
 # Import sorting configuration
 known-first-party = ["ragstack_common"]
 
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+# Lambda handlers all named index.py, need explicit paths
+files = ["lib/ragstack_common/", "src/lambda/"]
+
+# Third-party libraries without stubs
+[[tool.mypy.overrides]]
+module = [
+    "ebooklib.*",
+    "docx.*",
+    "openpyxl.*",
+    "fitz.*",
+    "bs4.*",
+    "markdownify.*",
+    "lxml.*",
+    "awslambdaric.*",
+    "httpx.*",
+]
+ignore_missing_imports = true
+
 [tool.vulture]
 # Vulture configuration for dead code detection
 # Run: uvx vulture lib/ src/lambda/ tests/ vulture_whitelist.py --min-confidence 80
