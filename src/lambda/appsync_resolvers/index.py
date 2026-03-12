@@ -871,9 +871,11 @@ def _reprocess_media(document_id: str, item: dict, table) -> dict:
         ExpressionAttributeValues={":status": "PROCESSING", ":updated_at": now},
     )
 
-    # Start Step Functions execution
+    # State machine expects document_id as S3 key (input/{doc_id}/{filename})
+    # because EventBridge passes the full key and ExtractDocumentId splits on '/'
+    s3_key = input_s3_uri.split("/", 3)[-1] if input_s3_uri.startswith("s3://") else ""
     execution_input = {
-        "document_id": document_id,
+        "document_id": s3_key,
         "input_s3_uri": input_s3_uri,
         "filename": item.get("filename"),
     }
@@ -919,9 +921,11 @@ def _reprocess_as_document(document_id: str, item: dict, table) -> dict:
         ExpressionAttributeValues={":status": "processing", ":updated_at": now},
     )
 
-    # Start Step Functions execution
+    # State machine expects document_id as S3 key (input/{doc_id}/{filename})
+    # because EventBridge passes the full key and ExtractDocumentId splits on '/'
+    s3_key = input_s3_uri.split("/", 3)[-1] if input_s3_uri.startswith("s3://") else ""
     execution_input = {
-        "document_id": document_id,
+        "document_id": s3_key,
         "input_s3_uri": input_s3_uri,
         "filename": item.get("filename"),
     }
