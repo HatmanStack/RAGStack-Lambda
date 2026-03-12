@@ -10,6 +10,7 @@ import { Search } from './components/Search';
 import { Chat } from './components/Chat';
 import { Settings } from './components/Settings';
 import { Scrape } from './components/Scrape';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 function App() {
   return (
@@ -24,12 +25,12 @@ function App() {
               <RequireAuth>
                 <AppLayout>
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/upload" element={<Upload />} />
-                    <Route path="/scrape" element={<Scrape />} />
-                    <Route path="/search" element={<Search />} />
-                    <Route path="/chat" element={<Chat />} />
-                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                    <Route path="/upload" element={<ErrorBoundary><Upload /></ErrorBoundary>} />
+                    <Route path="/scrape" element={<ErrorBoundary><Scrape /></ErrorBoundary>} />
+                    <Route path="/search" element={<ErrorBoundary><Search /></ErrorBoundary>} />
+                    <Route path="/chat" element={<ErrorBoundary><Chat /></ErrorBoundary>} />
+                    <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
                   </Routes>
                 </AppLayout>
               </RequireAuth>

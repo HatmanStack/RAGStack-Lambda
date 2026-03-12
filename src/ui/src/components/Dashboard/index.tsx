@@ -4,6 +4,7 @@ import { DocumentTable } from './DocumentTable';
 import { DocumentDetail } from './DocumentDetail';
 import { ScrapeJobDetail } from './ScrapeJobDetail';
 import { ImageDetail } from './ImageDetail';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { useDocuments } from '../../hooks/useDocuments';
 import { useScrape } from '../../hooks/useScrape';
 
@@ -81,15 +82,17 @@ export const Dashboard = () => {
       }
     >
       <SpaceBetween size="l">
-        <DocumentTable
-          documents={documents}
-          loading={loading}
-          onRefresh={refreshDocuments}
-          onSelectDocument={handleSelectItem}
-          onDelete={handleDelete}
-          onReprocess={handleReprocess}
-          onReindex={handleReindex}
-        />
+        <ErrorBoundary>
+          <DocumentTable
+            documents={documents}
+            loading={loading}
+            onRefresh={refreshDocuments}
+            onSelectDocument={handleSelectItem}
+            onDelete={handleDelete}
+            onReprocess={handleReprocess}
+            onReindex={handleReindex}
+          />
+        </ErrorBoundary>
       </SpaceBetween>
 
       {selectedType === 'scrape' && (
