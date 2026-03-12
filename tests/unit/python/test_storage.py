@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from ragstack_common.exceptions import FileSizeLimitExceeded
+from ragstack_common.exceptions import FileSizeLimitExceededError
 from ragstack_common.storage import parse_s3_uri, read_s3_binary
 
 
@@ -68,12 +68,12 @@ class TestReadS3Binary:
 
     @patch("ragstack_common.storage.get_s3_client")
     def test_over_max_size_raises(self, mock_get_client):
-        """File over max_size_bytes raises FileSizeLimitExceeded."""
+        """File over max_size_bytes raises FileSizeLimitExceededError."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         mock_client.head_object.return_value = {"ContentLength": 2000}
 
-        with pytest.raises(FileSizeLimitExceeded) as exc_info:
+        with pytest.raises(FileSizeLimitExceededError) as exc_info:
             read_s3_binary("s3://bucket/key.bin", max_size_bytes=1000)
 
         assert exc_info.value.actual_size == 2000

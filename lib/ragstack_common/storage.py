@@ -117,17 +117,17 @@ def read_s3_binary(s3_uri: str, max_size_bytes: int | None = None) -> bytes:
         s3_uri: S3 URI to binary file
         max_size_bytes: Optional maximum file size in bytes. When provided,
             a HEAD request is made first to check the object size before
-            downloading. If the object exceeds the limit, FileSizeLimitExceeded
+            downloading. If the object exceeds the limit, FileSizeLimitExceededError
             is raised.
 
     Returns:
         Binary content as bytes
 
     Raises:
-        FileSizeLimitExceeded: If the object exceeds max_size_bytes
+        FileSizeLimitExceededError: If the object exceeds max_size_bytes
         ClientError: If the S3 operation fails
     """
-    from ragstack_common.exceptions import FileSizeLimitExceeded
+    from ragstack_common.exceptions import FileSizeLimitExceededError
 
     bucket, key = parse_s3_uri(s3_uri)
 
@@ -137,11 +137,11 @@ def read_s3_binary(s3_uri: str, max_size_bytes: int | None = None) -> bytes:
             head = get_s3_client().head_object(Bucket=bucket, Key=key)
             content_length: int = head["ContentLength"]
             if content_length > max_size_bytes:
-                raise FileSizeLimitExceeded(content_length, max_size_bytes, s3_uri)
+                raise FileSizeLimitExceededError(content_length, max_size_bytes, s3_uri)
         except ClientError:
             # If HEAD fails, fall through to GET (don't block on HEAD failures)
             logger.warning(f"HEAD request failed for {s3_uri}, proceeding with GET")
-        except FileSizeLimitExceeded:
+        except FileSizeLimitExceededError:
             raise
 
     try:

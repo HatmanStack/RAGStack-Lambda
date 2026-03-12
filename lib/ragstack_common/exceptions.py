@@ -25,7 +25,7 @@ class MediaFileSizeExceededError(MediaProcessingError):
     """Media file size exceeds configured maximum."""
 
 
-class FileSizeLimitExceeded(Exception):
+class FileSizeLimitExceededError(Exception):
     """File size exceeds the configured maximum for download."""
 
     def __init__(self, actual_size: int, max_size: int, s3_uri: str = "") -> None:
