@@ -9,6 +9,7 @@ Demo mode is designed for public demonstrations where billing needs to be contro
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 from botocore.exceptions import ClientError
 
@@ -33,7 +34,7 @@ class DemoModeError(Exception):
         self.message = message
 
 
-def is_demo_mode_enabled(config_manager=None) -> bool:
+def is_demo_mode_enabled(config_manager: Any = None) -> bool:
     """
     Check if demo mode is enabled via environment variable or config.
 
@@ -59,7 +60,7 @@ def is_demo_mode_enabled(config_manager=None) -> bool:
     return False
 
 
-def check_demo_mode_feature_allowed(feature: str, config_manager=None) -> None:
+def check_demo_mode_feature_allowed(feature: str, config_manager: Any = None) -> None:
     """
     Check if a feature is allowed in demo mode. Raise DemoModeError if blocked.
 
@@ -91,8 +92,8 @@ def demo_quota_check_and_increment(
     user_id: str,
     quota_type: str,
     config_table_name: str,
-    dynamodb_client,
-    config_manager=None,
+    dynamodb_client: Any,
+    config_manager: Any = None,
 ) -> tuple[bool, str]:
     """
     Atomically check and increment demo mode quotas using DynamoDB transactions.
@@ -196,7 +197,7 @@ def demo_quota_check_and_increment(
         raise
 
 
-def get_demo_upload_conditions(config_manager=None) -> list | None:
+def get_demo_upload_conditions(config_manager: Any = None) -> list[list[str | int]] | None:
     """
     Get S3 presigned POST conditions for demo mode uploads.
 
@@ -224,9 +225,9 @@ def get_demo_quota_remaining(
     user_id: str,
     quota_type: str,
     config_table_name: str,
-    dynamodb_client,
-    config_manager=None,
-) -> dict:
+    dynamodb_client: Any,
+    config_manager: Any = None,
+) -> dict[str, int]:
     """
     Get remaining quota for a user in demo mode.
 

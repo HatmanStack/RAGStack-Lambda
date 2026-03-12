@@ -266,7 +266,7 @@ class MetadataExtractor:
             logger.exception(f"Unexpected error extracting metadata for {document_id}: {e}")
             return {}
 
-    def _build_extraction_prompt(self, text: str, existing_keys: list[dict]) -> str:
+    def _build_extraction_prompt(self, text: str, existing_keys: list[dict[str, Any]]) -> str:
         """
         Build the user prompt for metadata extraction.
 

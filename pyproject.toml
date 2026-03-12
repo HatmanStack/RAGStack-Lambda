@@ -65,6 +65,9 @@ ignore = [
     "N803",    # DynamoDB parameter names like 'Key' match AWS SDK conventions
     "N806",    # UPPER_CASE constants in functions (e.g., MAX_DOCUMENTS_PER_JOB)
 
+    # Enum style - str + Enum is used for JSON serialization compatibility
+    "UP042",   # Class inherits from both str and enum.Enum (prefer StrEnum)
+
     # Test files using pathlib.Path with open() is acceptable
     # PTH123 is handled via per-file-ignores for tests/
 ]
@@ -105,6 +108,10 @@ warn_unused_configs = true
 
 # Lambda handlers all named index.py, need explicit paths
 files = ["lib/ragstack_common/", "src/lambda/"]
+exclude = [
+    "lib/ragstack_common/text_extractors/",
+    "lib/ragstack_common/scraper/",
+]
 
 # Third-party libraries without stubs
 [[tool.mypy.overrides]]
@@ -118,8 +125,20 @@ module = [
     "lxml.*",
     "awslambdaric.*",
     "httpx.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
+
+# Text extractors and scraper modules heavily use third-party libs
+# without stubs (docx, ebooklib, bs4). Strict mode is impractical.
+[[tool.mypy.overrides]]
+module = [
+    "ragstack_common.text_extractors.*",
+    "ragstack_common.scraper.*",
+]
+strict = false
+disallow_untyped_defs = false
+warn_return_any = false
 
 [tool.vulture]
 # Vulture configuration for dead code detection

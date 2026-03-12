@@ -39,14 +39,15 @@ class SliceConfig:
     description: str = ""
 
 
-def _get_uri(result: dict) -> str:
+def _get_uri(result: dict[str, Any]) -> str:
     """Extract S3 URI from a retrieval result."""
     location = result.get("location", {})
     s3_location = location.get("s3Location", {})
-    return s3_location.get("uri", "")
+    uri: str = s3_location.get("uri", "")
+    return uri
 
 
-def deduplicate_results(results: list[dict]) -> list[dict]:
+def deduplicate_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Deduplicate retrieval results by S3 URI, keeping highest score.
 
@@ -60,7 +61,7 @@ def deduplicate_results(results: list[dict]) -> list[dict]:
         return []
 
     # Use dict to track best result per URI
-    best_by_uri: dict[str, dict] = {}
+    best_by_uri: dict[str, dict[str, Any]] = {}
 
     for result in results:
         uri = _get_uri(result) or f"_no_uri_{id(result)}"
@@ -78,8 +79,8 @@ def deduplicate_results(results: list[dict]) -> list[dict]:
 
 
 def compute_adaptive_boost(
-    filtered_results: list[dict],
-    unfiltered_results: list[dict],
+    filtered_results: list[dict[str, Any]],
+    unfiltered_results: list[dict[str, Any]],
     max_boost: float,
 ) -> float:
     """
@@ -132,15 +133,15 @@ def compute_adaptive_boost(
         boost,
         max_boost,
     )
-    return boost
+    return float(boost)
 
 
 def merge_slices_with_guaranteed_minimum(
-    slice_results: dict[str, list[dict]],
+    slice_results: dict[str, list[dict[str, Any]]],
     min_per_slice: int = 3,
     total_results: int = 10,
     filtered_score_boost: float = 1.0,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Merge multi-slice results with filtered results prioritized and boosted.
 
@@ -213,7 +214,7 @@ def merge_slices_with_guaranteed_minimum(
 
     # Deduplicate by URI, keeping highest boosted score (already sorted)
     seen_uris: set[str] = set()
-    merged: list[dict] = []
+    merged: list[dict[str, Any]] = []
     for result in all_results:
         uri = _get_uri(result) or f"_no_uri_{id(result)}"
         if uri not in seen_uris:
@@ -272,7 +273,7 @@ class MultiSliceRetriever:
 
     def __init__(
         self,
-        bedrock_agent_client=None,
+        bedrock_agent_client: Any = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_slices: int = DEFAULT_MAX_SLICES,
         enabled: bool = True,
@@ -304,9 +305,9 @@ class MultiSliceRetriever:
         query: str,
         knowledge_base_id: str,
         data_source_id: str | None,
-        metadata_filter: dict | None = None,
+        metadata_filter: dict[str, Any] | None = None,
         num_results: int = 5,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Retrieve documents using multi-slice strategy.
 
@@ -334,7 +335,7 @@ class MultiSliceRetriever:
         slices = self._build_slice_configs(metadata_filter, num_results)
 
         # Execute slices in parallel
-        slice_results: dict[str, list[dict]] = {}
+        slice_results: dict[str, list[dict[str, Any]]] = {}
 
         try:
             with ThreadPoolExecutor(max_workers=min(len(slices), self.max_slices)) as executor:
@@ -387,7 +388,7 @@ class MultiSliceRetriever:
 
     def _build_slice_configs(
         self,
-        metadata_filter: dict | None,
+        metadata_filter: dict[str, Any] | None,
         num_results: int,
     ) -> list[SliceConfig]:
         """
@@ -429,8 +430,8 @@ class MultiSliceRetriever:
         knowledge_base_id: str,
         data_source_id: str | None,
         slice_config: SliceConfig,
-        metadata_filter: dict | None = None,
-    ) -> list[dict]:
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Execute a single retrieval slice.
 
@@ -460,10 +461,10 @@ class MultiSliceRetriever:
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
-                retrievalConfiguration={"vectorSearchConfiguration": vector_config},
+                retrievalConfiguration={"vectorSearchConfiguration": vector_config},  # type: ignore[typeddict-item]  # boto3-stubs TypedDict vs dict
             )
 
-            results = response.get("retrievalResults", [])
+            results: list[dict[str, Any]] = response.get("retrievalResults", [])  # type: ignore[assignment]  # boto3-stubs returns typed list
             for i, r in enumerate(results):
                 uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
                 score = r.get("score", "N/A")
@@ -477,8 +478,8 @@ class MultiSliceRetriever:
     def _build_filter(
         self,
         data_source_id: str | None,
-        metadata_filter: dict | None,
-    ) -> dict | None:
+        metadata_filter: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
         """
         Build the complete filter expression.
 
@@ -519,7 +520,7 @@ class MultiSliceRetriever:
 
         return {"andAll": filters}
 
-    def _convert_filter_format(self, filter_expr: dict) -> dict | None:
+    def _convert_filter_format(self, filter_expr: dict[str, Any]) -> dict[str, Any] | None:
         """
         Convert S3 Vectors filter format to Bedrock KB filter format.
 
@@ -598,9 +599,9 @@ class MultiSliceRetriever:
         query: str,
         knowledge_base_id: str,
         data_source_id: str | None,
-        metadata_filter: dict | None,
+        metadata_filter: dict[str, Any] | None,
         num_results: int,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Execute a single (non-parallel) retrieval.
 
@@ -629,10 +630,10 @@ class MultiSliceRetriever:
             response = self.bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
-                retrievalConfiguration={"vectorSearchConfiguration": vector_config},
+                retrievalConfiguration={"vectorSearchConfiguration": vector_config},  # type: ignore[typeddict-item]  # boto3-stubs TypedDict vs dict
             )
 
-            results = response.get("retrievalResults", [])
+            results: list[dict[str, Any]] = response.get("retrievalResults", [])  # type: ignore[assignment]  # boto3-stubs returns typed list
             logger.info(f"Single retrieval returned {len(results)} results")
             for i, r in enumerate(results):
                 uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")

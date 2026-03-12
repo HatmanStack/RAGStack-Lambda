@@ -10,6 +10,7 @@ import logging
 import os
 import urllib.request
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 _session = None
 
 
-def _get_session():
+def _get_session() -> boto3.Session:
     """Get or create boto3 session."""
     global _session
     if _session is None:
@@ -29,17 +30,21 @@ def _get_session():
     return _session
 
 
-def _sign_request(request, region):
+def _sign_request(request: AWSRequest, region: str) -> None:
     """Sign an AWS request using SigV4."""
     session = _get_session()
     credentials = session.get_credentials()
+    if credentials is None:
+        raise RuntimeError("No AWS credentials available for signing")
     frozen_credentials = credentials.get_frozen_credentials()
 
     sigv4 = SigV4Auth(frozen_credentials, "appsync", region)
     sigv4.add_auth(request)
 
 
-def execute_appsync_mutation(graphql_endpoint: str, mutation: str, variables: dict) -> dict:
+def execute_appsync_mutation(
+    graphql_endpoint: str, mutation: str, variables: dict[str, Any]
+) -> dict[str, Any]:
     """
     Execute a GraphQL mutation against AppSync using IAM auth.
 
@@ -73,7 +78,7 @@ def execute_appsync_mutation(graphql_endpoint: str, mutation: str, variables: di
 
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
-            result = json.loads(response.read().decode("utf-8"))
+            result: dict[str, Any] = json.loads(response.read().decode("utf-8"))
             if "errors" in result:
                 logger.warning(f"GraphQL errors: {result['errors']}")
             return result
@@ -87,8 +92,8 @@ def publish_document_update(
     document_id: str,
     filename: str,
     status: str,
-    total_pages: int = None,
-    error_message: str = None,
+    total_pages: int | None = None,
+    error_message: str | None = None,
 ) -> None:
     """
     Publish a document status update to AppSync subscribers.
@@ -223,8 +228,8 @@ def publish_image_update(
     image_id: str,
     filename: str,
     status: str,
-    caption: str = None,
-    error_message: str = None,
+    caption: str | None = None,
+    error_message: str | None = None,
 ) -> None:
     """
     Publish an image status update to AppSync subscribers.
@@ -286,10 +291,10 @@ def publish_reindex_update(
     status: str,
     total_documents: int,
     processed_count: int,
-    current_document: str = None,
+    current_document: str | None = None,
     error_count: int = 0,
-    error_messages: list[str] = None,
-    new_knowledge_base_id: str = None,
+    error_messages: list[str] | None = None,
+    new_knowledge_base_id: str | None = None,
 ) -> None:
     """
     Publish a reindex progress update to AppSync subscribers.

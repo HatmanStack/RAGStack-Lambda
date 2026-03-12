@@ -21,7 +21,7 @@ _s3_client = None
 _dynamodb = None
 
 
-def get_s3_client():
+def get_s3_client() -> Any:
     """Get or create S3 client."""
     global _s3_client
     if _s3_client is None:
@@ -29,7 +29,7 @@ def get_s3_client():
     return _s3_client
 
 
-def get_dynamodb():
+def get_dynamodb() -> Any:
     """Get or create DynamoDB resource."""
     global _dynamodb
     if _dynamodb is None:
@@ -102,7 +102,8 @@ def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
-        return response["Body"].read().decode(encoding)
+        result: str = response["Body"].read().decode(encoding)
+        return result
     except ClientError:
         logger.exception(f"Failed to read S3 text from {s3_uri}")
         raise
@@ -113,7 +114,8 @@ def read_s3_binary(s3_uri: str) -> bytes:
     bucket, key = parse_s3_uri(s3_uri)
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
-        return response["Body"].read()
+        result: bytes = response["Body"].read()
+        return result
     except ClientError:
         logger.exception(f"Failed to read S3 binary from {s3_uri}")
         raise
@@ -181,9 +183,10 @@ def generate_presigned_url(
         logger.warning(f"Attempted presigned URL for unauthorized bucket: {bucket}")
         return None
     try:
-        return get_s3_client().generate_presigned_url(
+        url: str = get_s3_client().generate_presigned_url(
             "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
         )
+        return url
     except Exception as e:
         logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
         return None
@@ -292,7 +295,7 @@ def get_file_type_from_filename(filename: str) -> str:
 # ============================================================================
 
 
-def get_table(table_name: str):
+def get_table(table_name: str) -> Any:
     """Get DynamoDB table resource."""
     return get_dynamodb().Table(table_name)
 
@@ -328,7 +331,8 @@ def get_item(table_name: str, key: dict[str, Any]) -> dict[str, Any] | None:
     table = get_table(table_name)
     try:
         response = table.get_item(Key=key)
-        return response.get("Item")
+        item: dict[str, Any] | None = response.get("Item")
+        return item
     except ClientError:
         logger.exception(f"Failed to get item from {table_name}")
         raise

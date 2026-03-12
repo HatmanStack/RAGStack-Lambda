@@ -163,7 +163,7 @@ def resize_image(
             f"Resizing image from {current_width}x{current_height} to {new_width}x{new_height}"
         )
 
-        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         # Save in original format if possible, otherwise JPEG
         img_byte_array = io.BytesIO()
@@ -173,12 +173,12 @@ def resize_image(
             else "JPEG"
         )
 
-        save_kwargs = {"format": save_format}
+        save_kwargs: dict[str, Any] = {"format": save_format}
         if save_format in ["JPEG", "JPG"]:
             save_kwargs["quality"] = 95
             save_kwargs["optimize"] = True
 
-        image.save(img_byte_array, **save_kwargs)
+        resized_image.save(img_byte_array, **save_kwargs)
         return img_byte_array.getvalue()
     logger.info(
         f"Image {current_width}x{current_height} already fits within {target_width}x{target_height}"
@@ -199,7 +199,7 @@ def prepare_bedrock_image_attachment(image_data: bytes) -> dict[str, Any]:
     # Detect image format
     image = Image.open(io.BytesIO(image_data))
     format_mapping = {"JPEG": "jpeg", "PNG": "png", "GIF": "gif", "WEBP": "webp"}
-    detected_format = format_mapping.get(image.format)
+    detected_format = format_mapping.get(image.format or "")
 
     # AVIF not supported by Bedrock - convert to PNG
     if image.format == "AVIF":

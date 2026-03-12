@@ -98,7 +98,7 @@ class TranscribeClient:
 
         try:
             response = self._client.start_transcription_job(**job_params)
-            created_job_name = response["TranscriptionJob"]["TranscriptionJobName"]
+            created_job_name: str = response["TranscriptionJob"]["TranscriptionJobName"]
             logger.info(f"Transcription job started: {created_job_name}")
             return created_job_name
         except Exception as e:
@@ -116,7 +116,7 @@ class TranscribeClient:
         """
         try:
             response = self._client.get_transcription_job(TranscriptionJobName=job_name)
-            status = response["TranscriptionJob"]["TranscriptionJobStatus"]
+            status: str = response["TranscriptionJob"]["TranscriptionJobStatus"]
             logger.debug(f"Job {job_name} status: {status}")
             return status
         except Exception as e:
@@ -137,7 +137,8 @@ class TranscribeClient:
             job = response["TranscriptionJob"]
             if job["TranscriptionJobStatus"] != "COMPLETED":
                 return None
-            return job.get("Transcript", {}).get("TranscriptFileUri")
+            result: str | None = job.get("Transcript", {}).get("TranscriptFileUri")
+            return result
         except Exception as e:
             logger.exception(f"Failed to get transcript result: {e}")
             raise TranscriptionError(f"Failed to get transcript result: {e}") from e

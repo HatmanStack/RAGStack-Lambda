@@ -8,6 +8,7 @@ Provides OCR capabilities using:
 """
 
 import logging
+from typing import Any
 
 import boto3
 import fitz  # PyMuPDF
@@ -48,18 +49,18 @@ class OcrService:
         self.bedrock_model_id = bedrock_model_id or "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
         # Lazy-load clients
-        self._textract_client = None
-        self._bedrock_client = None
+        self._textract_client: Any = None
+        self._bedrock_client: BedrockClient | None = None
 
     @property
-    def textract_client(self):
+    def textract_client(self) -> Any:
         """Lazy-loaded Textract client."""
         if self._textract_client is None:
             self._textract_client = boto3.client("textract", region_name=self.region)
         return self._textract_client
 
     @property
-    def bedrock_client(self):
+    def bedrock_client(self) -> BedrockClient:
         """Lazy-loaded Bedrock client."""
         if self._bedrock_client is None:
             self._bedrock_client = BedrockClient(region=self.region)
@@ -328,7 +329,7 @@ class OcrService:
                     next_token = response.get("NextToken")
 
                 # Group blocks by page
-                pages_dict = {}
+                pages_dict: dict[int, dict[str, list[Any]]] = {}
                 for block in all_blocks:
                     if block["BlockType"] == "LINE":
                         page_num = block.get("Page", 1)
@@ -345,6 +346,8 @@ class OcrService:
                 # In batch mode, ensure every page in the range has an entry
                 # (blank scanned pages produce no LINE blocks but need Page objects)
                 if is_batch_mode:
+                    assert document.page_start is not None  # checked by is_batch_mode
+                    assert document.page_end is not None  # checked by is_batch_mode
                     for page_num in range(document.page_start, document.page_end + 1):
                         if page_num not in pages_dict:
                             pages_dict[page_num] = {"lines": [], "confidences": []}
@@ -370,6 +373,8 @@ class OcrService:
                 # In batch mode, set counts for the requested page range
                 # (blank scanned pages produce no LINE blocks but aren't failures)
                 if is_batch_mode:
+                    assert document.page_start is not None  # checked by is_batch_mode
+                    assert document.page_end is not None  # checked by is_batch_mode
                     pages_in_batch = document.page_end - document.page_start + 1
                     document.total_pages = pages_in_batch
                     document.pages_succeeded = len(document.pages)
@@ -456,7 +461,7 @@ class OcrService:
             document.error_message = str(e)
             return document
 
-    def _render_page_to_image(self, pdf_page, max_size_bytes: int = 5 * 1024 * 1024) -> bytes:
+    def _render_page_to_image(self, pdf_page: Any, max_size_bytes: int = 5 * 1024 * 1024) -> bytes:
         """
         Render PDF page to image, reducing quality if needed to stay under size limit.
 
@@ -480,7 +485,7 @@ class OcrService:
         for dpi in [150, 120, 100, 72, 50]:
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = pdf_page.get_pixmap(matrix=mat)
-            img_bytes = pix.tobytes("jpeg")
+            img_bytes: bytes = pix.tobytes("jpeg")
 
             if len(img_bytes) <= effective_limit:
                 logger.info(f"Page rendered at {dpi} DPI (JPEG): {len(img_bytes) / 1024:.0f} KB")
