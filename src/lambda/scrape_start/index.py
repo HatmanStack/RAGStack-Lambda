@@ -29,6 +29,7 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import boto3
@@ -176,7 +177,7 @@ def extract_job_metadata(url: str, config: ScrapeConfig) -> dict:
         return {}
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler - initiates scrape job.
     """
@@ -275,7 +276,7 @@ def lambda_handler(event, context):
             "depth": 0,
         }
 
-        send_params = {
+        send_params: dict[str, Any] = {
             "QueueUrl": discovery_queue_url,
             "MessageBody": json.dumps(message),
         }

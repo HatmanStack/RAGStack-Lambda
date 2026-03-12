@@ -194,7 +194,7 @@ def sample_vectors_from_kb(
     num_queries = min(10, max(5, max_samples // 100))
     random_queries = [str(uuid.uuid4()) for _ in range(num_queries)]
 
-    def execute_query(query: str) -> list[dict]:
+    def execute_query(query: str) -> list[dict[str, Any]]:
         """Execute a single retrieval query."""
         try:
             vector_config: dict[str, Any] = {"numberOfResults": 100}
@@ -209,9 +209,9 @@ def sample_vectors_from_kb(
             response = bedrock_agent.retrieve(
                 knowledgeBaseId=knowledge_base_id,
                 retrievalQuery={"text": query},
-                retrievalConfiguration={"vectorSearchConfiguration": vector_config},
+                retrievalConfiguration={"vectorSearchConfiguration": vector_config},  # type: ignore[typeddict-item]
             )
-            return response.get("retrievalResults", [])
+            return list(response.get("retrievalResults", []))  # type: ignore[arg-type]
         except ClientError as e:
             logger.warning(f"Random sample query failed: {e}")
             return []
@@ -323,7 +323,7 @@ def update_key_library_counts(
                     logger.warning(f"Failed to mark manual key '{manual_key}' as active: {e}")
 
 
-def lambda_handler(event: dict, context) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for metadata analysis.
 

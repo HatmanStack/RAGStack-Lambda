@@ -29,7 +29,7 @@ class KBMigrator:
         stack_name: str,
         kb_role_arn: str,
         embedding_model_arn: str,
-        region: str = None,
+        region: str | None = None,
     ):
         """
         Initialize KBMigrator.
@@ -55,7 +55,7 @@ class KBMigrator:
         self.s3vectors = boto3.client("s3vectors", region_name=self.region)
         self.sts = boto3.client("sts", region_name=self.region)
 
-    def create_knowledge_base(self, suffix: str = None) -> dict[str, Any]:
+    def create_knowledge_base(self, suffix: str | None = None) -> dict[str, Any]:
         """
         Create a new Knowledge Base with S3 Vectors data source.
 
@@ -200,7 +200,7 @@ class KBMigrator:
                 existing = self.s3vectors.get_index(
                     vectorBucketName=self.vector_bucket, indexName=index_name
                 )
-                return existing["index"]["indexArn"]
+                return str(existing["index"]["indexArn"])
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "")
                 # S3 Vectors returns NotFoundException, not ResourceNotFoundException
@@ -322,8 +322,9 @@ class KBMigrator:
 
             # Extract vector index ARN if S3 storage
             vector_index_arn = None
-            if storage_config.get("type") == "S3":
-                s3_config = storage_config.get("s3Configuration", {})
+            storage_type = str(storage_config.get("type", ""))
+            if storage_type == "S3":
+                s3_config: dict[str, Any] = storage_config.get("s3Configuration", {})  # type: ignore[assignment]
                 vector_index_arn = s3_config.get("vectorIndexArn")
 
             # Delete data sources first

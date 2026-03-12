@@ -456,7 +456,7 @@ def ingest_transcript_segments(
     return ingested_count
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Ingest media content with dual embeddings."""
     # Get KB config from config table (with env var fallback)
     config = get_config_manager_or_none()
@@ -494,7 +494,7 @@ def lambda_handler(event, context):
     # Fetch document details
     doc_response = tracking_table.get_item(Key={"document_id": document_id})
     doc_item = doc_response.get("Item", {})
-    filename = doc_item.get("filename", "unknown")
+    filename = str(doc_item.get("filename", "unknown"))
 
     try:
         # Read transcript for metadata extraction

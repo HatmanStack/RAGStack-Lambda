@@ -16,6 +16,7 @@ This Lambda:
 import json
 import logging
 import os
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -72,7 +73,7 @@ def create_metadata(document_id: str, filename: str) -> dict:
     }
 
 
-def lambda_handler(event: dict, context) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Move video from input/ to content/{docId}/ for visual embedding ingestion.
 
@@ -117,13 +118,13 @@ def lambda_handler(event: dict, context) -> dict:
         return {"status": "skipped", "message": f"Document {document_id} not found"}
 
     # Check if this is a media file
-    doc_type = doc_item.get("type", "")
+    doc_type = str(doc_item.get("type", ""))
     if doc_type != "media":
         logger.info(f"Document {document_id} is not media type (type={doc_type}), skipping")
         return {"status": "skipped", "message": f"Not a video file (type={doc_type})"}
 
-    filename = doc_item.get("filename", "video.mp4")
-    current_s3_uri = doc_item.get("input_s3_uri", "")
+    filename = str(doc_item.get("filename", "video.mp4"))
+    current_s3_uri = str(doc_item.get("input_s3_uri", ""))
 
     # Parse current location
     source_bucket, source_key = parse_s3_uri(current_s3_uri)
@@ -172,11 +173,10 @@ def lambda_handler(event: dict, context) -> dict:
 
         # Step 2: Copy video to destination
         logger.info(f"Copying video from {source_key} to {dest_key}")
-        copy_source = {"Bucket": data_bucket, "Key": source_key}
         s3_client.copy_object(
             Bucket=data_bucket,
             Key=dest_key,
-            CopySource=copy_source,
+            CopySource={"Bucket": data_bucket, "Key": source_key},
         )
 
         # Step 3: Delete original (only after successful copy)

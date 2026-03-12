@@ -26,6 +26,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -45,10 +46,10 @@ s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 
 # Module-level initialization (lazy-initialized to avoid import-time failures)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 
-def _get_config_manager():
+def _get_config_manager() -> ConfigurationManager:
     """Get or initialize ConfigurationManager (lazy initialization)."""
     global _config_manager
     if _config_manager is None:
@@ -56,7 +57,7 @@ def _get_config_manager():
     return _config_manager
 
 
-def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, tracking_table):
+def _process_scraped_markdown(document_id: str, input_s3_uri: str, output_s3_prefix: str, tracking_table: str) -> dict[str, Any]:
     """
     Process scraped markdown files by copying directly to output bucket.
 
@@ -160,7 +161,7 @@ def _process_scraped_markdown(document_id, input_s3_uri, output_s3_prefix, track
     }
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler.
     """

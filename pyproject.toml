@@ -102,16 +102,27 @@ known-first-party = ["ragstack_common"]
 
 [tool.mypy]
 python_version = "3.13"
-strict = true
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+extra_checks = true
 
 # Lambda handlers all named index.py, need explicit paths
 files = ["lib/ragstack_common/", "src/lambda/"]
 exclude = [
-    "lib/ragstack_common/text_extractors/",
-    "lib/ragstack_common/scraper/",
+    "ragstack-mcp",
+    "src/lambda/configuration_resolver/test_.*\\.py",
 ]
+# Each Lambda handler directory has its own index.py
+explicit_package_bases = true
+mypy_path = "lib"
 
 # Third-party libraries without stubs
 [[tool.mypy.overrides]]
@@ -129,16 +140,20 @@ module = [
 ]
 ignore_missing_imports = true
 
-# Text extractors and scraper modules heavily use third-party libs
-# without stubs (docx, ebooklib, bs4). Strict mode is impractical.
+# Lambda handlers use many dynamic patterns (DynamoDB responses, event parsing)
+# Require type annotations but relax strict checking for boto3 dynamic APIs
+[[tool.mypy.overrides]]
+module = "index"
+disallow_untyped_calls = false
+warn_return_any = false
+
+# text_extractors and scraper have complex third-party types - ignore errors
 [[tool.mypy.overrides]]
 module = [
     "ragstack_common.text_extractors.*",
     "ragstack_common.scraper.*",
 ]
-strict = false
-disallow_untyped_defs = false
-warn_return_any = false
+ignore_errors = true
 
 [tool.vulture]
 # Vulture configuration for dead code detection

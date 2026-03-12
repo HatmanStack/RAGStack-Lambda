@@ -114,7 +114,7 @@ def is_metadata_extraction_enabled() -> bool:
     if config is None:
         return True  # Default to enabled if config not available
 
-    return config.get_parameter("metadata_extraction_enabled", default=True)
+    return bool(config.get_parameter("metadata_extraction_enabled", default=True))
 
 
 def build_inline_attributes(metadata: dict[str, Any]) -> list[dict[str, Any]]:
@@ -172,7 +172,7 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
     try:
         response = s3_client.get_object(Bucket=bucket, Key=metadata_key)
         content = json.loads(response["Body"].read().decode("utf-8"))
-        metadata = content.get("metadataAttributes", {})
+        metadata: dict[str, Any] = content.get("metadataAttributes", {})
         logger.info(f"Found existing metadata file: {metadata_key} with {len(metadata)} fields")
         return metadata
     except ClientError as e:
@@ -225,7 +225,7 @@ def extract_document_metadata(
         return {}
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Ingest document into Knowledge Base via Bedrock Agent API."""
     # Get KB config from config table (with env var fallback)
     config = get_config_manager_or_none()
@@ -253,8 +253,8 @@ def lambda_handler(event, context):
     # Fetch document details first (needed for base metadata and publishing)
     doc_response = tracking_table.get_item(Key={"document_id": document_id})
     doc_item = doc_response.get("Item", {})
-    filename = doc_item.get("filename", "unknown")
-    total_pages = int(doc_item.get("total_pages", 0))
+    filename = str(doc_item.get("filename", "unknown"))
+    total_pages = int(doc_item.get("total_pages", 0))  # type: ignore[arg-type]
 
     # Check for existing metadata (e.g., from scrape_process)
     # If found and not forcing extraction, skip LLM extraction and use existing metadata
@@ -357,7 +357,7 @@ def lambda_handler(event, context):
         try:
             update_expression = "SET #status = :status, updated_at = :updated_at"
             expression_names = {"#status": "status"}
-            expression_values = {
+            expression_values: dict[str, Any] = {
                 ":status": "INDEXED",
                 ":updated_at": datetime.now(UTC).isoformat(),
             }
