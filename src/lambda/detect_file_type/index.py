@@ -197,7 +197,7 @@ def _get_pdf_page_info(input_s3_uri: str, filename: str) -> dict:
     Returns dict with total_pages, needs_batching, is_text_native, and batches array.
     """
     logger.info(f"Downloading PDF to count pages: {input_s3_uri}")
-    pdf_bytes = read_s3_binary(input_s3_uri)
+    pdf_bytes = read_s3_binary(input_s3_uri, max_size_bytes=500 * 1024 * 1024)
 
     # Count pages
     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
