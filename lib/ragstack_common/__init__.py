@@ -38,6 +38,17 @@ from ragstack_common.metadata_normalizer import (
     reduce_metadata,
 )
 from ragstack_common.multislice_retriever import MultiSliceRetriever
+from ragstack_common.types import (
+    ChatResponse,
+    ConversationTurn,
+    DocumentTrackingItem,
+    FilterConfig,
+    IngestionJobResponse,
+    KBRetrievalResult,
+    MetadataAttributes,
+    S3Location,
+    SourceInfo,
+)
 from ragstack_common.storage import (
     extract_filename_from_s3_uri,
     generate_presigned_url,
@@ -80,4 +91,13 @@ __all__ = [
     "validate_image_size",
     "validate_image_type",
     "write_metadata_to_s3",
+    "ChatResponse",
+    "ConversationTurn",
+    "DocumentTrackingItem",
+    "FilterConfig",
+    "IngestionJobResponse",
+    "KBRetrievalResult",
+    "MetadataAttributes",
+    "S3Location",
+    "SourceInfo",
 ]
