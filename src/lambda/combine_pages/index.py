@@ -42,7 +42,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def _list_partial_files(output_s3_prefix: str) -> list[dict]:
+def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
     """
     List partial files from S3 matching pages_XXX-YYY.txt pattern.
 

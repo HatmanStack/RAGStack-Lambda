@@ -168,9 +168,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     failed_count = 0
 
     for uri, kb_status in statuses.items():
-        doc: dict[str, Any] | None = uri_to_doc.get(uri)
-        if not doc:
+        matched_doc: dict[str, Any] | None = uri_to_doc.get(uri)
+        if not matched_doc:
             continue
+        doc = matched_doc
 
         document_id = str(doc.get("document_id", ""))
         filename = str(doc.get("filename", "unknown"))
