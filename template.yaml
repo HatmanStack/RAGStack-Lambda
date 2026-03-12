@@ -4208,13 +4208,71 @@ Resources:
         - Key: Project
           Value: !Ref AWS::StackName
 
+  # =========================================================================
+  # DLQ Replay Lambda - moves messages from DLQs back to source queues
+  # =========================================================================
+
+  DLQReplayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - '${Prefix}-dlq-replay'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      CodeUri: src/lambda/dlq_replay/
+      Handler: index.lambda_handler
+      Description: Replays messages from DLQs back to source queues (manually triggered)
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          PROCESSING_DLQ_URL: !Ref ProcessingDLQ
+          PROCESSING_QUEUE_URL: !Ref DocumentProcessingQueue
+          BATCH_DLQ_URL: !Ref BatchProcessingDLQ
+          BATCH_QUEUE_URL: !Ref BatchProcessingQueue
+          SCRAPE_DISCOVERY_DLQ_URL: !Ref ScrapeDiscoveryDLQ
+          SCRAPE_DISCOVERY_QUEUE_URL: !Ref ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_DLQ_URL: !Ref ScrapeProcessingDLQ
+          SCRAPE_PROCESSING_QUEUE_URL: !Ref ScrapeProcessingQueue
+          SYNC_DLQ_URL: !Ref SyncRequestDLQ
+          SYNC_QUEUE_URL: !Ref SyncRequestQueue
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource:
+                - !GetAtt ProcessingDLQ.Arn
+                - !GetAtt BatchProcessingDLQ.Arn
+                - !GetAtt ScrapeDiscoveryDLQ.Arn
+                - !GetAtt ScrapeProcessingDLQ.Arn
+                - !GetAtt SyncRequestDLQ.Arn
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource:
+                - !GetAtt DocumentProcessingQueue.Arn
+                - !GetAtt BatchProcessingQueue.Arn
+                - !GetAtt ScrapeDiscoveryQueue.Arn
+                - !GetAtt ScrapeProcessingQueue.Arn
+                - !GetAtt SyncRequestQueue.Arn
+      Tags:
+        Project: !Ref AWS::StackName
+
+  # =========================================================================
+  # CloudWatch Alarms for all DLQs
+  # =========================================================================
+
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub
         - '${Prefix}-DLQ-Messages'
         - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
-      AlarmDescription: Alert when messages appear in DLQ
+      AlarmDescription: Alert when messages appear in Processing DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
       Statistic: Average
@@ -4225,6 +4283,110 @@ Resources:
       Dimensions:
         - Name: QueueName
           Value: !GetAtt ProcessingDLQ.QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  BatchDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - '${Prefix}-Batch-DLQ-Messages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      AlarmDescription: Alert when messages appear in Batch Processing DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt BatchProcessingDLQ.QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  ScrapeDiscoveryDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - '${Prefix}-ScrapeDiscovery-DLQ-Messages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      AlarmDescription: Alert when messages appear in Scrape Discovery DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ScrapeDiscoveryDLQ.QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  ScrapeProcessingDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - '${Prefix}-ScrapeProcessing-DLQ-Messages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      AlarmDescription: Alert when messages appear in Scrape Processing DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ScrapeProcessingDLQ.QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  SyncDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - '${Prefix}-Sync-DLQ-Messages'
+        - Prefix: !If [UseCustomPrefix, !Ref StackPrefix, !Ref 'AWS::StackName']
+      AlarmDescription: Alert when messages appear in Sync Request DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SyncRequestDLQ.QueueName
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref AlarmTopic
