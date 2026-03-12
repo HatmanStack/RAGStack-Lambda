@@ -2,8 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from './NotificationContext';
 
+type NotificationType = 'success' | 'error' | 'warning' | 'info';
+
 // Test helper component that triggers notifications
-function TestConsumer({ type = 'info' as const, message = 'Test notification' }) {
+function TestConsumer({ type = 'info' as NotificationType, message = 'Test notification' }: { type?: NotificationType; message?: string }) {
   const { addNotification, clearNotifications } = useNotifications();
   return (
     <div>
