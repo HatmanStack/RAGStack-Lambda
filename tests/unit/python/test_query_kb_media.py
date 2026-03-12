@@ -254,8 +254,10 @@ class TestMediaSourceExtraction:
             }
         }
         index.dynamodb.Table.return_value = mock_table
-        # Mock the generate_presigned_url from ragstack_common.storage (used by extract_sources)
-        index.generate_presigned_url = MagicMock(
+        # Mock the generate_presigned_url in sources module (used by extract_sources)
+        import sources
+
+        sources.generate_presigned_url = MagicMock(
             return_value="https://s3.amazonaws.com/test-bucket/input/media123/video.mp4?sig=xyz"
         )
 
