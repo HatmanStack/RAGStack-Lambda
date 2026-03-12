@@ -147,7 +147,7 @@ def extract_kb_scalar(value: Any) -> str | None:
 _config_manager = None
 
 
-def get_config_manager():
+def get_config_manager() -> ConfigurationManager:
     """Lazy-load ConfigurationManager to avoid import-time failures."""
     global _config_manager
     if _config_manager is None:
@@ -168,7 +168,7 @@ _filter_examples_cache_time = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 
-def _get_filter_components(filtered_score_boost: float = 1.25):
+def _get_filter_components(filtered_score_boost: float = 1.25) -> tuple[KeyLibrary, FilterGenerator, MultiSliceRetriever]:
     """Lazy-load filter generation components."""
     global _key_library, _filter_generator, _multislice_retriever
 
@@ -194,7 +194,7 @@ def _get_filter_components(filtered_score_boost: float = 1.25):
     return _key_library, _filter_generator, _multislice_retriever
 
 
-def _get_filter_examples():
+def _get_filter_examples() -> list[Any]:
     """Get filter examples from config with caching."""
     import time
 
@@ -228,7 +228,7 @@ MAX_MESSAGE_LENGTH = 10000  # Max chars per message to prevent injection attacks
 QUOTA_TTL_DAYS = 2  # Quota counters expire after 2 days
 
 
-def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
+def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, region: str) -> str:
     """
     Atomically check and increment quotas using DynamoDB transactions.
 
@@ -246,12 +246,12 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         str: Model ID to use (primary or fallback)
     """
     # Load quota configuration
-    primary_model = get_config_manager().get_parameter(
+    primary_model: str = str(get_config_manager().get_parameter(
         "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    )
-    fallback_model = get_config_manager().get_parameter(
+    ))
+    fallback_model: str = str(get_config_manager().get_parameter(
         "chat_fallback_model", default="us.amazon.nova-lite-v1:0"
-    )
+    ))
     global_quota_daily = get_config_manager().get_parameter(
         "chat_global_quota_daily", default=10000
     )
@@ -323,7 +323,7 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
             )
 
         # Execute atomic transaction
-        dynamodb_client.transact_write_items(TransactItems=transact_items)
+        dynamodb_client.transact_write_items(TransactItems=transact_items)  # type: ignore[arg-type]
 
         user_prefix = tracking_id[:8] if tracking_id else "anon"
         logger.info(f"Quota transaction succeeded for {user_prefix}...")
@@ -348,7 +348,7 @@ def atomic_quota_check_and_increment(tracking_id, is_authenticated, region):
         return fallback_model
 
 
-def get_conversation_history(conversation_id):
+def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
     """
     Retrieve the last N conversation turns from DynamoDB.
 
@@ -385,8 +385,8 @@ def get_conversation_history(conversation_id):
 
 
 def store_conversation_turn(
-    conversation_id, turn_number, user_message, assistant_response, sources
-):
+    conversation_id: str, turn_number: int, user_message: str, assistant_response: str, sources: list[dict[str, Any]]
+) -> None:
     """
     Store a conversation turn in DynamoDB.
 
@@ -467,8 +467,8 @@ def _augment_with_id_lookup(
         # Scan for documents with filename containing the ID
         # Note: Scan is expensive for large tables - consider GSI on filename
         # We paginate to find matches across the entire table
-        items = []
-        scan_kwargs = {
+        items: list[dict[str, Any]] = []
+        scan_kwargs: dict[str, Any] = {
             "FilterExpression": "contains(filename, :id)",
             "ExpressionAttributeValues": {":id": id_pattern},
             "ProjectionExpression": "document_id, filename, output_s3_uri, input_s3_uri",
@@ -491,11 +491,11 @@ def _augment_with_id_lookup(
 
         # Add matched documents to results
         for item in items:
-            filename = item.get("filename", "")
-            doc_type = item.get("type", "")
-            document_id = item.get("document_id", "")
-            output_uri = item.get("output_s3_uri")
-            input_uri = item.get("input_s3_uri")
+            filename = str(item.get("filename", ""))
+            doc_type = str(item.get("type", ""))
+            document_id = str(item.get("document_id", ""))
+            output_uri = str(item.get("output_s3_uri", "")) or ""
+            input_uri = str(item.get("input_s3_uri", "")) or ""
 
             # Determine the S3 URI to use for the source
             # For scraped content (.md), use output_uri (input may be deleted)
@@ -549,7 +549,7 @@ def _augment_with_id_lookup(
         return retrieval_results
 
 
-def build_retrieval_query(current_query, history):
+def build_retrieval_query(current_query: str, history: list[dict[str, Any]]) -> str:
     """
     Build an optimized query for KB retrieval.
 
@@ -637,11 +637,12 @@ QUERY TO USE FOR SEARCH:"""
 
     result = response.get("output", {}).get("message", {}).get("content", [])
     if result and "text" in result[0]:
-        return result[0]["text"].strip()
+        rewritten: str = result[0]["text"].strip()
+        return rewritten
     return query
 
 
-def build_conversation_messages(current_query, history, retrieved_context, images=None):
+def build_conversation_messages(current_query: str, history: list[dict[str, Any]], retrieved_context: str, images: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """
     Build messages array for Bedrock Converse API with conversation history.
 
@@ -690,7 +691,7 @@ If the retrieved information doesn't contain the answer, say so and provide rele
     return messages
 
 
-def format_timestamp(seconds):
+def format_timestamp(seconds: int | float | Decimal | None) -> str | None:
     """
     Format seconds into M:SS or MM:SS display format.
 
@@ -708,7 +709,7 @@ def format_timestamp(seconds):
     return f"{minutes}:{secs:02d}"
 
 
-def generate_media_url(bucket, key, timestamp_start, timestamp_end, expiration=3600):
+def generate_media_url(bucket: str, key: str, timestamp_start: int | None, timestamp_end: int | None, expiration: int = 3600) -> str | None:
     """
     Generate presigned URL for media with optional timestamp fragment.
 
@@ -743,7 +744,7 @@ def generate_media_url(bucket, key, timestamp_start, timestamp_end, expiration=3
         return None
 
 
-def extract_source_url_from_content(content_text):
+def extract_source_url_from_content(content_text: str) -> str | None:
     """
     Extract source_url from scraped markdown frontmatter.
 
@@ -769,7 +770,7 @@ def extract_source_url_from_content(content_text):
     return None
 
 
-def extract_image_caption_from_content(content_text):
+def extract_image_caption_from_content(content_text: str) -> str | None:
     """
     Extract caption from image content frontmatter.
 
@@ -827,7 +828,7 @@ def extract_image_caption_from_content(content_text):
     return None
 
 
-def extract_sources(citations):
+def extract_sources(citations: list[Any]) -> list[dict[str, Any]]:
     """
     Parse Bedrock citations into structured sources.
 
@@ -980,11 +981,11 @@ def extract_sources(citations):
                         response = tracking_table.get_item(Key={"document_id": document_id})
                         tracking_item = response.get("Item")
                         if tracking_item:
-                            tracking_input_uri = tracking_item.get("input_s3_uri")
-                            tracking_source_url = tracking_item.get("source_url")
-                            original_filename = tracking_item.get("filename")
+                            tracking_input_uri = str(tracking_item.get("input_s3_uri", "")) or None
+                            tracking_source_url = str(tracking_item.get("source_url", "")) or None
+                            original_filename = str(tracking_item.get("filename", "")) or None
                             # Get document type for media detection (normalize scrape -> scraped)
-                            doc_type = tracking_item.get("type") or "document"
+                            doc_type = str(tracking_item.get("type", "")) or "document"
                             if doc_type == "scrape":
                                 doc_type = "scraped"
                             logger.info(
@@ -992,8 +993,8 @@ def extract_sources(citations):
                                 f"input_s3_uri={tracking_input_uri}, "
                                 f"filename={original_filename}, "
                                 f"source_url={tracking_source_url}, "
-                                f"status={tracking_item.get('status')}, "
-                                f"type={tracking_item.get('type')}"
+                                f"status={str(tracking_item.get('status', ''))}, "
+                                f"type={str(tracking_item.get('type', ''))}"
                             )
                         else:
                             doc_type = "document"  # Default when no tracking item
@@ -1324,7 +1325,7 @@ def extract_sources(citations):
     return sources
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Query Bedrock Knowledge Base with DynamoDB-stored conversation history.
 
@@ -1405,7 +1406,7 @@ def lambda_handler(event, context):
     tracking_id = user_id or (f"anon:{conversation_id}" if conversation_id else None)
 
     # Check quotas and select model (primary or fallback)
-    chat_model_id = atomic_quota_check_and_increment(tracking_id, is_authenticated, region)
+    chat_model_id = atomic_quota_check_and_increment(tracking_id or "", is_authenticated, region)
 
     # Log safe summary (not full event payload to avoid PII/user data leakage)
     safe_summary = {
@@ -1458,7 +1459,7 @@ def lambda_handler(event, context):
         retrieval_query = build_retrieval_query(query, history)
         logger.info(f"Retrieval query: {retrieval_query[:100]}...")
 
-        retrieval_results = []
+        retrieval_results: list[Any] = []
         generated_filter = None
 
         # Check if filter generation is enabled
@@ -1512,7 +1513,7 @@ def lambda_handler(event, context):
                     logger.info(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
             else:
                 # Standard single-query retrieval
-                retrieval_config = {
+                retrieval_config: dict[str, Any] = {
                     "vectorSearchConfiguration": {
                         "numberOfResults": 25,
                     }
@@ -1527,9 +1528,9 @@ def lambda_handler(event, context):
                 retrieve_response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
                     retrievalQuery={"text": retrieval_query},
-                    retrievalConfiguration=retrieval_config,
+                    retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
                 )
-                retrieval_results = retrieve_response.get("retrievalResults", [])
+                retrieval_results = list(retrieve_response.get("retrievalResults", []))
             logger.info(f"Retrieved {len(retrieval_results)} results")
 
             # Log each result's URI and score for debugging
@@ -1551,7 +1552,7 @@ def lambda_handler(event, context):
         # Build context from retrieved documents
         retrieved_chunks = []
         citations = []  # Build citations in the format expected by extract_sources
-        matched_images = []  # Collect images for visual matches to send to LLM
+        matched_images: list[dict[str, Any]] = []  # Collect images for visual matches to send to LLM
 
         # Only send images from top 3 most relevant results (already sorted by score)
         # Limit to 1 image to control costs and context size
@@ -1573,23 +1574,31 @@ def lambda_handler(event, context):
             # Note: KB returns floats like 30000.0, need int(float()) to convert
             ts_raw = metadata.get("timestamp_start")
             if ts_raw is not None:
-                with contextlib.suppress(ValueError, TypeError):
-                    ts_start = int(float(extract_kb_scalar(ts_raw)))
+                ts_str = extract_kb_scalar(ts_raw)
+                if ts_str is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_start = int(float(ts_str))
             else:
                 ts_millis = metadata.get("x-amz-bedrock-kb-chunk-start-time-in-millis")
                 if ts_millis is not None:
-                    with contextlib.suppress(ValueError, TypeError):
-                        ts_start = int(float(extract_kb_scalar(ts_millis))) // 1000
+                    ts_str = extract_kb_scalar(ts_millis)
+                    if ts_str is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            ts_start = int(float(ts_str)) // 1000
 
             ts_raw = metadata.get("timestamp_end")
             if ts_raw is not None:
-                with contextlib.suppress(ValueError, TypeError):
-                    ts_end = int(float(extract_kb_scalar(ts_raw)))
+                ts_str = extract_kb_scalar(ts_raw)
+                if ts_str is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        ts_end = int(float(ts_str))
             else:
                 ts_millis = metadata.get("x-amz-bedrock-kb-chunk-end-time-in-millis")
                 if ts_millis is not None:
-                    with contextlib.suppress(ValueError, TypeError):
-                        ts_end = int(float(extract_kb_scalar(ts_millis))) // 1000
+                    ts_str = extract_kb_scalar(ts_millis)
+                    if ts_str is not None:
+                        with contextlib.suppress(ValueError, TypeError):
+                            ts_end = int(float(ts_str)) // 1000
 
             # Format timestamp for display (M:SS format)
             ts_display = ""
@@ -1633,12 +1642,12 @@ def lambda_handler(event, context):
                         table = dynamodb.Table(tracking_table)
                         response = table.get_item(Key={"document_id": doc_id})
                         item = response.get("Item", {})
-                        tracked_type = item.get("type", "")
+                        tracked_type = str(item.get("type", ""))
 
                         if tracked_type == "image":
                             # For images, use the caption
                             if item.get("caption"):
-                                visual_context = f"\nImage caption: {item['caption']}"
+                                visual_context = f"\nImage caption: {str(item['caption'])}"
                             logger.info(f"Visual image match - added caption for {doc_id}")
 
                             # Only fetch images from top N results to send to LLM
@@ -1647,8 +1656,8 @@ def lambda_handler(event, context):
                                 result_rank < MAX_IMAGE_RANK
                                 and len(matched_images) < MAX_IMAGES_TO_SEND
                             ):
-                                input_uri = item.get("input_s3_uri")
-                                content_type_img = item.get("content_type")
+                                input_uri = str(item.get("input_s3_uri", ""))
+                                content_type_img = str(item.get("content_type", "")) or None
                                 if input_uri:
                                     img_block = fetch_image_for_converse(
                                         input_uri, content_type_img
@@ -1792,15 +1801,15 @@ def lambda_handler(event, context):
             )
 
         # Include filter info in response if a filter was generated
-        response = {
+        result_response: dict[str, Any] = {
             "answer": answer,
             "conversationId": conversation_id,
             "sources": sources,
         }
         if generated_filter:
-            response["filterApplied"] = json.dumps(generated_filter)
+            result_response["filterApplied"] = json.dumps(generated_filter)
 
-        return response
+        return result_response
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")

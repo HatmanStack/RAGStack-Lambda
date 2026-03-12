@@ -72,10 +72,10 @@ s3_client = boto3.client("s3")
 DATA_BUCKET = os.environ.get("DATA_BUCKET")
 
 # Lazy-initialized config manager (avoid raising at import time)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 
-def get_config_manager():
+def get_config_manager() -> ConfigurationManager:
     """Get or create ConfigurationManager singleton (lazy initialization)."""
     global _config_manager
     if _config_manager is None:
@@ -96,7 +96,7 @@ _filter_examples_cache_time = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 
-def _get_filter_components(filtered_score_boost: float = 1.25):
+def _get_filter_components(filtered_score_boost: float = 1.25) -> tuple[KeyLibrary, FilterGenerator, MultiSliceRetriever]:
     """Lazy-load filter generation components."""
     global _key_library, _filter_generator, _multislice_retriever
 
@@ -120,7 +120,7 @@ def _get_filter_components(filtered_score_boost: float = 1.25):
     return _key_library, _filter_generator, _multislice_retriever
 
 
-def _get_filter_examples():
+def _get_filter_examples() -> list[Any]:
     """Get filter examples from config with caching."""
     global _filter_examples_cache, _filter_examples_cache_time
 
@@ -143,7 +143,7 @@ def _get_filter_examples():
     return _filter_examples_cache
 
 
-def extract_document_id_from_uri(uri):
+def extract_document_id_from_uri(uri: str) -> str | None:
     """Extract document_id from S3 URI like s3://bucket/content/{doc_id}/extracted_text.txt"""
     if not uri:
         return None
@@ -154,7 +154,7 @@ def extract_document_id_from_uri(uri):
     return None
 
 
-def lookup_original_source(document_id, tracking_table_name):
+def lookup_original_source(document_id: str, tracking_table_name: str) -> dict[str, Any]:
     """Look up document details from tracking table."""
     if not document_id or not tracking_table_name:
         return {}
@@ -181,7 +181,7 @@ def lookup_original_source(document_id, tracking_table_name):
     return {}
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Search Bedrock Knowledge Base using vector similarity.
 
@@ -260,7 +260,7 @@ def lambda_handler(event, context):
 
         # Query Knowledge Base using retrieve (raw vector search)
         # Single unified query with optional metadata filter (includes content_type)
-        retrieval_results = []
+        retrieval_results: list[Any] = []
         generated_filter = None
 
         # Check if filter generation is enabled
@@ -306,7 +306,7 @@ def lambda_handler(event, context):
                 )
             else:
                 # Standard single-query retrieval
-                retrieval_config = {
+                retrieval_config: dict[str, Any] = {
                     "vectorSearchConfiguration": {
                         "numberOfResults": max_results,
                     }
@@ -319,7 +319,7 @@ def lambda_handler(event, context):
                 response = bedrock_agent.retrieve(
                     knowledgeBaseId=knowledge_base_id,
                     retrievalQuery={"text": query},
-                    retrievalConfiguration=retrieval_config,
+                    retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
                 )
                 retrieval_results = response.get("retrievalResults", [])
             logger.info(f"Retrieved {len(retrieval_results)} results")
@@ -455,14 +455,15 @@ def lambda_handler(event, context):
                             # This is a specific segment match - fetch that segment's text
                             bucket, key = parse_s3_uri(kb_uri)
                             if bucket and key:
-                                response = s3_client.get_object(Bucket=bucket, Key=key)
-                                visual_context = response["Body"].read().decode("utf-8")
+                                s3_resp = s3_client.get_object(Bucket=bucket, Key=key)
+                                visual_context = s3_resp["Body"].read().decode("utf-8")
                             logger.info(f"Visual segment match: {document_id}")
                         else:
                             # Full video match - get first segment for context
                             segment_key = f"content/{document_id}/segment-000.txt"
-                            response = s3_client.get_object(Bucket=DATA_BUCKET, Key=segment_key)
-                            visual_context = response["Body"].read().decode("utf-8")
+                            if DATA_BUCKET:
+                                s3_resp = s3_client.get_object(Bucket=DATA_BUCKET, Key=segment_key)
+                                visual_context = s3_resp["Body"].read().decode("utf-8")
                             logger.info(f"Visual video match: {document_id}")
                     except Exception as e:
                         logger.warning(f"Failed to fetch segment for {document_id}: {e}")
@@ -500,11 +501,11 @@ def lambda_handler(event, context):
         logger.info(f"Found {len(results)} results")
 
         # Include filter info in response if a filter was generated
-        response = {"query": query, "results": results, "total": len(results)}
+        result_response: dict[str, Any] = {"query": query, "results": results, "total": len(results)}
         if generated_filter:
-            response["filterApplied"] = json.dumps(generated_filter)
+            result_response["filterApplied"] = json.dumps(generated_filter)
 
-        return response
+        return result_response
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")

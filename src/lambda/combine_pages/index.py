@@ -55,7 +55,7 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
     s3 = boto3.client("s3")
 
     # List objects with pagination (handles >1000 objects)
-    partial_files = []
+    partial_files: list[dict[str, Any]] = []
     pattern = re.compile(r"pages_(\d+)-(\d+)\.txt$")
     continuation_token = None
 
@@ -86,7 +86,7 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
             break
 
     # Sort by page_start
-    partial_files.sort(key=lambda x: x["page_start"])
+    partial_files.sort(key=lambda x: int(x["page_start"]))
 
     logger.info(f"Found {len(partial_files)} partial files in {output_s3_prefix}")
     return partial_files
