@@ -87,6 +87,13 @@ def _process_batch(
     _, key = parse_s3_uri(input_s3_uri)
     filename = key.split("/")[-1]
 
+    # Fix output_s3_prefix - EventBridge template produces wrong format
+    # Received: s3://bucket/content/input/{doc_id}/{filename}/
+    # Expected: s3://bucket/content/{doc_id}/
+    if "/content/input/" in output_s3_prefix:
+        bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
+        output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
+
     # Create Document object with page range
     document = Document(
         document_id=document_id,

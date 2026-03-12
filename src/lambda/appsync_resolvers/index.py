@@ -57,7 +57,7 @@ from ragstack_common.ingestion import ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.scraper import ScrapeStatus
-from ragstack_common.storage import is_valid_uuid, read_s3_text, write_metadata_to_s3
+from ragstack_common.storage import is_valid_uuid, parse_s3_uri, read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -871,10 +871,13 @@ def _reprocess_media(document_id: str, item: dict, table) -> dict:
         ExpressionAttributeValues={":status": "PROCESSING", ":updated_at": now},
     )
 
-    # Start Step Functions execution
+    # State machine expects document_id as S3 key (input/{doc_id}/{filename})
+    # because EventBridge passes the full key and ExtractDocumentId splits on '/'
+    bucket, s3_key = parse_s3_uri(input_s3_uri)
     execution_input = {
-        "document_id": document_id,
+        "document_id": s3_key,
         "input_s3_uri": input_s3_uri,
+        "output_s3_prefix": f"s3://{bucket}/content/{document_id}/",
         "filename": item.get("filename"),
     }
 
@@ -919,10 +922,13 @@ def _reprocess_as_document(document_id: str, item: dict, table) -> dict:
         ExpressionAttributeValues={":status": "processing", ":updated_at": now},
     )
 
-    # Start Step Functions execution
+    # State machine expects document_id as S3 key (input/{doc_id}/{filename})
+    # because EventBridge passes the full key and ExtractDocumentId splits on '/'
+    bucket, s3_key = parse_s3_uri(input_s3_uri)
     execution_input = {
-        "document_id": document_id,
+        "document_id": s3_key,
         "input_s3_uri": input_s3_uri,
+        "output_s3_prefix": f"s3://{bucket}/content/{document_id}/",
         "filename": item.get("filename"),
     }
 

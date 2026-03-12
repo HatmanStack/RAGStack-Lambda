@@ -62,7 +62,9 @@ Parameters:
     Description: Bedrock model ID for OCR (if backend=bedrock)
     AllowedValues:
     - us.anthropic.claude-haiku-4-5-20251001-v1:0
-    - us.anthropic.claude-sonnet-4-6-v1:0
+    - us.anthropic.claude-sonnet-4-6
+    - us.amazon.nova-2-lite-v1:0
+    - us.amazon.nova-pro-v1:0
     - us.meta.llama4-scout-17b-instruct-v1:0
     - us.meta.llama4-maverick-17b-instruct-v1:0
     ConstraintDescription: Must be a valid Bedrock vision-capable model ID
@@ -235,45 +237,6 @@ Resources:
           Ref: AWS::StackName
     Metadata:
       SamResourceId: DataBucket
-  VectorBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName:
-        Fn::Sub:
-        - ${Prefix}-vectors-${AWS::AccountId}
-        - Prefix:
-            Fn::If:
-            - UseCustomPrefix
-            - Ref: StackPrefix
-            - Ref: AWS::StackName
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-        - Id: CleanupOldVectors
-          Status: Enabled
-          AbortIncompleteMultipartUpload:
-            DaysAfterInitiation: 7
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
-      Tags:
-      - Key: Project
-        Value:
-          Ref: AWS::StackName
-    Metadata:
-      SamResourceId: VectorBucket
   UICodeBuildServiceRole:
     Type: AWS::IAM::Role
     Condition: BuildUI
@@ -1072,12 +1035,37 @@ Resources:
             - Ref: StackPrefix
             - Ref: AWS::StackName
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/20aceb5280f332fc9798d808d4f28194
+      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/a51a0fada07f14c44d84493684d6443f
       CompatibleRuntimes:
       - python3.13
     Metadata:
       BuildMethod: python3.13
       SamResourceId: RagstackCommonLayer
+  BedrockMarketplacePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - aws-marketplace:ViewSubscriptions
+          Resource: '*'
+    Metadata:
+      SamResourceId: BedrockMarketplacePolicy
+  BedrockMarketplaceAdminPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - aws-marketplace:ViewSubscriptions
+          - aws-marketplace:Subscribe
+          Resource: '*'
+    Metadata:
+      SamResourceId: BedrockMarketplaceAdminPolicy
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1089,7 +1077,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/8f494eac07de223413949378d5b75974
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/ba252c3647ce3518d1f574346a212fb5
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
       Layers:
@@ -1117,6 +1105,7 @@ Resources:
             - GraphQLApi
             - GraphQLUrl
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - S3CrudPolicy:
           BucketName:
             Ref: DataBucket
@@ -1251,7 +1240,13 @@ Resources:
           TRACKING_TABLE:
             Ref: TrackingTable
           VECTOR_BUCKET:
-            Ref: VectorBucket
+            Fn::Sub:
+            - ${Prefix}-vectors-${AWS::AccountId}
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
           GRAPHQL_ENDPOINT:
             Fn::GetAtt:
             - GraphQLApi
@@ -1266,9 +1261,6 @@ Resources:
       - S3CrudPolicy:
           BucketName:
             Ref: DataBucket
-      - S3CrudPolicy:
-          BucketName:
-            Ref: VectorBucket
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
@@ -1455,7 +1447,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/6198bcf18b51187cf9a78bdf8ea495ad
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c4c2ec341bef3d10ee8bb5152b6cbe66
       Handler: index.lambda_handler
       Description: Process individual 10-page batches with global rate limiting
       Runtime: python3.13
@@ -1478,6 +1470,7 @@ Resources:
             - CombinePagesFunction
             - Arn
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - S3CrudPolicy:
           BucketName:
             Ref: DataBucket
@@ -1504,6 +1497,8 @@ Resources:
           Action:
           - textract:DetectDocumentText
           - textract:AnalyzeDocument
+          - textract:StartDocumentTextDetection
+          - textract:GetDocumentTextDetection
           Resource: '*'
       Events:
         SQSTrigger:
@@ -1534,7 +1529,7 @@ Resources:
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
       Timeout: 300
-      MemorySize: 128
+      MemorySize: 512
       Environment:
         Variables:
           LOG_LEVEL: INFO
@@ -1559,6 +1554,7 @@ Resources:
       Layers:
       - Ref: RagstackCommonLayer
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
@@ -1642,12 +1638,10 @@ Resources:
       Layers:
       - Ref: RagstackCommonLayer
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - S3CrudPolicy:
           BucketName:
             Ref: DataBucket
-      - S3CrudPolicy:
-          BucketName:
-            Ref: VectorBucket
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
@@ -1736,6 +1730,7 @@ Resources:
           SYNC_REQUEST_QUEUE_URL:
             Ref: SyncRequestQueue
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - S3ReadPolicy:
           BucketName:
             Ref: DataBucket
@@ -1814,6 +1809,7 @@ Resources:
           METADATA_KEY_LIBRARY_TABLE:
             Ref: MetadataKeyLibraryTable
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: MetadataKeyLibraryTable
@@ -1866,7 +1862,13 @@ Resources:
           DATA_BUCKET:
             Ref: DataBucket
           VECTOR_BUCKET:
-            Ref: VectorBucket
+            Fn::Sub:
+            - ${Prefix}-vectors-${AWS::AccountId}
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
           STACK_NAME:
             Ref: AWS::StackName
           KB_ROLE_ARN:
@@ -1890,6 +1892,7 @@ Resources:
           SCRAPE_JOBS_TABLE:
             Ref: ScrapeJobsTable
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
@@ -1905,9 +1908,6 @@ Resources:
       - S3CrudPolicy:
           BucketName:
             Ref: DataBucket
-      - S3CrudPolicy:
-          BucketName:
-            Ref: VectorBucket
       - Statement:
         - Effect: Allow
           Action:
@@ -1954,8 +1954,20 @@ Resources:
           - s3vectors:GetIndex
           - s3vectors:ListVectors
           Resource:
-          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
-          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
         - Effect: Allow
           Action:
           - lambda:GetFunctionConfiguration
@@ -2060,6 +2072,7 @@ Resources:
           CAPTION_MODEL_ID:
             Ref: CaptionModelId
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - S3ReadPolicy:
           BucketName:
             Ref: DataBucket
@@ -2137,6 +2150,7 @@ Resources:
           DEMO_MODE:
             Ref: DemoMode
       Policies:
+      - Ref: BedrockMarketplacePolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: ConfigurationTable
@@ -2215,6 +2229,7 @@ Resources:
           DATA_BUCKET:
             Ref: DataBucket
       Policies:
+      - Ref: BedrockMarketplacePolicy
       - Statement:
         - Effect: Allow
           Action:
@@ -2386,6 +2401,7 @@ Resources:
           DATA_BUCKET:
             Ref: DataBucket
       Policies:
+      - Ref: BedrockMarketplaceAdminPolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: ScrapeJobsTable
@@ -3440,17 +3456,6 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - s3:ListBucket
-            Resource:
-            - Fn::Sub: ${VectorBucket.Arn}
-          - Effect: Allow
-            Action:
-            - s3:GetObject
-            - s3:PutObject
-            Resource:
-            - Fn::Sub: ${VectorBucket.Arn}/*
-          - Effect: Allow
-            Action:
             - s3vectors:DescribeIndex
             - s3vectors:ReadVectors
             - s3vectors:WriteVectors
@@ -3459,8 +3464,20 @@ Resources:
             - s3vectors:GetVectors
             - s3vectors:DeleteVectors
             Resource:
-            - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
-            - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+            - Fn::Sub:
+              - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}
+              - Prefix:
+                  Fn::If:
+                  - UseCustomPrefix
+                  - Ref: StackPrefix
+                  - Ref: AWS::StackName
+            - Fn::Sub:
+              - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*
+              - Prefix:
+                  Fn::If:
+                  - UseCustomPrefix
+                  - Ref: StackPrefix
+                  - Ref: AWS::StackName
       - PolicyName: BedrockModelAccess
         PolicyDocument:
           Version: '2012-10-17'
@@ -3536,8 +3553,20 @@ Resources:
           - s3vectors:DescribeIndex
           - s3vectors:ListIndices
           Resource:
-          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}
-          - Fn::Sub: arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${VectorBucket}/*
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3vectors:${AWS::Region}:${AWS::AccountId}:bucket/${Prefix}-vectors-${AWS::AccountId}/*
+            - Prefix:
+                Fn::If:
+                - UseCustomPrefix
+                - Ref: StackPrefix
+                - Ref: AWS::StackName
         - Effect: Allow
           Action:
           - iam:PassRole
@@ -3580,7 +3609,13 @@ Resources:
         - KnowledgeBaseRole
         - Arn
       VectorBucket:
-        Ref: VectorBucket
+        Fn::Sub:
+        - ${Prefix}-vectors-${AWS::AccountId}
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
       DataBucket:
         Ref: DataBucket
       EmbedModelArn:
@@ -3958,7 +3993,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/a54b9cb0efaa5202d3d65245d227c8f3
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/e6a82ca6afe441d28f50a31d05d91705
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -4006,6 +4041,7 @@ Resources:
           DEMO_MODE:
             Ref: DemoMode
       Policies:
+      - Ref: BedrockMarketplacePolicy
       - DynamoDBCrudPolicy:
           TableName:
             Ref: TrackingTable
@@ -5691,6 +5727,8 @@ Resources:
             Fn::GetAtt:
             - KnowledgeBase
             - DataSourceId
+          BEDROCK_OCR_MODEL:
+            Ref: BedrockOcrModelId
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -5705,9 +5743,10 @@ Resources:
         \           'type': 'string',\n            'order': 2,\n            'description':\
         \ 'Bedrock model for OCR (only if backend is bedrock)',\n            'enum':\
         \ [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n    \
-        \            'us.anthropic.claude-sonnet-4-6-v1:0',\n             \
-        \   'us.meta.llama4-maverick-17b-instruct-v1:0',\n                'us.meta.llama4-scout-17b-instruct-v1:0'\n\
-        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \            'us.anthropic.claude-sonnet-4-6',\n                'us.amazon.nova-2-lite-v1:0',\n\
+        \                'us.amazon.nova-pro-v1:0',\n                'us.meta.llama4-scout-17b-instruct-v1:0',\n\
+        \                'us.meta.llama4-maverick-17b-instruct-v1:0'\n           \
+        \ ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
         \            'dependsOn': {'field': 'ocr_backend', 'value': 'bedrock'}\n \
         \       },\n        'chat_system_prompt': {\n            'type': 'string',\n\
         \            'order': 3,\n            'description': 'System prompt for chat\
@@ -5717,14 +5756,18 @@ Resources:
         \ doesn\\'t contain the answer, clearly state that and provide what relevant\
         \ information you can. Be concise but thorough.'\n        },\n        'chat_primary_model':\
         \ {\n            'type': 'string',\n            'order': 3,\n            'description':\
-        \ 'Primary chat model',\n            'enum': [\n                'us.anthropic.claude-sonnet-4-6-v1:0',\n\
+        \ 'Primary chat model',\n            'enum': [\n                'us.anthropic.claude-sonnet-4-6',\n\
         \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
-        \        'us.amazon.nova-pro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
-        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
-        \        },\n        'chat_fallback_model': {\n            'type': 'string',\n\
-        \            'order': 4,\n            'description': 'Fallback model when\
-        \ quotas exceeded',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
-        \                'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0'\n\
+        \        'us.amazon.nova-pro-v1:0',\n                'us.amazon.nova-premier-v1:0',\n\
+        \                'us.amazon.nova-2-lite-v1:0',\n                'us.amazon.nova-lite-v1:0',\n\
+        \                'us.meta.llama4-maverick-17b-instruct-v1:0',\n          \
+        \      'us.meta.llama4-scout-17b-instruct-v1:0'\n            ],\n        \
+        \    'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n\
+        \        'chat_fallback_model': {\n            'type': 'string',\n       \
+        \     'order': 4,\n            'description': 'Fallback model when quotas\
+        \ exceeded',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \                'us.amazon.nova-micro-v1:0',\n                'us.amazon.nova-lite-v1:0',\n\
+        \                'us.amazon.nova-2-lite-v1:0',\n                'us.meta.llama4-scout-17b-instruct-v1:0'\n\
         \            ],\n            'default': 'us.amazon.nova-lite-v1:0'\n     \
         \   },\n        'chat_global_quota_daily': {\n            'type': 'number',\n\
         \            'order': 5,\n            'description': 'Max messages per day\
@@ -5776,59 +5819,60 @@ Resources:
         \ 'default': True\n        },\n        'filter_generation_model': {\n    \
         \        'type': 'string',\n            'order': 17,\n            'description':\
         \ 'Model for filter generation',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
-        \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
-        \        'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
-        \ 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n        'multislice_enabled':\
-        \ {\n            'type': 'boolean',\n            'order': 18,\n          \
-        \  'description': 'Enable multi-slice retrieval (parallel filtered/unfiltered\
-        \ queries)',\n            'default': True\n        },\n        'multislice_count':\
-        \ {\n            'type': 'number',\n            'order': 19,\n           \
-        \ 'description': 'Number of parallel retrieval slices (2-4)',\n          \
-        \  'default': 2\n        },\n        'multislice_timeout_ms': {\n        \
-        \    'type': 'number',\n            'order': 20,\n            'description':\
-        \ 'Timeout per slice in milliseconds',\n            'default': 5000\n    \
-        \    },\n        'multislice_filtered_boost': {\n            'type': 'number',\n\
-        \            'order': 21,\n            'description': 'Score multiplier for\
-        \ filtered results (1.0-2.0)',\n            'default': 1.25\n        },\n\
-        \        'metadata_filter_examples': {\n            'type': 'array',\n   \
-        \         'order': 22,\n            'description': 'Filter examples for few-shot\
-        \ learning (JSON array)',\n            'default': []\n        },\n       \
-        \ 'metadata_filter_examples_disabled': {\n            'type': 'array',\n \
-        \           'order': 211,\n            'description': 'Names of disabled filter\
-        \ examples',\n            'default': []\n        },\n        'metadata_filter_examples_updated_at':\
-        \ {\n            'type': 'string',\n            'order': 212,\n          \
-        \  'description': 'Timestamp when filter examples were last generated',\n\
-        \            'default': ''\n        },\n        'metadata_extraction_enabled':\
-        \ {\n            'type': 'boolean',\n            'order': 22,\n          \
-        \  'description': 'Enable LLM metadata extraction during ingestion',\n   \
-        \         'default': True\n        },\n        'metadata_extraction_model':\
-        \ {\n            'type': 'string',\n            'order': 23,\n           \
-        \ 'description': 'Model for metadata extraction',\n            'enum': [\n\
-        \                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n        \
-        \        'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n                'us.amazon.nova-micro-v1:0',\n\
-        \                'us.amazon.nova-lite-v1:0'\n            ],\n            'default':\
-        \ 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n        },\n        'metadata_max_keys':\
-        \ {\n            'type': 'number',\n            'order': 24,\n           \
-        \ 'description': 'Maximum metadata fields to extract per document',\n    \
-        \        'default': 8\n        },\n        'metadata_extraction_mode': {\n\
-        \            'type': 'string',\n            'order': 25,\n            'description':\
-        \ 'Extraction mode: auto (LLM decides) or manual (admin specifies)',\n   \
-        \         'enum': ['auto', 'manual'],\n            'default': 'auto'\n   \
-        \     },\n        'metadata_manual_keys': {\n            'type': 'array',\n\
-        \            'order': 26,\n            'description': 'Keys to extract in\
-        \ manual mode',\n            'default': [],\n            'dependsOn': {'field':\
-        \ 'metadata_extraction_mode', 'value': 'manual'}\n        },\n        'metadata_filter_keys':\
-        \ {\n            'type': 'array',\n            'order': 27,\n            'description':\
-        \ 'Keys to use for filter example generation',\n            'default': []\n\
-        \        },\n        'knowledge_base_id': {\n            'type': 'string',\n\
-        \            'order': 100,\n            'description': 'Active Bedrock Knowledge\
-        \ Base ID (updated by reindex)',\n            'readOnly': True\n        },\n\
-        \        'data_source_id': {\n            'type': 'string',\n            'order':\
-        \ 101,\n            'description': 'Active Data Source ID (updated by reindex)',\n\
-        \            'readOnly': True\n        }\n    }\n}\n\ndef convert_floats_to_decimal(obj):\n\
-        \    \"\"\"Recursively convert floats to Decimal for DynamoDB.\"\"\"\n   \
-        \ from decimal import Decimal\n    if isinstance(obj, float):\n        return\
-        \ Decimal(str(obj))\n    if isinstance(obj, dict):\n        return {k: convert_floats_to_decimal(v)\
+        \                'us.amazon.nova-2-lite-v1:0',\n                'us.amazon.nova-lite-v1:0',\n\
+        \                'us.meta.llama4-scout-17b-instruct-v1:0'\n            ],\n\
+        \            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n  \
+        \      },\n        'multislice_enabled': {\n            'type': 'boolean',\n\
+        \            'order': 18,\n            'description': 'Enable multi-slice\
+        \ retrieval (parallel filtered/unfiltered queries)',\n            'default':\
+        \ True\n        },\n        'multislice_count': {\n            'type': 'number',\n\
+        \            'order': 19,\n            'description': 'Number of parallel\
+        \ retrieval slices (2-4)',\n            'default': 2\n        },\n       \
+        \ 'multislice_timeout_ms': {\n            'type': 'number',\n            'order':\
+        \ 20,\n            'description': 'Timeout per slice in milliseconds',\n \
+        \           'default': 5000\n        },\n        'multislice_filtered_boost':\
+        \ {\n            'type': 'number',\n            'order': 21,\n           \
+        \ 'description': 'Max boost ceiling for adaptive filtered score boost (1.0-2.0)',\n\
+        \            'default': 1.25\n        },\n        'metadata_filter_examples':\
+        \ {\n            'type': 'array',\n            'order': 22,\n            'description':\
+        \ 'Filter examples for few-shot learning (JSON array)',\n            'default':\
+        \ []\n        },\n        'metadata_filter_examples_disabled': {\n       \
+        \     'type': 'array',\n            'order': 211,\n            'description':\
+        \ 'Names of disabled filter examples',\n            'default': []\n      \
+        \  },\n        'metadata_filter_examples_updated_at': {\n            'type':\
+        \ 'string',\n            'order': 212,\n            'description': 'Timestamp\
+        \ when filter examples were last generated',\n            'default': ''\n\
+        \        },\n        'metadata_extraction_enabled': {\n            'type':\
+        \ 'boolean',\n            'order': 22,\n            'description': 'Enable\
+        \ LLM metadata extraction during ingestion',\n            'default': True\n\
+        \        },\n        'metadata_extraction_model': {\n            'type': 'string',\n\
+        \            'order': 23,\n            'description': 'Model for metadata\
+        \ extraction',\n            'enum': [\n                'us.anthropic.claude-haiku-4-5-20251001-v1:0',\n\
+        \                'us.amazon.nova-2-lite-v1:0',\n                'us.amazon.nova-micro-v1:0',\n\
+        \                'us.amazon.nova-lite-v1:0',\n                'us.meta.llama4-scout-17b-instruct-v1:0'\n\
+        \            ],\n            'default': 'us.anthropic.claude-haiku-4-5-20251001-v1:0'\n\
+        \        },\n        'metadata_max_keys': {\n            'type': 'number',\n\
+        \            'order': 24,\n            'description': 'Maximum metadata fields\
+        \ to extract per document',\n            'default': 8\n        },\n      \
+        \  'metadata_extraction_mode': {\n            'type': 'string',\n        \
+        \    'order': 25,\n            'description': 'Extraction mode: auto (LLM\
+        \ decides) or manual (admin specifies)',\n            'enum': ['auto', 'manual'],\n\
+        \            'default': 'auto'\n        },\n        'metadata_manual_keys':\
+        \ {\n            'type': 'array',\n            'order': 26,\n            'description':\
+        \ 'Keys to extract in manual mode',\n            'default': [],\n        \
+        \    'dependsOn': {'field': 'metadata_extraction_mode', 'value': 'manual'}\n\
+        \        },\n        'metadata_filter_keys': {\n            'type': 'array',\n\
+        \            'order': 27,\n            'description': 'Keys to use for filter\
+        \ example generation',\n            'default': []\n        },\n        'knowledge_base_id':\
+        \ {\n            'type': 'string',\n            'order': 100,\n          \
+        \  'description': 'Active Bedrock Knowledge Base ID (updated by reindex)',\n\
+        \            'readOnly': True\n        },\n        'data_source_id': {\n \
+        \           'type': 'string',\n            'order': 101,\n            'description':\
+        \ 'Active Data Source ID (updated by reindex)',\n            'readOnly': True\n\
+        \        }\n    }\n}\n\ndef convert_floats_to_decimal(obj):\n    \"\"\"Recursively\
+        \ convert floats to Decimal for DynamoDB.\"\"\"\n    from decimal import Decimal\n\
+        \    if isinstance(obj, float):\n        return Decimal(str(obj))\n    if\
+        \ isinstance(obj, dict):\n        return {k: convert_floats_to_decimal(v)\
         \ for k, v in obj.items()}\n    if isinstance(obj, list):\n        return\
         \ [convert_floats_to_decimal(i) for i in obj]\n    return obj\n\ndef lambda_handler(event,\
         \ context):\n    from decimal import Decimal\n    print(f\"Event: {json.dumps(event)}\"\
@@ -5842,11 +5886,39 @@ Resources:
         \       defaults[key] = val\n            defaults['chat_cdn_url'] = os.environ.get('WC_CDN_URL',\
         \ '')\n            defaults['knowledge_base_id'] = os.environ.get('KNOWLEDGE_BASE_ID',\
         \ '')\n            defaults['data_source_id'] = os.environ.get('DATA_SOURCE_ID',\
-        \ '')\n\n            # Seed Schema (stored as dict, not JSON string)\n   \
-        \         # Convert floats to Decimal throughout the schema\n            table.put_item(Item={\n\
+        \ '')\n            \n            # Override Bedrock OCR model from parameter\
+        \ if provided\n            if os.environ.get('BEDROCK_OCR_MODEL'):\n     \
+        \           defaults['bedrock_ocr_model_id'] = os.environ.get('BEDROCK_OCR_MODEL')\n\
+        \n            # Seed Schema (stored as dict, not JSON string)\n          \
+        \  # Use parameter value for schema default too if provided\n            if\
+        \ os.environ.get('BEDROCK_OCR_MODEL'):\n                SCHEMA['properties']['bedrock_ocr_model_id']['default']\
+        \ = os.environ.get('BEDROCK_OCR_MODEL')\n                \n            # Convert\
+        \ floats to Decimal throughout the schema\n            table.put_item(Item={\n\
         \                'Configuration': 'Schema',\n                'Schema': convert_floats_to_decimal(SCHEMA)\n\
-        \            })\n\n            # Seed Default (values at top level, not nested)\n\
-        \            table.put_item(Item=defaults)\n\n            print(\"Configuration\
+        \            })\n\n            # Ensure all values in defaults are DynamoDB-safe\
+        \ (no floats)\n            defaults = convert_floats_to_decimal(defaults)\n\
+        \n            # Seed Default: merge defaults into existing item to preserve\n\
+        \            # admin-edited runtime settings (only backfill missing keys)\n\
+        \            try:\n                existing = table.get_item(Key={'Configuration':\
+        \ 'Default'}).get('Item', {})\n            except Exception:\n           \
+        \     existing = {}\n\n            if existing:\n                # Only write\
+        \ keys that don't already exist in the item\n                missing = {k:\
+        \ v for k, v in defaults.items() if k not in existing}\n                if\
+        \ missing:\n                    update_expr_parts = []\n                 \
+        \   attr_names = {}\n                    attr_values = {}\n              \
+        \      for i, (k, v) in enumerate(missing.items()):\n                    \
+        \    alias = f'#k{i}'\n                        val_alias = f':v{i}'\n    \
+        \                    update_expr_parts.append(f'{alias} = {val_alias}')\n\
+        \                        attr_names[alias] = k\n                        attr_values[val_alias]\
+        \ = v\n                    table.update_item(\n                        Key={'Configuration':\
+        \ 'Default'},\n                        UpdateExpression='SET ' + ', '.join(update_expr_parts),\n\
+        \                        ExpressionAttributeNames=attr_names,\n          \
+        \              ExpressionAttributeValues=attr_values,\n                  \
+        \  )\n                    print(f\"Backfilled {len(missing)} missing keys\
+        \ into existing config\")\n                else:\n                    print(\"\
+        All default keys already present, no changes needed\")\n            else:\n\
+        \                # No existing config - fresh deployment, write all defaults\n\
+        \                table.put_item(Item=defaults)\n\n            print(\"Configuration\
         \ seeded successfully\")\n\n        # Send success response\n        send_response(event,\
         \ 'SUCCESS', {})\n\n    except Exception as e:\n        print(f\"Error: {e}\"\
         )\n        send_response(event, 'FAILED', {}, str(e))\n\ndef send_response(event,\
@@ -5865,7 +5937,9 @@ Resources:
         Fn::GetAtt:
         - ConfigurationSeederFunction
         - Arn
-      SchemaVersion: '6'
+      BedrockOcrModelId:
+        Ref: BedrockOcrModelId
+      SchemaVersion: '9'
     Metadata:
       SamResourceId: ConfigurationSeeder
   AdminUserProvisionerFunction:
@@ -5943,9 +6017,15 @@ Outputs:
             - Ref: StackPrefix
             - Ref: AWS::StackName
   VectorBucketName:
-    Description: S3 bucket for embeddings and vectors
+    Description: S3 Vectors bucket for embeddings and vectors
     Value:
-      Ref: VectorBucket
+      Fn::Sub:
+      - ${Prefix}-vectors-${AWS::AccountId}
+      - Prefix:
+          Fn::If:
+          - UseCustomPrefix
+          - Ref: StackPrefix
+          - Ref: AWS::StackName
     Export:
       Name:
         Fn::Sub:

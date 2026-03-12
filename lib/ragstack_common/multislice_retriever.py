@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_SLICES = 3
 DEFAULT_FILTERED_SCORE_BOOST = 1.25  # default max boost ceiling (configurable via settings)
-ADAPTIVE_BOOST_MARGIN = 1.10  # 10% margin above parity to ensure filtered beats unfiltered
-ADAPTIVE_BOOST_FLOOR = 1.05  # minimum boost even when filtered scores are already higher
+ADAPTIVE_BOOST_MARGIN = 1.05  # 5% margin above parity to ensure filtered beats unfiltered
+ADAPTIVE_BOOST_FLOOR = 1.02  # minimum boost even when filtered scores are already higher
 
 
 @dataclass

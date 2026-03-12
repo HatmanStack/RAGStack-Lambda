@@ -1301,7 +1301,7 @@ Resources:
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
       Timeout: 300  # 5 minutes for KB sync
-      MemorySize: 128  # Minimal - just API calls to Bedrock
+      MemorySize: 512  # S3 text loading + boto3 clients + LLM metadata extraction
       # No reserved concurrency - allows multi-stack deployments
       Environment:
         Variables:

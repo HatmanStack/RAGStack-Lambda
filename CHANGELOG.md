@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.3.8] - 2026-03-12
+
+### Fixed
+
+- **Batch processor writes to wrong S3 path**: EventBridge produces `output_s3_prefix` as `s3://bucket/content/input/{doc_id}/{filename}/` but the correct path is `s3://bucket/content/{doc_id}/`. `process_document` already fixed this for small docs (≤10 pages), but `batch_processor` (large docs >10 pages) passed it through raw. This caused batched documents to write extracted text under `content/input/`, breaking source link resolution in chat.
+- **Reprocess fails instantly on Step Functions**: `_reprocess_as_document` and `_reprocess_media` passed a bare UUID as `document_id`, but the `ExtractDocumentId` state expects an S3 key format (`input/{doc_id}/{filename}`). Now derives the S3 key from `input_s3_uri`.
+- **Dashboard metadata doesn't match KB filters**: `extracted_metadata` in DynamoDB stored raw LLM output (full names like "dwight sheldon tillotson") while the KB received the normalized, tokenized version. Dashboard now stores the same normalized metadata that the KB uses for filtering.
+- **Metadata extraction misses obvious fields on form-heavy documents**: The LLM received only raw extracted text with no filename context, causing it to fixate on form boilerplate and miss people, dates, and locations clearly present in the document. Now prepends the original filename to the extraction input, giving the LLM a strong signal for what to extract.
+- **Metadata tokenizer chokes on semicolons, pipes, slashes, and punctuation**: `expand_to_searchable_array` only split on commas, so LLM values like `"kent, ohio; hudson, ohio"` produced garbage tokens like `"ohio; hudson"`. Now normalizes semicolons, pipes, and slashes as delimiters and strips leading/trailing punctuation from word tokens.
+- **Adaptive boost margin too aggressive**: 10% margin and 5% floor caused filtered results to dominate over semantically better unfiltered results, especially when metadata filters matched incomplete token sets. Reduced to 5% margin and 2% floor.
+
 ## [2.3.7] - 2026-03-11
 
 ### Added
