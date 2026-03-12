@@ -40,7 +40,7 @@ from ragstack_common.config import (
 from ragstack_common.ingestion import check_document_status, ingest_documents_with_retry
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.metadata_normalizer import reduce_metadata
+from ragstack_common.metadata_normalizer import normalize_metadata_for_s3, reduce_metadata
 from ragstack_common.storage import (
     read_s3_text,
     write_metadata_to_s3,
@@ -188,6 +188,7 @@ def check_existing_metadata(output_s3_uri: str) -> dict[str, Any] | None:
 def extract_document_metadata(
     output_s3_uri: str,
     document_id: str,
+    filename: str | None = None,
 ) -> dict[str, Any]:
     """
     Extract metadata from document text using LLM.
@@ -195,6 +196,7 @@ def extract_document_metadata(
     Args:
         output_s3_uri: S3 URI to the document text file.
         document_id: Document identifier.
+        filename: Original filename (provides context for extraction).
 
     Returns:
         Dictionary of extracted metadata, or empty dict on failure.
@@ -206,6 +208,10 @@ def extract_document_metadata(
         if not text or not text.strip():
             logger.warning(f"Empty document text for {document_id}")
             return {}
+
+        # Prepend filename context so LLM can use it as a signal
+        if filename and filename != "unknown":
+            text = f"Original filename: {filename}\n\n{text}"
 
         # Extract metadata using LLM
         extractor = get_metadata_extractor()
@@ -268,7 +274,7 @@ def lambda_handler(event, context):
     else:
         # Extract LLM-based metadata if enabled
         if is_metadata_extraction_enabled():
-            llm_metadata = extract_document_metadata(output_s3_uri, document_id)
+            llm_metadata = extract_document_metadata(output_s3_uri, document_id, filename)
             llm_metadata_extracted = bool(llm_metadata)
 
     # content_type is a system field - set based on processing pipeline, not LLM
@@ -356,10 +362,10 @@ def lambda_handler(event, context):
                 ":updated_at": datetime.now(UTC).isoformat(),
             }
 
-            # Store actually ingested metadata for UI display
+            # Store normalized metadata for UI display (matches what KB uses for filtering)
             if ingested_metadata:
                 update_expression += ", extracted_metadata = :metadata"
-                expression_values[":metadata"] = ingested_metadata
+                expression_values[":metadata"] = normalize_metadata_for_s3(ingested_metadata)
 
             tracking_table.update_item(
                 Key={"document_id": document_id},

@@ -59,6 +59,42 @@ class TestExpandToSearchableArray:
         result = expand_to_searchable_array("CHICAGO, ILLINOIS")
         assert all(v.islower() for v in result)
 
+    def test_semicolon_separated(self):
+        """Semicolons are treated as delimiters."""
+        result = expand_to_searchable_array("kent, ohio; hudson, ohio")
+        assert "ohio" in result
+        assert "kent" in result
+        assert "hudson" in result
+        assert "kent, ohio" not in result  # Semicolon normalized to comma changes original
+
+    def test_pipe_separated(self):
+        """Pipes are treated as delimiters."""
+        result = expand_to_searchable_array("pilot | navigator")
+        assert "pilot" in result
+        assert "navigator" in result
+
+    def test_slash_separated(self):
+        """Slashes are treated as delimiters."""
+        result = expand_to_searchable_array("pilot/navigator")
+        assert "pilot" in result
+        assert "navigator" in result
+
+    def test_punctuation_stripped_from_tokens(self):
+        """Leading/trailing punctuation stripped from word tokens."""
+        result = expand_to_searchable_array("dwight (sr.) tillotson")
+        assert "dwight" in result
+        assert "tillotson" in result
+        assert "sr." not in result  # Stripped to "sr" which is < 3 chars
+        assert "(sr.)" not in result
+
+    def test_period_stripped(self):
+        """Trailing periods stripped from tokens."""
+        result = expand_to_searchable_array("st. louis, missouri")
+        assert "louis" in result
+        assert "missouri" in result
+        # "st." stripped to "st" which is < 3 chars, excluded
+        assert "st." not in result
+
     def test_max_items_limit(self):
         """Output is limited to MAX_ARRAY_ITEMS."""
         # Create a string that would expand to many items

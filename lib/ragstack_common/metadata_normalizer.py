@@ -44,9 +44,12 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
     words: list[str] = []
     phrases: list[str] = []
 
-    # Collect comma-separated parts
-    if "," in value:
-        for part in value.split(","):
+    # Normalize delimiters: treat semicolons, pipes, slashes as commas
+    normalized = re.sub(r"[;|/]", ",", value)
+
+    # Collect delimiter-separated parts
+    if "," in normalized:
+        for part in normalized.split(","):
             part = part.strip()
             if part and len(part) >= min_word_length and part not in seen:
                 seen.add(part)
@@ -55,9 +58,9 @@ def expand_to_searchable_array(value: str, min_word_length: int = 3) -> list[str
                 else:
                     words.append(part)
 
-    # Collect individual word tokens (source order preserved)
-    for word in value.replace(",", " ").split():
-        word = word.strip()
+    # Collect individual word tokens, stripping leading/trailing punctuation
+    for raw_word in normalized.replace(",", " ").split():
+        word = raw_word.strip().strip("().'\"")
         if len(word) >= min_word_length and word not in seen:
             seen.add(word)
             words.append(word)
