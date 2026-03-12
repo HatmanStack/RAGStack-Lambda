@@ -57,7 +57,12 @@ def _get_config_manager() -> ConfigurationManager:
     return _config_manager
 
 
-def _process_scraped_markdown(document_id: str, input_s3_uri: str, output_s3_prefix: str, tracking_table: str) -> dict[str, Any]:
+def _process_scraped_markdown(
+    document_id: str,
+    input_s3_uri: str,
+    output_s3_prefix: str,
+    tracking_table: str,
+) -> dict[str, Any]:
     """
     Process scraped markdown files by copying directly to output bucket.
 

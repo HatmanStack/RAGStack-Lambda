@@ -370,7 +370,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     }
 
 
-def _mark_failed(jobs_tbl: Any, urls_tbl: Any, job_id: str | None, url: str | None, error: str) -> None:
+def _mark_failed(
+    jobs_tbl: Any,
+    urls_tbl: Any,
+    job_id: str | None,
+    url: str | None,
+    error: str,
+) -> None:
     """Mark URL as failed and update job counters."""
     if not job_id or not url:
         return

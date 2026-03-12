@@ -21,7 +21,14 @@ bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
 
 
-def send_response(event: dict[str, Any], context: Any, status: str, data: dict[str, Any] | None = None, reason: str | None = None, physical_resource_id: str | None = None) -> None:
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    data: dict[str, Any] | None = None,
+    reason: str | None = None,
+    physical_resource_id: str | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,

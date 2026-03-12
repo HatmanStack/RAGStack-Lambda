@@ -783,7 +783,9 @@ def _delete_from_kb_for_reprocess(item: dict) -> None:
         return
 
     try:
-        doc_identifiers: list[Any] = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in kb_uris]
+        doc_identifiers: list[Any] = [
+            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in kb_uris
+        ]
         logger.info(f"Deleting {len(doc_identifiers)} documents from KB before reprocess")
         bedrock_agent.delete_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -1254,7 +1256,9 @@ def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
     config_manager = get_config_manager()
     try:
         kb_id, ds_id = get_knowledge_base_config(config_manager)
-        doc_identifiers: list[Any] = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in text_uris]
+        doc_identifiers: list[Any] = [
+            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in text_uris
+        ]
         logger.info(f"Deleting {len(doc_identifiers)} text documents from KB before reindex")
         bedrock_agent.delete_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -1393,12 +1397,14 @@ def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"Filename must be at most {MAX_FILENAME_LENGTH} characters")
 
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous", "upload",
+                    config_table, dynamodb_client, cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -1649,7 +1655,10 @@ def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
                     return None
 
             pages = [
-                format_scrape_page(p, get_content_url(str(p.get("document_id", "")))) for p in page_items
+                format_scrape_page(
+                    p, get_content_url(str(p.get("document_id", "")))
+                )
+                for p in page_items
             ]
 
         return {
@@ -1970,12 +1979,14 @@ def create_image_upload_url(args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("Unsupported image file type")
 
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous", "upload",
+                    config_table, dynamodb_client, cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -2259,7 +2270,10 @@ def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
 
         # Verify status is PENDING
         if str(item.get("status", "")) != ImageStatus.PENDING.value:
-            raise ValueError(f"Image is not in PENDING status (current: {str(item.get('status', ''))})")
+            current = str(item.get('status', ''))
+            raise ValueError(
+                f"Image is not in PENDING status (current: {current})"
+            )
 
         # Get S3 URI and verify image exists in S3
         input_s3_uri = str(item.get("input_s3_uri", ""))
@@ -2625,12 +2639,14 @@ def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
 
         # Check demo mode upload quota (after args parsing, ZIP counts as a single upload)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous", "upload",
+                    config_table, dynamodb_client, cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -2820,7 +2836,11 @@ def get_metadata_stats(args: dict[str, Any]) -> dict[str, Any]:
                     "keyName": str(item.get("key_name", "")),
                     "dataType": str(item.get("data_type", "string")),
                     "occurrenceCount": int(str(item.get("occurrence_count", 0))),
-                    "sampleValues": list(sample_vals)[:10] if isinstance(sample_vals, (list, tuple)) else [],
+                    "sampleValues": (
+                        list(sample_vals)[:10]
+                        if isinstance(sample_vals, (list, tuple))
+                        else []
+                    ),
                     "lastAnalyzed": key_analyzed,
                     "status": str(item.get("status", "active")),
                 }

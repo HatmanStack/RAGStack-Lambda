@@ -763,7 +763,9 @@ def process_scraped_item(
     job_metadata = {}
     if old_job_id:
         job_metadata = get_or_extract_job_metadata(old_job_id, all_content, data_bucket)
-        logger.info(f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {old_job_id})")
+        logger.info(
+            f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {old_job_id})"
+        )
     else:
         logger.warning(f"No job_id found for scraped item {doc_id}, using page-only metadata")
 
@@ -794,7 +796,9 @@ def process_scraped_item(
     # Update tracking table so UI shows fresh metadata
     update_tracking_metadata(doc_id, metadata)
 
-    logger.info(f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {old_job_id or 'none'})")
+    logger.info(
+        f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {old_job_id or 'none'})"
+    )
     return processed_count + 1, error_count, error_messages
 
 

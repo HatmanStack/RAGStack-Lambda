@@ -574,7 +574,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         raise
 
 
-def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: dict[str, Any]) -> str:
+def build_ingestion_text(
+    image_id: str, filename: str, caption: str, metadata: dict[str, Any]
+) -> str:
     """
     Build text content for KB ingestion with searchable metadata.
 

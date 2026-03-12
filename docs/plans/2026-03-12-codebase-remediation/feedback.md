@@ -31,3 +31,11 @@ TypedDicts now used in function signatures: `lambda_handler` returns `ChatRespon
 ### CODE_REVIEW: Phase 2 -- Uncommitted changes needed for mypy (Issue) -- RESOLVED
 
 All changes committed (included in the Phase 2 remediation commit).
+
+### CODE_REVIEW: Phase 2 -- test_query_kb.py broken by package refactor (Blocker) -- RESOLVED
+
+Tests already work. The `sys.path.insert(0, ...)` on line 10 of both `test_query_kb.py` and `test_query_kb_media.py` adds the `query_kb` directory to sys.path, so bare imports in the try/except fallback succeed. All 29 tests pass.
+
+### CODE_REVIEW: Phase 2 -- ruff E501 line-too-long errors introduced by type annotations (Issue) -- RESOLVED
+
+All 19 E501 errors fixed by wrapping long function signatures and expressions across multiple lines. Files modified: admin_user_provisioner, appsync_resolvers, initial_sync, kb_custom_resource, process_document, process_image, reindex_kb, scrape_process, scrape_status, search_kb.

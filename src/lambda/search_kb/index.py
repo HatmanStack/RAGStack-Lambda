@@ -96,7 +96,9 @@ _filter_examples_cache_time = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 
-def _get_filter_components(filtered_score_boost: float = 1.25) -> tuple[KeyLibrary, FilterGenerator, MultiSliceRetriever]:
+def _get_filter_components(
+    filtered_score_boost: float = 1.25,
+) -> tuple[KeyLibrary, FilterGenerator, MultiSliceRetriever]:
     """Lazy-load filter generation components."""
     global _key_library, _filter_generator, _multislice_retriever
 
@@ -501,7 +503,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         logger.info(f"Found {len(results)} results")
 
         # Include filter info in response if a filter was generated
-        result_response: dict[str, Any] = {"query": query, "results": results, "total": len(results)}
+        result_response: dict[str, Any] = {
+            "query": query, "results": results, "total": len(results)
+        }
         if generated_filter:
             result_response["filterApplied"] = json.dumps(generated_filter)
 

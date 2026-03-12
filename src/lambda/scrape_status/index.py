@@ -93,7 +93,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 
 def _handle_step_functions(
-    event: dict[str, Any], jobs_tbl: Any, tracking_tbl: Any, discovery_queue_url: str | None, processing_queue_url: str | None
+    event: dict[str, Any],
+    jobs_tbl: Any,
+    tracking_tbl: Any,
+    discovery_queue_url: str | None,
+    processing_queue_url: str | None,
 ) -> dict[str, Any]:
     """Handle Step Functions status polling."""
     job_id = event.get("job_id")

@@ -23,7 +23,13 @@ logger.setLevel(logging.INFO)
 bedrock_agent = boto3.client("bedrock-agent")
 
 
-def send_response(event: dict[str, Any], context: Any, status: str, reason: str = "", data: dict[str, Any] | None = None) -> None:
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    reason: str = "",
+    data: dict[str, Any] | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,

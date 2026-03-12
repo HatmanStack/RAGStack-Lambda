@@ -19,7 +19,13 @@ logger.setLevel(logging.INFO)
 cognito = boto3.client("cognito-idp")
 
 
-def send_response(event: dict[str, Any], context: Any, status: str, reason: str = "", data: dict[str, Any] | None = None) -> None:
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    reason: str = "",
+    data: dict[str, Any] | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,
