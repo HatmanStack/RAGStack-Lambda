@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.8] - 2026-03-12
+
+### Fixed
+
+- **Batch processor writes to wrong S3 path**: EventBridge produces `output_s3_prefix` as `s3://bucket/content/input/{doc_id}/{filename}/` but the correct path is `s3://bucket/content/{doc_id}/`. `process_document` already fixed this for small docs (≤10 pages), but `batch_processor` (large docs >10 pages) passed it through raw. This caused batched documents to write extracted text under `content/input/`, breaking source link resolution in chat.
+- **Reprocess fails instantly on Step Functions**: `_reprocess_as_document` and `_reprocess_media` passed a bare UUID as `document_id`, but the `ExtractDocumentId` state expects an S3 key format (`input/{doc_id}/{filename}`). Now derives the S3 key from `input_s3_uri`.
+
 ## [2.3.7] - 2026-03-11
 
 ### Added
