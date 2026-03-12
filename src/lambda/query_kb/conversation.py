@@ -11,8 +11,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from _clients import dynamodb
 from botocore.exceptions import ClientError
+
+from ragstack_common.types import SourceInfo
+
+try:
+    from ._clients import dynamodb
+except ImportError:
+    from _clients import dynamodb  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger()
 
@@ -49,7 +55,7 @@ def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
         )
 
         # Reverse to chronological order and convert Decimal to int
-        items = response.get("Items", [])
+        items: list[dict[str, Any]] = response.get("Items", [])
         for item in items:
             if "turnNumber" in item and isinstance(item["turnNumber"], Decimal):
                 item["turnNumber"] = int(item["turnNumber"])
@@ -65,7 +71,7 @@ def store_conversation_turn(
     turn_number: int,
     user_message: str,
     assistant_response: str,
-    sources: list[dict[str, Any]],
+    sources: list[SourceInfo],
 ) -> None:
     """
     Store a conversation turn in DynamoDB.

@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -50,20 +51,20 @@ def check_reindex_lock() -> None:
         lock = response.get("Item")
 
         if lock and lock.get("is_locked"):
-            started_at = lock.get("started_at", "unknown")
+            started_at = str(lock.get("started_at", "unknown"))
             raise RuntimeError(
                 f"Upload blocked: Knowledge Base reindex is in progress "
                 f"(started: {started_at}). Message will be retried after reindex."
             )
     except ClientError as e:
         # Log but don't block uploads if we can't check the lock
-        logger.warning(f"Error checking reindex lock: {e}")
+        logger.warning("Error checking reindex lock: %s", e)
     except RuntimeError:
         # Re-raise our lock error
         raise
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Process SQS messages and start Step Functions executions.
 

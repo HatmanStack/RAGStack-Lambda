@@ -8,19 +8,6 @@ remain as dict[str, Any].
 from typing import Any, TypedDict
 
 
-class ChatResponse(TypedDict):
-    """Response from the query_kb Lambda handler.
-
-    Returned by lambda_handler to AppSync. Contains the AI-generated answer,
-    conversation tracking ID, source citations, and optional error message.
-    """
-
-    answer: str
-    conversationId: str | None
-    sources: list[dict[str, Any]]
-    error: str | None
-
-
 class SourceInfo(TypedDict, total=False):
     """A single source citation from KB retrieval.
 
@@ -35,9 +22,41 @@ class SourceInfo(TypedDict, total=False):
     snippet: str
     score: float | None
     sourceUrl: str | None
-    mediaUrl: str | None
     contentType: str | None
-    imageCaption: str | None
+    # Document access fields
+    documentUrl: str | None
+    documentAccessAllowed: bool
+    filename: str | None
+    # Scraped content fields
+    isScraped: bool
+    # Image-specific fields
+    isImage: bool
+    thumbnailUrl: str | None
+    caption: str | None
+    # Media-specific fields
+    isMedia: bool | None
+    isSegment: bool
+    segmentUrl: str | None
+    mediaType: str | None
+    timestampStart: int | None
+    timestampEnd: int | None
+    timestampDisplay: str | None
+    speaker: str | None
+    segmentIndex: int | None
+
+
+class ChatResponse(TypedDict, total=False):
+    """Response from the query_kb Lambda handler.
+
+    Returned by lambda_handler to AppSync. Contains the AI-generated answer,
+    conversation tracking ID, source citations, and optional error message.
+    """
+
+    answer: str
+    conversationId: str | None
+    sources: list[SourceInfo]
+    error: str | None
+    filterApplied: str
 
 
 class ConversationTurn(TypedDict, total=False):

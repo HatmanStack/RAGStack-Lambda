@@ -6,8 +6,12 @@ media URLs with timestamp fragments, and extracting metadata from content.
 
 import logging
 from decimal import Decimal
+from typing import Any
 
-from _clients import s3_client
+try:
+    from ._clients import s3_client
+except ImportError:
+    from _clients import s3_client  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.storage import parse_s3_uri
 
@@ -29,7 +33,7 @@ IMAGE_FORMAT_MAP = {
 }
 
 
-def fetch_image_for_converse(s3_uri: str, content_type: str | None = None) -> dict | None:
+def fetch_image_for_converse(s3_uri: str, content_type: str | None = None) -> dict[str, Any] | None:
     """
     Fetch image from S3 and prepare for Bedrock Converse API.
 
@@ -102,7 +106,7 @@ def generate_media_url(
         str: Presigned URL with optional timestamp fragment, or None on error
     """
     try:
-        base_url = s3_client.generate_presigned_url(
+        base_url: str = s3_client.generate_presigned_url(
             "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiration
         )
         if not base_url:

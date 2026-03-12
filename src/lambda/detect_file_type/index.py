@@ -33,6 +33,7 @@ Output (adds fileType, detectedType, and pageInfo for OCR files):
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 import fitz  # PyMuPDF - for PDF page counting
@@ -274,7 +275,7 @@ def _update_tracking_table(
     logger.info(f"Updated tracking table for {document_id}: {filename}, {total_pages} pages")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for file type detection.
 

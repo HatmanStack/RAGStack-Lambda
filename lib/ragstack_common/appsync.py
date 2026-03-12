@@ -88,7 +88,7 @@ def execute_appsync_mutation(
 
 
 def publish_document_update(
-    graphql_endpoint: str,
+    graphql_endpoint: str | None,
     document_id: str,
     filename: str,
     status: str,
@@ -151,7 +151,7 @@ def publish_document_update(
 
 
 def publish_scrape_update(
-    graphql_endpoint: str,
+    graphql_endpoint: str | None,
     job_id: str,
     base_url: str,
     title: str,
@@ -224,7 +224,7 @@ def publish_scrape_update(
 
 
 def publish_image_update(
-    graphql_endpoint: str,
+    graphql_endpoint: str | None,
     image_id: str,
     filename: str,
     status: str,
@@ -287,7 +287,7 @@ def publish_image_update(
 
 
 def publish_reindex_update(
-    graphql_endpoint: str,
+    graphql_endpoint: str | None,
     status: str,
     total_documents: int,
     processed_count: int,

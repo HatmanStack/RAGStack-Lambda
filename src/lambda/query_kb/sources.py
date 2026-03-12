@@ -11,21 +11,35 @@ import os
 from typing import Any
 from urllib.parse import unquote
 
-from _clients import dynamodb, s3_client
-from filters import extract_kb_scalar, get_config_manager
-from media import (
-    MEDIA_CONTENT_TYPES,
-    extract_image_caption_from_content,
-    extract_source_url_from_content,
-    format_timestamp,
-)
+try:
+    from ._clients import dynamodb, s3_client
+    from .filters import extract_kb_scalar, get_config_manager
+    from .media import (
+        MEDIA_CONTENT_TYPES,
+        extract_image_caption_from_content,
+        extract_source_url_from_content,
+        format_timestamp,
+    )
+except ImportError:
+    from _clients import dynamodb, s3_client  # type: ignore[import-not-found,no-redef]
+    from filters import (  # type: ignore[import-not-found,no-redef]
+        extract_kb_scalar,
+        get_config_manager,
+    )
+    from media import (  # type: ignore[import-not-found,no-redef]
+        MEDIA_CONTENT_TYPES,
+        extract_image_caption_from_content,
+        extract_source_url_from_content,
+        format_timestamp,
+    )
 
 from ragstack_common.storage import generate_presigned_url
+from ragstack_common.types import SourceInfo
 
 logger = logging.getLogger()
 
 
-def extract_sources(citations: list[Any]) -> list[dict[str, Any]]:
+def extract_sources(citations: list[Any]) -> list[SourceInfo]:
     """
     Parse Bedrock citations into structured sources.
 
@@ -48,8 +62,8 @@ def extract_sources(citations: list[Any]) -> list[dict[str, Any]]:
             }]
         }]
     """
-    sources = []
-    seen = set()  # Deduplicate sources
+    sources: list[SourceInfo] = []
+    seen: set[str] = set()  # Deduplicate sources
 
     logger.info(f"Processing {len(citations)} citations")
     for idx, citation in enumerate(citations):
@@ -470,7 +484,7 @@ def extract_sources(citations: list[Any]) -> list[dict[str, Any]]:
                         end_fmt = format_timestamp(timestamp_end) if timestamp_end else ""
                         timestamp_display = f"{start_fmt}-{end_fmt}" if end_fmt else start_fmt
 
-                    source_obj = {
+                    source_obj: SourceInfo = {
                         "documentId": document_id,
                         "pageNumber": page_num,
                         "s3Uri": document_s3_uri,  # Use input bucket URI, not output

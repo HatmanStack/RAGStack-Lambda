@@ -31,6 +31,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -38,7 +39,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Send all batches to SQS and initialize batch tracking in DynamoDB.
 
@@ -113,11 +114,11 @@ def lambda_handler(event, context):
         )
 
         if len(entries) == 10:
-            sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
+            sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
             entries = []
 
     if entries:  # Send remaining
-        sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
+        sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")
 
@@ -128,7 +129,7 @@ def lambda_handler(event, context):
 
             # Get filename from tracking table
             response = table.get_item(Key={"document_id": document_id})
-            filename = response.get("Item", {}).get("filename", "unknown")
+            filename = str(response.get("Item", {}).get("filename", "unknown"))
 
             publish_document_update(
                 graphql_endpoint,

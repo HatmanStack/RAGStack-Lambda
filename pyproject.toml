@@ -102,17 +102,7 @@ known-first-party = ["ragstack_common"]
 
 [tool.mypy]
 python_version = "3.13"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-strict_equality = true
-extra_checks = true
+strict = true
 
 # Lambda handlers all named index.py, need explicit paths
 files = ["lib/ragstack_common/", "src/lambda/"]
@@ -137,14 +127,23 @@ module = [
     "awslambdaric.*",
     "httpx.*",
     "yaml.*",
+    "kb_migrator.*",
+    "crhelper.*",
 ]
 ignore_missing_imports = true
 
 # Lambda handlers use many dynamic patterns (DynamoDB responses, event parsing)
 # Require type annotations but relax strict checking for boto3 dynamic APIs
 [[tool.mypy.overrides]]
+module = "*.index"
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
 module = "index"
 disallow_untyped_calls = false
+disallow_any_generics = false
 warn_return_any = false
 
 # text_extractors and scraper have complex third-party types - ignore errors

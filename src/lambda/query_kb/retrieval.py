@@ -9,8 +9,16 @@ import logging
 import re
 from typing import Any
 
-from _clients import bedrock_runtime, dynamodb, s3_client
-from conversation import MAX_MESSAGE_LENGTH
+try:
+    from ._clients import bedrock_runtime, dynamodb, s3_client
+    from .conversation import MAX_MESSAGE_LENGTH
+except ImportError:
+    from _clients import (  # type: ignore[import-not-found,no-redef]
+        bedrock_runtime,
+        dynamodb,
+        s3_client,
+    )
+    from conversation import MAX_MESSAGE_LENGTH  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger()
 
@@ -25,8 +33,8 @@ def _extract_id_pattern(query: str) -> str | None:
 
 
 def _augment_with_id_lookup(
-    query: str, retrieval_results: list, tracking_table_name: str | None
-) -> list:
+    query: str, retrieval_results: list[Any], tracking_table_name: str | None
+) -> list[Any]:
     """
     Augment vector search results with DynamoDB filename lookup for ID-based queries.
 

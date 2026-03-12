@@ -8,7 +8,10 @@ import logging
 import os
 from typing import Any
 
-from _clients import bedrock_agent
+try:
+    from ._clients import bedrock_agent
+except ImportError:
+    from _clients import bedrock_agent  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config  # noqa: F401
 from ragstack_common.filter_generator import FilterGenerator

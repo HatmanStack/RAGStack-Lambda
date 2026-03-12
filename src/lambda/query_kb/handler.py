@@ -14,27 +14,55 @@ from decimal import Decimal
 from typing import Any
 
 import boto3
-from _clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
 from botocore.exceptions import ClientError
-from conversation import get_conversation_history, store_conversation_turn
-from filters import (
-    _get_filter_components,
-    _get_filter_examples,
-    extract_kb_scalar,
-    get_config_manager,
-)
-from media import fetch_image_for_converse
-from retrieval import (
-    _augment_with_id_lookup,
-    build_conversation_messages,
-    build_retrieval_query,
-)
-from sources import extract_sources
+
+try:
+    from ._clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
+    from .conversation import get_conversation_history, store_conversation_turn
+    from .filters import (
+        _get_filter_components,
+        _get_filter_examples,
+        extract_kb_scalar,
+        get_config_manager,
+    )
+    from .media import fetch_image_for_converse
+    from .retrieval import (
+        _augment_with_id_lookup,
+        build_conversation_messages,
+        build_retrieval_query,
+    )
+    from .sources import extract_sources
+except ImportError:
+    from _clients import (  # type: ignore[import-not-found,no-redef]
+        bedrock_agent,
+        bedrock_runtime,
+        dynamodb,
+        dynamodb_client,
+        s3_client,
+    )
+    from conversation import (  # type: ignore[import-not-found,no-redef]
+        get_conversation_history,
+        store_conversation_turn,
+    )
+    from filters import (  # type: ignore[import-not-found,no-redef]
+        _get_filter_components,
+        _get_filter_examples,
+        extract_kb_scalar,
+        get_config_manager,
+    )
+    from media import fetch_image_for_converse  # type: ignore[import-not-found,no-redef]
+    from retrieval import (  # type: ignore[import-not-found,no-redef]
+        _augment_with_id_lookup,
+        build_conversation_messages,
+        build_retrieval_query,
+    )
+    from sources import extract_sources  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import get_knowledge_base_config
 from ragstack_common.demo_mode import is_demo_mode_enabled
 from ragstack_common.storage import parse_s3_uri
+from ragstack_common.types import ChatResponse
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -163,7 +191,7 @@ def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, r
         return fallback_model
 
 
-def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     """
     Query Bedrock Knowledge Base with DynamoDB-stored conversation history.
 
@@ -640,7 +668,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             )
 
         # Include filter info in response if a filter was generated
-        result_response: dict[str, Any] = {
+        result_response: ChatResponse = {
             "answer": answer,
             "conversationId": conversation_id,
             "sources": sources,
