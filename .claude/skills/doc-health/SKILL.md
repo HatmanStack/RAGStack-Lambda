@@ -16,22 +16,51 @@ You coordinate a documentation drift audit of a codebase. The doc auditor runs a
 
 ### Step 1: Scope the Audit
 
-Ask the user 3-5 scoping questions, **one at a time**, preferring multiple choice:
+Ask scoping questions **one at a time**, preferring multiple choice. Wait for each answer before asking the next.
+
+The doc audit runs 6 detection phases: discovery, comparison (drift/gaps/stale), code examples, link integrity, config/environment, and structure. It compares documentation claims against actual code behavior.
+
+**Question 1** — Known pain points give the auditor a starting hypothesis:
 
 ```text
-What documentation should I audit?
+Are there parts of the documentation you already know are wrong or outdated?
+Stale READMEs, broken examples, missing API docs, etc.
 
-A) All docs in the repo
-B) Specific directories only (I'll tell you which)
-C) README and API docs only
+A) Yes (tell me which docs and what's wrong)
+B) No — scan everything with fresh eyes
 ```
 
-**Question priority:**
-1. **Doc scope** — all docs or specific directories?
-2. **Constraints** — any docs that shouldn't be touched?
-3. **Language stack** — JS/TS, Python, or both? (determines auto-gen tools)
-4. **CI platform** — GitHub Actions, GitLab CI, other?
-5. **Prevention scope** — what tooling to add for drift prevention (markdown linting, link checking, auto-gen API docs, or none)
+**Question 2** — Scope and constraints in one question:
+
+```text
+What documentation should I audit, and is anything off-limits?
+
+A) All docs, no constraints
+B) All docs, but skip specific files (tell me which)
+C) Specific directories only (tell me which)
+D) README and API docs only
+```
+
+**Question 3** — Language stack determines which auto-generation tools are available (typedoc for TS, sphinx for Python, swagger for REST APIs):
+
+```text
+What's the primary language stack?
+
+A) JS/TS — typedoc, swagger-jsdoc available
+B) Python — sphinx, mkdocstrings available
+C) Both
+```
+
+**Question 4** — Prevention tooling. What automated checks to add so documentation drift becomes a CI failure instead of a periodic cleanup:
+
+```text
+What drift prevention tooling should I add after fixing the docs?
+
+A) Markdown linting (markdownlint) + link checking (lychee) — catches formatting issues and broken links on every PR
+B) Auto-generated API docs (typedoc/sphinx) — single source of truth lives in code, not prose
+C) Both A and B
+D) None — just fix the existing docs, no new tooling
+```
 
 ### Step 2: Generate Plan Identifier
 

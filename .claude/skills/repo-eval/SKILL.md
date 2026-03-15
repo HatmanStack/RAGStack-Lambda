@@ -16,25 +16,67 @@ You coordinate a 3-evaluator hiring panel assessment of a codebase. Each evaluat
 
 ### Step 1: Scope the Evaluation
 
-Ask the user 3-5 scoping questions, **one at a time**, preferring multiple choice:
+Ask scoping questions **one at a time**, preferring multiple choice. Wait for each answer before asking the next.
+
+The code evaluation runs 3 evaluator agents in parallel, each scoring 4 pillars (12 total). These questions calibrate the evaluation.
+
+**Question 1** — Known pain points give the evaluators a starting hypothesis instead of scanning cold:
+
+```text
+Are there parts of the codebase you already know are problematic?
+Things that keep breaking, areas you dread touching, modules that slow down every PR.
+
+A) Yes (tell me which areas and what's wrong)
+B) No — scan everything with fresh eyes
+```
+
+**Question 2** — Role level sets the scoring bar:
 
 ```text
 What role level should I evaluate this codebase against?
 
-A) Junior Developer
-B) Mid-Level Developer
-C) Senior Developer
-D) Staff+ / Principal
+A) Junior Developer — fundamentals: readability, basic error handling, test presence
+B) Mid-Level Developer — patterns: separation of concerns, consistent conventions, test coverage
+C) Senior Developer — production: defensive coding, observability, performance awareness, type rigor
+D) Staff+ / Principal — systems: architectural coherence, scalability, operational excellence
 ```
 
-**Question priority:**
-1. **Role level** — calibrates scoring expectations
-2. **Focus areas** — any specific concerns? (performance, security, testing, etc.)
-3. **Context** — is this a side project, production app, interview take-home?
-4. **Exclusions** — any directories/files to skip? (vendor, generated, etc.)
-5. **Pillar overrides** — any pillars to accept below 9? (e.g., "Creativity is fine at 7 — it's a CRUD app")
+**Question 3** — Focus areas weight what evaluators pay extra attention to (they still score all 12 pillars):
 
-For pillar overrides, present the 12 pillars and ask which (if any) should have a lower threshold or be excluded from the remediation gate. Some pillars (like Creativity & Ingenuity) may not be improvable through code changes alone. Record overrides in the eval.md frontmatter.
+```text
+Any specific concerns the evaluators should weight more heavily?
+
+A) Performance — hot paths, algorithmic complexity, resource management
+B) Security — input validation, auth patterns, secrets handling
+C) Testing — coverage quality, test architecture, edge cases
+D) Architecture — separation of concerns, modularity, coupling
+E) Multiple (tell me which)
+F) None — balanced evaluation across all pillars
+```
+
+**Question 4** — Scope and exclusions:
+
+```text
+What should the evaluators look at?
+
+A) Full repo, standard exclusions (vendor, generated, node_modules, __pycache__)
+B) Full repo, no exclusions
+C) Specific directories only (tell me which to include or exclude)
+```
+
+**Question 5** — Pillar overrides. By default, `/pipeline` remediates until all 12 pillars hit 9/10. Some pillars may not be improvable through code changes. The 12 pillars are:
+- **Hire lens:** Problem-Solution Fit, Architecture, Code Quality, Creativity
+- **Stress lens:** Pragmatism, Defensiveness, Performance, Type Rigor
+- **Day 2 lens:** Test Value, Reproducibility, Git Hygiene, Onboarding
+
+```text
+Any pillars to accept below the default 9/10 threshold?
+
+A) None — require 9/10 on all 12 pillars
+B) Specific overrides (tell me which pillars and target scores, e.g., "Creativity: 7, Git Hygiene: accept")
+```
+
+Record overrides in the eval.md frontmatter.
 
 ### Step 2: Generate Plan Identifier
 
