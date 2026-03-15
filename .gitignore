@@ -20,6 +20,8 @@ layers/
 
 # Build artifacts - copied shared library
 src/lambda/*/ragstack_common/
+src/ragstack-mcp/.mcpregistry_github_token
+src/ragstack-mcp/.mcpregistry_registry_token
 
 # Node
 node_modules/
