@@ -137,7 +137,7 @@ Use this template for each task:
 > * How to run tests
 >
 > **Commit Message Template:**
-> ```
+> ```text
 > type(scope): brief description
 >
 > - Detail 1
@@ -155,7 +155,7 @@ Use this template for each task:
 
 Ask questions **one at a time** (prefer multiple choice):
 
-```
+```text
 Creating plan. The brainstorm mentions "auth" but doesn't specify approach.
 
 Which should I use?

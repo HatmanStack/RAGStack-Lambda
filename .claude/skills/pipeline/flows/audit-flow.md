@@ -229,7 +229,7 @@ All remediation is committed and verified.
 ### If any gate not met: Loop back to Stage 1
 
 - Use the re-entry planner prompt (Stage 1a Re-entry) with updated intake docs
-- **Max re-evaluation cycles: 3.** If not all gates met after 3 full cycles, stop and surface to user.
+- **Max re-evaluation cycles: 3.** This is a global limit shared across all gates. Individual flows use different limits (3 for eval, 2 for health/doc), but the unified audit uses 3 for all gates since the merged plan may need more iterations to converge across multiple concern types. If not all gates met after 3 full cycles, stop and surface to user.
 
 Report between cycles:
 ```text

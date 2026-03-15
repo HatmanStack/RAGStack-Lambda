@@ -39,7 +39,7 @@ You coordinate the adversarial development pipeline. Each role runs as a separat
 Each pipeline type uses a distinct intake filename — no frontmatter parsing needed for routing.
 
 1. **Glob** for all intake docs at `docs/plans/$ARGUMENTS/` to determine which exist
-1. **If `brainstorm.md` exists**: it runs alone — continue with the feature flow stages below
+1. **If `brainstorm.md` exists**: it runs alone — continue with the feature flow stages below. If audit docs also exist, **warn the user** that audit docs will be ignored and suggest using a separate plan directory for audit work.
 1. **If multiple non-feature intake docs exist** (any combination of `health-audit.md`, `eval.md`, `doc-audit.md`): **Read** `flows/audit-flow.md` and follow it. This creates ONE unified plan across all audit types. **Stop reading this file and follow the flow file.**
 1. **If exactly one non-feature intake doc exists**: read the corresponding flow file and follow it. **Stop reading this file and follow the flow file.**
 1. **If none found**: tell the user to run an intake skill first

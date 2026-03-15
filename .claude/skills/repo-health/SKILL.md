@@ -18,7 +18,7 @@ You coordinate a technical debt audit of a codebase. The auditor runs as a separ
 
 Ask the user 3-5 scoping questions, **one at a time**, preferring multiple choice:
 
-```
+```text
 What's the primary goal for this audit?
 
 A) General health check — find and fix everything
@@ -49,7 +49,7 @@ Create the directory.
 1. **Read** `.claude/skills/pipeline/health-auditor.md` — store contents as `AUDITOR_PROMPT`
 2. Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of health-auditor.md]
 </role_prompt>
@@ -98,7 +98,7 @@ goal: [from Step 1]
 
 ### Step 5: Handoff
 
-```
+```text
 Audit complete: docs/plans/YYYY-MM-DD-health-slug/health-audit.md
 
 Findings: X critical, Y high, Z medium, W low

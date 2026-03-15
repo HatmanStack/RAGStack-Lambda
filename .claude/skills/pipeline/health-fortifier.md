@@ -90,7 +90,7 @@ When you receive `CHANGES_REQUESTED` from the Health Reviewer:
 
 ## Output Format
 
-```
+```text
 ## Phase [N] Hardening Complete
 
 Baseline: [X lint warnings, Y% coverage, Z test passing]

@@ -50,7 +50,7 @@ Build two inventories in parallel:
 
 **Code inventory:**
 - Glob for entry points: `**/index.*`, `**/main.*`, `**/app.*`, `**/handler*`
-- Grep for exported functions/classes: `export`, `module.exports`, `def `, `class `
+- Grep for exported functions/classes: `export`, `module.exports`, `def`, `class`
 - Grep for all env var reads: `process.env.`, `os.environ`, `os.getenv`
 - Grep for CLI flags: `argparse`, `yargs`, `commander`
 

@@ -106,7 +106,7 @@ The planner reads `eval.md` instead of `brainstorm.md`. The planner creates ONE 
 - **Read** `planner.md` for the role prompt
 - Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of planner.md]
 </role_prompt>
@@ -137,7 +137,7 @@ When complete, end with: PLAN_COMPLETE
 
 When looping back from Stage 4 with updated scores:
 
-```
+```xml
 <role_prompt>
 [Contents of planner.md]
 </role_prompt>
@@ -188,7 +188,7 @@ Read the Calibration section from eval.md. Check which evaluator lenses have at 
 
 For each evaluator being re-run, use this prompt (substituting the appropriate role prompt and signal):
 
-```
+```xml
 <role_prompt>
 [Contents of eval-{hire|stress|day2}.md]
 </role_prompt>
@@ -219,7 +219,7 @@ The **orchestrator** (you) must:
 
 ### If all pillars meet thresholds: Report success
 
-```
+```text
 Pipeline complete for $ARGUMENTS.
 
 Final verdict: ALL PILLARS AT TARGET
@@ -236,7 +236,7 @@ All remediation is committed and verified.
 - **Max re-evaluation cycles: 3.** If not all at threshold after 3 full cycles, stop and surface to user.
 
 Report between cycles:
-```
+```text
 Re-evaluation cycle N complete.
 Pillars still below threshold: [list with scores and targets]
 Evaluators re-run: [list]

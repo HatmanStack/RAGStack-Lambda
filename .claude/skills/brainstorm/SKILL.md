@@ -35,7 +35,7 @@ Ask questions **one at a time**. Aim for **5-15 questions** total, prioritizing 
 
 **Prefer multiple choice**, but open-ended is fine when the option space is too large:
 
-```
+```text
 The codebase uses DynamoDB for storage. For this feature's data, should we:
 
 A) Add tables to the existing DynamoDB setup
@@ -61,7 +61,7 @@ C) Both — DynamoDB for metadata, S3 for content
 
 After gathering enough context (you'll know — the remaining questions are minor details the planner can handle), summarize what you've learned and confirm with the user:
 
-```
+```text
 I think I have a clear picture. Here's what I understand:
 
 - [Key decision 1]
@@ -118,7 +118,7 @@ Create `docs/plans/YYYY-MM-DD-feature-slug/brainstorm.md` using **Write**:
 
 After writing the brainstorm document:
 
-```
+```text
 Brainstorm complete: docs/plans/YYYY-MM-DD-feature-slug/brainstorm.md
 
 To start the automated build pipeline, run:

@@ -160,14 +160,14 @@ Use this ASCII Dashboard for your summary:
 
 ## Guidelines
 
-### Do:
+### Do
 - **Prove it:** Use tools to verify integration points
 - **Run the Suite:** Don't assume previous checks were sufficient
 - **Check for Dead Ends:** Code written in Phase 1 but ignored later is tech debt
 - Take a holistic, end-to-end view
 - Be honest about readiness
 
-### Don't:
+### Don't
 - Review individual lines of code (that was done)
 - Fix issues yourself
 - Approve if full test suite fails
@@ -177,7 +177,7 @@ Use this ASCII Dashboard for your summary:
 
 Ask clarifying questions **one at a time** (prefer multiple choice):
 
-```
+```text
 I see authentication in Phase 2, but the plan mentions "OAuth support"
 and I only see JWT. Should I:
 

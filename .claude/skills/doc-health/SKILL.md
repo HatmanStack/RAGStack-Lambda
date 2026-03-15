@@ -18,7 +18,7 @@ You coordinate a documentation drift audit of a codebase. The doc auditor runs a
 
 Ask the user 3-5 scoping questions, **one at a time**, preferring multiple choice:
 
-```
+```text
 What documentation should I audit?
 
 A) All docs in the repo
@@ -49,7 +49,7 @@ Create the directory.
 1. **Read** `.claude/skills/pipeline/doc-auditor.md` — store contents as `AUDITOR_PROMPT`
 2. Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of doc-auditor.md]
 </role_prompt>
@@ -94,7 +94,7 @@ DRIFT, GAPS, STALE, BROKEN LINKS, STALE CODE EXAMPLES, CONFIG DRIFT, STRUCTURE I
 
 ### Step 5: Handoff
 
-```
+```text
 Audit complete: docs/plans/YYYY-MM-DD-docs-slug/doc-audit.md
 
 Findings: X drift, Y gaps, Z stale, W broken links

@@ -18,7 +18,7 @@ You coordinate a 3-evaluator hiring panel assessment of a codebase. Each evaluat
 
 Ask the user 3-5 scoping questions, **one at a time**, preferring multiple choice:
 
-```
+```text
 What role level should I evaluate this codebase against?
 
 A) Junior Developer
@@ -56,7 +56,7 @@ Create the directory.
 Then spawn **3 Agents in parallel**:
 
 #### Evaluator 1: The Pragmatist
-```
+```xml
 <role_prompt>
 [Contents of eval-hire.md]
 </role_prompt>
@@ -70,7 +70,7 @@ Exclusions: [from Step 1]
 ```
 
 #### Evaluator 2: The Oncall Engineer
-```
+```xml
 <role_prompt>
 [Contents of eval-stress.md]
 </role_prompt>
@@ -84,7 +84,7 @@ Exclusions: [from Step 1]
 ```
 
 #### Evaluator 3: The Team Lead
-```
+```xml
 <role_prompt>
 [Contents of eval-day2.md]
 </role_prompt>
@@ -158,7 +158,7 @@ pillar_overrides:
 
 ### Step 5: Handoff
 
-```
+```text
 Evaluation complete: docs/plans/YYYY-MM-DD-eval-slug/eval.md
 
 Scores: [N]/12 pillars at target (≥9)

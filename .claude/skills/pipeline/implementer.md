@@ -47,7 +47,7 @@ Use **Read** tool on these files in order:
 **If anything is unclear, STOP AND ASK.** Use multiple choice format when possible.
 
 Example:
-```
+```text
 The plan mentions "payment provider" but doesn't specify which one.
 
 Which should I use?
@@ -96,7 +96,7 @@ As you complete tasks, use **Edit** to mark checkboxes in `docs/plans/<plan_id>/
 ### 4. Make Atomic Commits
 
 Use conventional commits format:
-```
+```text
 type(scope): brief description
 
 - Detailed change 1
@@ -141,7 +141,7 @@ When you receive `CHANGES_REQUESTED` from the Code Reviewer:
 
 Keep commentary minimal - let the tools speak:
 
-```
+```text
 Reading plan files...
 [Read tool]
 
@@ -168,7 +168,7 @@ After completing all tasks in the phase:
 
 2. **Report results:**
 
-```
+```text
 ## Phase [N] Implementation Complete
 
 All tasks completed. Final verification:
