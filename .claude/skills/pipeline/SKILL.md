@@ -27,37 +27,22 @@ You coordinate the adversarial development pipeline. Each role runs as a separat
 |  Check which intake docs exist at docs/plans/$ARGUMENTS/:         |
 |                                                                   |
 |  brainstorm.md exists?    → type: feature (default flow below)    |
-|  health-audit.md exists?  → type: repo-health                     |
-|  eval.md exists?          → type: repo-eval                       |
-|  doc-audit.md exists?     → type: doc-health                      |
+|  Multiple audit docs?     → type: audit (unified plan)            |
+|  health-audit.md only?    → type: repo-health                     |
+|  eval.md only?            → type: repo-eval                       |
+|  doc-audit.md only?       → type: doc-health                      |
 |  none found?              → tell user to run an intake skill      |
-|                                                                   |
-|  MULTI-FLOW: If multiple intake docs exist, run flows             |
-|  sequentially in this order:                                      |
-|    1. repo-health  (clean first)                                  |
-|    2. repo-eval    (score the clean code)                          |
-|    3. doc-health   (fix docs last, reflects final code)            |
-|  Feature flow (brainstorm.md) always runs alone.                  |
 |                                                                   |
 +-------------------------------------------------------------------+
 ```
 
 Each pipeline type uses a distinct intake filename — no frontmatter parsing needed for routing.
 
-3. **Glob** for all intake docs at `docs/plans/$ARGUMENTS/` to determine which exist
-4. **If `brainstorm.md` exists**: it runs alone — continue with the feature flow stages below
-5. **If multiple non-feature intake docs exist**: build an ordered queue of flows to run:
-   - `health-audit.md` → read `flows/repo-health-flow.md` and execute it fully
-   - `eval.md` → read `flows/repo-eval-flow.md` and execute it fully
-   - `doc-audit.md` → read `flows/doc-health-flow.md` and execute it fully
-   - Run each flow to completion before starting the next. Report between flows:
-   ```
-   Flow complete: repo-health
-   Next flow: repo-eval
-   Starting...
-   ```
-6. **If exactly one non-feature intake doc exists**: read the corresponding flow file and follow it. **Stop reading this file and follow the flow file.**
-7. **If none found**: tell the user to run an intake skill first
+1. **Glob** for all intake docs at `docs/plans/$ARGUMENTS/` to determine which exist
+1. **If `brainstorm.md` exists**: it runs alone — continue with the feature flow stages below
+1. **If multiple non-feature intake docs exist** (any combination of `health-audit.md`, `eval.md`, `doc-audit.md`): **Read** `flows/audit-flow.md` and follow it. This creates ONE unified plan across all audit types. **Stop reading this file and follow the flow file.**
+1. **If exactly one non-feature intake doc exists**: read the corresponding flow file and follow it. **Stop reading this file and follow the flow file.**
+1. **If none found**: tell the user to run an intake skill first
 
 ## Stage 0: Pipeline State Recovery
 
@@ -86,7 +71,7 @@ Report the detected state to the user before continuing.
 - **Read** `planner.md` to load the role prompt
 - Spawn an **Agent** (subagent_type: general-purpose) with the following prompt structure:
 
-```
+```xml
 <role_prompt>
 [Contents of planner.md]
 </role_prompt>
@@ -111,7 +96,7 @@ When complete, end your response with: PLAN_COMPLETE
 - **Read** `plan_reviewer.md` to load the role prompt
 - Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of plan_reviewer.md]
 </role_prompt>
@@ -131,7 +116,7 @@ If plan is good: end with: PLAN_APPROVED
   - `PLAN_APPROVED` → proceed to Stage 2
   - `REVISION_REQUIRED` → re-spawn Planner (1a) with revision instructions:
 
-```
+```xml
 <role_prompt>
 [Contents of planner.md]
 </role_prompt>
@@ -149,10 +134,10 @@ When complete, end your response with: PLAN_COMPLETE
 
 - Loop until `PLAN_APPROVED` or max iterations reached
 
-### Between Stages: Report to User
+### Between Stages - Report to User
 
 After plan approval, report:
-```
+```text
 Plan approved after N iteration(s).
 Phases identified: [list phases found]
 Starting implementation...
@@ -179,21 +164,21 @@ Before processing phases, determine each phase's completion state. For each Phas
 A phase is only skip-eligible when feedback.md contains a `PHASE_APPROVED` record for it. Implementation commits alone are not sufficient.
 
 Report the recovered state to the user before continuing:
-```
+```text
 Resume state for $ARGUMENTS:
 - Phase 1: [done | needs review | needs review fixes | needs implementation | not started]
 - Phase 2: [...]
 Continuing from Phase N...
 ```
 
-### For each Phase-N:
+### For each Phase-N
 
 #### 2a: Spawn Implementer
 
 - **Read** `implementer.md` to load the role prompt
 - Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of implementer.md]
 </role_prompt>
@@ -219,7 +204,7 @@ When complete, end your response with: IMPLEMENTATION_COMPLETE
 - **Read** `reviewer.md` to load the role prompt
 - Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of reviewer.md]
 </role_prompt>
@@ -244,7 +229,7 @@ If implementation is good: end with: PHASE_APPROVED
   - `PHASE_APPROVED` → report to user, move to next phase
   - `CHANGES_REQUESTED` → re-spawn Implementer (2a) with:
 
-```
+```xml
 <role_prompt>
 [Contents of implementer.md]
 </role_prompt>
@@ -263,9 +248,9 @@ When complete, end your response with: IMPLEMENTATION_COMPLETE
 
 - Loop until `PHASE_APPROVED` or max iterations reached
 
-#### Between Phases: Report
+#### Between Phases
 
-```
+```text
 Phase N approved after M iteration(s).
 Remaining phases: [list]
 ```
@@ -277,7 +262,7 @@ After all phases are approved:
 - **Read** `final_reviewer.md` to load the role prompt
 - Spawn an **Agent** with:
 
-```
+```xml
 <role_prompt>
 [Contents of final_reviewer.md]
 </role_prompt>
@@ -304,9 +289,9 @@ If not ready: write feedback to docs/plans/$ARGUMENTS/feedback.md tagged FINAL_R
 
 ## Completion
 
-### On GO:
+### On GO
 
-```
+```text
 Pipeline complete for $ARGUMENTS.
 
 Final verdict: GO — Production Ready
@@ -321,9 +306,9 @@ Stages completed:
 All code is committed and ready for deployment.
 ```
 
-### On NO-GO:
+### On NO-GO
 
-```
+```text
 Pipeline stopped for $ARGUMENTS.
 
 Final verdict: NO-GO
@@ -345,9 +330,9 @@ C) Ship with caveats (if issues are minor)
 
 The orchestrator should update the `NO-GO` status in feedback.md to `REWORK_IN_PROGRESS` to distinguish active rework from a fresh pipeline run.
 
-### On Max Iterations Reached:
+### On Max Iterations Reached
 
-```
+```text
 Pipeline paused for $ARGUMENTS.
 
 The [Planner ↔ Plan Reviewer | Implementer ↔ Reviewer] loop for [Phase N] did not converge after 3 iterations.
