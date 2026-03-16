@@ -136,6 +136,7 @@ To remediate, run:
 ## Rules
 
 - **DO NOT** skip the scoping questions
+- **DO NOT** re-run the doc auditor agent after writing doc-audit.md — it runs exactly once here. Re-audit happens in `/pipeline` after all remediation is complete.
 - **DO NOT** start remediation — your only output is the audit doc
 - **DO** include the full auditor output (the planner needs the detail)
 - **DO** preserve file:line locations in all findings

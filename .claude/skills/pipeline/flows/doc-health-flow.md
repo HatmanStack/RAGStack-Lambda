@@ -59,6 +59,15 @@ If any file is missing, **stop and report** which files are absent.
 
 Skip this stage — the intake skill (`/doc-health`) already ran the doc auditor and produced `doc-audit.md`. Read it to understand the findings.
 
+## Critical Rule: No Auditor Agents During Planning or Implementation
+
+Auditor agents are **token-expensive**. They run exactly twice in the full lifecycle:
+
+1. **Once during `/doc-health` intake** — produces doc-audit.md
+2. **Never again** — Stage 4 (Verification) uses the existing code reviewer to spot-check findings, NOT the doc auditor agent
+
+**NEVER** re-run the doc auditor agent at any point during the pipeline. The planner, doc engineer, and verification reviewer work from doc-audit.md and feedback.md.
+
 ## Stage 2: Planning (Planner ↔ Plan Reviewer GAN Loop)
 
 **Max iterations: 3.**
@@ -119,51 +128,72 @@ Phase N approved after M iteration(s).
 Remaining phases: [list]
 ```
 
-## Stage 4: Re-Audit
+## Stage 4: Verification
 
-After all phases are implemented and approved, re-run the doc auditor:
+After all phases are `PHASE_APPROVED`, run a single verification agent that spot-checks the original DRIFT, STALE, and BROKEN LINK findings.
 
-### 4a: Spawn Doc Auditor
+### 4a: Spawn Verification Agent
 
-- **Read** `doc-auditor.md` for the role prompt
-- Spawn an **Agent** with:
+- **Read** `reviewer.md` for the role prompt
+- Spawn **one Agent** with:
 
 ```xml
 <role_prompt>
-[Contents of doc-auditor.md]
+[Contents of reviewer.md]
 </role_prompt>
 
 <task>
 Version: $ARGUMENTS
 
-This is a RE-AUDIT after remediation. Read the previous audit at docs/plans/$ARGUMENTS/doc-audit.md.
+This is a VERIFICATION pass after remediation. You are NOT doing a full doc audit — you are spot-checking that specific findings were addressed.
 
-Re-audit all documentation against the codebase. Run all 6 phases again. Verify prior findings were addressed. Check that fixes didn't introduce new drift.
+Read docs/plans/$ARGUMENTS/doc-audit.md — focus on DRIFT, STALE, and BROKEN LINK findings.
 
-End with: DOC_AUDIT_COMPLETE
+For each finding:
+1. Check the specific doc path and code path referenced
+2. Verify drift was fixed (doc now matches code)
+3. Verify stale docs were deleted or updated
+4. Verify broken links now resolve (Glob for targets)
+
+Report which findings are VERIFIED (fixed) vs UNVERIFIED (still present).
+GAP findings (missing docs) do not need verification unless the plan included creating them.
+
+If all DRIFT/STALE/BROKEN findings verified: end with VERIFIED
+If any unverified: list the unverified items, then end with UNVERIFIED
 </task>
 ```
 
 ### 4b: Assess Results
 
-The **orchestrator** (you) must:
-1. Read the re-audit agent's output
-2. Use **Write** to append a new `## Re-Audit Cycle N` section to `docs/plans/$ARGUMENTS/doc-audit.md` with the re-audit findings (preserve all previous content)
-3. Check: are all DRIFT, STALE, and BROKEN LINK findings resolved?
+- If `VERIFIED` → report success
+- If `UNVERIFIED` → report unverified items to user, let them decide
 
-### If all critical findings resolved: Report success
+**Max verification cycles: 2.** If items remain unverified after 2 cycles, stop and surface to user.
+
+### If verified
 
 ```text
 Pipeline complete for $ARGUMENTS.
 
-Final verdict: DOCUMENTATION HEALTHY
+Final verdict: VERIFIED
 
-[Summary: findings resolved, remaining gaps, prevention tools installed]
+Verification checked [N] findings from doc-audit.md:
+- [X] verified (fixed)
+- Remaining gaps: [Y] (not gated)
 
 All fixes are committed and verified.
 ```
 
-### If findings remain: Loop back to Stage 2
+### If unverified
 
-- Re-enter planning with the remaining findings
-- **Max re-audit cycles: 2.** If findings persist after 2 full cycles, stop and surface to user. (2 cycles is sufficient because doc fixes are deterministic — drift either matches code or it doesn't. If findings persist after 2 cycles, the issue is likely a scope or design disagreement that needs human input.)
+```text
+Pipeline paused for $ARGUMENTS.
+
+Verification found [Y] unverified items:
+- [finding — doc path — still present because...]
+
+Options:
+A) Re-enter planning for unverified items: /pipeline $ARGUMENTS
+B) Review manually and decide
+C) Accept as-is
+```

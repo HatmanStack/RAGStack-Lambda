@@ -330,6 +330,7 @@ The pipeline will create one unified plan across all audit types.
 - **DO** ask follow-up questions one at a time, waiting for each answer
 - **DO NOT** prompt the user again after all questions are answered — run all agents autonomously
 - **DO NOT** start remediation — your only output is the intake docs
+- **DO NOT** re-run evaluator or auditor agents after writing the intake docs — they run exactly once during this skill. Re-evaluation happens later in `/pipeline` after all remediation is complete.
 - **DO** embed role prompt contents in agent prompts (agents cannot access skill directory files)
 - **DO** produce all intake docs in the same plan directory
 - **DO** report results after each audit completes

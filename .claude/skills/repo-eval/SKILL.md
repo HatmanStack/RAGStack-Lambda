@@ -214,6 +214,7 @@ To remediate and bring all pillars to 9/10, run:
 
 - **DO NOT** skip the scoping questions
 - **DO NOT** run evaluators sequentially — they MUST run in parallel
+- **DO NOT** re-run evaluator agents after writing eval.md — they run exactly once here. Re-evaluation happens in `/pipeline` after all remediation is complete.
 - **DO NOT** start remediation — your only output is the eval doc
 - **DO** include full evaluator outputs in eval.md (the planner needs the detail)
 - **DO** consolidate overlapping findings across evaluators

@@ -12,6 +12,7 @@ dist/
 build/
 .claude/*
 !.claude/agents/
+!.claude/skills/
 !.claude/SUBAGENTS_USAGE.md
 
 # AWS

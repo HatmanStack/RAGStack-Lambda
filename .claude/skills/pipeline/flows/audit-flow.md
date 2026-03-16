@@ -67,6 +67,15 @@ And based on which intake docs are present:
 
 If any file is missing, **stop and report** which files are absent.
 
+## Critical Rule: No Evaluator/Auditor Agents During Planning or Implementation
+
+Evaluator and auditor agents are **token-expensive**. They run exactly twice in the full lifecycle:
+
+1. **Once during `/audit` intake** — produces the intake docs
+2. **Never again** — Stage 3 (Verification) uses the existing code reviewer to spot-check findings, NOT the evaluator/auditor agents
+
+**NEVER** re-run evaluator or auditor agents at any point during the pipeline. The planner, implementer, and verification reviewer work from the intake docs and feedback.md.
+
 ## Stage 1: Planning (Planner ↔ Plan Reviewer GAN Loop)
 
 **Max iterations: 3.**
@@ -175,70 +184,80 @@ Phase N [TAG] approved after M iteration(s).
 Remaining phases: [list with tags]
 ```
 
-## Stage 3: Re-Evaluation and Re-Audit
+## Stage 3: Verification
 
-After all phases are implemented and approved, re-evaluate/re-audit based on which intake docs exist.
+After all phases are `PHASE_APPROVED`, run a single verification agent that spot-checks the original findings from all intake docs. This is NOT a full re-evaluation — it's a targeted check using the existing code reviewer role.
 
-### 3a: Spawn Re-Evaluation Agents
+### 3a: Spawn Verification Agent
 
-Run the appropriate re-evaluation agents **in parallel** based on which intake docs exist:
+- **Read** `reviewer.md` for the role prompt
+- Spawn **one Agent** with:
 
-**If `eval.md` exists** — targeted re-evaluation:
-- Read the eval.md Calibration section to determine which evaluator lenses have pillars below threshold
-- Only re-run evaluators with failing pillars (see `flows/repo-eval-flow.md` Stage 4 for details)
-- Spawn with re-evaluation prompts from `eval-hire.md`, `eval-stress.md`, `eval-day2.md`
+```xml
+<role_prompt>
+[Contents of reviewer.md]
+</role_prompt>
 
-**If `health-audit.md` exists** — re-audit:
-- **Read** `health-auditor.md`, spawn re-audit agent (see `flows/repo-health-flow.md` Stage 4 for prompt)
+<task>
+Version: $ARGUMENTS
 
-**If `doc-audit.md` exists** — re-audit:
-- **Read** `doc-auditor.md`, spawn re-audit agent (see `flows/doc-health-flow.md` Stage 4 for prompt)
+This is a VERIFICATION pass after remediation. You are NOT doing a full code review — you are spot-checking that specific findings from the original audit were addressed.
 
-All re-evaluation/re-audit agents run **in parallel** — they are read-only.
+Read the original intake docs to get the list of findings:
+- docs/plans/$ARGUMENTS/eval.md (if exists) — check REMEDIATION TARGETS
+- docs/plans/$ARGUMENTS/health-audit.md (if exists) — check CRITICAL and HIGH findings
+- docs/plans/$ARGUMENTS/doc-audit.md (if exists) — check DRIFT, STALE, and BROKEN LINK findings
 
-### 3b: Combine Results
+For each finding:
+1. Read the specific file:line referenced in the finding
+2. Verify the issue was addressed (Glob/Grep/Read)
+3. Run tests if the finding was about test coverage or behavior
 
-The **orchestrator** (you) must:
-1. Read all re-evaluation/re-audit agent outputs
-2. Use **Write** to append results to the respective intake docs (preserve all previous content):
-   - eval.md → append `## Re-Evaluation Cycle N` section
-   - health-audit.md → append `## Re-Audit Cycle N` section
-   - doc-audit.md → append `## Re-Audit Cycle N` section
-3. Check all gates:
+Report which findings are VERIFIED (fixed) vs UNVERIFIED (still present).
 
-| Intake Doc | Gate | Met? |
-|------------|------|------|
-| eval.md | All pillars ≥ threshold (default 9, respecting pillar_overrides) | |
-| health-audit.md | All CRITICAL/HIGH findings resolved | |
-| doc-audit.md | All DRIFT/STALE/BROKEN findings resolved | |
+Also run the full test suite to catch regressions.
 
-### If all gates met: Report success
+If all findings verified and tests pass: end with VERIFIED
+If any findings unverified or tests fail: list the unverified items, then end with UNVERIFIED
+</task>
+```
+
+### 3b: Assess Results
+
+- If `VERIFIED` → report success
+- If `UNVERIFIED` → the orchestrator reads the unverified items and decides:
+  - If minor (< 3 items): report to user with specific items, let them decide
+  - If significant: loop back to Stage 1 with the unverified items as new targets
+
+**Max verification cycles: 2.** If items remain unverified after 2 cycles, stop and surface to user.
+
+### If verified: Report success
 
 ```text
 Pipeline complete for $ARGUMENTS.
 
-Final verdict: ALL GATES MET
+Final verdict: VERIFIED
 
-[Eval scorecard with initial → final scores]
-[Health summary: findings resolved, remaining MEDIUM/LOW]
-[Doc summary: findings resolved, remaining gaps]
+Verification checked [N] findings from original audit:
+- [X] verified (fixed)
+- [Y] unverified (if any, listed below)
+
+Tests: [all passing / N failures]
 
 All remediation is committed and verified.
 ```
 
-### If any gate not met: Loop back to Stage 1
+### If unverified: Report to user
 
-- Use the re-entry planner prompt (Stage 1a Re-entry) with updated intake docs
-- **Max re-evaluation cycles: 3.** This is a global limit shared across all gates. Individual flows use different limits (3 for eval, 2 for health/doc), but the unified audit uses 3 for all gates since the merged plan may need more iterations to converge across multiple concern types. If not all gates met after 3 full cycles, stop and surface to user.
-
-Report between cycles:
 ```text
-Re-evaluation cycle N complete.
+Pipeline paused for $ARGUMENTS.
 
-Gates:
-- Eval: [X/12 pillars at target | not applicable]
-- Health: [CRITICAL/HIGH resolved: yes/no | not applicable]
-- Docs: [drift resolved: yes/no | not applicable]
+Verification found [Y] unverified items:
+- [finding 1 — file:line — still present because...]
+- [finding 2 — ...]
 
-Re-entering planning for remaining targets...
+Options:
+A) Re-enter planning for unverified items: /pipeline $ARGUMENTS
+B) Review manually and decide
+C) Accept as-is
 ```
