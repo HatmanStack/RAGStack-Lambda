@@ -12,7 +12,7 @@
                         +--REQUIRED------+                   +--REQUESTED-----+               +--REQUESTED-----+                |
                                                                                                                                 |
                                                  +--------------------------------------------------------------------------+  |
-                                                 | Findings remain? Loop back to Planner with re-audit results              |  |
+                                                 | Unverified items? Loop back to Planner                                   |  |
                                                  +--------------------------------------------------------------------------+  |
 ```
 
@@ -34,9 +34,7 @@ Before starting any stage, detect prior progress:
    - `PHASE_APPROVED` for all phases → enter at Stage 4 (Re-Audit)
    - OPEN `CODE_REVIEW` items → enter at Stage 3 at the correct phase with revision instructions
    - OPEN `PLAN_REVIEW` items → enter at Stage 2 with revision instructions
-3. **Check health-audit.md** for re-audit sections (headers like `## Re-Audit Cycle N`):
-   - If re-audit exists with all CRITICAL/HIGH resolved → pipeline complete, report and stop
-   - If re-audit exists with remaining findings → enter at Stage 2 with updated targets
+3. **Check feedback.md** for `VERIFIED` signal → pipeline complete, report and stop
 4. **No plan files, no feedback.md** → enter at Stage 2 (first run)
 
 Apply the same per-phase state recovery logic from the main SKILL.md (check `PHASE_APPROVED`, OPEN/resolved `CODE_REVIEW`, and git commits per phase).

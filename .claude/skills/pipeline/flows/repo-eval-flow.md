@@ -36,9 +36,7 @@ Before starting any stage, detect prior progress:
    - `PHASE_APPROVED` for all phases → enter at Stage 4 (Re-Evaluation)
    - OPEN `CODE_REVIEW` items → enter at Stage 3 at the correct phase with revision instructions
    - OPEN `PLAN_REVIEW` items → enter at Stage 2 with revision instructions
-3. **Check eval.md** for re-evaluation sections (headers like `## Re-Evaluation Cycle N`):
-   - If re-evaluation results exist with all pillars ≥ 9 → pipeline complete, report and stop
-   - If re-evaluation results exist with pillars < 9 → enter at Stage 2 with updated targets
+3. **Check feedback.md** for `VERIFIED` signal → pipeline complete, report and stop
 4. **No plan files, no feedback.md** → enter at Stage 2 (first run)
 
 Apply the same per-phase state recovery logic from the main SKILL.md (check `PHASE_APPROVED`, OPEN/resolved `CODE_REVIEW`, and git commits per phase).

@@ -47,7 +47,7 @@ Before starting any stage, detect prior progress:
    - `PHASE_APPROVED` for all phases → enter at Stage 3 (Re-Evaluation)
    - OPEN `CODE_REVIEW` items → enter at Stage 2 at the correct phase with revision instructions
    - OPEN `PLAN_REVIEW` items → enter at Stage 1 with revision instructions
-3. **Check for re-evaluation/re-audit sections** in eval.md or health-audit.md or doc-audit.md
+3. **Check feedback.md** for `VERIFIED` signal → pipeline complete, report and stop
 4. **No plan files, no feedback.md** → enter at Stage 1 (first run)
 
 Apply the same per-phase state recovery logic from the main SKILL.md (check `PHASE_APPROVED`, OPEN/resolved `CODE_REVIEW`, and git commits per phase).
@@ -122,7 +122,7 @@ When complete, end with: PLAN_COMPLETE
 
 ### 1a (Re-entry): Spawn Planner After Re-Evaluation
 
-When looping back from Stage 3 with updated scores/findings:
+When looping back from Stage 3 (Verification) with unverified items:
 
 ```xml
 <role_prompt>
@@ -132,9 +132,9 @@ When looping back from Stage 3 with updated scores/findings:
 <task>
 Version: $ARGUMENTS
 
-This is a RE-EVALUATION remediation plan (cycle N). The intake docs have been updated with new scores/findings from the latest re-evaluation. Read the most recent sections in each intake doc for updated remediation targets.
+Verification found unverified items. Read docs/plans/$ARGUMENTS/feedback.md for the UNVERIFIED findings.
 
-Create a NEW remediation plan addressing ONLY the remaining targets. Previous plan files may exist — create new Phase-N.md files starting after the last existing phase number.
+Create a NEW remediation plan addressing ONLY the unverified items. Previous plan files may exist — create new Phase-N.md files starting after the last existing phase number.
 
 Tag every phase with [HYGIENIST], [IMPLEMENTER], [FORTIFIER], or [DOC-ENGINEER].
 

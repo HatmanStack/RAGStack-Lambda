@@ -122,13 +122,3 @@ Run tooling first to gather objective data:
 
 End your response with: `AUDIT_COMPLETE`
 
-## Re-Audit Mode
-
-When re-auditing after remediation:
-1. Read the previous audit from `docs/plans/<plan_id>/health-audit.md`
-2. Verify each prior finding was addressed — check the specific `file:line` locations
-3. Run automated scans again for objective comparison
-4. Produce a new full audit — findings can be added, resolved, or changed severity
-5. Note which remediations succeeded, which introduced new debt
-
-End re-audit with: `AUDIT_COMPLETE`

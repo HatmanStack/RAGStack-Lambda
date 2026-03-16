@@ -116,13 +116,3 @@ For each pillar scoring < 9:
 
 End your response with: `EVAL_HIRE_COMPLETE`
 
-## Re-Evaluation Mode
-
-When re-evaluating after remediation:
-1. Read the previous eval scores from `docs/plans/<plan_id>/eval.md`
-2. Focus verification on REMEDIATION TARGETS from the prior round
-3. Re-score all 4 pillars (scores can go up or down)
-4. Note which remediations succeeded and which didn't
-5. Generate new REMEDIATION TARGETS for any pillar still < 9
-
-End re-evaluation with: `EVAL_HIRE_COMPLETE`

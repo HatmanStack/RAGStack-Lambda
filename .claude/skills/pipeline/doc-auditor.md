@@ -143,12 +143,3 @@ Cross-reference code env var reads against documentation:
 
 End your response with: `DOC_AUDIT_COMPLETE`
 
-## Re-Audit Mode
-
-When re-auditing after remediation:
-1. Read the previous audit from `docs/plans/<plan_id>/doc-audit.md`
-2. Verify each prior finding was addressed
-3. Run all 6 phases again — new drift may have been introduced during fixes
-4. Produce a new full audit
-
-End re-audit with: `DOC_AUDIT_COMPLETE`
