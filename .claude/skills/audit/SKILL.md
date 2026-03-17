@@ -298,9 +298,18 @@ Constraints: [from Step 2]
 </task>
 ```
 
-### Step 6: Collect Results and Write Intake Docs
+### Step 6: Validate and Write Intake Docs
 
-After all agents complete, the **orchestrator** (you) reads each agent's output and writes the intake docs:
+After all agents complete, verify each agent's output contains its completion signal:
+- Health auditor: check for `AUDIT_COMPLETE`
+- Eval hire: check for `EVAL_HIRE_COMPLETE`
+- Eval stress: check for `EVAL_STRESS_COMPLETE`
+- Eval day2: check for `EVAL_DAY2_COMPLETE`
+- Doc auditor: check for `DOC_AUDIT_COMPLETE`
+
+If any signal is missing, the agent may have been truncated. Report the incomplete agent to the user and do NOT write that intake doc with partial data. Other intake docs with valid signals can still be written.
+
+For agents with valid signals, write the intake docs:
 
 - **Health:** Write `docs/plans/YYYY-MM-DD-audit-slug/health-audit.md` with `type: repo-health` in frontmatter
 - **Eval:** Combine all 3 evaluator outputs into `docs/plans/YYYY-MM-DD-audit-slug/eval.md` with `type: repo-eval` and `pillar_overrides` in frontmatter

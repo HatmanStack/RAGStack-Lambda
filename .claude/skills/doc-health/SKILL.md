@@ -90,16 +90,17 @@ Constraints: [from Step 1]
 </task>
 ```
 
-### Step 4: Write Audit Document
+### Step 4: Validate and Write Audit Document
 
-Read the auditor output. **Write** `docs/plans/YYYY-MM-DD-docs-slug/doc-audit.md`:
+Verify the auditor's output contains `DOC_AUDIT_COMPLETE`. If missing, the agent may have been truncated — report to the user and do NOT write doc-audit.md with partial data.
+
+If signal present, **Write** `docs/plans/YYYY-MM-DD-docs-slug/doc-audit.md`:
 
 ```markdown
 ---
 type: doc-health
 date: YYYY-MM-DD
 prevention_scope: [from Step 1 — what tooling to add]
-ci_platform: [from Step 1]
 language_stack: [from Step 1]
 ---
 

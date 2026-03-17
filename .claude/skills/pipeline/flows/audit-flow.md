@@ -41,16 +41,18 @@ Multiple docs exist at `docs/plans/$ARGUMENTS/`:
 
 Before starting any stage, detect prior progress:
 
-1. **Check for plan files**: Glob for `docs/plans/$ARGUMENTS/Phase-*.md`
-2. **Check feedback.md** (if it exists):
+1. **Check feedback.md** for `VERIFIED` signal → pipeline already complete, report and stop
+2. **Check for plan files**: Glob for `docs/plans/$ARGUMENTS/Phase-*.md`
+3. **Check feedback.md** (if it exists):
+   - `PHASE_APPROVED` for all phases → enter at Stage 3 (Verification)
    - `PLAN_APPROVED` with no phase progress → enter at Stage 2 (Implementation)
-   - `PHASE_APPROVED` for all phases → enter at Stage 3 (Re-Evaluation)
    - OPEN `CODE_REVIEW` items → enter at Stage 2 at the correct phase with revision instructions
    - OPEN `PLAN_REVIEW` items → enter at Stage 1 with revision instructions
-3. **Check feedback.md** for `VERIFIED` signal → pipeline complete, report and stop
 4. **No plan files, no feedback.md** → enter at Stage 1 (first run)
 
 Apply the same per-phase state recovery logic from the main SKILL.md (check `PHASE_APPROVED`, OPEN/resolved `CODE_REVIEW`, and git commits per phase).
+
+If `docs/plans/$ARGUMENTS/feedback.md` does not exist, create it with the empty template from `pipeline-protocol.md` before proceeding to any stage.
 
 Report detected state to the user before continuing.
 
@@ -60,10 +62,12 @@ Before spawning any agents, verify all required role prompt files exist using **
 - `.claude/skills/pipeline/planner.md`
 - `.claude/skills/pipeline/plan_reviewer.md`
 
-And based on which intake docs are present:
-- If `health-audit.md`: `.claude/skills/pipeline/health-hygienist.md`, `.claude/skills/pipeline/health-fortifier.md`, `.claude/skills/pipeline/health-reviewer.md`, `.claude/skills/pipeline/health-auditor.md`
-- If `eval.md`: `.claude/skills/pipeline/implementer.md`, `.claude/skills/pipeline/reviewer.md`, `.claude/skills/pipeline/eval-hire.md`, `.claude/skills/pipeline/eval-stress.md`, `.claude/skills/pipeline/eval-day2.md`
-- If `doc-audit.md`: `.claude/skills/pipeline/doc-engineer.md`, `.claude/skills/pipeline/doc-reviewer.md`, `.claude/skills/pipeline/doc-auditor.md`
+Also validate the implementer/reviewer roles needed for each phase tag type. Based on which intake docs are present:
+- If `health-audit.md`: `.claude/skills/pipeline/health-hygienist.md`, `.claude/skills/pipeline/health-fortifier.md`, `.claude/skills/pipeline/health-reviewer.md`
+- If `eval.md`: `.claude/skills/pipeline/implementer.md`, `.claude/skills/pipeline/reviewer.md`
+- If `doc-audit.md`: `.claude/skills/pipeline/doc-engineer.md`, `.claude/skills/pipeline/doc-reviewer.md`
+
+Note: evaluator/auditor role files (eval-hire.md, eval-stress.md, eval-day2.md, health-auditor.md, doc-auditor.md) are NOT needed here — they were used during intake only.
 
 If any file is missing, **stop and report** which files are absent.
 
@@ -72,7 +76,7 @@ If any file is missing, **stop and report** which files are absent.
 Evaluator and auditor agents are **token-expensive**. They run exactly twice in the full lifecycle:
 
 1. **Once during `/audit` intake** — produces the intake docs
-2. **Never again** — Stage 3 (Verification) uses the existing code reviewer to spot-check findings, NOT the evaluator/auditor agents
+2. **Never again** — Stage 3 (Verification) uses the existing code reviewer to verify findings, NOT the evaluator/auditor agents
 
 **NEVER** re-run evaluator or auditor agents at any point during the pipeline. The planner, implementer, and verification reviewer work from the intake docs and feedback.md.
 
@@ -186,7 +190,7 @@ Remaining phases: [list with tags]
 
 ## Stage 3: Verification
 
-After all phases are `PHASE_APPROVED`, run a single verification agent that spot-checks the original findings from all intake docs. This is NOT a full re-evaluation — it's a targeted check using the existing code reviewer role.
+After all phases are `PHASE_APPROVED`, run a single verification agent that verifies the original findings from all intake docs. This is NOT a full re-evaluation — it's a targeted check using the existing code reviewer role.
 
 ### 3a: Spawn Verification Agent
 
@@ -201,7 +205,7 @@ After all phases are `PHASE_APPROVED`, run a single verification agent that spot
 <task>
 Version: $ARGUMENTS
 
-This is a VERIFICATION pass after remediation. You are NOT doing a full code review — you are spot-checking that specific findings from the original audit were addressed.
+This is a VERIFICATION pass after remediation. You are NOT doing a full code review — you are verifying that specific findings from the original audit were addressed.
 
 Read the original intake docs to get the list of findings:
 - docs/plans/$ARGUMENTS/eval.md (if exists) — check REMEDIATION TARGETS
@@ -222,8 +226,14 @@ If any findings unverified or tests fail: list the unverified items, then end wi
 </task>
 ```
 
-### 3b: Assess Results
+### 3b: Persist and Assess Results
 
+The **orchestrator** must write the verification result to feedback.md **before** reporting to the user. This ensures state recovery can detect completion if interrupted.
+
+1. If agent returned `VERIFIED`: **Edit** feedback.md to append `VERIFIED` under a `## Verification` section
+2. If agent returned `UNVERIFIED`: **Edit** feedback.md to append `UNVERIFIED` with the list of unverified items under a `## Verification` section
+
+Then assess:
 - If `VERIFIED` → report success
 - If `UNVERIFIED` → the orchestrator reads the unverified items and decides:
   - If minor (< 3 items): report to user with specific items, let them decide

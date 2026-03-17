@@ -139,9 +139,16 @@ Exclusions: [from Step 1]
 </task>
 ```
 
-### Step 4: Combine Results
+### Step 4: Validate and Combine Results
 
-Read all 3 evaluator outputs. **Write** `docs/plans/YYYY-MM-DD-eval-slug/eval.md`:
+Verify each evaluator's output contains its completion signal before proceeding:
+- Evaluator 1: check for `EVAL_HIRE_COMPLETE`
+- Evaluator 2: check for `EVAL_STRESS_COMPLETE`
+- Evaluator 3: check for `EVAL_DAY2_COMPLETE`
+
+If any signal is missing, the agent may have been truncated. Report the incomplete evaluator to the user and do NOT write eval.md with partial data.
+
+If all signals present, **Write** `docs/plans/YYYY-MM-DD-eval-slug/eval.md`:
 
 ```markdown
 ---
