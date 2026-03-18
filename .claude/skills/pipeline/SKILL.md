@@ -346,6 +346,16 @@ B) Manually resolve and continue
 
 ## Rules
 
+### Agent Spawning
+
+- **ONE agent at a time.** Every stage runs a single foreground agent. Wait for it to complete fully before deciding the next step.
+- **NO duplicate or replacement agents.** If an agent is slow, wait. Agents can take 20+ minutes on large codebases. Do NOT spawn a second agent for the same work.
+- **NO per-phase planners.** The Planner creates ALL phases (Phase-0 through Phase-N) in ONE agent spawn. Never decompose planning into separate agents per phase.
+- **NO parallel agents.** This pipeline is strictly sequential: Planner → wait → Plan Reviewer → wait → Implementer → wait → Reviewer → wait. Never overlap stages.
+- **NO background agents.** Every agent spawn must be foreground. Wait for the result before proceeding.
+
+### Pipeline Integrity
+
 - **NEVER** modify source code yourself — only agents do that
 - **NEVER** skip the Plan Reviewer — every plan gets reviewed
 - **NEVER** skip the Code Reviewer — every implementation gets reviewed
