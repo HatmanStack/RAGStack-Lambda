@@ -66,10 +66,12 @@ Report the detected state to the user before continuing.
 
 **Max iterations: 3.** If not approved after 3 cycles, stop and surface the unresolved issues to the user.
 
-### 1a: Spawn Planner
+**One Planner agent and one Plan Reviewer agent for the entire planning stage.** Spawn each once, then use `SendMessage` for subsequent iterations.
+
+### 1a: Spawn Planner (once)
 
 - **Read** `planner.md` to load the role prompt
-- Spawn an **Agent** (subagent_type: general-purpose) with the following prompt structure:
+- Spawn an **Agent** — note its agent ID for later `SendMessage`:
 
 ```xml
 <role_prompt>
@@ -91,10 +93,10 @@ When complete, end your response with: PLAN_COMPLETE
 - Wait for the agent to complete
 - Verify `PLAN_COMPLETE` is in the result
 
-### 1b: Spawn Plan Reviewer
+### 1b: Spawn Plan Reviewer (once)
 
 - **Read** `plan_reviewer.md` to load the role prompt
-- Spawn an **Agent** with:
+- Spawn an **Agent** — note its agent ID for later `SendMessage`:
 
 ```xml
 <role_prompt>
@@ -112,27 +114,34 @@ If plan is good: end with: PLAN_APPROVED
 </task>
 ```
 
-- Check the signal in the result:
+### 1c: Iteration Loop
+
+- Check the reviewer's signal:
   - `PLAN_APPROVED` → proceed to Stage 2
-  - `REVISION_REQUIRED` → re-spawn Planner (1a) with revision instructions:
+  - `REVISION_REQUIRED` → use **SendMessage** to the SAME Planner agent (by ID):
 
-```xml
-<role_prompt>
-[Contents of planner.md]
-</role_prompt>
-
-<task>
-Version: $ARGUMENTS
-
+```text
 The Plan Reviewer has requested revisions. Read docs/plans/$ARGUMENTS/feedback.md for OPEN items tagged PLAN_REVIEW.
 
 Address each item by revising the plan files. Move resolved feedback to the "Resolved Feedback" section with a resolution note.
 
 When complete, end your response with: PLAN_COMPLETE
-</task>
 ```
 
-- Loop until `PLAN_APPROVED` or max iterations reached
+- After the planner responds, use **SendMessage** to the SAME Plan Reviewer agent (by ID):
+
+```text
+The Planner has revised the plan. Re-review the changes:
+1. Check that OPEN PLAN_REVIEW items in feedback.md were resolved
+2. Verify file existence with Glob
+3. Re-check dependencies and actionability
+
+If new issues found: write new feedback, end with: REVISION_REQUIRED
+If all resolved: end with: PLAN_APPROVED
+```
+
+- Loop until `PLAN_APPROVED` or max iterations (3) reached
+- **NEVER spawn a new Planner or Plan Reviewer agent during this stage.** Always use `SendMessage` to continue the existing agents.
 
 ### Between Stages - Report to User
 
@@ -173,10 +182,12 @@ Continuing from Phase N...
 
 ### For each Phase-N
 
-#### 2a: Spawn Implementer
+**One Implementer agent and one Reviewer agent per phase.** Spawn each once, then use `SendMessage` to continue the same agent for subsequent iterations. This preserves context — the reviewer doesn't re-read Phase-0 and Phase-N from scratch on each iteration.
+
+#### 2a: Spawn Implementer (once per phase)
 
 - **Read** `implementer.md` to load the role prompt
-- Spawn an **Agent** with:
+- Spawn an **Agent** — note its agent ID for later `SendMessage`:
 
 ```xml
 <role_prompt>
@@ -199,10 +210,10 @@ When complete, end your response with: IMPLEMENTATION_COMPLETE
 </task>
 ```
 
-#### 2b: Spawn Reviewer
+#### 2b: Spawn Reviewer (once per phase)
 
 - **Read** `reviewer.md` to load the role prompt
-- Spawn an **Agent** with:
+- Spawn an **Agent** — note its agent ID for later `SendMessage`:
 
 ```xml
 <role_prompt>
@@ -225,28 +236,34 @@ If implementation is good: end with: PHASE_APPROVED
 </task>
 ```
 
-- Check the signal:
+#### 2c: Iteration Loop
+
+- Check the reviewer's signal:
   - `PHASE_APPROVED` → report to user, move to next phase
-  - `CHANGES_REQUESTED` → re-spawn Implementer (2a) with:
+  - `CHANGES_REQUESTED` → use **SendMessage** to the SAME Implementer agent (by ID):
 
-```xml
-<role_prompt>
-[Contents of implementer.md]
-</role_prompt>
-
-<task>
-Version: $ARGUMENTS
-Phase: N
-
+```text
 The Code Reviewer has requested changes. Read docs/plans/$ARGUMENTS/feedback.md for OPEN items tagged CODE_REVIEW.
 
 Address each item. Move resolved feedback to "Resolved Feedback" with a resolution note. Continue following TDD.
 
 When complete, end your response with: IMPLEMENTATION_COMPLETE
-</task>
 ```
 
-- Loop until `PHASE_APPROVED` or max iterations reached
+- After the implementer responds, use **SendMessage** to the SAME Reviewer agent (by ID):
+
+```text
+The Implementer has addressed the feedback. Re-review the changes:
+1. Check that OPEN CODE_REVIEW items in feedback.md were resolved
+2. Run tests and build
+3. Verify fixes are correct
+
+If new issues found: write new feedback, end with: CHANGES_REQUESTED
+If all resolved: end with: PHASE_APPROVED
+```
+
+- Loop until `PHASE_APPROVED` or max iterations (3) reached
+- **NEVER spawn a new Implementer or Reviewer agent for the same phase.** Always use `SendMessage` to continue the existing agents.
 
 #### Between Phases
 
@@ -349,6 +366,7 @@ B) Manually resolve and continue
 ### Agent Spawning
 
 - **ONE agent at a time.** Every stage runs a single foreground agent. Wait for it to complete fully before deciding the next step.
+- **ONE Implementer and ONE Reviewer per phase.** Spawn each once, then use `SendMessage` (by agent ID) for subsequent iterations. Never spawn a new agent for the same role within a phase.
 - **NO duplicate or replacement agents.** If an agent is slow, wait. Agents can take 20+ minutes on large codebases. Do NOT spawn a second agent for the same work.
 - **NO per-phase planners.** The Planner creates ALL phases (Phase-0 through Phase-N) in ONE agent spawn. Never decompose planning into separate agents per phase.
 - **NO parallel agents.** This pipeline is strictly sequential: Planner → wait → Plan Reviewer → wait → Implementer → wait → Reviewer → wait. Never overlap stages.
