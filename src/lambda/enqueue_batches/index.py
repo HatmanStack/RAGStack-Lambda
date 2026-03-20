@@ -147,7 +147,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
             # Get filename from tracking table
             response = table.get_item(Key={"document_id": document_id})
-            filename = response.get("Item", {}).get("filename") or "unknown"
+            filename = str(response.get("Item", {}).get("filename") or "unknown")
 
             publish_document_update(
                 graphql_endpoint,
