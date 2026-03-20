@@ -115,36 +115,25 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         )
 
         if len(entries) == 10:
-            resp = sqs.send_message_batch(
-                QueueUrl=batch_queue_url, Entries=entries
-            )  # type: ignore[arg-type]
+            resp = sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
             batch_failed = resp.get("Failed", [])
             if batch_failed:
                 failed_count += len(batch_failed)
                 for f in batch_failed:
-                    logger.error(
-                        f"SQS batch send failed: {f.get('Id')} "
-                        f"- {f.get('Message')}"
-                    )
+                    logger.error(f"SQS batch send failed: {f.get('Id')} - {f.get('Message')}")
             entries = []
 
     if entries:  # Send remaining
-        resp = sqs.send_message_batch(
-            QueueUrl=batch_queue_url, Entries=entries
-        )  # type: ignore[arg-type]
+        resp = sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
         batch_failed = resp.get("Failed", [])
         if batch_failed:
             failed_count += len(batch_failed)
             for f in batch_failed:
-                logger.error(
-                    f"SQS batch send failed: {f.get('Id')} "
-                    f"- {f.get('Message')}"
-                )
+                logger.error(f"SQS batch send failed: {f.get('Id')} - {f.get('Message')}")
 
     if failed_count > 0:
         raise RuntimeError(
-            f"{failed_count}/{total_batches} batch messages "
-            f"failed to enqueue for {document_id}"
+            f"{failed_count}/{total_batches} batch messages failed to enqueue for {document_id}"
         )
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")

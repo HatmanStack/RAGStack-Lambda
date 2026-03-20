@@ -12,11 +12,7 @@ import pytest
 def load_dlq_replay_module():
     """Load the dlq_replay index module dynamically."""
     module_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "src"
-        / "lambda"
-        / "dlq_replay"
-        / "index.py"
+        Path(__file__).parent.parent.parent.parent / "src" / "lambda" / "dlq_replay" / "index.py"
     ).resolve()
     spec = importlib.util.spec_from_file_location("dlq_replay_index", str(module_path))
     assert spec is not None

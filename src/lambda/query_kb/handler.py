@@ -92,12 +92,16 @@ def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, r
         str: Model ID to use (primary or fallback)
     """
     # Load quota configuration
-    primary_model: str = str(get_config_manager().get_parameter(
-        "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    ))
-    fallback_model: str = str(get_config_manager().get_parameter(
-        "chat_fallback_model", default="us.amazon.nova-lite-v1:0"
-    ))
+    primary_model: str = str(
+        get_config_manager().get_parameter(
+            "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        )
+    )
+    fallback_model: str = str(
+        get_config_manager().get_parameter(
+            "chat_fallback_model", default="us.amazon.nova-lite-v1:0"
+        )
+    )
     global_quota_daily = get_config_manager().get_parameter(
         "chat_global_quota_daily", default=10000
     )

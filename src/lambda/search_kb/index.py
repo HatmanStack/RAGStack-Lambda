@@ -504,7 +504,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         # Include filter info in response if a filter was generated
         result_response: dict[str, Any] = {
-            "query": query, "results": results, "total": len(results)
+            "query": query,
+            "results": results,
+            "total": len(results),
         }
         if generated_filter:
             result_response["filterApplied"] = json.dumps(generated_filter)

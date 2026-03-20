@@ -238,9 +238,11 @@ QUERY TO USE FOR SEARCH:"""
     except ImportError:
         from filters import get_config_manager  # type: ignore[import-not-found,no-redef]
 
-    rewrite_model = str(get_config_manager().get_parameter(
-        "chat_query_rewrite_model", default="us.amazon.nova-lite-v1:0"
-    ))
+    rewrite_model = str(
+        get_config_manager().get_parameter(
+            "chat_query_rewrite_model", default="us.amazon.nova-lite-v1:0"
+        )
+    )
 
     response = bedrock_runtime.converse(
         modelId=rewrite_model,

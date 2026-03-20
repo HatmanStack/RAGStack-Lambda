@@ -95,9 +95,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 # FIFO queues require MessageGroupId and MessageDeduplicationId
                 if is_fifo:
                     attrs = msg.get("Attributes", {})
-                    send_kwargs["MessageGroupId"] = attrs.get(
-                        "MessageGroupId", "dlq-replay"
-                    )
+                    send_kwargs["MessageGroupId"] = attrs.get("MessageGroupId", "dlq-replay")
                     # Always use a fresh dedup ID so SQS does not treat the
                     # replay as a duplicate of the original message.
                     send_kwargs["MessageDeduplicationId"] = uuid4().hex
@@ -118,8 +116,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     else:
         logger.warning(
-            f"Reached max iterations ({MAX_ITERATIONS}). "
-            f"Replayed {replayed}, failed {failed}."
+            f"Reached max iterations ({MAX_ITERATIONS}). Replayed {replayed}, failed {failed}."
         )
 
     result: dict[str, int] = {"replayed": replayed, "failed": failed}

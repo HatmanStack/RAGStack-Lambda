@@ -1403,8 +1403,11 @@ def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload",
-                    config_table, dynamodb_client, cm,
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -1655,9 +1658,7 @@ def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
                     return None
 
             pages = [
-                format_scrape_page(
-                    p, get_content_url(str(p.get("document_id", "")))
-                )
+                format_scrape_page(p, get_content_url(str(p.get("document_id", ""))))
                 for p in page_items
             ]
 
@@ -1985,8 +1986,11 @@ def create_image_upload_url(args: dict[str, Any]) -> dict[str, Any]:
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload",
-                    config_table, dynamodb_client, cm,
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -2270,10 +2274,8 @@ def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
 
         # Verify status is PENDING
         if str(item.get("status", "")) != ImageStatus.PENDING.value:
-            current = str(item.get('status', ''))
-            raise ValueError(
-                f"Image is not in PENDING status (current: {current})"
-            )
+            current = str(item.get("status", ""))
+            raise ValueError(f"Image is not in PENDING status (current: {current})")
 
         # Get S3 URI and verify image exists in S3
         input_s3_uri = str(item.get("input_s3_uri", ""))
@@ -2645,8 +2647,11 @@ def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id or "anonymous", "upload",
-                    config_table, dynamodb_client, cm,
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -2837,9 +2842,7 @@ def get_metadata_stats(args: dict[str, Any]) -> dict[str, Any]:
                     "dataType": str(item.get("data_type", "string")),
                     "occurrenceCount": int(str(item.get("occurrence_count", 0))),
                     "sampleValues": (
-                        list(sample_vals)[:10]
-                        if isinstance(sample_vals, (list, tuple))
-                        else []
+                        list(sample_vals)[:10] if isinstance(sample_vals, (list, tuple)) else []
                     ),
                     "lastAnalyzed": key_analyzed,
                     "status": str(item.get("status", "active")),

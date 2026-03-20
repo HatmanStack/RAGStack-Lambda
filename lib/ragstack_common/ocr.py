@@ -86,9 +86,7 @@ class OcrService:
         logger.info(f"Processing document: {document.document_id}")
 
         # Download document from S3 (500MB limit to prevent OOM on Lambda)
-        document_bytes = read_s3_binary(
-            document.input_s3_uri, max_size_bytes=500 * 1024 * 1024
-        )
+        document_bytes = read_s3_binary(document.input_s3_uri, max_size_bytes=500 * 1024 * 1024)
 
         # Determine document type
         if document.filename.lower().endswith(".pdf"):
