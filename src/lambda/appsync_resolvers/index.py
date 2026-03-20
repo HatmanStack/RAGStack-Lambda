@@ -3474,9 +3474,10 @@ def get_conversation(args: dict[str, Any]) -> dict[str, Any]:
 
     turns = []
     for item in response.get("Items", []):
-        # Verify ownership: if the turn has a userId, it must match the requester
+        # Verify ownership: if the turn has a userId, deny access to
+        # unauthenticated callers or callers whose id doesn't match
         item_user_id = item.get("userId")
-        if item_user_id and requesting_user_id and str(item_user_id) != requesting_user_id:
+        if item_user_id and (not requesting_user_id or str(item_user_id) != requesting_user_id):
             return {"conversationId": conversation_id, "turns": []}
 
         turn: dict[str, Any] = {
