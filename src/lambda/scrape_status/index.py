@@ -330,7 +330,9 @@ def _list_urls(urls_tbl: Any, job_id: str, query_params: dict[str, str]) -> dict
     try:
         limit = min(max(int(query_params.get("limit", "50")), 1), 100)
     except (ValueError, TypeError):
-        return _response(400, {"error": "Invalid limit parameter, must be an integer between 1 and 100"})
+        return _response(
+            400, {"error": "Invalid limit, must be integer 1-100"}
+        )
     next_token = query_params.get("next_token")
     status_filter = query_params.get("status")
 

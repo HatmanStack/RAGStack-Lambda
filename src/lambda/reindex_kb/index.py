@@ -409,12 +409,14 @@ def handle_check_sync_status(event: dict) -> dict:
         )
     except Exception as e:
         logger.error(f"Error checking sync status: {e}")
-        return {**event, "action": "finalize", "sync_status": "COMPLETE"}
+        return {**event, "action": "abort", "sync_status": "ERROR", "sync_error": str(e)}
 
-    if status in ("COMPLETE", "FAILED", "STOPPED"):
-        if status == "FAILED":
-            logger.warning("Sync failed")
+    if status == "COMPLETE":
         return {**event, "action": "finalize", "sync_status": status}
+
+    if status in ("FAILED", "STOPPED"):
+        logger.warning(f"Sync {status}, aborting reindex")
+        return {**event, "action": "abort", "sync_status": status}
 
     # Still in progress — state machine will loop back to WaitForSync
     return {**event, "sync_status": status}
@@ -829,11 +831,11 @@ def process_media_item(
     """
     import re
 
-    doc_id = str(item.get("document_id", ""))
-    filename = str(item.get("filename", "unknown"))
-    input_s3_uri = item.get("input_s3_uri")  # Source video file
-    output_s3_uri = item.get("output_s3_uri")  # Transcript text
-    media_type = str(item.get("media_type", "video"))
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    input_s3_uri = item.get("input_s3_uri") or ""  # Source video file
+    output_s3_uri = item.get("output_s3_uri") or ""  # Transcript text
+    media_type = item.get("media_type") or "video"
 
     # Extract metadata from transcript
     metadata: dict[str, Any] = {}

@@ -142,7 +142,9 @@ def read_s3_binary(s3_uri: str, max_size_bytes: int | None = None) -> bytes:
             raise
         except ClientError:
             # HEAD failed — fail closed to prevent downloading oversized objects
-            logger.error(f"HEAD request failed for {s3_uri}, aborting (max_size_bytes={max_size_bytes})")
+            logger.error(
+                f"HEAD failed for {s3_uri}, aborting (max_size={max_size_bytes})"
+            )
             raise
 
     try:

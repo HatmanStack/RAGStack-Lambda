@@ -324,11 +324,15 @@ class KBMigrator:
             vector_index_arn = None
             storage_type = str(storage_config.get("type", ""))
             if storage_type == "S3_VECTORS":
-                s3_config: dict[str, Any] = storage_config.get("s3VectorsConfiguration", {})  # type: ignore[assignment]
-                vector_index_arn = s3_config.get("vectorIndexArn")
+                s3_config: dict[str, Any] = storage_config.get(
+                    "s3VectorsConfiguration", {}
+                )  # type: ignore[assignment]
+                vector_index_arn = s3_config.get("indexArn")
             elif storage_type == "S3":
-                s3_config = storage_config.get("s3Configuration", {})  # type: ignore[assignment]
-                vector_index_arn = s3_config.get("vectorIndexArn")
+                s3_config = storage_config.get(
+                    "s3Configuration", {}
+                )  # type: ignore[assignment]
+                vector_index_arn = s3_config.get("indexArn")
 
             # Delete data sources first
             try:

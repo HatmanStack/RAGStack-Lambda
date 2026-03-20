@@ -50,7 +50,10 @@ except ImportError:
         extract_kb_scalar,
         get_config_manager,
     )
-    from media import fetch_image_for_converse, format_timestamp  # type: ignore[import-not-found,no-redef]
+    from media import (  # type: ignore[import-not-found,no-redef]
+        fetch_image_for_converse,
+        format_timestamp,
+    )
     from retrieval import (  # type: ignore[import-not-found,no-redef]
         _augment_with_id_lookup,
         build_conversation_messages,

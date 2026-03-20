@@ -134,6 +134,11 @@
           "Variable": "$.action",
           "StringEquals": "finalize",
           "Next": "Finalize"
+        },
+        {
+          "Variable": "$.action",
+          "StringEquals": "abort",
+          "Next": "PrepareCleanup"
         }
       ],
       "Default": "WaitForSync"
