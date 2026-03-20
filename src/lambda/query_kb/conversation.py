@@ -107,3 +107,55 @@ def store_conversation_turn(
         logger.info(f"Stored turn {turn_number} for conversation {conversation_id[:8]}...")
     except ClientError as e:
         logger.error(f"Failed to store conversation turn: {e}")
+
+
+def update_conversation_turn(
+    conversation_id: str,
+    turn_number: int,
+    status: str,
+    assistant_response: str = "",
+    sources: list[SourceInfo] | None = None,
+    error_message: str | None = None,
+) -> None:
+    """
+    Update an existing conversation turn with the async result.
+
+    Args:
+        conversation_id: The conversation ID
+        turn_number: The turn number to update
+        status: "COMPLETED" or "ERROR"
+        assistant_response: The assistant's response (for COMPLETED)
+        sources: The source documents used (for COMPLETED)
+        error_message: Error details (for ERROR)
+    """
+    conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
+    if not conversation_table_name or not conversation_id:
+        return
+
+    table = dynamodb.Table(conversation_table_name)
+
+    update_expr = "SET #status = :status, assistantResponse = :response, sources = :sources"
+    expr_values: dict[str, Any] = {
+        ":status": status,
+        ":response": assistant_response,
+        ":sources": json.dumps(sources or []),
+    }
+    expr_names = {"#status": "status"}
+
+    if error_message:
+        update_expr += ", errorMessage = :error"
+        expr_values[":error"] = error_message
+
+    try:
+        table.update_item(
+            Key={
+                "conversationId": conversation_id,
+                "turnNumber": turn_number,
+            },
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values,
+            ExpressionAttributeNames=expr_names,
+        )
+        logger.info(f"Updated turn {turn_number} for {conversation_id[:8]}... to {status}")
+    except ClientError as e:
+        logger.error(f"Failed to update conversation turn: {e}")

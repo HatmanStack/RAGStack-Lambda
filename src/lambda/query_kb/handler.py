@@ -18,7 +18,7 @@ from botocore.exceptions import ClientError
 
 try:
     from ._clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
-    from .conversation import get_conversation_history, store_conversation_turn
+    from .conversation import get_conversation_history, store_conversation_turn, update_conversation_turn
     from .filters import (
         _get_filter_components,
         _get_filter_examples,
@@ -43,6 +43,7 @@ except ImportError:
     from conversation import (  # type: ignore[import-not-found,no-redef]
         get_conversation_history,
         store_conversation_turn,
+        update_conversation_turn,
     )
     from filters import (  # type: ignore[import-not-found,no-redef]
         _get_filter_components,
@@ -209,8 +210,12 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     Returns:
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
+    # Detect async invocation from AppSync resolver
+    is_async = event.get("asyncInvocation", False)
+    request_id = event.get("requestId")
+    turn_number = event.get("turnNumber")
+
     # Check public access control
-    allowed, error_msg = check_public_access(event, "chat", get_config_manager())
     if not allowed:
         return {
             "answer": "",
@@ -667,14 +672,25 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
 
         # Store conversation turn for future context
         if conversation_id:
-            next_turn = len(history) + 1
-            store_conversation_turn(
-                conversation_id=conversation_id,
-                turn_number=next_turn,
-                user_message=query,  # Store original query, not enhanced
-                assistant_response=answer,
-                sources=sources,
-            )
+            if is_async and turn_number:
+                # Async mode: update existing PENDING record
+                update_conversation_turn(
+                    conversation_id=conversation_id,
+                    turn_number=turn_number,
+                    status="COMPLETED",
+                    assistant_response=answer,
+                    sources=sources,
+                )
+            else:
+                # Sync mode: create new record (existing behavior)
+                next_turn = len(history) + 1
+                store_conversation_turn(
+                    conversation_id=conversation_id,
+                    turn_number=next_turn,
+                    user_message=query,  # Store original query, not enhanced
+                    assistant_response=answer,
+                    sources=sources,
+                )
 
         # Include filter info in response if a filter was generated
         result_response: ChatResponse = {
@@ -691,8 +707,16 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         error_code = e.response.get("Error", {}).get("Code", "")
         error_msg = e.response.get("Error", {}).get("Message", "")
         logger.error(f"Bedrock client error: {error_code} - {error_msg}")
+        error_msg_for_user = f"Failed to query knowledge base: {error_msg}"
+        if is_async and conversation_id and turn_number:
+            update_conversation_turn(
+                conversation_id=conversation_id,
+                turn_number=turn_number,
+                status="ERROR",
+                error_message=error_msg_for_user,
+            )
         return {
-            "error": f"Failed to query knowledge base: {error_msg}",
+            "error": error_msg_for_user,
             "answer": "",
             "conversationId": conversation_id,
             "sources": [],
@@ -701,8 +725,16 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     except Exception as e:
         # Generic error handling
         logger.error(f"Error querying KB: {e}", exc_info=True)
+        error_msg_for_user = "Failed to query knowledge base. Please try again."
+        if is_async and conversation_id and turn_number:
+            update_conversation_turn(
+                conversation_id=conversation_id,
+                turn_number=turn_number,
+                status="ERROR",
+                error_message=error_msg_for_user,
+            )
         return {
-            "error": "Failed to query knowledge base. Please try again.",
+            "error": error_msg_for_user,
             "answer": "",
             "conversationId": conversation_id,
             "sources": [],
