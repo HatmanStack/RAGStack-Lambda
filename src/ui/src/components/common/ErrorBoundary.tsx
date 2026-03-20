@@ -3,7 +3,7 @@ import { Alert, Button, SpaceBetween } from '@cloudscape-design/components';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode;
+  fallback?: ReactNode | ((reset: () => void) => ReactNode);
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
@@ -34,7 +34,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render(): ReactNode {
     if (this.state.hasError) {
       if (this.props.fallback) {
-        return this.props.fallback;
+        return typeof this.props.fallback === 'function'
+          ? this.props.fallback(this.handleReset)
+          : this.props.fallback;
       }
 
       return (
@@ -48,7 +50,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <SpaceBetween size="xs">
             <span>An unexpected error occurred. You can try again or refresh the page.</span>
             {this.state.error && (
-              <code style={{ fontSize: '12px', color: '#666' }}>
+              <code style={{ fontSize: '12px', opacity: 0.7 }}>
                 {this.state.error.message}
               </code>
             )}

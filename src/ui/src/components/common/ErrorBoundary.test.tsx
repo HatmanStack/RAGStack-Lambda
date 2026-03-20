@@ -61,7 +61,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Recovered content')).toBeTruthy();
   });
 
-  it('uses custom fallback when provided', () => {
+  it('uses custom fallback ReactNode when provided', () => {
     render(
       <ErrorBoundary fallback={<div>Custom error view</div>}>
         <ThrowingComponent />
@@ -69,6 +69,33 @@ describe('ErrorBoundary', () => {
     );
     expect(screen.getByText('Custom error view')).toBeTruthy();
     expect(screen.queryByText('Something went wrong')).toBeNull();
+  });
+
+  it('uses custom fallback render prop with reset', () => {
+    let shouldThrow = true;
+
+    const ToggleComponent = () => {
+      if (shouldThrow) {
+        throw new Error('Render prop error');
+      }
+      return <div>Recovered via render prop</div>;
+    };
+
+    render(
+      <ErrorBoundary fallback={(reset) => (
+        <div>
+          <span>Custom error with reset</span>
+          <button onClick={reset}>Reset</button>
+        </div>
+      )}>
+        <ToggleComponent />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('Custom error with reset')).toBeTruthy();
+
+    shouldThrow = false;
+    fireEvent.click(screen.getByText('Reset'));
+    expect(screen.getByText('Recovered via render prop')).toBeTruthy();
   });
 
   it('calls onError callback with error info', () => {

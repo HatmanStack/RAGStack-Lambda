@@ -19,6 +19,7 @@ try:
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
+        generate_media_url,
     )
 except ImportError:
     from _clients import dynamodb, s3_client  # type: ignore[import-not-found,no-redef]
@@ -31,6 +32,7 @@ except ImportError:
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
+        generate_media_url,
     )
 
 from ragstack_common.storage import generate_presigned_url
@@ -467,11 +469,9 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                             document_url = generate_presigned_url(media_bucket, media_key)
                             # Segment URL with timestamp fragment for deep linking
                             if document_url and timestamp_start is not None:
-                                if timestamp_end is not None:
-                                    ts_frag = f"#t={timestamp_start},{timestamp_end}"
-                                else:
-                                    ts_frag = f"#t={timestamp_start}"
-                                segment_url = f"{document_url}{ts_frag}"
+                                segment_url = generate_media_url(
+                                    media_bucket, media_key, timestamp_start, timestamp_end
+                                )
                                 logger.info(
                                     f"[SOURCE] Media URLs: full={document_url[:50]}..., "
                                     f"segment=#t={timestamp_start},{timestamp_end}"

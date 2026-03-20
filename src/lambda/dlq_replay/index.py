@@ -71,6 +71,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             QueueUrl=dlq_url,
             MaxNumberOfMessages=10,
             WaitTimeSeconds=1,
+            AttributeNames=["All"],
             MessageAttributeNames=["All"],
         )
 

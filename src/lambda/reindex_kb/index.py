@@ -39,13 +39,13 @@ s3_client = boto3.client("s3")
 lambda_client = boto3.client("lambda")
 
 # Lazy-initialized singletons
-_key_library = None
-_metadata_extractor = None
-_config_manager = None
+_key_library: KeyLibrary | None = None
+_metadata_extractor: MetadataExtractor | None = None
+_config_manager: ConfigurationManager | None = None
 
 # Cache for job metadata (persists within a single Lambda invocation/batch)
 # Key: job_id, Value: dict of extracted metadata from seed document
-_job_metadata_cache: dict[str, dict] = {}
+_job_metadata_cache: dict[str, dict[str, Any]] = {}
 
 # Reindex lock key in configuration table
 REINDEX_LOCK_KEY = "reindex_lock"
@@ -172,7 +172,7 @@ def get_config_manager() -> ConfigurationManager | None:
     return _config_manager
 
 
-def update_tracking_metadata(document_id: str, metadata: dict) -> None:
+def update_tracking_metadata(document_id: str, metadata: dict[str, Any]) -> None:
     """
     Update extracted_metadata in the tracking table.
 
@@ -203,7 +203,7 @@ def update_tracking_metadata(document_id: str, metadata: dict) -> None:
         logger.warning(f"Failed to update tracking metadata for {document_id}: {e}")
 
 
-def lambda_handler(event: dict, context: Any) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for reindex operations.
 

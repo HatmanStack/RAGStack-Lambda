@@ -265,6 +265,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         setSelectedItems([]);
       } catch (err) {
         console.error('Delete failed:', err);
+        addNotification('error', `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
       }

@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Flashbar, type FlashbarProps } from '@cloudscape-design/components';
 
 type NotificationType = 'success' | 'error' | 'warning' | 'info';
@@ -28,13 +28,29 @@ export function useNotifications(): NotificationContextValue {
 
 // Auto-dismiss delay for transient notifications (ms)
 const AUTO_DISMISS_MS = 10_000;
+// Maximum number of notifications displayed at once
+const MAX_NOTIFICATIONS = 10;
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<FlashbarProps.MessageDefinition[]>([]);
   const counterRef = useRef(0);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Clean up all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []);
 
   const removeItem = useCallback((id: string) => {
     setItems(prev => prev.filter(item => item.id !== id));
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
   }, []);
 
   const addNotification = useCallback(
@@ -50,26 +66,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       };
 
       if (options?.action) {
+        const handleClick = options.action.onClick;
         item.action = (
-          <span
-            role="button"
-            tabIndex={0}
-            style={{ cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={options.action.onClick}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') options.action!.onClick();
-            }}
+          <button
+            type="button"
+            style={{ cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit' }}
+            onClick={handleClick}
           >
             {options.action.text}
-          </span>
+          </button>
         );
       }
 
-      setItems(prev => [...prev, item]);
+      setItems(prev => {
+        const next = [...prev, item];
+        // Drop oldest notifications when exceeding max
+        return next.length > MAX_NOTIFICATIONS ? next.slice(next.length - MAX_NOTIFICATIONS) : next;
+      });
 
       // Auto-dismiss success and info after timeout
       if (type === 'success' || type === 'info') {
-        setTimeout(() => removeItem(id), AUTO_DISMISS_MS);
+        const timer = setTimeout(() => removeItem(id), AUTO_DISMISS_MS);
+        timersRef.current.set(id, timer);
       }
     },
     [removeItem],
@@ -77,6 +95,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const clearNotifications = useCallback(() => {
     setItems([]);
+    timersRef.current.forEach(timer => clearTimeout(timer));
+    timersRef.current.clear();
   }, []);
 
   return (

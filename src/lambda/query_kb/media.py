@@ -96,14 +96,14 @@ def generate_media_url(
     direct seeking in video/audio players.
 
     Args:
-        bucket (str): S3 bucket name
-        key (str): S3 object key
-        timestamp_start (int|None): Start time in seconds
-        timestamp_end (int|None): End time in seconds
-        expiration (int): URL expiration time in seconds (default 1 hour)
+        bucket: S3 bucket name
+        key: S3 object key
+        timestamp_start: Start time in seconds
+        timestamp_end: End time in seconds
+        expiration: URL expiration time in seconds (default 1 hour)
 
     Returns:
-        str: Presigned URL with optional timestamp fragment, or None on error
+        Presigned URL with optional timestamp fragment, or None on error
     """
     try:
         base_url: str = s3_client.generate_presigned_url(

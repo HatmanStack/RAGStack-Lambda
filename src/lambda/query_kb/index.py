@@ -30,9 +30,6 @@ try:
         generate_media_url,
     )
     from .retrieval import (  # noqa: F401
-        _augment_with_id_lookup,
-        _extract_id_pattern,
-        _rewrite_query_with_llm,
         build_conversation_messages,
         build_retrieval_query,
     )
@@ -68,9 +65,6 @@ except ImportError:
         generate_media_url,
     )
     from retrieval import (  # type: ignore[import-not-found,no-redef]  # noqa: F401
-        _augment_with_id_lookup,
-        _extract_id_pattern,
-        _rewrite_query_with_llm,
         build_conversation_messages,
         build_retrieval_query,
     )
@@ -79,4 +73,3 @@ except ImportError:
 from ragstack_common.sources import (  # noqa: F401
     construct_image_uri_from_content_uri,
 )
-from ragstack_common.storage import generate_presigned_url  # noqa: F401

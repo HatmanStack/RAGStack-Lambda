@@ -61,9 +61,9 @@ sqs = boto3.client("sqs")
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 # Lazy-initialized singletons
-_key_library = None
-_metadata_extractor = None
-_config_manager = None
+_key_library: KeyLibrary | None = None
+_metadata_extractor: MetadataExtractor | None = None
+_config_manager: ConfigurationManager | None = None
 
 
 def get_config_manager() -> ConfigurationManager | None:

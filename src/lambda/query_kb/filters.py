@@ -13,7 +13,7 @@ try:
 except ImportError:
     from _clients import bedrock_agent  # type: ignore[import-not-found,no-redef]
 
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config  # noqa: F401
+from ragstack_common.config import ConfigurationManager
 from ragstack_common.filter_generator import FilterGenerator
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
@@ -39,7 +39,7 @@ def extract_kb_scalar(value: Any) -> str | None:
 
 
 # Module-level lazy initialization (reused across Lambda invocations in same container)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 
 def get_config_manager() -> ConfigurationManager:
@@ -55,11 +55,11 @@ def get_config_manager() -> ConfigurationManager:
 
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
-_key_library = None
-_filter_generator = None
-_multislice_retriever = None
-_filter_examples_cache = None
-_filter_examples_cache_time = None
+_key_library: KeyLibrary | None = None
+_filter_generator: FilterGenerator | None = None
+_multislice_retriever: MultiSliceRetriever | None = None
+_filter_examples_cache: list[Any] | None = None
+_filter_examples_cache_time: float | None = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 

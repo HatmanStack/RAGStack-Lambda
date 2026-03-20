@@ -88,11 +88,11 @@ def get_config_manager() -> ConfigurationManager:
 
 
 # Filter generation components (lazy-loaded to avoid init overhead if disabled)
-_key_library = None
-_filter_generator = None
-_multislice_retriever = None
-_filter_examples_cache = None
-_filter_examples_cache_time = None
+_key_library: KeyLibrary | None = None
+_filter_generator: FilterGenerator | None = None
+_multislice_retriever: MultiSliceRetriever | None = None
+_filter_examples_cache: list[Any] | None = None
+_filter_examples_cache_time: float | None = None
 FILTER_EXAMPLES_CACHE_TTL = 300  # 5 minutes
 
 

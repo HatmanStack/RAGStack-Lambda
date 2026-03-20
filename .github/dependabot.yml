@@ -22,6 +22,17 @@ updates:
       production-dependencies:
         dependency-type: production
 
+  - package-ecosystem: npm
+    directory: /src/ragstack-chat
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+      production-dependencies:
+        dependency-type: production
+
   - package-ecosystem: pip
     directory: /
     schedule:

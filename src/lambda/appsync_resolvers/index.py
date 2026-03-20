@@ -70,10 +70,10 @@ lambda_client = boto3.client("lambda")
 bedrock_agent = boto3.client("bedrock-agent")
 
 # Module-level configuration manager (lazy init for resolvers that need access control)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 # Module-level event storage for passing identity to resolvers
-_current_event = None
+_current_event: dict[str, Any] | None = None
 
 # DynamoDB client for quota operations
 dynamodb_client = boto3.client("dynamodb")

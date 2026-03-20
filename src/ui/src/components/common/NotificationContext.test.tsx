@@ -104,6 +104,59 @@ describe('NotificationContext', () => {
     vi.useRealTimers();
   });
 
+  it('renders action button and fires callback on click', () => {
+    const actionFn = vi.fn();
+
+    function ActionConsumer() {
+      const { addNotification } = useNotifications();
+      return (
+        <button onClick={() => addNotification('warning', 'Action notification', {
+          action: { text: 'Undo', onClick: actionFn }
+        })}>Add with action</button>
+      );
+    }
+
+    render(
+      <NotificationProvider>
+        <ActionConsumer />
+      </NotificationProvider>
+    );
+
+    fireEvent.click(screen.getByText('Add with action'));
+    expect(screen.getByText('Action notification')).toBeTruthy();
+
+    const undoButton = screen.getByText('Undo');
+    expect(undoButton).toBeTruthy();
+    fireEvent.click(undoButton);
+    expect(actionFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps notifications at max limit', () => {
+    function BulkAdder() {
+      const { addNotification } = useNotifications();
+      return (
+        <button onClick={() => {
+          for (let i = 0; i < 12; i++) {
+            addNotification('error', `Notification ${i}`);
+          }
+        }}>Add many</button>
+      );
+    }
+
+    render(
+      <NotificationProvider>
+        <BulkAdder />
+      </NotificationProvider>
+    );
+
+    fireEvent.click(screen.getByText('Add many'));
+    // Should only show the last 10 (MAX_NOTIFICATIONS)
+    expect(screen.queryByText('Notification 0')).toBeNull();
+    expect(screen.queryByText('Notification 1')).toBeNull();
+    expect(screen.getByText('Notification 2')).toBeTruthy();
+    expect(screen.getByText('Notification 11')).toBeTruthy();
+  });
+
   it('throws when useNotifications used outside provider', () => {
     // Suppress React error console noise
     vi.spyOn(console, 'error').mockImplementation(() => {});

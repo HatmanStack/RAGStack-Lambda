@@ -25,7 +25,7 @@ try:
         extract_kb_scalar,
         get_config_manager,
     )
-    from .media import fetch_image_for_converse
+    from .media import fetch_image_for_converse, format_timestamp
     from .retrieval import (
         _augment_with_id_lookup,
         build_conversation_messages,
@@ -50,7 +50,7 @@ except ImportError:
         extract_kb_scalar,
         get_config_manager,
     )
-    from media import fetch_image_for_converse  # type: ignore[import-not-found,no-redef]
+    from media import fetch_image_for_converse, format_timestamp  # type: ignore[import-not-found,no-redef]
     from retrieval import (  # type: ignore[import-not-found,no-redef]
         _augment_with_id_lookup,
         build_conversation_messages,
@@ -470,9 +470,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
             # Format timestamp for display (M:SS format)
             ts_display = ""
             if ts_start is not None:
-                start_fmt = f"{ts_start // 60}:{ts_start % 60:02d}"
+                start_fmt = format_timestamp(ts_start)
                 if ts_end is not None:
-                    end_fmt = f"{ts_end // 60}:{ts_end % 60:02d}"
+                    end_fmt = format_timestamp(ts_end)
                     ts_display = f", {start_fmt}-{end_fmt}"
                 else:
                     ts_display = f", {start_fmt}"

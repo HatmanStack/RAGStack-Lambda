@@ -4224,6 +4224,7 @@ Resources:
       Runtime: python3.13
       Timeout: 300
       MemorySize: 128
+      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           LOG_LEVEL: INFO
