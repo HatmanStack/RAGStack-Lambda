@@ -138,12 +138,14 @@ ignore_missing_imports = true
 module = "*.index"
 disallow_untyped_calls = false
 disallow_any_generics = false
+disallow_untyped_decorators = false
 warn_return_any = false
 
 [[tool.mypy.overrides]]
 module = "index"
 disallow_untyped_calls = false
 disallow_any_generics = false
+disallow_untyped_decorators = false
 warn_return_any = false
 
 # text_extractors and scraper have complex third-party types - ignore errors
@@ -152,6 +154,11 @@ module = [
     "ragstack_common.text_extractors.*",
     "ragstack_common.scraper.*",
 ]
+ignore_errors = true
+
+# setup.py uses setuptools which lacks stubs
+[[tool.mypy.overrides]]
+module = "setup"
 ignore_errors = true
 
 [tool.vulture]

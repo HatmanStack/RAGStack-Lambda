@@ -123,8 +123,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         logger.info(f"Document {document_id} is not media type (type={doc_type}), skipping")
         return {"status": "skipped", "message": f"Not a video file (type={doc_type})"}
 
-    filename = doc_item.get("filename") or "video.mp4"
-    current_s3_uri = doc_item.get("input_s3_uri") or ""
+    filename = str(doc_item.get("filename") or "video.mp4")
+    current_s3_uri = str(doc_item.get("input_s3_uri") or "")
 
     # Parse current location
     source_bucket, source_key = parse_s3_uri(current_s3_uri)

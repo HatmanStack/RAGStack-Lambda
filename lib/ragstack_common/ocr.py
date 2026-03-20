@@ -337,8 +337,11 @@ class OcrService:
                     if block["BlockType"] == "LINE":
                         page_num = block.get("Page", 1)
                         # In batch mode, filter to only the requested page range
-                        if is_batch_mode and (
-                            page_num < document.page_start or page_num > document.page_end
+                        if (
+                            is_batch_mode
+                            and document.page_start is not None
+                            and document.page_end is not None
+                            and (page_num < document.page_start or page_num > document.page_end)
                         ):
                             continue
                         if page_num not in pages_dict:
@@ -384,7 +387,7 @@ class OcrService:
                     document.pages_failed = pages_in_batch - len(document.pages)
             else:
                 # Single image - use sync API
-                response = self.textract_client.detect_document_text(
+                response = self.textract_client.detect_document_text(  # type: ignore[assignment]
                     Document={"Bytes": document_bytes}
                 )
 
