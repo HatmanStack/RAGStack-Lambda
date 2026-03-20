@@ -1712,7 +1712,7 @@ Resources:
       Layers:
         - !Ref RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 60  # 1 minute for chat responses
+      Timeout: 90  # 90 seconds for LLM chat responses
       MemorySize: 1769  # 1 full vCPU for CPU-bound chat response generation
       # No reserved concurrency - allows multi-stack deployments
       Environment:
@@ -3455,6 +3455,20 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      Code: |
+        export function request(ctx) {
+          return {
+            operation: 'Invoke',
+            payload: ctx,
+            invocationTimeoutMs: 90000
+          };
+        }
+        export function response(ctx) {
+          return ctx.result;
+        }
 
   SearchKBResolver:
     Type: AWS::AppSync::Resolver
