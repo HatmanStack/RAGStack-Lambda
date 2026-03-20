@@ -170,7 +170,7 @@ curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "mutation($query: String!, $conversationId: ID!, $requestId: ID!) { queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) { conversationId requestId status } }",
-    "variables": {"query": "What is RAGStack?", "conversationId": "550e8400-e29b-41d4-a716-446655440000", "requestId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"}
+    "variables": {"query": "What is RAGStack?", "conversationId": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "requestId": "7c9e6679-7425-40de-944b-e07fc1f90ae7"}
   }'
 ```
 

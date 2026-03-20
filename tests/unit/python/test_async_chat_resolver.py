@@ -299,6 +299,62 @@ class TestQueryKnowledgeBaseMutation:
         with pytest.raises(ValueError, match="10000"):
             index.query_knowledge_base(args)
 
+    def test_conditional_put_retries_on_conflict(self, _mock_dependencies):
+        """ConditionalCheckFailedException retries with incremented turn number."""
+        index = _mock_dependencies
+
+        mock_table = MagicMock()
+        mock_table.query.return_value = {"Items": [{"turnNumber": 1}]}
+        index._test_dynamodb.Table.return_value = mock_table
+
+        # ClientError in the module is mocked as Exception (see fixture line 73)
+        # Create an error object that mimics ClientError's .response attribute
+        conflict_error = Exception("ConditionalCheckFailedException")
+        conflict_error.response = {"Error": {"Code": "ConditionalCheckFailedException"}}
+
+        # First two puts fail with conflict, third succeeds
+        mock_table.put_item.side_effect = [conflict_error, conflict_error, None]
+
+        args = {
+            "query": "test query",
+            "conversationId": "conv-123",
+            "requestId": "req-456",
+        }
+
+        result = index.query_knowledge_base(args)
+
+        assert result["status"] == "PENDING"
+        assert mock_table.put_item.call_count == 3
+        # First attempt: turn 2, second: turn 3, third: turn 4
+        put_calls = mock_table.put_item.call_args_list
+        assert put_calls[0][1]["Item"]["turnNumber"] == 2
+        assert put_calls[1][1]["Item"]["turnNumber"] == 3
+        assert put_calls[2][1]["Item"]["turnNumber"] == 4
+
+    def test_conditional_put_raises_after_max_retries(self, _mock_dependencies):
+        """ConditionalCheckFailedException raises after 3 attempts."""
+        index = _mock_dependencies
+
+        mock_table = MagicMock()
+        mock_table.query.return_value = {"Items": [{"turnNumber": 1}]}
+        index._test_dynamodb.Table.return_value = mock_table
+
+        conflict_error = Exception("ConditionalCheckFailedException")
+        conflict_error.response = {"Error": {"Code": "ConditionalCheckFailedException"}}
+        mock_table.put_item.side_effect = [conflict_error, conflict_error, conflict_error]
+
+        args = {
+            "query": "test query",
+            "conversationId": "conv-123",
+            "requestId": "req-456",
+        }
+
+        # After 3 conflicts, the outer except ClientError catches and wraps as ValueError
+        with pytest.raises(ValueError, match="Failed to submit chat query"):
+            index.query_knowledge_base(args)
+
+        assert mock_table.put_item.call_count == 3
+
 
 class TestGetConversation:
     """Tests for the getConversation query resolver."""

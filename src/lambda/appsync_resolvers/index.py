@@ -3426,7 +3426,8 @@ def query_knowledge_base(args: dict[str, Any]) -> dict[str, Any]:
                     f"Failed to clean up PENDING turn {next_turn} "
                     f"for conversation {conversation_id}"
                 )
-            raise invoke_err
+            logger.error(f"Async invoke failed: {invoke_err}")
+            raise ValueError("Failed to submit chat query. Please try again.") from invoke_err
 
         return {
             "conversationId": conversation_id,
@@ -3455,6 +3456,8 @@ def get_conversation(args: dict[str, Any]) -> dict[str, Any]:
     conversation_id = args.get("conversationId", "")
     if not conversation_id or not conversation_id.strip():
         raise ValueError("Missing required argument: conversationId")
+    if not is_valid_uuid(conversation_id):
+        raise ValueError("Invalid conversationId: must be a valid UUID")
 
     if not CONVERSATION_TABLE_NAME:
         raise ValueError("CONVERSATION_TABLE_NAME environment variable is not configured")

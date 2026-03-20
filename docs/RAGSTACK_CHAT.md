@@ -12,7 +12,6 @@ Use the chat in Vue, Angular, Svelte, or vanilla JavaScript:
 
 <!-- Add chat to your page -->
 <ragstack-chat
-  conversation-id="my-app"
   header-text="Ask About Documents"
   show-sources="true"
 ></ragstack-chat>
@@ -257,7 +256,7 @@ Configure the widget via HTML attributes:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `conversation-id` | string | `"default"` | Unique conversation identifier |
+| `conversation-id` | string (UUID) | auto-generated | Unique conversation identifier (must be UUID v4; auto-generated if omitted or invalid) |
 | `header-text` | string | `"Document Q&A"` | Header title text |
 | `header-subtitle` | string | `"Ask questions about your documents"` | Subtitle below header |
 | `input-placeholder` | string | `"Ask a question..."` | Input field placeholder |
@@ -331,7 +330,6 @@ Use the component in any framework via Web Components:
 ```vue
 <template>
   <ragstack-chat
-    conversation-id="vue-chat"
     @ragstack-chat:send-message="handleMessage"
   />
 </template>

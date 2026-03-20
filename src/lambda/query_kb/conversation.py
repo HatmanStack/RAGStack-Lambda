@@ -49,17 +49,26 @@ def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
     try:
         from boto3.dynamodb.conditions import Attr
 
-        response = table.query(
-            KeyConditionExpression=Key("conversationId").eq(conversation_id),
-            FilterExpression=Attr("status").ne("PENDING") | Attr("status").not_exists(),
-            ScanIndexForward=False,  # Descending order (newest first)
-            ProjectionExpression="turnNumber, userMessage, assistantResponse, #s",
-            ExpressionAttributeNames={"#s": "status"},
-        )
+        # Paginate to collect enough completed turns, stopping early once we
+        # have MAX_HISTORY_TURNS to avoid unnecessary reads.
+        all_items: list[dict[str, Any]] = []
+        query_kwargs: dict[str, Any] = {
+            "KeyConditionExpression": Key("conversationId").eq(conversation_id),
+            "FilterExpression": Attr("status").ne("PENDING") | Attr("status").not_exists(),
+            "ScanIndexForward": False,  # Descending order (newest first)
+            "ProjectionExpression": "turnNumber, userMessage, assistantResponse, #s",
+            "ExpressionAttributeNames": {"#s": "status"},
+        }
+        while True:
+            response = table.query(**query_kwargs)
+            all_items.extend(response.get("Items", []))
+            if len(all_items) >= MAX_HISTORY_TURNS:
+                break
+            if "LastEvaluatedKey" not in response:
+                break
+            query_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
-        # Trim to MAX_HISTORY_TURNS after filtering (Limit caps scanned rows,
-        # not returned rows, so filtering + Limit can return fewer than expected)
-        items: list[dict[str, Any]] = response.get("Items", [])[:MAX_HISTORY_TURNS]
+        items = all_items[:MAX_HISTORY_TURNS]
         for item in items:
             if "turnNumber" in item and isinstance(item["turnNumber"], Decimal):
                 item["turnNumber"] = int(item["turnNumber"])
@@ -162,9 +171,16 @@ def update_conversation_turn(
                 "turnNumber": turn_number,
             },
             UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_values,
+            ExpressionAttributeValues={**expr_values, ":pending": "PENDING"},
             ExpressionAttributeNames=expr_names,
+            ConditionExpression="attribute_exists(conversationId) AND #status = :pending",
         )
         logger.info(f"Updated turn {turn_number} for {conversation_id[:8]}... to {status}")
     except ClientError as e:
-        logger.error(f"Failed to update conversation turn: {e}")
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(
+                f"Turn {turn_number} for {conversation_id[:8]}... "
+                f"not found or not PENDING, skipping update to {status}"
+            )
+        else:
+            logger.error(f"Failed to update conversation turn: {e}")
