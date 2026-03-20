@@ -176,10 +176,10 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 # ============================================================
                 # SOURCE URI RESOLUTION - Comprehensive logging for debugging
                 # ============================================================
-                logger.info(f"[SOURCE] ===== Processing source: {document_id} =====")
-                logger.info(f"[SOURCE] KB citation URI: {uri}")
-                logger.info(f"[SOURCE] is_scraped={is_scraped}, is_image={is_image}")
-                logger.info(f"[SOURCE] Parsed - bucket: {bucket}, input_prefix: {input_prefix}")
+                logger.debug(f"[SOURCE] ===== Processing source: {document_id} =====")
+                logger.debug(f"[SOURCE] KB citation URI: {uri}")
+                logger.debug(f"[SOURCE] is_scraped={is_scraped}, is_image={is_image}")
+                logger.debug(f"[SOURCE] Parsed - bucket: {bucket}, input_prefix: {input_prefix}")
 
                 # Look up input_s3_uri, filename, and source_url from tracking table
                 # This gives us the actual source document URI (PDF, image, scraped web page)
@@ -187,7 +187,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 tracking_source_url = None
                 tracking_item = None
                 tracking_table_name = os.environ.get("TRACKING_TABLE")
-                logger.info(f"[SOURCE] Tracking table: {tracking_table_name}")
+                logger.debug(f"[SOURCE] Tracking table: {tracking_table_name}")
                 if tracking_table_name:
                     try:
                         tracking_table = dynamodb.Table(tracking_table_name)
@@ -234,10 +234,10 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 if is_scraped:
                     # Scraped content: use the output full_text.txt or the KB citation URI
                     document_s3_uri = uri  # KB citation already points to output
-                    logger.info(f"[SOURCE] Scraped content, using KB URI: {document_s3_uri}")
+                    logger.debug(f"[SOURCE] Scraped content, using KB URI: {document_s3_uri}")
                 elif tracking_input_uri:
                     document_s3_uri = tracking_input_uri
-                    logger.info(f"[SOURCE] Using tracking input_s3_uri: {document_s3_uri}")
+                    logger.debug(f"[SOURCE] Using tracking input_s3_uri: {document_s3_uri}")
                 elif original_filename and len(original_filename) > 0:
                     if input_prefix:
                         document_s3_uri = (
@@ -257,7 +257,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                         f"{document_s3_uri}"
                     )
 
-                logger.info(f"[SOURCE] Final document_s3_uri: {document_s3_uri}")
+                logger.debug(f"[SOURCE] Final document_s3_uri: {document_s3_uri}")
 
                 # Extract page number if available (from metadata or filename)
                 page_num = None
@@ -305,12 +305,12 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                     # Fallback: try tracking table (old format has source_url per-page)
                     if not source_url and tracking_source_url:
                         source_url = tracking_source_url
-                        logger.info(f"[SOURCE] Using source_url from tracking: {source_url}")
+                        logger.debug(f"[SOURCE] Using source_url from tracking: {source_url}")
 
                     # Last fallback: try to extract from content frontmatter
                     if not source_url:
                         source_url = extract_source_url_from_content(content_text)
-                        logger.info(f"[SOURCE] Extracted source_url from content: {source_url}")
+                        logger.debug(f"[SOURCE] Extracted source_url from content: {source_url}")
 
                 # For image content, extract caption from frontmatter
                 image_caption = None
@@ -351,7 +351,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                     allow_document_access = get_config_manager().get_parameter(
                         "chat_allow_document_access", default=False
                     )
-                    logger.info(f"[SOURCE] Document access allowed: {allow_document_access}")
+                    logger.debug(f"[SOURCE] Document access allowed: {allow_document_access}")
 
                     # Generate presigned URL if access is enabled
                     document_url = None
@@ -399,7 +399,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                     # so users can click through to the source website
                     if is_scraped and source_url:
                         document_url = source_url
-                        logger.info(f"[SOURCE] Scraped content - using source URL: {source_url}")
+                        logger.debug(f"[SOURCE] Scraped content - using source URL: {source_url}")
 
                     # Check for media sources (video/audio content types or tracking type)
                     # KB metadata comes as lists with quoted strings, extract scalars
@@ -517,12 +517,12 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                         if document_url and len(document_url) > 60
                         else document_url
                     )
-                    logger.info(f"[SOURCE] FINAL: docId={document_id}, s3Uri={document_s3_uri}")
+                    logger.debug(f"[SOURCE] FINAL: docId={document_id}, s3Uri={document_s3_uri}")
                     logger.info(
                         f"[SOURCE] FINAL: documentUrl={doc_url_preview}, "
                         f"isScraped={is_scraped}, isImage={is_image}"
                     )
-                    logger.info(f"[SOURCE] ===== End source {document_id} =====")
+                    logger.debug(f"[SOURCE] ===== End source {document_id} =====")
                     sources.append(source_obj)
                     seen.add(source_key)
                 else:

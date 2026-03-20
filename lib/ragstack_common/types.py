@@ -63,12 +63,13 @@ class ConversationTurn(TypedDict):
     """A single turn in a conversation stored in DynamoDB.
 
     Stored in the conversation history table with TTL for automatic cleanup.
-    The query and answer fields capture the user's question and AI response.
+    Fields match the actual DynamoDB schema in conversation.py.
     """
 
     conversationId: str
-    timestamp: str
-    query: str
-    answer: str
+    turnNumber: int
+    userMessage: str
+    assistantResponse: str
     sources: str  # JSON-serialized list of SourceInfo
+    createdAt: NotRequired[str]
     ttl: int

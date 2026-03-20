@@ -74,9 +74,12 @@ def _augment_with_id_lookup(
             "ProjectionExpression": "document_id, filename, output_s3_uri, input_s3_uri",
         }
 
-        while len(items) < 3:  # Find up to 3 matching documents
+        max_scan_pages = 10  # Cap scan pages to avoid expensive full-table scans
+        pages_scanned = 0
+        while len(items) < 3 and pages_scanned < max_scan_pages:
             response = table.scan(**scan_kwargs)
             items.extend(response.get("Items", []))
+            pages_scanned += 1
 
             # Check for more pages
             if "LastEvaluatedKey" not in response:
@@ -229,8 +232,18 @@ RULES:
 
 QUERY TO USE FOR SEARCH:"""
 
+    # Use a lightweight model for query rewriting (configurable via DynamoDB)
+    try:
+        from .filters import get_config_manager
+    except ImportError:
+        from filters import get_config_manager  # type: ignore[import-not-found,no-redef]
+
+    rewrite_model = str(get_config_manager().get_parameter(
+        "chat_query_rewrite_model", default="us.amazon.nova-lite-v1:0"
+    ))
+
     response = bedrock_runtime.converse(
-        modelId="us.amazon.nova-lite-v1:0",
+        modelId=rewrite_model,
         messages=[{"role": "user", "content": [{"text": prompt}]}],
         inferenceConfig={"maxTokens": 1000, "temperature": 0},
     )

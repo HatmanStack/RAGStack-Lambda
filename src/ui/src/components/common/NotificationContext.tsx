@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Flashbar, type FlashbarProps } from '@cloudscape-design/components';
+import { Button, Flashbar, type FlashbarProps } from '@cloudscape-design/components';
 
 type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
@@ -68,13 +68,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (options?.action) {
         const handleClick = options.action.onClick;
         item.action = (
-          <button
-            type="button"
-            style={{ cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit' }}
-            onClick={handleClick}
-          >
+          <Button variant="link" onClick={handleClick}>
             {options.action.text}
-          </button>
+          </Button>
         );
       }
 

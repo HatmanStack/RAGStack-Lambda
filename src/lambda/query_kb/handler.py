@@ -378,7 +378,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 for i, r in enumerate(retrieval_results):
                     uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
                     score = r.get("score", "N/A")
-                    logger.info(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
+                    logger.debug(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
             else:
                 # Standard single-query retrieval
                 retrieval_config: dict[str, Any] = {
@@ -405,7 +405,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
             for i, r in enumerate(retrieval_results):
                 uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
                 score = r.get("score", "N/A")
-                logger.info(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
+                logger.debug(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
         except Exception as e:
             logger.warning(f"Retrieval failed: {e}")
 
@@ -492,7 +492,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 or content.get("type") == "VIDEO"
                 or uri_lower.endswith(visual_extensions)
             )
-            logger.info(f"[RESULT {result_rank}] visual={is_visual}, text={bool(content_text)}")
+            logger.debug(f"[RESULT {result_rank}] visual={is_visual}, text={bool(content_text)}")
 
             if is_visual:
                 # Visual match - get additional context (caption for images, transcript for videos)

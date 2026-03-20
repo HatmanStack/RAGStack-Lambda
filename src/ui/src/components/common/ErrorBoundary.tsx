@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         >
           <SpaceBetween size="xs">
             <span>An unexpected error occurred. You can try again or refresh the page.</span>
-            {this.state.error && (
+            {this.state.error && import.meta.env.DEV && (
               <code style={{ fontSize: '12px', opacity: 0.7 }}>
                 {this.state.error.message}
               </code>
