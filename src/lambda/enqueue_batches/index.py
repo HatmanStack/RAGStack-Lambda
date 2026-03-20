@@ -73,27 +73,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     sqs = boto3.client("sqs")
     table = dynamodb.Table(tracking_table)
 
-    # Update DynamoDB with batch tracking info
-    now = datetime.now(UTC).isoformat()
-    table.update_item(
-        Key={"document_id": document_id},
-        UpdateExpression=(
-            "SET batches_total = :total, "
-            "batches_remaining = :remaining, "
-            "pages_succeeded = :zero, "
-            "pages_failed = :zero, "
-            "updated_at = :now"
-        ),
-        ExpressionAttributeValues={
-            ":total": total_batches,
-            ":remaining": total_batches,
-            ":zero": 0,
-            ":now": now,
-        },
-    )
-    logger.info(f"Initialized batch tracking: {total_batches} batches")
-
-    # Send batch messages to SQS (in batches of 10, the SQS limit)
+    # Send batch messages to SQS first, verify all succeed,
+    # then write DynamoDB. This prevents stale counters if Lambda retries
+    # after a partial SQS failure.
     entries: list[dict[str, str]] = []
     failed_count = 0
     for i, batch in enumerate(batches):
@@ -138,6 +120,26 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")
 
+    # Write DynamoDB batch tracking only after all SQS sends confirmed
+    now = datetime.now(UTC).isoformat()
+    table.update_item(
+        Key={"document_id": document_id},
+        UpdateExpression=(
+            "SET batches_total = :total, "
+            "batches_remaining = :remaining, "
+            "pages_succeeded = :zero, "
+            "pages_failed = :zero, "
+            "updated_at = :now"
+        ),
+        ExpressionAttributeValues={
+            ":total": total_batches,
+            ":remaining": total_batches,
+            ":zero": 0,
+            ":now": now,
+        },
+    )
+    logger.info(f"Initialized batch tracking: {total_batches} batches")
+
     # Publish real-time update if GraphQL endpoint available
     if graphql_endpoint:
         try:
@@ -145,7 +147,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
             # Get filename from tracking table
             response = table.get_item(Key={"document_id": document_id})
-            filename = str(response.get("Item", {}).get("filename", "unknown"))
+            filename = response.get("Item", {}).get("filename") or "unknown"
 
             publish_document_update(
                 graphql_endpoint,
