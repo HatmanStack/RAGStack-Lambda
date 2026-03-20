@@ -3138,6 +3138,10 @@ Resources:
           PROCESS_IMAGE_FUNCTION_ARN: !GetAtt ProcessImageFunction.Arn
           # Ingest to KB function for single document reindexing
           INGEST_TO_KB_FUNCTION_ARN: !GetAtt IngestToKBFunction.Arn
+          # Query KB function for async chat invocation
+          QUERY_KB_FUNCTION_ARN: !GetAtt QueryKBFunction.Arn
+          # Conversation history table for async chat
+          CONVERSATION_TABLE_NAME: !Ref ConversationHistoryTable
           # Demo mode for rate limiting and feature restrictions
           DEMO_MODE: !Ref DemoMode
       Policies:
@@ -3181,6 +3185,14 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt IngestToKBFunction.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt QueryKBFunction.Arn
+        # Conversation history table for async chat
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationHistoryTable
         - Statement:
             - Effect: Allow
               Action:
@@ -3452,9 +3464,18 @@ Resources:
     DependsOn: GraphQLSchema
     Properties:
       ApiId: !GetAtt GraphQLApi.ApiId
-      TypeName: Query
+      TypeName: Mutation
       FieldName: queryKnowledgeBase
-      DataSourceName: !GetAtt KBQueryDataSource.Name
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
+
+  GetConversationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: getConversation
+      DataSourceName: !GetAtt AppSyncLambdaDataSource.Name
 
   SearchKBResolver:
     Type: AWS::AppSync::Resolver
