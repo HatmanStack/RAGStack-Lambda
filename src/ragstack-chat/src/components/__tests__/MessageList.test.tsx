@@ -118,4 +118,25 @@ describe('MessageList', () => {
     expect(screen.queryByText(/start a conversation/i)).not.toBeInTheDocument();
     expect(screen.getByText('Assistant is typing')).toBeInTheDocument();
   });
+
+  it('does NOT show slow response message when isLoading=true and isSlowResponse=false', () => {
+    render(<MessageList messages={sampleMessages} isLoading={true} isSlowResponse={false} showSources={true} />);
+
+    expect(screen.getByText('Assistant is typing')).toBeInTheDocument();
+    expect(screen.queryByText('Taking longer than usual...')).not.toBeInTheDocument();
+  });
+
+  it('shows slow response message when isLoading=true and isSlowResponse=true', () => {
+    render(<MessageList messages={sampleMessages} isLoading={true} isSlowResponse={true} showSources={true} />);
+
+    expect(screen.getByText('Assistant is typing')).toBeInTheDocument();
+    expect(screen.getByText('Taking longer than usual...')).toBeInTheDocument();
+  });
+
+  it('does NOT show slow response message when isLoading=false regardless of isSlowResponse', () => {
+    render(<MessageList messages={sampleMessages} isLoading={false} isSlowResponse={true} showSources={true} />);
+
+    expect(screen.queryByText('Assistant is typing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Taking longer than usual...')).not.toBeInTheDocument();
+  });
 });
