@@ -3455,20 +3455,21 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
-      Runtime:
-        Name: APPSYNC_JS
-        RuntimeVersion: 1.0.0
-      Code: |
-        export function request(ctx) {
-          return {
-            operation: 'Invoke',
-            payload: ctx,
-            invocationTimeoutMs: 90000
-          };
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "Invoke",
+          "invocationTimeoutMs": 90000,
+          "payload": {
+            "arguments": $util.toJson($context.arguments),
+            "identity": $util.toJson($context.identity),
+            "source": $util.toJson($context.source),
+            "request": $util.toJson($context.request),
+            "info": $util.toJson($context.info)
+          }
         }
-        export function response(ctx) {
-          return ctx.result;
-        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
 
   SearchKBResolver:
     Type: AWS::AppSync::Resolver
