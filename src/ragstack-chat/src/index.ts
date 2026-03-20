@@ -15,7 +15,6 @@
  * export function MyApp() {
  *   return (
  *     <ChatWithSources
- *       conversationId="my-chat"
  *       headerText="Ask a Question"
  *     />
  *   );
@@ -50,6 +49,7 @@ export {
   getOrCreateConversationId,
   clearConversationId,
   resetConversationId,
+  isValidConversationId,
 } from './utils/conversationId';
 
 // Version - will be updated by build process

@@ -3467,13 +3467,22 @@ def get_conversation(args: dict[str, Any]) -> dict[str, Any]:
         requesting_user_id = identity.get("sub") or identity.get("username")
 
     table = dynamodb.Table(conv_table_name)
-    response = table.query(
-        KeyConditionExpression=Key("conversationId").eq(conversation_id),
-        ScanIndexForward=True,  # Chronological order
-    )
+
+    # Paginate to handle conversations exceeding DynamoDB's 1 MB page limit
+    all_items: list[dict[str, Any]] = []
+    query_kwargs: dict[str, Any] = {
+        "KeyConditionExpression": Key("conversationId").eq(conversation_id),
+        "ScanIndexForward": True,
+    }
+    while True:
+        response = table.query(**query_kwargs)
+        all_items.extend(response.get("Items", []))
+        if "LastEvaluatedKey" not in response:
+            break
+        query_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
     turns = []
-    for item in response.get("Items", []):
+    for item in all_items:
         # Verify ownership: if the turn has a userId, deny access to
         # unauthenticated callers or callers whose id doesn't match
         item_user_id = item.get("userId")

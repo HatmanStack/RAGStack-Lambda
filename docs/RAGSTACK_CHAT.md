@@ -59,7 +59,6 @@ import { ChatWithSources } from '@ragstack/ragstack-chat';
 export function App() {
   return (
     <ChatWithSources
-      conversationId="main"
       headerText="Document Q&A"
     />
   );
@@ -72,7 +71,7 @@ export function App() {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `conversationId` | string | `"default"` | Unique conversation ID |
+| `conversationId` | string (UUID) | auto-generated | Unique conversation ID (must be a valid UUID v4; auto-generated if omitted or invalid) |
 | `headerText` | string | `"Document Q&A"` | Header title |
 | `headerSubtitle` | string | `"Ask questions about your documents"` | Header subtitle |
 | `inputPlaceholder` | string | `"Ask a question..."` | Input field placeholder |
@@ -314,7 +313,6 @@ Use the component in any framework via Web Components:
 <script src="https://your-cdn.com/ragstack-chat.js"></script>
 
 <ragstack-chat
-  conversation-id="my-chat"
   header-text="Ask a Question"
   show-sources="true"
 ></ragstack-chat>

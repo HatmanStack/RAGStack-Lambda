@@ -108,52 +108,73 @@ Query Knowledge Base with multi-turn chat context.
 
 **Auth:** IAM (unauthenticated web component), API key, Cognito
 
-**GraphQL:**
+**GraphQL (async mutation + polling):**
+
+Step 1: Send the chat mutation (returns immediately with PENDING status):
 ```graphql
-query QueryKnowledgeBase($query: String!, $conversationId: String) {
-  queryKnowledgeBase(query: $query, conversationId: $conversationId) {
-    answer
+mutation QueryKnowledgeBase($query: String!, $conversationId: ID!, $requestId: ID!) {
+  queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) {
     conversationId
-    sources {
-      documentId
-      pageNumber
-      s3Uri
-      snippet
-      documentUrl
-      documentAccessAllowed
-      score
-      filename
-      isScraped
-      sourceUrl
-      isImage
-      thumbnailUrl
-      caption
-      isMedia
-      isSegment
-      segmentUrl
-      mediaType
-      contentType
-      timestampStart
-      timestampEnd
-      timestampDisplay
-      speaker
-      segmentIndex
-    }
-    filterApplied
+    requestId
+    status
   }
 }
 ```
 
-**curl:**
+Step 2: Poll for the result:
+```graphql
+query GetConversation($conversationId: ID!) {
+  getConversation(conversationId: $conversationId) {
+    conversationId
+    turns {
+      turnNumber
+      requestId
+      status
+      userMessage
+      assistantResponse
+      sources {
+        documentId
+        pageNumber
+        s3Uri
+        snippet
+        documentUrl
+        documentAccessAllowed
+        score
+        filename
+        isScraped
+        sourceUrl
+        isImage
+        isMedia
+        isSegment
+        segmentUrl
+        mediaType
+        contentType
+        timestampStart
+        timestampEnd
+        timestampDisplay
+        speaker
+      }
+      error
+      createdAt
+    }
+  }
+}
+```
+
+Poll until the turn matching your `requestId` has `status: "COMPLETED"` or `status: "ERROR"`.
+
+**curl (send mutation):**
 ```bash
 curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
   -H 'x-api-key: YOUR_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": "query($query: String!, $conversationId: String) { queryKnowledgeBase(query: $query, conversationId: $conversationId) { answer conversationId sources { filename snippet score } } }",
-    "variables": {"query": "What is RAGStack?", "conversationId": "session-123"}
+    "query": "mutation($query: String!, $conversationId: ID!, $requestId: ID!) { queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) { conversationId requestId status } }",
+    "variables": {"query": "What is RAGStack?", "conversationId": "550e8400-e29b-41d4-a716-446655440000", "requestId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"}
   }'
 ```
+
+> **Note:** `conversationId` and `requestId` must be valid UUID v4 strings.
 
 ---
 

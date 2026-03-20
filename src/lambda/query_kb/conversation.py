@@ -53,13 +53,13 @@ def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
             KeyConditionExpression=Key("conversationId").eq(conversation_id),
             FilterExpression=Attr("status").ne("PENDING") | Attr("status").not_exists(),
             ScanIndexForward=False,  # Descending order (newest first)
-            Limit=MAX_HISTORY_TURNS,
             ProjectionExpression="turnNumber, userMessage, assistantResponse, #s",
             ExpressionAttributeNames={"#s": "status"},
         )
 
-        # Reverse to chronological order and convert Decimal to int
-        items: list[dict[str, Any]] = response.get("Items", [])
+        # Trim to MAX_HISTORY_TURNS after filtering (Limit caps scanned rows,
+        # not returned rows, so filtering + Limit can return fewer than expected)
+        items: list[dict[str, Any]] = response.get("Items", [])[:MAX_HISTORY_TURNS]
         for item in items:
             if "turnNumber" in item and isinstance(item["turnNumber"], Decimal):
                 item["turnNumber"] = int(item["turnNumber"])
@@ -76,6 +76,7 @@ def store_conversation_turn(
     user_message: str,
     assistant_response: str,
     sources: list[SourceInfo],
+    user_id: str | None = None,
 ) -> None:
     """
     Store a conversation turn in DynamoDB.
@@ -86,6 +87,7 @@ def store_conversation_turn(
         user_message (str): The user's original query
         assistant_response (str): The assistant's response
         sources (list): The source documents used
+        user_id (str | None): The user ID for ownership scoping
     """
     conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
     if not conversation_table_name or not conversation_id:
@@ -96,18 +98,21 @@ def store_conversation_turn(
     # Calculate TTL (14 days from now)
     ttl = int(datetime.now(UTC).timestamp()) + (CONVERSATION_TTL_DAYS * 86400)
 
+    item: dict[str, Any] = {
+        "conversationId": conversation_id,
+        "turnNumber": turn_number,
+        "userMessage": user_message,
+        "assistantResponse": assistant_response,
+        "sources": json.dumps(sources),  # Store as JSON string
+        "status": "COMPLETED",
+        "createdAt": datetime.now(UTC).isoformat(),
+        "ttl": ttl,
+    }
+    if user_id:
+        item["userId"] = user_id
+
     try:
-        table.put_item(
-            Item={
-                "conversationId": conversation_id,
-                "turnNumber": turn_number,
-                "userMessage": user_message,
-                "assistantResponse": assistant_response,
-                "sources": json.dumps(sources),  # Store as JSON string
-                "createdAt": datetime.now(UTC).isoformat(),
-                "ttl": ttl,
-            }
-        )
+        table.put_item(Item=item)
         logger.info(f"Stored turn {turn_number} for conversation {conversation_id[:8]}...")
     except ClientError as e:
         logger.error(f"Failed to store conversation turn: {e}")

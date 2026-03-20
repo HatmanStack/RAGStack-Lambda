@@ -694,6 +694,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                     user_message=query,  # Store original query, not enhanced
                     assistant_response=answer,
                     sources=sources,
+                    user_id=user_id,
                 )
 
         # Include filter info in response if a filter was generated
