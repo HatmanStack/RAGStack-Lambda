@@ -160,6 +160,12 @@ METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN"
 # Process image function for submitImage
 PROCESS_IMAGE_FUNCTION_ARN = os.environ.get("PROCESS_IMAGE_FUNCTION_ARN")
 
+# Query KB function for async chat invocation
+QUERY_KB_FUNCTION_ARN = os.environ.get("QUERY_KB_FUNCTION_ARN")
+
+# Conversation history table for async chat
+CONVERSATION_TABLE_NAME = os.environ.get("CONVERSATION_TABLE_NAME")
+
 # Metadata key library table (optional)
 METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
 
@@ -240,6 +246,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
         "startScrape": "scrape",
         "checkScrapeUrl": "scrape",
         "cancelScrape": "scrape",
+        "queryKnowledgeBase": "chat",
     }
 
     if field_name in access_requirements:
@@ -281,6 +288,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
         "deleteMetadataKey": delete_metadata_key,
         # KB Reindex
         "startReindex": start_reindex,
+        # Async chat
+        "queryKnowledgeBase": query_knowledge_base,
+        "getConversation": get_conversation,
     }
 
     resolver = resolvers.get(field_name)
@@ -3286,3 +3296,145 @@ def start_reindex(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Unexpected error starting reindex: {e}")
         raise ValueError(f"Failed to start reindex: {str(e)}") from e
+
+
+# =========================================================================
+# Async Chat Resolvers
+# =========================================================================
+
+
+def query_knowledge_base(args: dict[str, Any]) -> dict[str, Any]:
+    """
+    Async mutation resolver: validate input, write PENDING record, async-invoke QueryKBFunction.
+
+    Args:
+        args: GraphQL arguments with query, conversationId, requestId
+
+    Returns:
+        ChatRequest dict with conversationId, requestId, status="PENDING"
+    """
+    from boto3.dynamodb.conditions import Key
+
+    # Validate required arguments
+    query = args.get("query", "")
+    conversation_id = args.get("conversationId", "")
+    request_id = args.get("requestId", "")
+
+    if not query or not query.strip():
+        raise ValueError("Missing required argument: query")
+    if not conversation_id or not conversation_id.strip():
+        raise ValueError("Missing required argument: conversationId")
+    if not request_id or not request_id.strip():
+        raise ValueError("Missing required argument: requestId")
+    if len(query) > 10000:
+        raise ValueError("Query exceeds maximum length of 10000 characters")
+
+    try:
+        # Write PENDING record to ConversationHistoryTable
+        table = dynamodb.Table(CONVERSATION_TABLE_NAME)
+
+        # Determine turn number by querying existing turns
+        response = table.query(
+            KeyConditionExpression=Key("conversationId").eq(conversation_id),
+            ScanIndexForward=False,
+            Limit=1,
+            ProjectionExpression="turnNumber",
+        )
+        existing_items = response.get("Items", [])
+        next_turn = int(existing_items[0]["turnNumber"]) + 1 if existing_items else 1
+
+        ttl = int(datetime.now(UTC).timestamp()) + (14 * 86400)  # 14 day TTL
+
+        table.put_item(
+            Item={
+                "conversationId": conversation_id,
+                "turnNumber": next_turn,
+                "requestId": request_id,
+                "status": "PENDING",
+                "userMessage": query,
+                "assistantResponse": "",
+                "sources": "[]",
+                "createdAt": datetime.now(UTC).isoformat(),
+                "ttl": ttl,
+            }
+        )
+
+        # Async-invoke QueryKBFunction
+        invoke_event = {
+            "arguments": {
+                "query": query,
+                "conversationId": conversation_id,
+            },
+            "requestId": request_id,
+            "turnNumber": next_turn,
+            "identity": _current_event.get("identity") if _current_event else None,
+            "asyncInvocation": True,
+        }
+        lambda_client.invoke(
+            FunctionName=QUERY_KB_FUNCTION_ARN,
+            InvocationType="Event",
+            Payload=json.dumps(invoke_event).encode(),
+        )
+
+        return {
+            "conversationId": conversation_id,
+            "requestId": request_id,
+            "status": "PENDING",
+        }
+
+    except (ClientError, Exception) as e:
+        if isinstance(e, ValueError):
+            raise
+        logger.error(f"Failed to process queryKnowledgeBase mutation: {e}")
+        raise ValueError("Failed to submit chat query. Please try again.") from e
+
+
+def get_conversation(args: dict[str, Any]) -> dict[str, Any]:
+    """
+    Query resolver: read all turns for a conversationId from ConversationHistoryTable.
+
+    Args:
+        args: GraphQL arguments with conversationId
+
+    Returns:
+        Conversation dict with conversationId and turns array
+    """
+    from boto3.dynamodb.conditions import Key
+
+    conversation_id = args.get("conversationId", "")
+    if not conversation_id or not conversation_id.strip():
+        raise ValueError("Missing required argument: conversationId")
+
+    table = dynamodb.Table(CONVERSATION_TABLE_NAME)
+    response = table.query(
+        KeyConditionExpression=Key("conversationId").eq(conversation_id),
+        ScanIndexForward=True,  # Chronological order
+    )
+
+    turns = []
+    for item in response.get("Items", []):
+        turn: dict[str, Any] = {
+            "turnNumber": int(item["turnNumber"]),
+            "requestId": item.get("requestId"),
+            "status": item.get("status", "COMPLETED"),  # Legacy turns without status are COMPLETED
+            "userMessage": item.get("userMessage", ""),
+            "assistantResponse": item.get("assistantResponse"),
+            "sources": None,
+            "error": item.get("errorMessage"),
+            "createdAt": item.get("createdAt", ""),
+        }
+        # Parse sources from JSON string to list
+        sources_json = item.get("sources", "[]")
+        if sources_json and sources_json != "[]":
+            try:
+                turn["sources"] = json.loads(sources_json)
+            except (json.JSONDecodeError, TypeError):
+                turn["sources"] = []
+        else:
+            turn["sources"] = []
+        turns.append(turn)
+
+    return {
+        "conversationId": conversation_id,
+        "turns": turns,
+    }
