@@ -55,8 +55,6 @@ export interface ChatMessage {
   timestamp: string;
   /** Model used to generate response (for quota tracking) */
   modelUsed?: string;
-  /** Whether this response took longer than the slow threshold */
-  isSlowResponse?: boolean;
 }
 
 /**

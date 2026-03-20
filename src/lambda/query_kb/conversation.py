@@ -47,11 +47,15 @@ def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
     table = dynamodb.Table(conversation_table_name)
 
     try:
+        from boto3.dynamodb.conditions import Attr
+
         response = table.query(
             KeyConditionExpression=Key("conversationId").eq(conversation_id),
+            FilterExpression=Attr("status").ne("PENDING") | Attr("status").not_exists(),
             ScanIndexForward=False,  # Descending order (newest first)
             Limit=MAX_HISTORY_TURNS,
-            ProjectionExpression="turnNumber, userMessage, assistantResponse",
+            ProjectionExpression="turnNumber, userMessage, assistantResponse, #s",
+            ExpressionAttributeNames={"#s": "status"},
         )
 
         # Reverse to chronological order and convert Decimal to int

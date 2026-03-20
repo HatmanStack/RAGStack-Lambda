@@ -70,9 +70,11 @@ const GET_CONVERSATION_QUERY = `
 `;
 
 // Polling configuration
-const POLL_INTERVAL_MS = 2000;      // Poll every 2 seconds
-const SLOW_THRESHOLD_MS = 30000;    // "Still working" after 30s
-const HARD_TIMEOUT_MS = 90000;      // Hard timeout at 90s
+const POLL_INTERVAL_INITIAL_MS = 1000;  // Start polling at 1s
+const POLL_INTERVAL_MAX_MS = 5000;      // Cap at 5s
+const SLOW_THRESHOLD_MS = 30000;        // "Still working" after 30s
+const HARD_TIMEOUT_MS = 90000;          // Hard timeout at 90s
+const MAX_CONSECUTIVE_POLL_FAILURES = 5; // Surface error after N consecutive poll failures
 
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
@@ -122,6 +124,7 @@ async function pollForResult(
   conversationId: string,
   requestId: string,
   onSlowThreshold: () => void,
+  signal?: AbortSignal,
 ): Promise<{
   answer: string;
   sources: Array<{
@@ -155,9 +158,15 @@ async function pollForResult(
 
   const startTime = Date.now();
   let slowNotified = false;
+  let consecutiveFailures = 0;
+  let pollInterval = POLL_INTERVAL_INITIAL_MS;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    if (signal?.aborted) {
+      throw new DOMException('Polling aborted', 'AbortError');
+    }
+
     const elapsed = Date.now() - startTime;
 
     // Hard timeout
@@ -177,8 +186,11 @@ async function pollForResult(
       variables: { conversationId },
     });
 
-    const response = await iamFetch(config.apiEndpoint, body, config.identityPoolId, config.region);
+    const response = await iamFetch(
+      config.apiEndpoint, body, config.identityPoolId, config.region, signal
+    );
     if (response.ok) {
+      consecutiveFailures = 0;
       const result = await response.json();
       const conversation = result.data?.getConversation;
 
@@ -203,11 +215,20 @@ async function pollForResult(
           // PENDING - continue polling
         }
       }
+    } else {
+      consecutiveFailures++;
+      // Surface persistent non-transient errors (4xx) immediately
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(`Server error (HTTP ${response.status}). Please try again.`);
+      }
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        throw new Error(`Unable to reach server after ${consecutiveFailures} attempts. Please try again.`);
+      }
     }
-    // If poll request fails, continue polling (transient error)
 
-    // Wait before next poll
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    // Wait with step backoff before next poll
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    pollInterval = Math.min(pollInterval * 1.5, POLL_INTERVAL_MAX_MS);
   }
 }
 
@@ -241,6 +262,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Use ref to track retry count to avoid stale closure issues in handleSend
   const retryCountRef = useRef(0);
+
+  // AbortController ref to cancel in-flight polling on unmount or new send
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Stable refs for optional callbacks to avoid stale closures without triggering re-renders
+  const onSendMessageRef = useRef(onSendMessage);
+  const onResponseReceivedRef = useRef(onResponseReceived);
+  onSendMessageRef.current = onSendMessage;
+  onResponseReceivedRef.current = onResponseReceived;
+
+  // Abort polling on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // SessionStorage key with userId and conversationId for isolation
   const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
@@ -292,14 +329,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
 
       // Call onSendMessage callback if provided
-      if (onSendMessage) {
-        onSendMessage(messageText, conversationId);
+      if (onSendMessageRef.current) {
+        onSendMessageRef.current(messageText, conversationId);
       }
 
       // Set loading state
       setIsLoading(true);
       setError(null);
       setIsSlowResponse(false);
+
+      // Abort any in-flight polling from a previous send
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       try {
         // Generate a unique requestId for this message
@@ -313,6 +355,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           conversationId,
           requestId,
           () => setIsSlowResponse(true),
+          controller.signal,
         );
 
         // Map sources to the format expected by the UI
@@ -354,10 +397,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         retryCountRef.current = 0;
 
         // Call onResponseReceived callback if provided
-        if (onResponseReceived) {
-          onResponseReceived(assistantMessage);
+        if (onResponseReceivedRef.current) {
+          onResponseReceivedRef.current(assistantMessage);
         }
       } catch (err) {
+        // Silently ignore aborted requests (unmount or new send replacing old one)
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
         // Error classification and handling
         console.error('[RagStackChat] Query error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -416,9 +464,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setIsSlowResponse(false);
       }
     },
-    // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
-    // to prevent handleSend recreation when parent passes new callback references.
-    // These are optional side-effect callbacks that don't affect core functionality.
+    // Callbacks accessed via refs (onSendMessageRef, onResponseReceivedRef) — always current.
     // retryCountRef is a ref and doesn't need to be in deps.
     [conversationId]
   );

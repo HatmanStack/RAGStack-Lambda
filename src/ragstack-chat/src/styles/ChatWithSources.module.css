@@ -265,7 +265,7 @@
 .slowResponseMessage {
   font-size: 0.8rem;
   color: var(--chat-color-text-secondary, #666);
-  margin-top: 4px;
+  margin-top: var(--chat-spacing-xs, 4px);
   text-align: center;
 }
 
