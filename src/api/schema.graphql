@@ -7,10 +7,8 @@ type Query {
   # List all documents (returns all items, no pagination)
   listDocuments: DocumentConnection @aws_api_key @aws_cognito_user_pools
 
-  # Query Knowledge Base with optional conversation ID for multi-turn chat
-  # Note: sessionId is deprecated, use conversationId instead
-  # Accessible via IAM (unauthenticated web component), API key (server-side), or Cognito (admin UI)
-  queryKnowledgeBase(query: String!, sessionId: String, conversationId: String): ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools
+  # Get conversation history by ID (used for polling async chat results)
+  getConversation(conversationId: ID!): Conversation @aws_iam @aws_api_key @aws_cognito_user_pools
 
   # Search Knowledge Base and return raw vector search results
   # Accessible via IAM (unauthenticated), API key (server-side), or Cognito (admin UI)
@@ -54,6 +52,9 @@ type Query {
 }
 
 type Mutation {
+  # Send a chat query to Knowledge Base (async - returns immediately, poll getConversation for result)
+  queryKnowledgeBase(query: String!, conversationId: ID!, requestId: ID!): ChatRequest @aws_iam @aws_api_key @aws_cognito_user_pools
+
   # Create presigned URL for document upload
   # Accessible via API key for external integrations, or Cognito for admin UI
   createUploadUrl(filename: String!): UploadUrl @aws_iam @aws_api_key @aws_cognito_user_pools
@@ -321,15 +322,36 @@ type UploadUrl @aws_api_key @aws_cognito_user_pools {
   fields: AWSJSON
 }
 
-# Chat response with conversation support for multi-turn context
-type ChatResponse @aws_iam @aws_api_key @aws_cognito_user_pools {
-  answer: String!
-  sessionId: String  # Deprecated, use conversationId
-  conversationId: String
-  sources: [Source!]!
+# Acknowledgment returned immediately from queryKnowledgeBase mutation
+type ChatRequest @aws_iam @aws_api_key @aws_cognito_user_pools {
+  conversationId: ID!
+  requestId: ID!
+  status: ChatStatus!
+}
+
+# Status of an individual chat turn
+enum ChatStatus {
+  PENDING
+  COMPLETED
+  ERROR
+}
+
+# A single conversation turn (message + response pair)
+type ConversationTurn @aws_iam @aws_api_key @aws_cognito_user_pools {
+  turnNumber: Int!
+  requestId: ID
+  status: ChatStatus!
+  userMessage: String!
+  assistantResponse: String
+  sources: [Source!]
   error: String
-  # Filter applied during retrieval (JSON string, null if no filter)
-  filterApplied: String
+  createdAt: String!
+}
+
+# Full conversation with all turns
+type Conversation @aws_iam @aws_api_key @aws_cognito_user_pools {
+  conversationId: ID!
+  turns: [ConversationTurn!]!
 }
 
 # Source citation from Knowledge Base retrieval

@@ -47,15 +47,28 @@ def get_conversation_history(conversation_id: str) -> list[dict[str, Any]]:
     table = dynamodb.Table(conversation_table_name)
 
     try:
-        response = table.query(
-            KeyConditionExpression=Key("conversationId").eq(conversation_id),
-            ScanIndexForward=False,  # Descending order (newest first)
-            Limit=MAX_HISTORY_TURNS,
-            ProjectionExpression="turnNumber, userMessage, assistantResponse",
-        )
+        from boto3.dynamodb.conditions import Attr
 
-        # Reverse to chronological order and convert Decimal to int
-        items: list[dict[str, Any]] = response.get("Items", [])
+        # Paginate to collect enough completed turns, stopping early once we
+        # have MAX_HISTORY_TURNS to avoid unnecessary reads.
+        all_items: list[dict[str, Any]] = []
+        query_kwargs: dict[str, Any] = {
+            "KeyConditionExpression": Key("conversationId").eq(conversation_id),
+            "FilterExpression": Attr("status").ne("PENDING") | Attr("status").not_exists(),
+            "ScanIndexForward": False,  # Descending order (newest first)
+            "ProjectionExpression": "turnNumber, userMessage, assistantResponse, #s",
+            "ExpressionAttributeNames": {"#s": "status"},
+        }
+        while True:
+            response = table.query(**query_kwargs)
+            all_items.extend(response.get("Items", []))
+            if len(all_items) >= MAX_HISTORY_TURNS:
+                break
+            if "LastEvaluatedKey" not in response:
+                break
+            query_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
+        items = all_items[:MAX_HISTORY_TURNS]
         for item in items:
             if "turnNumber" in item and isinstance(item["turnNumber"], Decimal):
                 item["turnNumber"] = int(item["turnNumber"])
@@ -72,6 +85,7 @@ def store_conversation_turn(
     user_message: str,
     assistant_response: str,
     sources: list[SourceInfo],
+    user_id: str | None = None,
 ) -> None:
     """
     Store a conversation turn in DynamoDB.
@@ -82,6 +96,7 @@ def store_conversation_turn(
         user_message (str): The user's original query
         assistant_response (str): The assistant's response
         sources (list): The source documents used
+        user_id (str | None): The user ID for ownership scoping
     """
     conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
     if not conversation_table_name or not conversation_id:
@@ -92,18 +107,88 @@ def store_conversation_turn(
     # Calculate TTL (14 days from now)
     ttl = int(datetime.now(UTC).timestamp()) + (CONVERSATION_TTL_DAYS * 86400)
 
+    item: dict[str, Any] = {
+        "conversationId": conversation_id,
+        "turnNumber": turn_number,
+        "userMessage": user_message,
+        "assistantResponse": assistant_response,
+        "sources": json.dumps(sources),  # Store as JSON string
+        "status": "COMPLETED",
+        "createdAt": datetime.now(UTC).isoformat(),
+        "ttl": ttl,
+    }
+    if user_id:
+        item["userId"] = user_id
+
     try:
         table.put_item(
-            Item={
-                "conversationId": conversation_id,
-                "turnNumber": turn_number,
-                "userMessage": user_message,
-                "assistantResponse": assistant_response,
-                "sources": json.dumps(sources),  # Store as JSON string
-                "createdAt": datetime.now(UTC).isoformat(),
-                "ttl": ttl,
-            }
+            Item=item,
+            ConditionExpression="attribute_not_exists(turnNumber)",
         )
         logger.info(f"Stored turn {turn_number} for conversation {conversation_id[:8]}...")
     except ClientError as e:
-        logger.error(f"Failed to store conversation turn: {e}")
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(
+                f"Turn {turn_number} already exists for {conversation_id[:8]}..., skipping"
+            )
+        else:
+            logger.error(f"Failed to store conversation turn: {e}")
+
+
+def update_conversation_turn(
+    conversation_id: str,
+    turn_number: int,
+    status: str,
+    assistant_response: str = "",
+    sources: list[SourceInfo] | None = None,
+    error_message: str | None = None,
+) -> None:
+    """
+    Update an existing conversation turn with the async result.
+
+    Args:
+        conversation_id: The conversation ID
+        turn_number: The turn number to update
+        status: "COMPLETED" or "ERROR"
+        assistant_response: The assistant's response (for COMPLETED)
+        sources: The source documents used (for COMPLETED)
+        error_message: Error details (for ERROR)
+    """
+    conversation_table_name = os.environ.get("CONVERSATION_TABLE_NAME")
+    if not conversation_table_name or not conversation_id:
+        return
+
+    table = dynamodb.Table(conversation_table_name)
+
+    update_expr = "SET #status = :status, assistantResponse = :response, sources = :sources"
+    expr_values: dict[str, Any] = {
+        ":status": status,
+        ":response": assistant_response,
+        ":sources": json.dumps(sources or []),
+    }
+    expr_names = {"#status": "status"}
+
+    if error_message:
+        update_expr += ", errorMessage = :error"
+        expr_values[":error"] = error_message
+
+    try:
+        table.update_item(
+            Key={
+                "conversationId": conversation_id,
+                "turnNumber": turn_number,
+            },
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues={**expr_values, ":pending": "PENDING"},
+            ExpressionAttributeNames=expr_names,
+            ConditionExpression="attribute_exists(conversationId) AND #status = :pending",
+        )
+        logger.info(f"Updated turn {turn_number} for {conversation_id[:8]}... to {status}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(
+                f"Turn {turn_number} for {conversation_id[:8]}... "
+                f"not found or not PENDING, skipping update to {status}"
+            )
+        else:
+            logger.error(f"Failed to update conversation turn: {e}")

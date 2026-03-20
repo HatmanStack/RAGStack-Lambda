@@ -13,38 +13,68 @@ import { fetchCDNConfig } from '../utils/fetchCDNConfig';
 import { iamFetch } from '../utils/iamAuth';
 import styles from '../styles/ChatWithSources.module.css';
 
-// GraphQL query for SAM AppSync queryKnowledgeBase
-const QUERY_KB_QUERY = `
-  query QueryKnowledgeBase($query: String!, $conversationId: String) {
-    queryKnowledgeBase(query: $query, conversationId: $conversationId) {
-      answer
+/** Generate a UUID v4 using crypto API */
+function generateRequestId(): string {
+  return crypto.randomUUID();
+}
+
+// GraphQL mutation for async chat query
+const QUERY_KB_MUTATION = `
+  mutation QueryKnowledgeBase($query: String!, $conversationId: ID!, $requestId: ID!) {
+    queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) {
       conversationId
-      sources {
-        documentId
-        pageNumber
-        s3Uri
-        snippet
-        documentUrl
-        documentAccessAllowed
-        score
-        filename
-        isMedia
-        isSegment
-        segmentUrl
-        mediaType
-        contentType
-        timestampStart
-        timestampEnd
-        timestampDisplay
-        speaker
-        isImage
-        isScraped
-        sourceUrl
-      }
-      error
+      requestId
+      status
     }
   }
 `;
+
+// GraphQL query for polling conversation results
+const GET_CONVERSATION_QUERY = `
+  query GetConversation($conversationId: ID!) {
+    getConversation(conversationId: $conversationId) {
+      conversationId
+      turns {
+        turnNumber
+        requestId
+        status
+        userMessage
+        assistantResponse
+        sources {
+          documentId
+          pageNumber
+          s3Uri
+          snippet
+          documentUrl
+          documentAccessAllowed
+          score
+          filename
+          isMedia
+          isSegment
+          segmentUrl
+          mediaType
+          contentType
+          timestampStart
+          timestampEnd
+          timestampDisplay
+          speaker
+          isImage
+          isScraped
+          sourceUrl
+        }
+        error
+        createdAt
+      }
+    }
+  }
+`;
+
+// Polling configuration
+const POLL_INTERVAL_INITIAL_MS = 1000;  // Start polling at 1s
+const POLL_INTERVAL_MAX_MS = 5000;      // Cap at 5s
+const SLOW_THRESHOLD_MS = 30000;        // "Still working" after 30s
+const HARD_TIMEOUT_MS = 90000;          // Hard timeout at 90s
+const MAX_CONSECUTIVE_POLL_FAILURES = 5; // Surface error after N consecutive poll failures
 
 // Message limit to prevent sessionStorage quota exceeded (module scope constant)
 const MESSAGE_LIMIT = 50;
@@ -53,15 +83,50 @@ const MESSAGE_LIMIT = 50;
 const MAX_RETRIES = 3;
 
 /**
- * Query SAM AppSync API using IAM authentication
- * Gets API endpoint and Identity Pool ID from config.json at runtime
+ * Send async chat mutation
  */
-async function queryKnowledgeBase(
+async function sendChatMutation(
   message: string,
-  conversationId: string
+  conversationId: string,
+  requestId: string,
+): Promise<{ conversationId: string; requestId: string; status: string }> {
+  const config = await fetchCDNConfig();
+  if (!config?.apiEndpoint || !config?.identityPoolId || !config?.region) {
+    throw new Error('API endpoint not available. Please check your configuration.');
+  }
+
+  const body = JSON.stringify({
+    query: QUERY_KB_MUTATION,
+    variables: { query: message, conversationId, requestId },
+  });
+
+  const response = await iamFetch(config.apiEndpoint, body, config.identityPoolId, config.region);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  if (result.errors?.length > 0) {
+    throw new Error(result.errors[0].message);
+  }
+
+  if (!result.data?.queryKnowledgeBase) {
+    throw new Error('No response data received');
+  }
+
+  return result.data.queryKnowledgeBase;
+}
+
+/**
+ * Poll getConversation for a specific requestId's result
+ */
+async function pollForResult(
+  conversationId: string,
+  requestId: string,
+  onSlowThreshold: () => void,
+  signal?: AbortSignal,
 ): Promise<{
   answer: string;
-  conversationId: string | null;
   sources: Array<{
     documentId: string;
     pageNumber?: number;
@@ -87,47 +152,84 @@ async function queryKnowledgeBase(
   error?: string;
 }> {
   const config = await fetchCDNConfig();
-
   if (!config?.apiEndpoint || !config?.identityPoolId || !config?.region) {
-    throw new Error('API endpoint not available. Please check your configuration.');
+    throw new Error('API endpoint not available.');
   }
 
-  const body = JSON.stringify({
-    query: QUERY_KB_QUERY,
-    variables: {
-      query: message,
-      conversationId: conversationId,
-    },
-  });
+  const startTime = Date.now();
+  let slowNotified = false;
+  let consecutiveFailures = 0;
+  let pollInterval = POLL_INTERVAL_INITIAL_MS;
 
-  const response = await iamFetch(
-    config.apiEndpoint,
-    body,
-    config.identityPoolId,
-    config.region
-  );
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException('Polling aborted', 'AbortError');
+    }
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const elapsed = Date.now() - startTime;
+
+    // Hard timeout
+    if (elapsed > HARD_TIMEOUT_MS) {
+      throw new Error('Response timed out. The query may still be processing. Please try again.');
+    }
+
+    // Slow threshold notification
+    if (!slowNotified && elapsed > SLOW_THRESHOLD_MS) {
+      slowNotified = true;
+      onSlowThreshold();
+    }
+
+    // Poll
+    const body = JSON.stringify({
+      query: GET_CONVERSATION_QUERY,
+      variables: { conversationId },
+    });
+
+    const response = await iamFetch(
+      config.apiEndpoint, body, config.identityPoolId, config.region, signal
+    );
+    if (response.ok) {
+      consecutiveFailures = 0;
+      const result = await response.json();
+      const conversation = result.data?.getConversation;
+
+      if (conversation?.turns) {
+        // Find the turn matching our requestId
+        const matchingTurn = conversation.turns.find(
+          (t: { requestId?: string }) => t.requestId === requestId
+        );
+
+        if (matchingTurn) {
+          if (matchingTurn.status === 'COMPLETED') {
+            return {
+              answer: matchingTurn.assistantResponse || '',
+              sources: matchingTurn.sources || [],
+            };
+          }
+
+          if (matchingTurn.status === 'ERROR') {
+            throw new Error(matchingTurn.error || 'An error occurred processing your query.');
+          }
+
+          // PENDING - continue polling
+        }
+      }
+    } else {
+      consecutiveFailures++;
+      // Surface persistent non-transient errors (4xx) immediately
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(`Server error (HTTP ${response.status}). Please try again.`);
+      }
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        throw new Error(`Unable to reach server after ${consecutiveFailures} attempts. Please try again.`);
+      }
+    }
+
+    // Wait with step backoff before next poll
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    pollInterval = Math.min(pollInterval * 1.5, POLL_INTERVAL_MAX_MS);
   }
-
-  const result = await response.json();
-
-  if (result.errors && result.errors.length > 0) {
-    throw new Error(result.errors[0].message);
-  }
-
-  if (!result.data?.queryKnowledgeBase) {
-    throw new Error('No response data received');
-  }
-
-  const kbResponse = result.data.queryKnowledgeBase;
-
-  if (kbResponse.error) {
-    throw new Error(kbResponse.error);
-  }
-
-  return kbResponse;
 }
 
 /**
@@ -155,10 +257,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSlowResponse, setIsSlowResponse] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
 
   // Use ref to track retry count to avoid stale closure issues in handleSend
   const retryCountRef = useRef(0);
+
+  // AbortController ref to cancel in-flight polling on unmount or new send
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Stable refs for optional callbacks to avoid stale closures without triggering re-renders
+  const onSendMessageRef = useRef(onSendMessage);
+  const onResponseReceivedRef = useRef(onResponseReceived);
+  onSendMessageRef.current = onSendMessage;
+  onResponseReceivedRef.current = onResponseReceived;
+
+  // Abort polling on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // SessionStorage key with userId and conversationId for isolation
   const storageKey = `chat-${userId || 'guest'}-${conversationId}`;
@@ -210,17 +329,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
 
       // Call onSendMessage callback if provided
-      if (onSendMessage) {
-        onSendMessage(messageText, conversationId);
+      if (onSendMessageRef.current) {
+        onSendMessageRef.current(messageText, conversationId);
       }
 
       // Set loading state
       setIsLoading(true);
       setError(null);
+      setIsSlowResponse(false);
+
+      // Abort any in-flight polling from a previous send
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       try {
-        // Call SAM AppSync API directly
-        const response = await queryKnowledgeBase(messageText, conversationId);
+        // Generate a unique requestId for this message
+        const requestId = generateRequestId();
+
+        // Send async mutation
+        await sendChatMutation(messageText, conversationId, requestId);
+
+        // Poll for result
+        const response = await pollForResult(
+          conversationId,
+          requestId,
+          () => setIsSlowResponse(true),
+          controller.signal,
+        );
 
         // Map sources to the format expected by the UI
         const mappedSources = (response.sources || []).map((s) => ({
@@ -261,10 +397,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         retryCountRef.current = 0;
 
         // Call onResponseReceived callback if provided
-        if (onResponseReceived) {
-          onResponseReceived(assistantMessage);
+        if (onResponseReceivedRef.current) {
+          onResponseReceivedRef.current(assistantMessage);
         }
       } catch (err) {
+        // Silently ignore aborted requests (unmount or new send replacing old one)
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
         // Error classification and handling
         console.error('[RagStackChat] Query error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -285,6 +426,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           errorMessage.toLowerCase().includes('quota')
         ) {
           errorType = 'quota';
+          retryable = true;
+        } else if (errorMessage.toLowerCase().includes('timed out')) {
+          errorType = 'network';
           retryable = true;
         } else if (
           errorMessage.toLowerCase().includes('network') ||
@@ -317,11 +461,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         });
       } finally {
         setIsLoading(false);
+        setIsSlowResponse(false);
       }
     },
-    // Note: onSendMessage and onResponseReceived are intentionally excluded from deps
-    // to prevent handleSend recreation when parent passes new callback references.
-    // These are optional side-effect callbacks that don't affect core functionality.
+    // Callbacks accessed via refs (onSendMessageRef, onResponseReceivedRef) — always current.
     // retryCountRef is a ref and doesn't need to be in deps.
     [conversationId]
   );
@@ -337,6 +480,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       <MessageList
         messages={messages}
         isLoading={isLoading}
+        isSlowResponse={isSlowResponse}
         error={error}
         showSources={showSources}
       />

@@ -16,7 +16,6 @@ import { ChatWithSources } from '@ragstack/ragstack-chat';
 export function App() {
   return (
     <ChatWithSources
-      conversationId="my-chat-1"
       headerText="Ask me anything"
       showSources={true}
     />
@@ -42,7 +41,7 @@ Web component includes configuration at build time (zero runtime config).
 
 | Prop | Attribute | Type | Default |
 |------|-----------|------|---------|
-| `conversationId` | `conversation-id` | `string` | `"default"` |
+| `conversationId` | `conversation-id` | `string` (UUID) | auto-generated |
 | `headerText` | `header-text` | `string` | `"Document Q&A"` |
 | `headerSubtitle` | `header-subtitle` | `string` | `""` |
 | `showSources` | `show-sources` | `boolean` | `true` |

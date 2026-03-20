@@ -262,6 +262,13 @@
   animation-delay: 0.4s;
 }
 
+.slowResponseMessage {
+  font-size: 0.8rem;
+  color: var(--chat-color-text-secondary, #666);
+  margin-top: var(--chat-spacing-xs, 4px);
+  text-align: center;
+}
+
 @keyframes loadingDot {
   0%,
   80%,

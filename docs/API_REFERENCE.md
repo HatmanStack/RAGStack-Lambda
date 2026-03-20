@@ -108,52 +108,83 @@ Query Knowledge Base with multi-turn chat context.
 
 **Auth:** IAM (unauthenticated web component), API key, Cognito
 
-**GraphQL:**
+**GraphQL (async mutation + polling):**
+
+Step 1: Send the chat mutation (returns immediately with PENDING status):
 ```graphql
-query QueryKnowledgeBase($query: String!, $conversationId: String) {
-  queryKnowledgeBase(query: $query, conversationId: $conversationId) {
-    answer
+mutation QueryKnowledgeBase($query: String!, $conversationId: ID!, $requestId: ID!) {
+  queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) {
     conversationId
-    sources {
-      documentId
-      pageNumber
-      s3Uri
-      snippet
-      documentUrl
-      documentAccessAllowed
-      score
-      filename
-      isScraped
-      sourceUrl
-      isImage
-      thumbnailUrl
-      caption
-      isMedia
-      isSegment
-      segmentUrl
-      mediaType
-      contentType
-      timestampStart
-      timestampEnd
-      timestampDisplay
-      speaker
-      segmentIndex
-    }
-    filterApplied
+    requestId
+    status
   }
 }
 ```
 
-**curl:**
+Step 2: Poll for the result:
+```graphql
+query GetConversation($conversationId: ID!) {
+  getConversation(conversationId: $conversationId) {
+    conversationId
+    turns {
+      turnNumber
+      requestId
+      status
+      userMessage
+      assistantResponse
+      sources {
+        documentId
+        pageNumber
+        s3Uri
+        snippet
+        documentUrl
+        documentAccessAllowed
+        score
+        filename
+        isScraped
+        sourceUrl
+        isImage
+        isMedia
+        isSegment
+        segmentUrl
+        mediaType
+        contentType
+        timestampStart
+        timestampEnd
+        timestampDisplay
+        speaker
+      }
+      error
+      createdAt
+    }
+  }
+}
+```
+
+Poll until the turn matching your `requestId` has `status: "COMPLETED"` or `status: "ERROR"`.
+
+**`ChatStatus` values:**
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Query accepted, Lambda processing in progress |
+| `COMPLETED` | Response ready — `assistantResponse` and `sources` populated |
+| `ERROR` | Processing failed — check the `error` field for details |
+
+**Polling strategy:** Start polling after ~1 second. Use exponential backoff (multiply interval by 1.5x) with a cap of 5 seconds. Set a hard timeout of 90 seconds. Typical response times are 30–50 seconds depending on query complexity.
+
+**curl (send mutation):**
 ```bash
 curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
   -H 'x-api-key: YOUR_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": "query($query: String!, $conversationId: String) { queryKnowledgeBase(query: $query, conversationId: $conversationId) { answer conversationId sources { filename snippet score } } }",
-    "variables": {"query": "What is RAGStack?", "conversationId": "session-123"}
+    "query": "mutation($query: String!, $conversationId: ID!, $requestId: ID!) { queryKnowledgeBase(query: $query, conversationId: $conversationId, requestId: $requestId) { conversationId requestId status } }",
+    "variables": {"query": "What is RAGStack?", "conversationId": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "requestId": "7c9e6679-7425-40de-944b-e07fc1f90ae7"}
   }'
 ```
+
+> **Note:** `conversationId` and `requestId` must be valid UUID v4 strings.
 
 ---
 

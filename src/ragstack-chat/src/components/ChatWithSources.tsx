@@ -25,7 +25,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { ChatInterface } from './ChatInterface';
 import { ChatWithSourcesProps, ChatMessage } from '../types';
-import { getOrCreateConversationId } from '../utils/conversationId';
+import { getOrCreateConversationId, isValidConversationId } from '../utils/conversationId';
 import styles from '../styles/ChatWithSources.module.css';
 
 /**
@@ -70,7 +70,16 @@ export const ChatWithSources: React.FC<ChatWithSourcesProps> = ({
   // Generate unique conversation ID if not provided
   // This ensures each browser has isolated chat history
   const conversationId = useMemo(() => {
-    return propConversationId || getOrCreateConversationId();
+    if (propConversationId) {
+      if (isValidConversationId(propConversationId)) {
+        return propConversationId;
+      }
+      console.warn(
+        `[RagStackChat] conversationId "${propConversationId}" is not a valid UUID and will be ignored. ` +
+        'A UUID will be generated automatically. Pass a valid UUID v4 or omit the prop.'
+      );
+    }
+    return getOrCreateConversationId();
   }, [propConversationId]);
 
   // Memoize callbacks to prevent unnecessary re-renders
