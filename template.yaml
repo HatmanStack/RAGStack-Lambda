@@ -3455,21 +3455,6 @@ Resources:
       TypeName: Query
       FieldName: queryKnowledgeBase
       DataSourceName: !GetAtt KBQueryDataSource.Name
-      RequestMappingTemplate: |
-        {
-          "version": "2017-02-28",
-          "operation": "Invoke",
-          "invocationTimeoutMs": 90000,
-          "payload": {
-            "arguments": $util.toJson($context.arguments),
-            "identity": $util.toJson($context.identity),
-            "source": $util.toJson($context.source),
-            "request": $util.toJson($context.request),
-            "info": $util.toJson($context.info)
-          }
-        }
-      ResponseMappingTemplate: |
-        $util.toJson($context.result)
 
   SearchKBResolver:
     Type: AWS::AppSync::Resolver
