@@ -208,6 +208,8 @@ All remediation is committed and verified.
 
 ### If unverified
 
+**STOP HERE. Present these options to the user and WAIT for their response. Do NOT choose an option yourself.**
+
 ```text
 Pipeline paused for $ARGUMENTS.
 

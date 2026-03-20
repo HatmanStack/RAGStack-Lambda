@@ -96,12 +96,11 @@ Create the directory.
 </role_prompt>
 
 <task>
-Audit the codebase. Target: [repo path from $ARGUMENTS, or current working directory if empty]
+Audit the codebase in the current working directory.
 Goal: [from Step 1]
 Scope: [from Step 1]
 Existing tooling: [from Step 1]
 Constraints: [from Step 1]
-Additional context from $ARGUMENTS: [any non-path context from $ARGUMENTS, or "none"]
 </task>
 ```
 
