@@ -156,6 +156,7 @@ async function pollForResult(
   const startTime = Date.now();
   let slowNotified = false;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const elapsed = Date.now() - startTime;
 
