@@ -374,6 +374,7 @@ B) Manually resolve and continue
 
 ### Pipeline Integrity
 
+- **NEVER** run tests, linters, builds, or CI yourself — agents handle all validation within their own execution. The orchestrator only spawns agents, reads signals, and routes work.
 - **NEVER** modify source code yourself — only agents do that
 - **NEVER** skip the Plan Reviewer — every plan gets reviewed
 - **NEVER** skip the Code Reviewer — every implementation gets reviewed
