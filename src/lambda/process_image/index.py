@@ -61,9 +61,9 @@ sqs = boto3.client("sqs")
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
 
 # Lazy-initialized singletons
-_key_library = None
-_metadata_extractor = None
-_config_manager = None
+_key_library: KeyLibrary | None = None
+_metadata_extractor: MetadataExtractor | None = None
+_config_manager: ConfigurationManager | None = None
 
 
 def get_config_manager() -> ConfigurationManager | None:
@@ -191,7 +191,7 @@ def extract_image_metadata(
         return {}
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Process image and create files for KB ingestion via StartIngestionJob."""
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
@@ -266,12 +266,12 @@ def lambda_handler(event, context):
                 "message": "auto_process not enabled, waiting for submitImage",
             }
 
-        filename = item.get("filename", "unknown")
-        caption = item.get("caption", "")
+        filename = str(item.get("filename", "unknown"))
+        caption = str(item.get("caption", ""))
         extract_text = item.get("extract_text", False)
 
         # Get actual image S3 URI from tracking record (not from event, which has metadata.json)
-        input_s3_uri = item.get("input_s3_uri", "")
+        input_s3_uri = str(item.get("input_s3_uri", ""))
         if not input_s3_uri:
             raise ValueError(f"No input_s3_uri in tracking record for image: {image_id}")
 
@@ -326,10 +326,10 @@ def lambda_handler(event, context):
         # This prevents KB from incorrectly indexing a standalone metadata.json file
         metadata = {
             "caption": caption,
-            "userCaption": item.get("user_caption", ""),
-            "aiCaption": item.get("ai_caption", ""),
+            "userCaption": str(item.get("user_caption", "")),
+            "aiCaption": str(item.get("ai_caption", "")),
             "filename": filename,
-            "createdAt": item.get("created_at", datetime.now(UTC).isoformat()),
+            "createdAt": str(item.get("created_at", datetime.now(UTC).isoformat())),
         }
 
         # Create caption text file for semantic text search
@@ -540,7 +540,7 @@ def lambda_handler(event, context):
                     publish_image_update(
                         graphql_endpoint,
                         image_id,
-                        item.get("filename", "unknown"),
+                        str(item.get("filename", "unknown")),
                         ImageStatus.FAILED.value,
                         error_message=error_msg,
                     )
@@ -574,7 +574,9 @@ def lambda_handler(event, context):
         raise
 
 
-def build_ingestion_text(image_id: str, filename: str, caption: str, metadata: dict) -> str:
+def build_ingestion_text(
+    image_id: str, filename: str, caption: str, metadata: dict[str, Any]
+) -> str:
     """
     Build text content for KB ingestion with searchable metadata.
 
@@ -712,7 +714,7 @@ def extract_text_from_image(s3_uri: str) -> str:
 
         for block in content:
             if "text" in block:
-                extracted = block["text"].strip()
+                extracted: str = block["text"].strip()
                 if extracted == "NO_TEXT":
                     logger.info("No text found in image")
                     return ""

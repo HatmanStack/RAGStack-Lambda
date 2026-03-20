@@ -26,6 +26,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -117,7 +118,7 @@ def start_sync_job(kb_id: str, ds_id: str) -> dict | None:
     """
     try:
         response = start_ingestion_with_retry(kb_id, ds_id)
-        job_info = response.get("ingestionJob", {})
+        job_info: dict[str, Any] = response.get("ingestionJob", {})
         job_id = job_info.get("ingestionJobId")
         logger.info(f"Started ingestion job: {job_id}")
         return job_info
@@ -170,7 +171,7 @@ def update_document_statuses(
                 update_expr += ", ingestion_job_id = :job_id"
                 expr_values[":job_id"] = job_id
 
-            update_kwargs = {
+            update_kwargs: dict[str, Any] = {
                 "Key": {"document_id": doc_id},
                 "UpdateExpression": update_expr,
                 "ExpressionAttributeValues": expr_values,
@@ -184,7 +185,7 @@ def update_document_statuses(
             logger.warning(f"Failed to update status for {doc_id}: {e}")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Process sync request from SQS FIFO queue.
 

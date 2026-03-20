@@ -31,6 +31,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -38,7 +39,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Send all batches to SQS and initialize batch tracking in DynamoDB.
 
@@ -72,28 +73,11 @@ def lambda_handler(event, context):
     sqs = boto3.client("sqs")
     table = dynamodb.Table(tracking_table)
 
-    # Update DynamoDB with batch tracking info
-    now = datetime.now(UTC).isoformat()
-    table.update_item(
-        Key={"document_id": document_id},
-        UpdateExpression=(
-            "SET batches_total = :total, "
-            "batches_remaining = :remaining, "
-            "pages_succeeded = :zero, "
-            "pages_failed = :zero, "
-            "updated_at = :now"
-        ),
-        ExpressionAttributeValues={
-            ":total": total_batches,
-            ":remaining": total_batches,
-            ":zero": 0,
-            ":now": now,
-        },
-    )
-    logger.info(f"Initialized batch tracking: {total_batches} batches")
-
-    # Send batch messages to SQS (in batches of 10, the SQS limit)
-    entries = []
+    # Send batch messages to SQS first, verify all succeed,
+    # then write DynamoDB. This prevents stale counters if Lambda retries
+    # after a partial SQS failure.
+    entries: list[dict[str, str]] = []
+    failed_count = 0
     for i, batch in enumerate(batches):
         message_body = {
             "document_id": document_id,
@@ -113,13 +97,48 @@ def lambda_handler(event, context):
         )
 
         if len(entries) == 10:
-            sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
+            resp = sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
+            batch_failed = resp.get("Failed", [])
+            if batch_failed:
+                failed_count += len(batch_failed)
+                for f in batch_failed:
+                    logger.error(f"SQS batch send failed: {f.get('Id')} - {f.get('Message')}")
             entries = []
 
     if entries:  # Send remaining
-        sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)
+        resp = sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
+        batch_failed = resp.get("Failed", [])
+        if batch_failed:
+            failed_count += len(batch_failed)
+            for f in batch_failed:
+                logger.error(f"SQS batch send failed: {f.get('Id')} - {f.get('Message')}")
+
+    if failed_count > 0:
+        raise RuntimeError(
+            f"{failed_count}/{total_batches} batch messages failed to enqueue for {document_id}"
+        )
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")
+
+    # Write DynamoDB batch tracking only after all SQS sends confirmed
+    now = datetime.now(UTC).isoformat()
+    table.update_item(
+        Key={"document_id": document_id},
+        UpdateExpression=(
+            "SET batches_total = :total, "
+            "batches_remaining = :remaining, "
+            "pages_succeeded = :zero, "
+            "pages_failed = :zero, "
+            "updated_at = :now"
+        ),
+        ExpressionAttributeValues={
+            ":total": total_batches,
+            ":remaining": total_batches,
+            ":zero": 0,
+            ":now": now,
+        },
+    )
+    logger.info(f"Initialized batch tracking: {total_batches} batches")
 
     # Publish real-time update if GraphQL endpoint available
     if graphql_endpoint:
@@ -128,7 +147,7 @@ def lambda_handler(event, context):
 
             # Get filename from tracking table
             response = table.get_item(Key={"document_id": document_id})
-            filename = response.get("Item", {}).get("filename", "unknown")
+            filename = str(response.get("Item", {}).get("filename") or "unknown")
 
             publish_document_update(
                 graphql_endpoint,

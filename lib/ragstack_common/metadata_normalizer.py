@@ -99,7 +99,7 @@ def normalize_metadata_for_s3(metadata: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Normalized metadata with STRING_LIST arrays for all string fields.
     """
-    normalized = {}
+    normalized: dict[str, Any] = {}
 
     for key, value in metadata.items():
         if value is None:

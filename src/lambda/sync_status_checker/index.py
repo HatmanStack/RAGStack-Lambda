@@ -19,6 +19,7 @@ Flow:
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -114,7 +115,7 @@ def update_document_status(
         logger.error(f"Failed to update status for {document_id}: {e}")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     """
     Check status of SYNC_QUEUED documents and update accordingly.
 
@@ -167,12 +168,13 @@ def lambda_handler(event, context):
     failed_count = 0
 
     for uri, kb_status in statuses.items():
-        doc = uri_to_doc.get(uri)
-        if not doc:
+        matched_doc: dict[str, Any] | None = uri_to_doc.get(uri)
+        if not matched_doc:
             continue
+        doc = matched_doc
 
-        document_id = doc.get("document_id")
-        filename = doc.get("filename", "unknown")
+        document_id = str(doc.get("document_id", ""))
+        filename = str(doc.get("filename", "unknown"))
         doc_type = doc.get("type", "document")
 
         if kb_status == "INDEXED":

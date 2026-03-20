@@ -30,6 +30,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -137,7 +138,7 @@ def _get_media_duration_estimate(content_length: int, media_type: str) -> float:
     return max(30.0, content_length / bytes_per_second)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for media file processing.
 

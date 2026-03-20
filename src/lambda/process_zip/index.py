@@ -33,6 +33,7 @@ import uuid
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -57,7 +58,7 @@ MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500 MB max ZIP file
 MAX_IMAGE_SIZE = 50 * 1024 * 1024  # 50 MB max per image
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Process ZIP archive and extract images with captions."""
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     data_bucket = os.environ.get("DATA_BUCKET")
@@ -93,10 +94,10 @@ def lambda_handler(event, context):
         try:
             tracking_response = tracking_table.get_item(Key={"document_id": upload_id})
             tracking_item = tracking_response.get("Item", {})
-            generate_captions = tracking_item.get("generate_captions", False)
+            generate_captions = bool(tracking_item.get("generate_captions", False))
             logger.info(f"Retrieved generate_captions={generate_captions} from tracking record")
         except ClientError as e:
-            logger.warning(f"Could not retrieve tracking record for {upload_id}: {e}")
+            logger.warning("Could not retrieve tracking record for %s: %s", upload_id, e)
 
     logger.info(
         f"Processing ZIP: upload_id={upload_id}, key={key}, generate_captions={generate_captions}"
@@ -331,7 +332,7 @@ def combine_captions(user_caption: str | None, ai_caption: str | None) -> str:
 
 
 def create_image_record(
-    tracking_table,
+    tracking_table: Any,
     data_bucket: str,
     image_data: bytes,
     filename: str,

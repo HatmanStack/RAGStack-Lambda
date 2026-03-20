@@ -14,6 +14,7 @@ The generator:
 import json
 import logging
 import time
+from typing import Any
 
 from ragstack_common.bedrock import BedrockClient
 from ragstack_common.key_library import KeyLibrary
@@ -83,7 +84,7 @@ VALID_OPERATORS = frozenset(
 )
 
 
-def _normalize_filter_value(value):
+def _normalize_filter_value(value: Any) -> Any:
     """
     Normalize filter values to lowercase for consistent metadata matching.
 
@@ -170,9 +171,9 @@ class FilterGenerator:
     def generate_filter(
         self,
         query: str,
-        filter_examples: list[dict] | None = None,
+        filter_examples: list[dict[str, Any]] | None = None,
         manual_keys: list[str] | None = None,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """
         Generate a metadata filter from a natural language query.
 
@@ -267,8 +268,8 @@ class FilterGenerator:
     def _build_prompt(
         self,
         query: str,
-        active_keys: list[dict],
-        filter_examples: list[dict] | None = None,
+        active_keys: list[dict[str, Any]],
+        filter_examples: list[dict[str, Any]] | None = None,
     ) -> str:
         """
         Build the user prompt for filter generation.
@@ -317,7 +318,7 @@ USER QUERY: {query}
 Generate a filter for this query using only the available keys above.
 Return null if no filter applies."""
 
-    def _parse_response(self, response_text: str) -> dict | None:
+    def _parse_response(self, response_text: str) -> dict[str, Any] | None:
         """
         Parse the LLM response into a filter dictionary.
 
@@ -370,9 +371,9 @@ Return null if no filter applies."""
 
     def _validate_filter(
         self,
-        filter_expr: dict,
+        filter_expr: dict[str, Any],
         valid_keys: list[str] | None = None,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """
         Validate and clean a filter expression.
 
@@ -395,12 +396,12 @@ Return null if no filter applies."""
 
         valid_keys_set = set(valid_keys)
 
-        def validate_condition(condition: dict) -> dict | None:
+        def validate_condition(condition: dict[str, Any]) -> dict[str, Any] | None:
             """Recursively validate a condition."""
             if not isinstance(condition, dict):
                 return None
 
-            result = {}
+            result: dict[str, Any] = {}
 
             for key, value in condition.items():
                 # Handle logical operators
@@ -428,7 +429,7 @@ Return null if no filter applies."""
                 # Validate the operator structure
                 if isinstance(value, dict):
                     # Check operators are valid
-                    valid_ops = {}
+                    valid_ops: dict[str, Any] = {}
                     for op, op_value in value.items():
                         if op in VALID_OPERATORS:
                             # Normalize string values to lowercase for consistent filtering
@@ -439,7 +440,8 @@ Return null if no filter applies."""
                         result[key] = valid_ops
                 else:
                     # Direct value (implicit $eq)
-                    result[key] = {"$eq": _normalize_filter_value(value)}
+                    normalized: dict[str, Any] = {"$eq": _normalize_filter_value(value)}
+                    result[key] = normalized
 
             return result if result else None
 

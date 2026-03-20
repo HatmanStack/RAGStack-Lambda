@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.4.0] - 2026-03-20
+
+### Added
+
+- **DLQ replay Lambda**: New `dlq_replay` Lambda replays messages from any of the 5 DLQ/source-queue pairs (processing, batch, scrape-discovery, scrape-processing, sync). Manually triggered. FIFO queues use fresh dedup IDs to avoid SQS deduplication. `ReservedConcurrentExecutions: 1` prevents concurrent replay races. CloudWatch alarms added for all 5 DLQs.
+- **S3 size guard**: `read_s3_binary` accepts `max_size_bytes` — performs a HEAD check before GET and fails closed (raises `ClientError` on HEAD failure instead of falling through to download). Used by OCR to prevent OOM on oversized documents.
+- **UI error boundaries**: `ErrorBoundary` component wraps each route and the `DocumentTable`. Supports both static `ReactNode` fallback and render-prop `(reset) => ReactNode` for custom recovery UI. Raw error messages gated behind `import.meta.env.DEV`.
+- **UI notification system**: `NotificationProvider` with Cloudscape Flashbar replaces `window.alert`. Auto-dismiss timers with cleanup on unmount, notification cap at 10, Cloudscape `Button` for actions. Delete failures now surface to users (previously console-only).
+- **mypy strict mode**: Added to CI pipeline. Type annotations across all 18+ Lambda handlers and `ragstack_common`. `TypedDict` contracts for `SourceInfo`, `ChatResponse`, `ConversationTurn`. `boto3-stubs` with textract extra for typed Textract client.
+- **Dependabot**: Automated dependency updates for npm (root, src/ui, src/ragstack-chat), pip, and GitHub Actions.
+- **12 new test files**: Unit tests for admin_user_provisioner, api_key_resolver, batch_processor, budget_sync, combine_pages, configuration_resolver, dlq_replay, enqueue_batches, initial_sync, kb_custom_resource, queue_processor, start_codebuild. Full suite: 1071 tests.
+- **Claude Forge skills**: Pipeline skills for repo-eval, repo-health, doc-health, brainstorm, and audit workflows.
+
+### Fixed
+
+- **Queue processor reindex lock broken** (critical): `get_item` used `{"config_key": REINDEX_LOCK_KEY}` but ConfigurationTable partition key is `Configuration`. Lock was completely non-functional — uploads were never blocked during reindex.
+- **Enqueue batches: SQS partial failures ignored** (critical): `send_message_batch` response `Failed` array was not checked. If individual entries failed, DynamoDB batch counters were already written, permanently stalling the document. Now raises `RuntimeError` on any failure. DynamoDB write moved after SQS send verification.
+- **Reindex sync: exception promotes unverified KB** (critical): `handle_check_sync_status` returned `action: "finalize"` on Bedrock exceptions and FAILED/STOPPED status, causing `handle_finalize` to promote the new KB and delete the old one without verifying sync completed. Now returns `action: "abort"` which routes to `PrepareCleanup` via new state machine choice.
+- **kb_migrator: wrong field name for S3 Vectors index**: `delete_knowledge_base` read `vectorIndexArn` but Bedrock API returns `indexArn` in `s3VectorsConfiguration`. S3 Vectors index cleanup silently skipped on every delete. Added `S3_VECTORS` storage type handling alongside legacy `S3`.
+- **str(None) → "None" across multiple handlers**: `str(item.get("field", default))` produces `"None"` when DynamoDB stores explicit null. Fixed in `reindex_kb` (documents, scraped items, media, images), `move_video`, and `enqueue_batches` using `item.get("field") or default` pattern.
+- **ConversationTurn TypedDict mismatch**: Fields were `query`/`answer` but `conversation.py` stores `userMessage`/`assistantResponse`/`turnNumber`/`createdAt`. Updated to match actual DynamoDB schema.
+- **scrape_status limit parameter injection**: Raw `int()` conversion on user-supplied `limit` query param raised unhandled `ValueError` as 500. Now validates with try/except, clamps to 1-100, returns 400 on bad input.
+- **reindex_kb prerequisite validation**: `update_config_kb_ids` was called before checking `STACK_NAME` and `new_data_source_id`, risking partial config table mutation. Validation now runs first.
+- **Verbose per-result logging**: 14 `[SOURCE]` and 3 `[RETRIEVE]`/`[RESULT]` info-level logs per query downgraded to debug. Reduces CloudWatch costs at scale.
+
+### Changed
+
+- **query_kb refactored**: Split 1,824-line `index.py` into `handler.py`, `conversation.py`, `filters.py`, `media.py`, `retrieval.py`, `sources.py`, `_clients.py`. Lambda handler path unchanged.
+- **Query rewrite model configurable**: Hardcoded `us.amazon.nova-lite-v1:0` now reads `chat_query_rewrite_model` from DynamoDB config.
+- **DynamoDB scan capped**: ID-pattern fallback scan in `retrieval.py` limited to 10 pages max to prevent expensive full-table scans.
+- **Quota applied to all callers**: Per-caller quota check now runs for anonymous users (via `anon:{conversationId}` tracking ID), not just authenticated users.
+- **Quota after validation**: `atomic_quota_check_and_increment` moved after query validation to avoid wasting quota on empty/invalid/oversized queries.
+- **QueryKB Lambda timeout**: Increased from 60s to 90s for long LLM responses.
+- **storage.py fail-closed**: HEAD failure with `max_size_bytes` set now raises `ClientError` instead of silently falling through to GET.
+
+### Docs
+
+- **doc-auditor skill**: Phase 3 explicitly static-only (no code execution). Sentence variety improved.
+- **final_reviewer skill**: Fixed `pipeline.md` → `pipeline-protocol.md` references.
+- **repo-health skill**: `$ARGUMENTS` forwarded to auditor spawn.
+
 ## [2.3.8] - 2026-03-12
 
 ### Fixed

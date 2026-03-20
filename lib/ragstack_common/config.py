@@ -317,7 +317,8 @@ class ConfigurationManager:
             return {}
 
         # Schema is stored under 'Schema' key in the item
-        return schema_item.get("Schema", {})
+        schema: dict[str, Any] = schema_item.get("Schema", {})
+        return schema
 
     @staticmethod
     def _remove_partition_key(item: dict[str, Any] | None) -> dict[str, Any]:

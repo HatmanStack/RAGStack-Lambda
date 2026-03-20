@@ -32,6 +32,7 @@ import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -69,16 +70,16 @@ lambda_client = boto3.client("lambda")
 bedrock_agent = boto3.client("bedrock-agent")
 
 # Module-level configuration manager (lazy init for resolvers that need access control)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 # Module-level event storage for passing identity to resolvers
-_current_event = None
+_current_event: dict[str, Any] | None = None
 
 # DynamoDB client for quota operations
 dynamodb_client = boto3.client("dynamodb")
 
 
-def get_config_manager():
+def get_config_manager() -> ConfigurationManager:
     """Lazy initialization of ConfigurationManager."""
     global _config_manager
     if _config_manager is None:
@@ -94,7 +95,7 @@ def get_current_user_id() -> str | None:
     return identity.get("sub") or identity.get("username")
 
 
-def convert_decimals(obj):
+def convert_decimals(obj: Any) -> Any:
     """Convert DynamoDB Decimal types to native Python types for JSON serialization."""
     if isinstance(obj, dict):
         return {k: convert_decimals(v) for k, v in obj.items()}
@@ -129,7 +130,7 @@ def check_reindex_lock() -> None:
         lock = response.get("Item")
 
         if lock and lock.get("is_locked"):
-            started_at = lock.get("started_at", "unknown")
+            started_at = str(lock.get("started_at", "unknown"))
             raise ValueError(
                 f"Operation blocked: Knowledge Base reindex is in progress "
                 f"(started: {started_at}). Please wait for the reindex to complete."
@@ -200,7 +201,7 @@ def sanitize_filename(filename: str) -> str:
     return sanitized
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> Any:
     """
     Route to appropriate resolver based on field name.
     """
@@ -299,7 +300,7 @@ def lambda_handler(event, context):
         raise
 
 
-def get_document(args):
+def get_document(args: dict[str, Any]) -> dict[str, Any] | None:
     """Get document by ID."""
     try:
         document_id = args["documentId"]
@@ -318,7 +319,7 @@ def get_document(args):
             logger.info(f"Document not found: {document_id}")
             return None
 
-        logger.info(f"Document found: {document_id}, status: {item.get('status')}")
+        logger.info(f"Document found: {document_id}, status: {str(item.get('status', ''))}")
         return format_document(item)
 
     except ClientError as e:
@@ -329,7 +330,7 @@ def get_document(args):
         raise
 
 
-def list_documents(args):
+def list_documents(args: dict[str, Any]) -> dict[str, Any]:
     """
     List all documents (excluding images and scraped pages).
 
@@ -344,7 +345,7 @@ def list_documents(args):
         # Filter out images and scraped pages - they have their own list endpoints
         # Note: We scan all items without DynamoDB Limit because Limit applies
         # BEFORE FilterExpression, which would return inconsistent results.
-        scan_kwargs = {
+        scan_kwargs: dict[str, Any] = {
             "FilterExpression": (
                 "attribute_not_exists(#type) OR (#type <> :image_type AND #type <> :scraped_type)"
             ),
@@ -378,7 +379,7 @@ def list_documents(args):
         raise
 
 
-def delete_documents(args):
+def delete_documents(args: dict[str, Any]) -> dict[str, Any]:
     """
     Delete documents from S3, Knowledge Base, and DynamoDB tracking table.
 
@@ -426,7 +427,7 @@ def delete_documents(args):
     errors = []
 
     # Collect KB document identifiers for batch delete
-    kb_doc_identifiers = []
+    kb_doc_identifiers: list[Any] = []
 
     for doc_id in document_ids:
         try:
@@ -446,8 +447,8 @@ def delete_documents(args):
                 continue
 
             # Get S3 URIs
-            input_s3_uri = item.get("input_s3_uri", "")
-            output_s3_uri = item.get("output_s3_uri", "")
+            input_s3_uri = str(item.get("input_s3_uri", ""))
+            output_s3_uri = str(item.get("output_s3_uri", ""))
             base_uri = input_s3_uri or output_s3_uri
 
             # List all KB URIs BEFORE deleting from S3
@@ -469,7 +470,7 @@ def delete_documents(args):
 
             # For scraped items, also clean up scrape_jobs and scrape_urls tables
             # In the new format, document_id IS the job_id
-            item_type = item.get("type")
+            item_type = str(item.get("type", ""))
             if item_type == "scraped" and SCRAPE_JOBS_TABLE and SCRAPE_URLS_TABLE:
                 _delete_scrape_job_records(doc_id)
 
@@ -489,16 +490,16 @@ def delete_documents(args):
     if kb_id and ds_id and kb_doc_identifiers:
         try:
             logger.info(f"Deleting {len(kb_doc_identifiers)} documents from KB")
-            response = bedrock_agent.delete_knowledge_base_documents(
+            kb_response = bedrock_agent.delete_knowledge_base_documents(
                 knowledgeBaseId=kb_id, dataSourceId=ds_id, documentIdentifiers=kb_doc_identifiers
             )
             # Log results
-            doc_details = response.get("documentDetails", [])
+            doc_details = kb_response.get("documentDetails", [])
             for detail in doc_details:
-                status = detail.get("status", "UNKNOWN")
-                if status == "DELETE_IN_PROGRESS":
+                status_val = detail.get("status", "UNKNOWN")
+                if str(status_val) == "DELETE_IN_PROGRESS":
                     logger.info(f"KB delete queued: {detail}")
-                elif status != "DELETED":
+                elif str(status_val) != "DELETED":
                     logger.warning(f"KB delete issue: {detail}")
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
@@ -553,7 +554,7 @@ def _delete_s3_content_folder(input_s3_uri: str, doc_id: str) -> None:
                 objects = page.get("Contents", [])
                 if objects:
                     delete_keys = [{"Key": obj["Key"]} for obj in objects]
-                    s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})
+                    s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})  # type: ignore[typeddict-item]
                     logger.info(
                         f"Deleted {len(delete_keys)} files from s3://{bucket}/{folder_prefix}"
                     )
@@ -565,7 +566,7 @@ def _delete_s3_content_folder(input_s3_uri: str, doc_id: str) -> None:
                     objects = page.get("Contents", [])
                     if objects:
                         delete_keys = [{"Key": obj["Key"]} for obj in objects]
-                        s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})
+                        s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})  # type: ignore[typeddict-item]
                         logger.info(
                             f"Deleted {len(delete_keys)} files from s3://{bucket}/{output_prefix}"
                         )
@@ -590,6 +591,8 @@ def _delete_scrape_job_records(job_id: str) -> None:
     """
     try:
         # Delete from scrape_jobs table
+        assert SCRAPE_JOBS_TABLE is not None
+        assert SCRAPE_URLS_TABLE is not None
         jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)
         jobs_table.delete_item(Key={"job_id": job_id})
         logger.info(f"Deleted scrape job record: {job_id}")
@@ -627,7 +630,7 @@ def _delete_scrape_job_records(job_id: str) -> None:
         logger.warning(f"Failed to delete scrape job records for {job_id}: {e}")
 
 
-def reprocess_document(args):
+def reprocess_document(args: dict[str, Any]) -> dict[str, Any]:
     """
     Reprocess a document/image/media by triggering the appropriate pipeline.
 
@@ -663,8 +666,8 @@ def reprocess_document(args):
     if not item:
         raise ValueError("Document not found")
 
-    doc_type = item.get("type", "document")
-    current_status = item.get("status", "").lower()
+    doc_type = str(item.get("type", "document"))
+    current_status = str(item.get("status", "")).lower()
 
     # Check if already processing
     if current_status in ("processing", "transcribing", "pending"):
@@ -764,8 +767,8 @@ def _delete_from_kb_for_reprocess(item: dict) -> None:
         return
 
     # Get any S3 URI to determine the content folder
-    input_s3_uri = item.get("input_s3_uri", "")
-    output_s3_uri = item.get("output_s3_uri", "")
+    input_s3_uri = str(item.get("input_s3_uri", ""))
+    output_s3_uri = str(item.get("output_s3_uri", ""))
     base_uri = input_s3_uri or output_s3_uri
 
     if not base_uri:
@@ -780,7 +783,9 @@ def _delete_from_kb_for_reprocess(item: dict) -> None:
         return
 
     try:
-        doc_identifiers = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in kb_uris]
+        doc_identifiers: list[Any] = [
+            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in kb_uris
+        ]
         logger.info(f"Deleting {len(doc_identifiers)} documents from KB before reprocess")
         bedrock_agent.delete_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -794,7 +799,7 @@ def _delete_from_kb_for_reprocess(item: dict) -> None:
         logger.warning(f"KB deletion before reprocess failed ({error_code}): {e}")
 
 
-def _reprocess_image(document_id: str, item: dict, table) -> dict:
+def _reprocess_image(document_id: str, item: dict[str, Any], table: Any) -> dict[str, Any]:
     """Reprocess an image by invoking the ProcessImageFunction."""
     logger.info(f"Reprocessing image: {document_id}")
 
@@ -846,7 +851,7 @@ def _reprocess_image(document_id: str, item: dict, table) -> dict:
     }
 
 
-def _reprocess_media(document_id: str, item: dict, table) -> dict:
+def _reprocess_media(document_id: str, item: dict[str, Any], table: Any) -> dict[str, Any]:
     """Reprocess media by triggering the document processing pipeline."""
     logger.info(f"Reprocessing media: {document_id}")
 
@@ -899,7 +904,7 @@ def _reprocess_media(document_id: str, item: dict, table) -> dict:
     }
 
 
-def _reprocess_as_document(document_id: str, item: dict, table) -> dict:
+def _reprocess_as_document(document_id: str, item: dict[str, Any], table: Any) -> dict[str, Any]:
     """Reprocess as a document via Step Functions."""
     logger.info(f"Reprocessing document: {document_id}")
 
@@ -1048,7 +1053,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
     jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)
     job_response = jobs_table.get_item(Key={"job_id": document_id})
     job_item = job_response.get("Item", {})
-    base_url = job_item.get("base_url", "")
+    base_url = str(job_item.get("base_url", ""))
 
     if not base_url:
         logger.warning(f"No base_url found for scraped job {document_id}")
@@ -1175,12 +1180,12 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
     # Ingest all documents in one batch
     if documents:
         try:
-            response = ingest_documents_with_retry(
+            ingest_response = ingest_documents_with_retry(
                 kb_id=kb_id,
                 ds_id=ds_id,
                 documents=documents,
             )
-            logger.info(f"Ingested {len(documents)} scraped pages: {response}")
+            logger.info(f"Ingested {len(documents)} scraped pages: {ingest_response}")
         except Exception as e:
             logger.error(f"Failed to ingest scraped pages: {e}")
             raise  # Propagate to caller so job is marked FAILED, not INDEXED
@@ -1188,7 +1193,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
     return ingested_count
 
 
-def reindex_document(args):
+def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
     """
     Reindex a document - re-extract metadata and reingest to KB without re-running OCR.
 
@@ -1227,8 +1232,8 @@ def reindex_document(args):
     if not item:
         raise ValueError("Document not found")
 
-    doc_type = item.get("type", "document")
-    current_status = item.get("status", "").lower()
+    doc_type = str(item.get("type", "document"))
+    current_status = str(item.get("status", "")).lower()
 
     # Non-scraped docs need INGEST_TO_KB_FUNCTION_ARN for Lambda invocation
     if doc_type != "scraped" and not INGEST_TO_KB_FUNCTION_ARN:
@@ -1251,7 +1256,9 @@ def reindex_document(args):
     config_manager = get_config_manager()
     try:
         kb_id, ds_id = get_knowledge_base_config(config_manager)
-        doc_identifiers = [{"dataSourceType": "S3", "s3": {"uri": uri}} for uri in text_uris]
+        doc_identifiers: list[Any] = [
+            {"dataSourceType": "S3", "s3": {"uri": uri}} for uri in text_uris
+        ]
         logger.info(f"Deleting {len(doc_identifiers)} text documents from KB before reindex")
         bedrock_agent.delete_knowledge_base_documents(
             knowledgeBaseId=kb_id,
@@ -1352,7 +1359,7 @@ def reindex_document(args):
     }
 
 
-def create_upload_url(args):
+def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     """
     Create presigned URL for S3 upload.
 
@@ -1390,12 +1397,17 @@ def create_upload_url(args):
             raise ValueError(f"Filename must be at most {MAX_FILENAME_LENGTH} characters")
 
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -1457,7 +1469,7 @@ def create_upload_url(args):
         raise
 
 
-def process_document(args):
+def process_document(args: dict[str, Any]) -> dict[str, Any]:
     """
     Manually trigger document processing via Step Functions.
 
@@ -1487,7 +1499,7 @@ def process_document(args):
             raise ValueError("Document not found")
 
         # Check if document is in a state that can be reprocessed
-        current_status = item.get("status", "").lower()
+        current_status = str(item.get("status", "")).lower()
         if current_status == "processing":
             logger.warning(f"Document already processing: {document_id}")
             raise ValueError("Document is already being processed")
@@ -1523,6 +1535,8 @@ def process_document(args):
         # Get updated document
         response = table.get_item(Key={"document_id": document_id})
         updated_item = response.get("Item")
+        if not updated_item:
+            raise ValueError(f"Document not found after processing: {document_id}")
 
         return format_document(updated_item)
 
@@ -1534,7 +1548,7 @@ def process_document(args):
         raise
 
 
-def generate_presigned_download_url(s3_uri, expiration=3600):
+def generate_presigned_download_url(s3_uri: str, expiration: int = 3600) -> str | None:
     """Generate presigned URL for S3 object download."""
     if not s3_uri or not s3_uri.startswith("s3://"):
         return None
@@ -1555,7 +1569,7 @@ def generate_presigned_download_url(s3_uri, expiration=3600):
         return None
 
 
-def format_document(item):
+def format_document(item: dict[str, Any]) -> dict[str, Any]:
     """Format DynamoDB item as GraphQL Document type."""
     output_s3_uri = item.get("output_s3_uri")
     status = item.get("status", "uploaded").upper()
@@ -1591,13 +1605,13 @@ def format_document(item):
 # =========================================================================
 
 
-def _check_scrape_enabled():
+def _check_scrape_enabled() -> None:
     """Check if scraping is enabled (tables configured)."""
     if not SCRAPE_JOBS_TABLE:
         raise ValueError("Scraping is not enabled")
 
 
-def get_scrape_job(args):
+def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
     """Get scrape job by ID with pages."""
     _check_scrape_enabled()
 
@@ -1608,7 +1622,7 @@ def get_scrape_job(args):
         if not is_valid_uuid(job_id):
             raise ValueError("Invalid job ID format")
 
-        jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)
+        jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
         response = jobs_table.get_item(Key={"job_id": job_id})
 
         item = response.get("Item")
@@ -1629,7 +1643,7 @@ def get_scrape_job(args):
 
             # Generate content URLs directly from document_id
             # Scraped content is stored at: input/{doc_id}/{doc_id}.scraped.md
-            def get_content_url(doc_id):
+            def get_content_url(doc_id: str) -> str | None:
                 if not doc_id:
                     return None
                 try:
@@ -1644,7 +1658,8 @@ def get_scrape_job(args):
                     return None
 
             pages = [
-                format_scrape_page(p, get_content_url(p.get("document_id"))) for p in page_items
+                format_scrape_page(p, get_content_url(str(p.get("document_id", ""))))
+                for p in page_items
             ]
 
         return {
@@ -1657,7 +1672,7 @@ def get_scrape_job(args):
         raise
 
 
-def list_scrape_jobs(args):
+def list_scrape_jobs(args: dict[str, Any]) -> dict[str, Any]:
     """List all scrape jobs with pagination."""
     _check_scrape_enabled()
 
@@ -1670,8 +1685,8 @@ def list_scrape_jobs(args):
 
         logger.info(f"Listing scrape jobs with limit: {limit}")
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
-        scan_kwargs = {"Limit": limit}
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
+        scan_kwargs: dict[str, Any] = {"Limit": limit}
 
         if next_token:
             try:
@@ -1684,7 +1699,7 @@ def list_scrape_jobs(args):
         items = [format_scrape_job(item) for item in response.get("Items", [])]
         logger.info(f"Retrieved {len(items)} scrape jobs")
 
-        result = {"items": items}
+        result: dict[str, Any] = {"items": items}
         if "LastEvaluatedKey" in response:
             result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
 
@@ -1695,7 +1710,7 @@ def list_scrape_jobs(args):
         raise
 
 
-def check_scrape_url(args):
+def check_scrape_url(args: dict[str, Any]) -> dict[str, Any]:
     """Check if URL has been scraped before."""
     _check_scrape_enabled()
 
@@ -1707,7 +1722,7 @@ def check_scrape_url(args):
         parsed = urlparse(url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
 
         # Query using BaseUrlIndex GSI
         response = table.query(
@@ -1735,7 +1750,7 @@ def check_scrape_url(args):
         raise
 
 
-def start_scrape(args):
+def start_scrape(args: dict[str, Any]) -> dict[str, Any]:
     """Start a new scrape job."""
     _check_scrape_enabled()
 
@@ -1786,7 +1801,7 @@ def start_scrape(args):
         # Fetch the created job
         job_id = payload.get("job_id")
         if job_id:
-            table = dynamodb.Table(SCRAPE_JOBS_TABLE)
+            table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
             job_response = table.get_item(Key={"job_id": job_id})
             if job_response.get("Item"):
                 return format_scrape_job(job_response["Item"])
@@ -1813,7 +1828,7 @@ def start_scrape(args):
         raise
 
 
-def cancel_scrape(args):
+def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
     """Cancel an in-progress scrape job."""
     _check_scrape_enabled()
 
@@ -1824,7 +1839,7 @@ def cancel_scrape(args):
         if not is_valid_uuid(job_id):
             raise ValueError("Invalid job ID format")
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
 
         # Get job
         response = table.get_item(Key={"job_id": job_id})
@@ -1834,7 +1849,7 @@ def cancel_scrape(args):
             raise ValueError("Scrape job not found")
 
         # Check if job can be cancelled
-        status = item.get("status", "")
+        status = str(item.get("status", ""))
         terminal_statuses = (
             ScrapeStatus.COMPLETED.value,
             ScrapeStatus.COMPLETED_WITH_ERRORS.value,
@@ -1845,7 +1860,7 @@ def cancel_scrape(args):
             raise ValueError(f"Cannot cancel job with status: {status}")
 
         # Stop Step Functions execution if running
-        step_function_arn = item.get("step_function_arn")
+        step_function_arn = str(item.get("step_function_arn", ""))
         if step_function_arn:
             try:
                 sfn.stop_execution(
@@ -1869,14 +1884,17 @@ def cancel_scrape(args):
 
         # Return updated job
         response = table.get_item(Key={"job_id": job_id})
-        return format_scrape_job(response.get("Item"))
+        updated_item = response.get("Item")
+        if not updated_item:
+            raise ValueError(f"Job not found after cancel: {job_id}")
+        return format_scrape_job(updated_item)
 
     except ClientError as e:
         logger.error(f"Error in cancel_scrape: {e}")
         raise
 
 
-def format_scrape_job(item):
+def format_scrape_job(item: dict[str, Any]) -> dict[str, Any]:
     """Format DynamoDB item as GraphQL ScrapeJob type."""
     config = item.get("config", {})
     return {
@@ -1905,7 +1923,7 @@ def format_scrape_job(item):
     }
 
 
-def format_scrape_page(item, content_url=None):
+def format_scrape_page(item: dict[str, Any], content_url: str | None = None) -> dict[str, Any]:
     """Format DynamoDB item as GraphQL ScrapePage type."""
     return {
         "url": item["url"],
@@ -1923,7 +1941,7 @@ def format_scrape_page(item, content_url=None):
 # =========================================================================
 
 
-def create_image_upload_url(args):
+def create_image_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     """
     Create presigned URL for image upload.
 
@@ -1962,12 +1980,17 @@ def create_image_upload_url(args):
             raise ValueError("Unsupported image file type")
 
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -1980,8 +2003,8 @@ def create_image_upload_url(args):
 
         # Build presigned POST conditions and fields
         # Include metadata for auto-processing if requested
-        conditions = []
-        fields = {}
+        conditions: list[Any] = []
+        fields: dict[str, str] = {}
 
         # Add demo mode file size limit if applicable
         demo_conditions = get_demo_upload_conditions(get_config_manager())
@@ -2048,7 +2071,7 @@ def create_image_upload_url(args):
         raise
 
 
-def generate_caption(args):
+def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
     """
     Generate an AI caption for an image using Bedrock Converse API with vision.
 
@@ -2209,7 +2232,7 @@ def generate_caption(args):
         return {"caption": None, "error": "Failed to generate caption. Please try again."}
 
 
-def submit_image(args):
+def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
     """
     Submit an image with caption to finalize upload and trigger processing.
 
@@ -2246,15 +2269,16 @@ def submit_image(args):
             raise ValueError("Image not found")
 
         # Verify it's an image type
-        if item.get("type") != "image":
+        if str(item.get("type", "")) != "image":
             raise ValueError("Record is not an image")
 
         # Verify status is PENDING
-        if item.get("status") != ImageStatus.PENDING.value:
-            raise ValueError(f"Image is not in PENDING status (current: {item.get('status')})")
+        if str(item.get("status", "")) != ImageStatus.PENDING.value:
+            current = str(item.get("status", ""))
+            raise ValueError(f"Image is not in PENDING status (current: {current})")
 
         # Get S3 URI and verify image exists in S3
-        input_s3_uri = item.get("input_s3_uri", "")
+        input_s3_uri = str(item.get("input_s3_uri", ""))
         if not input_s3_uri.startswith("s3://"):
             raise ValueError("Invalid S3 URI in tracking record")
 
@@ -2334,6 +2358,8 @@ def submit_image(args):
         # Get updated item
         response = table.get_item(Key={"document_id": image_id})
         updated_item = response.get("Item")
+        if not updated_item:
+            raise ValueError(f"Image not found after submit: {image_id}")
 
         logger.info(f"Image submitted successfully: {image_id}")
         return format_image(updated_item)
@@ -2348,7 +2374,7 @@ def submit_image(args):
         raise
 
 
-def format_image(item):
+def format_image(item: dict[str, Any]) -> dict[str, Any] | None:
     """Format DynamoDB item as GraphQL Image type."""
     if not item:
         return None
@@ -2390,7 +2416,7 @@ def format_image(item):
     }
 
 
-def get_image(args):
+def get_image(args: dict[str, Any]) -> dict[str, Any] | None:
     """
     Get image by ID.
 
@@ -2436,7 +2462,7 @@ def get_image(args):
         raise
 
 
-def list_images(args):
+def list_images(args: dict[str, Any]) -> dict[str, Any]:
     """
     List all images with pagination.
 
@@ -2463,7 +2489,7 @@ def list_images(args):
         # Scan with filter for type="image"
         # Note: Don't use DynamoDB Limit with FilterExpression - Limit applies BEFORE
         # filtering, which can return 0 results. Scan all and apply limit after.
-        scan_kwargs = {
+        scan_kwargs: dict[str, Any] = {
             "FilterExpression": "#type = :image_type",
             "ExpressionAttributeNames": {"#type": "type"},
             "ExpressionAttributeValues": {":image_type": "image"},
@@ -2488,7 +2514,7 @@ def list_images(args):
         items = [format_image(item) for item in all_items[:limit]]
         logger.info(f"Retrieved {len(items)} images")
 
-        result = {"items": items}
+        result: dict[str, Any] = {"items": items}
         if len(all_items) > limit:
             last_item = all_items[limit - 1]
             result["nextToken"] = json.dumps({"document_id": last_item["document_id"]})
@@ -2505,7 +2531,7 @@ def list_images(args):
         raise
 
 
-def delete_image(args):
+def delete_image(args: dict[str, Any]) -> Any:
     """
     Delete an image from S3, DynamoDB, and Knowledge Base.
 
@@ -2539,10 +2565,10 @@ def delete_image(args):
             raise ValueError("Image not found")
 
         # Verify it's an image type
-        if item.get("type") != "image":
+        if str(item.get("type", "")) != "image":
             raise ValueError("Record is not an image")
 
-        input_s3_uri = item.get("input_s3_uri", "")
+        input_s3_uri = str(item.get("input_s3_uri", ""))
 
         # Delete files from S3
         if input_s3_uri and input_s3_uri.startswith("s3://"):
@@ -2596,7 +2622,7 @@ def delete_image(args):
         raise
 
 
-def create_zip_upload_url(args):
+def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     """
     Create presigned URL for ZIP archive upload.
 
@@ -2615,12 +2641,17 @@ def create_zip_upload_url(args):
         logger.info(f"Creating ZIP upload URL, generateCaptions={generate_captions}")
 
         # Check demo mode upload quota (after args parsing, ZIP counts as a single upload)
-        if is_demo_mode_enabled(get_config_manager()):
+        cm = get_config_manager()
+        if is_demo_mode_enabled(cm):
             user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
-                    user_id, "upload", config_table, dynamodb_client, get_config_manager()
+                    user_id or "anonymous",
+                    "upload",
+                    config_table,
+                    dynamodb_client,
+                    cm,
                 )
                 if not allowed:
                     raise ValueError(message)
@@ -2676,7 +2707,7 @@ def create_zip_upload_url(args):
 # =========================================================================
 
 
-def analyze_metadata(args):
+def analyze_metadata(args: dict[str, Any]) -> dict[str, Any]:
     """
     Trigger metadata analysis of Knowledge Base vectors.
 
@@ -2760,7 +2791,7 @@ def analyze_metadata(args):
         }
 
 
-def get_metadata_stats(args):
+def get_metadata_stats(args: dict[str, Any]) -> dict[str, Any]:
     """
     Get metadata key statistics from the key library.
 
@@ -2785,33 +2816,36 @@ def get_metadata_stats(args):
 
         # Scan all keys from the library
         all_items = []
-        scan_kwargs: dict = {}
+        scan_kwargs: dict[str, Any] = {}
 
         while True:
-            response = table.scan(**scan_kwargs)
-            all_items.extend(response.get("Items", []))
+            scan_response = table.scan(**scan_kwargs)
+            all_items.extend(scan_response.get("Items", []))
 
-            if "LastEvaluatedKey" not in response:
+            if "LastEvaluatedKey" not in scan_response:
                 break
-            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+            scan_kwargs["ExclusiveStartKey"] = scan_response["LastEvaluatedKey"]
 
         # Format keys for GraphQL response
-        keys = []
-        last_analyzed = None
+        keys: list[dict[str, Any]] = []
+        last_analyzed: str | None = None
 
         for item in all_items:
-            key_analyzed = item.get("last_analyzed")
+            key_analyzed = str(item.get("last_analyzed", "")) or None
             if key_analyzed and (not last_analyzed or key_analyzed > last_analyzed):
                 last_analyzed = key_analyzed
 
+            sample_vals = item.get("sample_values", [])
             keys.append(
                 {
-                    "keyName": item.get("key_name", ""),
-                    "dataType": item.get("data_type", "string"),
-                    "occurrenceCount": int(item.get("occurrence_count", 0)),
-                    "sampleValues": item.get("sample_values", [])[:10],
+                    "keyName": str(item.get("key_name", "")),
+                    "dataType": str(item.get("data_type", "string")),
+                    "occurrenceCount": int(str(item.get("occurrence_count", 0))),
+                    "sampleValues": (
+                        list(sample_vals)[:10] if isinstance(sample_vals, (list, tuple)) else []
+                    ),
                     "lastAnalyzed": key_analyzed,
-                    "status": item.get("status", "active"),
+                    "status": str(item.get("status", "active")),
                 }
             )
 
@@ -2845,7 +2879,7 @@ def get_metadata_stats(args):
         }
 
 
-def get_filter_examples(args):
+def get_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
     """
     Get filter examples from configuration.
 
@@ -2916,7 +2950,7 @@ def get_filter_examples(args):
         }
 
 
-def get_key_library(args):
+def get_key_library(args: dict[str, Any]) -> Any:
     """
     Get active metadata keys from the key library.
 
@@ -2935,36 +2969,37 @@ def get_key_library(args):
         table = dynamodb.Table(METADATA_KEY_LIBRARY_TABLE)
 
         # Scan all keys from the library
-        all_items = []
-        scan_kwargs: dict = {}
+        all_items: list[dict[str, Any]] = []
+        scan_kwargs: dict[str, Any] = {}
 
         while True:
-            response = table.scan(**scan_kwargs)
-            all_items.extend(response.get("Items", []))
+            scan_response = table.scan(**scan_kwargs)
+            all_items.extend(scan_response.get("Items", []))
 
-            if "LastEvaluatedKey" not in response:
+            if "LastEvaluatedKey" not in scan_response:
                 break
-            scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+            scan_kwargs["ExclusiveStartKey"] = scan_response["LastEvaluatedKey"]
 
         # Filter to only active keys and format for GraphQL
-        keys = []
+        keys: list[dict[str, Any]] = []
         for item in all_items:
-            status = item.get("status", "active")
+            status = str(item.get("status", "active"))
             if status != "active":
                 continue
 
+            sample_vals = item.get("sample_values", [])
             keys.append(
                 {
-                    "keyName": item.get("key_name", ""),
-                    "dataType": item.get("data_type", "string"),
+                    "keyName": str(item.get("key_name", "")),
+                    "dataType": str(item.get("data_type", "string")),
                     "occurrenceCount": int(item.get("occurrence_count", 0)),
-                    "sampleValues": item.get("sample_values", [])[:5],
+                    "sampleValues": list(sample_vals)[:5] if sample_vals else [],
                     "status": status,
                 }
             )
 
         # Sort by occurrence count descending
-        keys.sort(key=lambda x: x["occurrenceCount"], reverse=True)
+        keys.sort(key=lambda x: int(x["occurrenceCount"]), reverse=True)
 
         logger.info(f"Retrieved {len(keys)} active keys from library")
         return keys
@@ -2977,7 +3012,7 @@ def get_key_library(args):
         return []
 
 
-def check_key_similarity(args):
+def check_key_similarity(args: dict[str, Any]) -> dict[str, Any]:
     """
     Check if a proposed key is similar to existing keys.
 
@@ -3040,7 +3075,7 @@ def check_key_similarity(args):
         }
 
 
-def regenerate_filter_examples(args):
+def regenerate_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
     """
     Regenerate filter examples using only the configured filter keys.
 
@@ -3108,9 +3143,9 @@ def regenerate_filter_examples(args):
             }
 
         # Build field analysis format expected by generate_filter_examples
-        field_analysis = {}
+        field_analysis: dict[str, dict[str, Any]] = {}
         for key in allowed_keys:
-            field_analysis[key.get("key_name")] = {
+            field_analysis[str(key.get("key_name", ""))] = {
                 "count": key.get("occurrence_count", 0),
                 "data_type": key.get("data_type", "string"),
                 "sample_values": key.get("sample_values", []),
@@ -3148,7 +3183,7 @@ def regenerate_filter_examples(args):
         }
 
 
-def delete_metadata_key(args):
+def delete_metadata_key(args: dict[str, Any]) -> dict[str, Any]:
     """Delete a metadata key from the key library and filter allowlist."""
     key_name = args.get("keyName", "")
     if not key_name:
@@ -3197,7 +3232,7 @@ def delete_metadata_key(args):
 # =========================================================================
 
 
-def start_reindex(args):
+def start_reindex(args: dict[str, Any]) -> dict[str, Any]:
     """
     Start a Knowledge Base reindex operation.
 

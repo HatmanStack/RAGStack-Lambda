@@ -25,6 +25,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import boto3
@@ -113,10 +114,10 @@ def build_scrape_metadata(
 
 
 def write_metadata_file(
-    s3_client,
+    s3_client: Any,
     bucket: str,
     content_key: str,
-    metadata: dict,
+    metadata: dict[str, Any],
 ) -> str:
     """
     Write metadata JSON file alongside content file.
@@ -155,7 +156,7 @@ def sanitize_for_s3_metadata(value: str, max_length: int = 256) -> str:
     return ascii_value[:max_length]
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
     """
     Main Lambda handler - processes URLs and extracts content.
     """
@@ -205,7 +206,7 @@ def lambda_handler(event, context):
                 logger.warning(f"Job not found: {job_id}")
                 continue
 
-            job_status = job_item.get("status")
+            job_status = str(job_item.get("status", ""))
             if job_status in [
                 ScrapeStatus.CANCELLED.value,
                 ScrapeStatus.FAILED.value,
@@ -215,9 +216,9 @@ def lambda_handler(event, context):
                 continue
 
             # Get job config and metadata
-            config_data = job_item.get("config", {})
+            config_data: dict[str, Any] = job_item.get("config", {})  # type: ignore[assignment]
             config = ScrapeConfig.from_dict(config_data)
-            job_metadata = job_item.get("job_metadata", {})
+            job_metadata: dict[str, Any] = job_item.get("job_metadata", {})  # type: ignore[assignment]
 
             # Update URL status to processing
             urls_tbl.update_item(
@@ -228,7 +229,7 @@ def lambda_handler(event, context):
             )
 
             # Fetch content with auto SPA detection
-            scrape_mode = config_data.get("scrape_mode", "auto")
+            scrape_mode = str(config_data.get("scrape_mode", "auto"))
             force_playwright = scrape_mode == "full"
 
             result = fetch_auto(
@@ -334,16 +335,16 @@ def lambda_handler(event, context):
 
             # Publish processing progress update to subscribers
             graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-            current_processed = int(job_item.get("processed_count", 0)) + 1
+            current_processed = int(job_item.get("processed_count", 0)) + 1  # type: ignore[arg-type]
             publish_scrape_update(
                 graphql_endpoint=graphql_endpoint,
                 job_id=job_id,
-                base_url=job_item.get("base_url", ""),
-                title=job_item.get("title") or job_item.get("base_url", ""),
-                status=job_item.get("status", ScrapeStatus.PROCESSING.value),
-                total_urls=int(job_item.get("total_urls", 0)),
+                base_url=str(job_item.get("base_url", "")),
+                title=str(job_item.get("title") or job_item.get("base_url", "")),
+                status=str(job_item.get("status", ScrapeStatus.PROCESSING.value)),
+                total_urls=int(job_item.get("total_urls", 0)),  # type: ignore[arg-type]
                 processed_count=current_processed,
-                failed_count=int(job_item.get("failed_count", 0)),
+                failed_count=int(job_item.get("failed_count", 0)),  # type: ignore[arg-type]
             )
 
             processed += 1
@@ -369,7 +370,13 @@ def lambda_handler(event, context):
     }
 
 
-def _mark_failed(jobs_tbl, urls_tbl, job_id: str | None, url: str | None, error: str):
+def _mark_failed(
+    jobs_tbl: Any,
+    urls_tbl: Any,
+    job_id: str | None,
+    url: str | None,
+    error: str,
+) -> None:
     """Mark URL as failed and update job counters."""
     if not job_id or not url:
         return

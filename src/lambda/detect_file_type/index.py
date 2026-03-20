@@ -33,6 +33,7 @@ Output (adds fileType, detectedType, and pageInfo for OCR files):
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 import fitz  # PyMuPDF - for PDF page counting
@@ -196,7 +197,7 @@ def _get_pdf_page_info(input_s3_uri: str, filename: str) -> dict:
     Returns dict with total_pages, needs_batching, is_text_native, and batches array.
     """
     logger.info(f"Downloading PDF to count pages: {input_s3_uri}")
-    pdf_bytes = read_s3_binary(input_s3_uri)
+    pdf_bytes = read_s3_binary(input_s3_uri, max_size_bytes=500 * 1024 * 1024)
 
     # Count pages
     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -274,7 +275,7 @@ def _update_tracking_table(
     logger.info(f"Updated tracking table for {document_id}: {filename}, {total_pages} pages")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for file type detection.
 

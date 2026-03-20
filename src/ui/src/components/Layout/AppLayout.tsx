@@ -7,6 +7,7 @@ import type { AppLayoutProps, TopNavigationProps } from '@cloudscape-design/comp
 import { Navigation } from './Navigation';
 import { useAuth } from '../Auth/AuthProvider';
 import { useDemoMode } from '../../hooks/useDemoMode';
+import { NotificationProvider } from '../common/NotificationContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -66,7 +67,11 @@ export const AppLayout = ({ children, contentType = 'default' }: LayoutProps) =>
         navigation={<Navigation />}
         navigationOpen={navigationOpen}
         onNavigationChange={({ detail }) => setNavigationOpen(detail.open)}
-        content={children}
+        content={
+          <NotificationProvider>
+            {children}
+          </NotificationProvider>
+        }
         contentType={contentType}
         toolsHide
       />

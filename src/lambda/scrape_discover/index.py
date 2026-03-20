@@ -24,6 +24,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -42,7 +43,7 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler - processes discovery queue messages.
     """
@@ -90,7 +91,7 @@ def lambda_handler(event, context):
                 logger.warning(f"Job not found: {job_id}")
                 continue
 
-            job_status = job_item.get("status")
+            job_status = str(job_item.get("status", ""))
             if job_status in [
                 ScrapeStatus.CANCELLED.value,
                 ScrapeStatus.FAILED.value,
@@ -122,9 +123,9 @@ def lambda_handler(event, context):
             urls_tbl.put_item(Item=page_data)
 
             # Get job config
-            config_data = job_item.get("config", {})
+            config_data: dict[str, Any] = job_item.get("config", {})  # type: ignore[assignment]
             config = ScrapeConfig.from_dict(config_data)
-            base_url = job_item.get("base_url", url)
+            base_url = str(job_item.get("base_url", url))
 
             # Fetch the page to extract links
             fetcher = HttpFetcher(
@@ -181,16 +182,16 @@ def lambda_handler(event, context):
 
             # Publish discovery progress update to subscribers
             graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-            current_total = int(job_item.get("total_urls", 0)) + 1
+            current_total = int(job_item.get("total_urls", 0)) + 1  # type: ignore[arg-type]
             publish_scrape_update(
                 graphql_endpoint=graphql_endpoint,
                 job_id=job_id,
-                base_url=job_item.get("base_url", url),
-                title=job_item.get("title") or job_item.get("base_url", url),
-                status=job_item.get("status", ScrapeStatus.DISCOVERING.value),
+                base_url=str(job_item.get("base_url", url)),
+                title=str(job_item.get("title") or job_item.get("base_url", url)),
+                status=str(job_item.get("status", ScrapeStatus.DISCOVERING.value)),
                 total_urls=current_total,
-                processed_count=int(job_item.get("processed_count", 0)),
-                failed_count=int(job_item.get("failed_count", 0)),
+                processed_count=int(job_item.get("processed_count", 0)),  # type: ignore[arg-type]
+                failed_count=int(job_item.get("failed_count", 0)),  # type: ignore[arg-type]
             )
 
             # Extract and filter links if within depth limit
@@ -215,7 +216,7 @@ def lambda_handler(event, context):
 
                 # Check max pages limit
                 job_refresh = jobs_tbl.get_item(Key={"job_id": job_id})
-                total_discovered = int(job_refresh.get("Item", {}).get("total_urls", 0))
+                total_discovered = int(job_refresh.get("Item", {}).get("total_urls", 0))  # type: ignore[arg-type]
                 remaining = max_pages - total_discovered
 
                 # Queue new URLs for discovery

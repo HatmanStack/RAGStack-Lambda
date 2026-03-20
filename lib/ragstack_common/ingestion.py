@@ -24,6 +24,7 @@ Usage:
 
 import logging
 import time
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -37,7 +38,7 @@ DEFAULT_STATUS_CHECK_BATCH_SIZE = 25
 _bedrock_agent = None
 
 
-def _get_bedrock_agent():
+def _get_bedrock_agent() -> Any:
     """Get or create bedrock-agent client."""
     global _bedrock_agent
     if _bedrock_agent is None:
@@ -50,8 +51,8 @@ def start_ingestion_with_retry(
     ds_id: str,
     max_retries: int = 5,
     base_delay: float = 5.0,
-    client=None,
-) -> dict:
+    client: Any = None,
+) -> dict[str, Any]:
     """
     Start ingestion job with retry for concurrent API conflicts.
 
@@ -77,10 +78,11 @@ def start_ingestion_with_retry(
 
     for attempt in range(max_retries + 1):
         try:
-            return bedrock_agent.start_ingestion_job(
+            result: dict[str, Any] = bedrock_agent.start_ingestion_job(
                 knowledgeBaseId=kb_id,
                 dataSourceId=ds_id,
             )
+            return result
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             error_msg = e.response.get("Error", {}).get("Message", "")
@@ -111,11 +113,11 @@ def start_ingestion_with_retry(
 def ingest_documents_with_retry(
     kb_id: str,
     ds_id: str,
-    documents: list[dict],
+    documents: list[dict[str, Any]],
     max_retries: int = 5,
     base_delay: float = 2.0,
-    client=None,
-) -> dict:
+    client: Any = None,
+) -> dict[str, Any]:
     """
     Ingest documents with retry for concurrent API conflicts.
 
@@ -142,11 +144,12 @@ def ingest_documents_with_retry(
 
     for attempt in range(max_retries + 1):
         try:
-            return bedrock_agent.ingest_knowledge_base_documents(
+            result: dict[str, Any] = bedrock_agent.ingest_knowledge_base_documents(
                 knowledgeBaseId=kb_id,
                 dataSourceId=ds_id,
                 documents=documents,
             )
+            return result
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             error_msg = e.response.get("Error", {}).get("Message", "")
@@ -187,7 +190,7 @@ def check_document_status(
     ds_id: str,
     s3_uri: str,
     sleep_first: bool = True,
-    client=None,
+    client: Any = None,
 ) -> str:
     """
     Quick check for document ingestion status (single call, no polling).
@@ -215,7 +218,8 @@ def check_document_status(
         )
         doc_details = response.get("documentDetails", [])
         if doc_details:
-            return doc_details[0].get("status", "UNKNOWN")
+            status: str = doc_details[0].get("status", "UNKNOWN")
+            return status
     except ClientError as e:
         logger.warning(f"Error checking document status: {e}")
 
@@ -227,7 +231,7 @@ def batch_check_document_statuses(
     ds_id: str,
     s3_uris: list[str],
     batch_size: int = DEFAULT_STATUS_CHECK_BATCH_SIZE,
-    client=None,
+    client: Any = None,
 ) -> dict[str, str]:
     """
     Check ingestion status for multiple documents in batches.

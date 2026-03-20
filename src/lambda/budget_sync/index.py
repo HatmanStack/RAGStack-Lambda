@@ -13,6 +13,7 @@ import os
 import urllib.error
 import urllib.request
 from decimal import Decimal
+from typing import Any
 
 import boto3
 
@@ -37,11 +38,11 @@ def get_account_id() -> str:
     """Get AWS account ID (cached)."""
     global _account_id
     if _account_id is None:
-        _account_id = sts.get_caller_identity()["Account"]
+        _account_id = str(sts.get_caller_identity()["Account"])
     return _account_id
 
 
-def get_dynamodb_value(image: dict, key: str, default=None):
+def get_dynamodb_value(image: dict[str, Any], key: str, default: Any = None) -> Any:
     """Extract a value from DynamoDB stream image format."""
     if key not in image:
         return default
@@ -59,7 +60,7 @@ def get_dynamodb_value(image: dict, key: str, default=None):
     return default
 
 
-def send_cfn_response(event: dict, context, status: str, reason: str = "") -> None:
+def send_cfn_response(event: dict[str, Any], context: Any, status: str, reason: str = "") -> None:
     """Send response to CloudFormation."""
     logger.info(f"send_cfn_response called with status={status}")
 
@@ -85,7 +86,7 @@ def send_cfn_response(event: dict, context, status: str, reason: str = "") -> No
         response_url,
         data=body,
         method="PUT",
-        headers={"Content-Type": "", "Content-Length": len(body)},
+        headers={"Content-Type": "", "Content-Length": str(len(body))},
     )
     logger.info("urllib.request.Request created, sending...")
 
@@ -104,7 +105,7 @@ def send_cfn_response(event: dict, context, status: str, reason: str = "") -> No
         raise
 
 
-def handle_cfn_event(event: dict, context) -> dict:
+def handle_cfn_event(event: dict[str, Any], context: Any) -> dict[str, int]:
     """Handle CloudFormation custom resource event."""
     request_type = event.get("RequestType")
     logger.info(f"CloudFormation {request_type} request")
@@ -125,7 +126,7 @@ def handle_cfn_event(event: dict, context) -> dict:
     return {"statusCode": 200}
 
 
-def lambda_handler(event: dict, context) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Process DynamoDB stream events or CloudFormation custom resource events.
 
     Args:
@@ -152,7 +153,7 @@ def lambda_handler(event: dict, context) -> dict:
         return {"statusCode": 500, "error": str(e)}
 
 
-def _handle_event(event: dict, context) -> dict:
+def _handle_event(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Internal handler - separated so we can wrap with global exception handling."""
     # Log raw event immediately
     logger.info(f"RAW EVENT: {json.dumps(event, default=str)}")

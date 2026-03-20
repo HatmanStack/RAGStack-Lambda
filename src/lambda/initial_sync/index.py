@@ -12,6 +12,7 @@ On DELETE: No-op (KB deletion handles cleanup)
 import json
 import logging
 import urllib.request
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -22,7 +23,13 @@ logger.setLevel(logging.INFO)
 bedrock_agent = boto3.client("bedrock-agent")
 
 
-def send_response(event: dict, context, status: str, reason: str = "", data: dict = None):
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    reason: str = "",
+    data: dict[str, Any] | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,
@@ -51,7 +58,7 @@ def send_response(event: dict, context, status: str, reason: str = "", data: dic
         raise
 
 
-def lambda_handler(event: dict, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> None:
     """Handle CloudFormation custom resource events."""
     logger.info(f"Event: {json.dumps(event)}")
 

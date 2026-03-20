@@ -1035,7 +1035,7 @@ Resources:
             - Ref: StackPrefix
             - Ref: AWS::StackName
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/a51a0fada07f14c44d84493684d6443f
+      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f1a95088405f33f97b43a76b95030f23
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -1524,7 +1524,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/92f78f50ffbb81fac3f58a3b11f82cce
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/202a3b03936848ca6c61735c8751d90f
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
@@ -3993,7 +3993,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/e6a82ca6afe441d28f50a31d05d91705
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/b2e75324a1188fbc5613f11826d06db5
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer

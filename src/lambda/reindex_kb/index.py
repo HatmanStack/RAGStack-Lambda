@@ -39,13 +39,13 @@ s3_client = boto3.client("s3")
 lambda_client = boto3.client("lambda")
 
 # Lazy-initialized singletons
-_key_library = None
-_metadata_extractor = None
-_config_manager = None
+_key_library: KeyLibrary | None = None
+_metadata_extractor: MetadataExtractor | None = None
+_config_manager: ConfigurationManager | None = None
 
 # Cache for job metadata (persists within a single Lambda invocation/batch)
 # Key: job_id, Value: dict of extracted metadata from seed document
-_job_metadata_cache: dict[str, dict] = {}
+_job_metadata_cache: dict[str, dict[str, Any]] = {}
 
 # Reindex lock key in configuration table
 REINDEX_LOCK_KEY = "reindex_lock"
@@ -172,7 +172,7 @@ def get_config_manager() -> ConfigurationManager | None:
     return _config_manager
 
 
-def update_tracking_metadata(document_id: str, metadata: dict) -> None:
+def update_tracking_metadata(document_id: str, metadata: dict[str, Any]) -> None:
     """
     Update extracted_metadata in the tracking table.
 
@@ -203,7 +203,7 @@ def update_tracking_metadata(document_id: str, metadata: dict) -> None:
         logger.warning(f"Failed to update tracking metadata for {document_id}: {e}")
 
 
-def lambda_handler(event: dict, context: Any) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for reindex operations.
 
@@ -295,6 +295,8 @@ def handle_init(event: dict) -> dict:
     logger.info(f"Reset occurrence counts for {reset_count} metadata keys")
 
     # Count all content to reindex (documents, images, scraped pages)
+    if not tracking_table_name:
+        raise ValueError("TRACKING_TABLE environment variable is required")
     tracking_table = dynamodb.Table(tracking_table_name)
     all_content = list_all_content(tracking_table)
 
@@ -394,8 +396,8 @@ def handle_check_sync_status(event: dict) -> dict:
 
     try:
         job_response = bedrock_agent.get_ingestion_job(
-            knowledgeBaseId=new_kb_id,
-            dataSourceId=new_data_source_id,
+            knowledgeBaseId=new_kb_id,  # type: ignore[arg-type]
+            dataSourceId=new_data_source_id,  # type: ignore[arg-type]
             ingestionJobId=baseline_job_id,
         )
         status = job_response.get("ingestionJob", {}).get("status", "UNKNOWN")
@@ -407,12 +409,14 @@ def handle_check_sync_status(event: dict) -> dict:
         )
     except Exception as e:
         logger.error(f"Error checking sync status: {e}")
-        return {**event, "action": "finalize", "sync_status": "COMPLETE"}
+        return {**event, "action": "abort", "sync_status": "ERROR", "sync_error": str(e)}
 
-    if status in ("COMPLETE", "FAILED", "STOPPED"):
-        if status == "FAILED":
-            logger.warning("Sync failed")
+    if status == "COMPLETE":
         return {**event, "action": "finalize", "sync_status": status}
+
+    if status in ("FAILED", "STOPPED"):
+        logger.warning(f"Sync {status}, aborting reindex")
+        return {**event, "action": "abort", "sync_status": status}
 
     # Still in progress — state machine will loop back to WaitForSync
     return {**event, "sync_status": status}
@@ -428,6 +432,11 @@ def handle_process_batch(event: dict) -> dict:
     tracking_table_name = os.environ.get("TRACKING_TABLE")
     data_bucket = os.environ.get("DATA_BUCKET")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
+
+    if not tracking_table_name:
+        raise ValueError("TRACKING_TABLE environment variable is required")
+    if not data_bucket:
+        raise ValueError("DATA_BUCKET environment variable is required")
 
     total_documents = event["total_documents"]
     processed_count = event["processed_count"]
@@ -594,9 +603,9 @@ def process_text_item(
     Returns:
         Tuple of (processed_count, error_count, error_messages)
     """
-    doc_id = item.get("document_id")
-    filename = item.get("filename", "unknown")
-    output_s3_uri = item.get("output_s3_uri")
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    output_s3_uri = item.get("output_s3_uri") or ""
 
     if not output_s3_uri:
         logger.warning(f"Item {doc_id} has no output_s3_uri, skipping")
@@ -667,11 +676,11 @@ def process_scraped_item(
     from datetime import UTC, datetime
     from urllib.parse import urlparse
 
-    doc_id = item.get("document_id")
-    filename = item.get("filename", "unknown")
-    output_s3_uri = item.get("output_s3_uri")
-    input_s3_uri = item.get("input_s3_uri")
-    source_url = item.get("source_url", "")
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    output_s3_uri = item.get("output_s3_uri") or ""
+    input_s3_uri = item.get("input_s3_uri") or ""
+    source_url = item.get("source_url") or ""
 
     if not output_s3_uri:
         logger.warning(f"Scraped item {doc_id} has no output_s3_uri, skipping")
@@ -748,15 +757,17 @@ def process_scraped_item(
 
     # OLD FORMAT: Per-page tracking record
     # Get job_id from S3 input file metadata
-    job_id = None
+    old_job_id: str | None = None
     if input_s3_uri:
-        job_id = get_job_id_from_s3(input_s3_uri)
+        old_job_id = get_job_id_from_s3(str(input_s3_uri))
 
     # Get job-level metadata (from seed document, using new extraction settings)
     job_metadata = {}
-    if job_id:
-        job_metadata = get_or_extract_job_metadata(job_id, all_content, data_bucket)
-        logger.info(f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {job_id})")
+    if old_job_id:
+        job_metadata = get_or_extract_job_metadata(old_job_id, all_content, data_bucket)
+        logger.info(
+            f"Using job metadata for {doc_id}: {len(job_metadata)} fields (job {old_job_id})"
+        )
     else:
         logger.warning(f"No job_id found for scraped item {doc_id}, using page-only metadata")
 
@@ -778,8 +789,8 @@ def process_scraped_item(
     if parsed and parsed.netloc:
         metadata["source_domain"] = parsed.netloc
 
-    if job_id:
-        metadata["job_id"] = job_id
+    if old_job_id:
+        metadata["job_id"] = old_job_id
 
     # Write metadata sidecar to S3
     write_metadata_to_s3(output_s3_uri, metadata)
@@ -787,7 +798,9 @@ def process_scraped_item(
     # Update tracking table so UI shows fresh metadata
     update_tracking_metadata(doc_id, metadata)
 
-    logger.info(f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {job_id or 'none'})")
+    logger.info(
+        f"Wrote sidecar for scraped page {doc_id}: {filename} (job: {old_job_id or 'none'})"
+    )
     return processed_count + 1, error_count, error_messages
 
 
@@ -818,17 +831,17 @@ def process_media_item(
     """
     import re
 
-    doc_id = item.get("document_id")
-    filename = item.get("filename", "unknown")
-    input_s3_uri = item.get("input_s3_uri")  # Source video file
-    output_s3_uri = item.get("output_s3_uri")  # Transcript text
-    media_type = item.get("media_type", "video")
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    input_s3_uri = item.get("input_s3_uri") or ""  # Source video file
+    output_s3_uri = item.get("output_s3_uri") or ""  # Transcript text
+    media_type = item.get("media_type") or "video"
 
     # Extract metadata from transcript
-    metadata = {}
+    metadata: dict[str, Any] = {}
     if output_s3_uri:
         try:
-            transcript_text = read_s3_text(output_s3_uri)
+            transcript_text = read_s3_text(str(output_s3_uri))
             if transcript_text and transcript_text.strip():
                 extractor = get_metadata_extractor()
                 metadata = extractor.extract_metadata(transcript_text, doc_id)
@@ -929,16 +942,16 @@ def process_image_item(
     Returns:
         Tuple of (processed_count, error_count, error_messages)
     """
-    doc_id = item.get("document_id")
-    filename = item.get("filename", "unknown")
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
     image_s3_uri = item.get("output_s3_uri") or item.get("input_s3_uri")
     caption_s3_uri = item.get("caption_s3_uri")
 
     # Extract metadata from caption if available
-    metadata = {}
+    metadata: dict[str, Any] = {}
     if caption_s3_uri:
         try:
-            caption_text = read_s3_text(caption_s3_uri)
+            caption_text = read_s3_text(str(caption_s3_uri))
             if caption_text and caption_text.strip():
                 extractor = get_metadata_extractor()
                 metadata = extractor.extract_metadata(caption_text, doc_id)
@@ -1101,6 +1114,12 @@ def handle_finalize(event: dict) -> dict:
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
 
+    # Validate prerequisites before mutating config
+    if not stack_name:
+        raise ValueError("STACK_NAME environment variable is required")
+    if not new_data_source_id:
+        raise ValueError("new_data_source_id is required to update config")
+
     # Update config table first (primary source for KB IDs)
     publish_reindex_update(
         graphql_endpoint,
@@ -1111,7 +1130,7 @@ def handle_finalize(event: dict) -> dict:
         new_knowledge_base_id=new_kb_id,
     )
 
-    config_errors = update_config_kb_ids(new_kb_id, new_data_source_id)
+    config_errors = update_config_kb_ids(new_kb_id, str(new_data_source_id))
     if config_errors:
         error_messages.extend(config_errors)
         logger.warning(f"Config table update issues: {config_errors}")
@@ -1420,7 +1439,7 @@ def get_or_extract_job_metadata(
     return job_metadata
 
 
-def list_all_content(tracking_table) -> list[dict]:
+def list_all_content(tracking_table: Any) -> list[dict[str, Any]]:
     """
     List all content from tracking table (documents, images, and scraped pages).
 
@@ -1439,7 +1458,7 @@ def list_all_content(tracking_table) -> list[dict]:
         scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
     # Sort by type for consistent processing order: documents, images, scraped, media
-    def sort_key(item):
+    def sort_key(item: dict[str, Any]) -> tuple[int, Any]:
         item_type = item.get("type", "")
         if not item_type:
             return (0, item.get("document_id", ""))  # Documents (no type) first

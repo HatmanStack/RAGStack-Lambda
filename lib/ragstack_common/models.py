@@ -95,9 +95,9 @@ class Document:
     pages_succeeded: int = 0
     pages_failed: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for DynamoDB storage."""
-        data = {
+        data: dict[str, Any] = {
             "document_id": self.document_id,
             "filename": self.filename,
             "input_s3_uri": self.input_s3_uri,
@@ -123,7 +123,7 @@ class Document:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Document":
+    def from_dict(cls, data: dict[str, Any]) -> "Document":
         """Create Document from DynamoDB record."""
         return cls(
             document_id=data["document_id"],

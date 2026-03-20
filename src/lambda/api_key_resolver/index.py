@@ -9,6 +9,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -16,17 +17,17 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
-appsync = None
+appsync: Any = None
 
 
-def _initialize_client():
+def _initialize_client() -> None:
     """Initialize AppSync client (lazy initialization for testing)."""
     global appsync
     if appsync is None:
         appsync = boto3.client("appsync")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     AWS Lambda handler for GraphQL API key operations.
 

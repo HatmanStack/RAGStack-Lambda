@@ -27,6 +27,7 @@ Output:
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -47,7 +48,7 @@ s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler for text-based file processing.
     """

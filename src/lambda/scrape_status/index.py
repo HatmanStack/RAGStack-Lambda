@@ -34,6 +34,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -52,7 +53,7 @@ FAILURE_THRESHOLD = 0.1
 class DecimalEncoder(json.JSONEncoder):
     """JSON encoder that handles Decimal types from DynamoDB."""
 
-    def default(self, obj):
+    def default(self, obj: Any) -> Any:
         if isinstance(obj, Decimal):
             if obj % 1 == 0:
                 return int(obj)
@@ -60,7 +61,7 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler - routes to appropriate handler based on event type.
     """
@@ -92,8 +93,12 @@ def lambda_handler(event, context):
 
 
 def _handle_step_functions(
-    event, jobs_tbl, tracking_tbl, discovery_queue_url, processing_queue_url
-):
+    event: dict[str, Any],
+    jobs_tbl: Any,
+    tracking_tbl: Any,
+    discovery_queue_url: str | None,
+    processing_queue_url: str | None,
+) -> dict[str, Any]:
     """Handle Step Functions status polling."""
     job_id = event.get("job_id")
     if not job_id:
@@ -116,6 +121,7 @@ def _handle_step_functions(
         # Check queue depths to determine if discovery/processing are complete
         sqs = boto3.client("sqs")
 
+        # When queue URLs are unavailable, rely on count-based completion only
         discovery_complete = True
         processing_complete = True
 
@@ -245,7 +251,7 @@ def _handle_step_functions(
         raise
 
 
-def _handle_api_request(event, jobs_tbl, urls_tbl):
+def _handle_api_request(event: dict[str, Any], jobs_tbl: Any, urls_tbl: Any) -> dict[str, Any]:
     """Handle API Gateway requests."""
     try:
         http_method = event.get("httpMethod", "GET")
@@ -279,7 +285,7 @@ def _handle_api_request(event, jobs_tbl, urls_tbl):
         return _response(500, {"error": "Internal server error"})
 
 
-def _get_status_api(jobs_tbl, job_id: str) -> dict:
+def _get_status_api(jobs_tbl: Any, job_id: str) -> dict[str, Any]:
     """Get job status for API response."""
     response = jobs_tbl.get_item(Key={"job_id": job_id})
     job = response.get("Item")
@@ -291,7 +297,7 @@ def _get_status_api(jobs_tbl, job_id: str) -> dict:
     processed_count = int(job.get("processed_count", 0))
     failed_count = int(job.get("failed_count", 0))
 
-    progress = {
+    progress: dict[str, int | float] = {
         "total": total_urls,
         "processed": processed_count,
         "failed": failed_count,
@@ -319,13 +325,16 @@ def _get_status_api(jobs_tbl, job_id: str) -> dict:
     )
 
 
-def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
+def _list_urls(urls_tbl: Any, job_id: str, query_params: dict[str, str]) -> dict[str, Any]:
     """List URLs for a job with pagination."""
-    limit = min(int(query_params.get("limit", "50")), 100)
+    try:
+        limit = min(max(int(query_params.get("limit", "50")), 1), 100)
+    except (ValueError, TypeError):
+        return _response(400, {"error": "Invalid limit, must be integer 1-100"})
     next_token = query_params.get("next_token")
     status_filter = query_params.get("status")
 
-    query_kwargs = {
+    query_kwargs: dict[str, Any] = {
         "KeyConditionExpression": Key("job_id").eq(job_id),
     }
 
@@ -384,7 +393,7 @@ def _list_urls(urls_tbl, job_id: str, query_params: dict) -> dict:
     return _response(200, result)
 
 
-def _cancel_job(jobs_tbl, job_id: str) -> dict:
+def _cancel_job(jobs_tbl: Any, job_id: str) -> dict[str, Any]:
     """Cancel a running scrape job."""
     response = jobs_tbl.get_item(Key={"job_id": job_id})
     job = response.get("Item")
@@ -434,7 +443,7 @@ def _cancel_job(jobs_tbl, job_id: str) -> dict:
     )
 
 
-def _response(status_code: int, body: dict) -> dict:
+def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     """Create API Gateway proxy response."""
     return {
         "statusCode": status_code,

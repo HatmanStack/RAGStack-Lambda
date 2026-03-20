@@ -30,6 +30,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -41,7 +42,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def _list_partial_files(output_s3_prefix: str) -> list[dict]:
+def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
     """
     List partial files from S3 matching pages_XXX-YYY.txt pattern.
 
@@ -54,12 +55,12 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict]:
     s3 = boto3.client("s3")
 
     # List objects with pagination (handles >1000 objects)
-    partial_files = []
+    partial_files: list[dict[str, Any]] = []
     pattern = re.compile(r"pages_(\d+)-(\d+)\.txt$")
     continuation_token = None
 
     while True:
-        list_kwargs = {"Bucket": bucket, "Prefix": prefix}
+        list_kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
         if continuation_token:
             list_kwargs["ContinuationToken"] = continuation_token
 
@@ -85,7 +86,7 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict]:
             break
 
     # Sort by page_start
-    partial_files.sort(key=lambda x: x["page_start"])
+    partial_files.sort(key=lambda x: int(x["page_start"]))
 
     logger.info(f"Found {len(partial_files)} partial files in {output_s3_prefix}")
     return partial_files
@@ -116,7 +117,7 @@ def _invoke_ingest_to_kb(document_id: str, output_s3_uri: str) -> None:
     logger.info("IngestToKB invoked successfully")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler.
 
@@ -223,7 +224,7 @@ def lambda_handler(event, context):
     if graphql_endpoint:
         # Get filename from tracking table for the update
         response = table.get_item(Key={"document_id": document_id})
-        filename = response.get("Item", {}).get("filename", "unknown")
+        filename = str(response.get("Item", {}).get("filename", "unknown"))
 
         publish_document_update(
             graphql_endpoint,

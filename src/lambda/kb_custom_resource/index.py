@@ -8,6 +8,7 @@ so we use a custom resource to create and manage the Knowledge Base.
 import json
 import logging
 import time
+from typing import Any
 from urllib.request import Request, urlopen
 
 import boto3
@@ -20,7 +21,14 @@ bedrock_agent = boto3.client("bedrock-agent")
 ssm = boto3.client("ssm")
 
 
-def send_response(event, context, status, data=None, reason=None, physical_resource_id=None):
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    data: dict[str, Any] | None = None,
+    reason: str | None = None,
+    physical_resource_id: str | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,
@@ -48,7 +56,7 @@ def send_response(event, context, status, data=None, reason=None, physical_resou
         logger.error(f"Failed to send response: {e}")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> None:
     """Handle custom resource lifecycle."""
     logger.info(f"Event: {json.dumps(event)}")
 
@@ -79,7 +87,7 @@ def lambda_handler(event, context):
         send_response(event, context, "FAILED", reason=str(e))
 
 
-def get_knowledge_base_attributes(kb_id):
+def get_knowledge_base_attributes(kb_id: str) -> dict[str, Any]:
     """Fetch existing Knowledge Base attributes for Update requests."""
     logger.info(f"Fetching attributes for Knowledge Base: {kb_id}")
 
@@ -114,7 +122,7 @@ def get_knowledge_base_attributes(kb_id):
         raise
 
 
-def create_knowledge_base(properties):
+def create_knowledge_base(properties: dict[str, Any]) -> dict[str, Any]:
     """Create Bedrock Knowledge Base with S3 Vectors storage."""
 
     kb_name = properties["KnowledgeBaseName"]
@@ -268,7 +276,7 @@ def create_knowledge_base(properties):
                     "inclusionPrefixes": ["content/"],
                 },
             },
-            vectorIngestionConfiguration=chunking_config,
+            vectorIngestionConfiguration=chunking_config,  # type: ignore[arg-type]
         )
 
         data_source_id = ds_response["dataSource"]["dataSourceId"]
@@ -304,7 +312,7 @@ def create_knowledge_base(properties):
     }
 
 
-def delete_knowledge_base(kb_id, project_name="default"):
+def delete_knowledge_base(kb_id: str, project_name: str = "default") -> None:
     """Delete Knowledge Base and S3 Vectors index."""
     if kb_id == "KnowledgeBase":
         logger.info("Physical ID is placeholder, skipping deletion")

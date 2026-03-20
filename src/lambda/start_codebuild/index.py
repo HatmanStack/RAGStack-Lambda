@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from typing import Any
 from urllib.parse import quote
 
 import boto3
@@ -21,7 +22,7 @@ helper = CfnResource(
 codebuild_client = boto3.client("codebuild")
 
 
-def _redact_event(event):
+def _redact_event(event: dict[str, Any]) -> dict[str, Any] | str:
     """
     Redact sensitive fields from CloudFormation event before logging.
 
@@ -46,7 +47,7 @@ def _redact_event(event):
 
 @helper.create
 @helper.update
-def create_or_update(event, context):
+def create_or_update(event: dict[str, Any], context: Any) -> None:
     """
     Start CodeBuild project on Create or Update.
 
@@ -100,7 +101,7 @@ def create_or_update(event, context):
 
 @helper.poll_create
 @helper.poll_update
-def poll_create_or_update(event, context):
+def poll_create_or_update(event: dict[str, Any], context: Any) -> bool | None:
     """
     Poll CodeBuild project until complete.
 
@@ -143,7 +144,7 @@ def poll_create_or_update(event, context):
 
 
 @helper.delete
-def delete(event, context):
+def delete(event: dict[str, Any], context: Any) -> None:
     """
     Handle Delete events (no-op for CodeBuild).
 
@@ -152,7 +153,7 @@ def delete(event, context):
     logger.info("Delete event - no action needed")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> Any:
     """Lambda handler entry point"""
     logger.info(f"Received event: {json.dumps(_redact_event(event))}")
     return helper(event, context)

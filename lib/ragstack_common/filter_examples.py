@@ -7,6 +7,7 @@ filter examples used by the query-time filter generator.
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.config import Config
@@ -27,7 +28,7 @@ s3 = boto3.client("s3")
 DEFAULT_FILTER_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
-def _validate_filter_keys(filter_obj: dict, valid_keys: set[str]) -> bool:
+def _validate_filter_keys(filter_obj: dict[str, Any], valid_keys: set[str]) -> bool:
     """
     Check if a filter object only uses keys from the valid set.
 
@@ -61,10 +62,10 @@ def _validate_filter_keys(filter_obj: dict, valid_keys: set[str]) -> bool:
 
 
 def generate_filter_examples(
-    field_analysis: dict[str, dict],
+    field_analysis: dict[str, dict[str, Any]],
     model_id: str | None = None,
     num_examples: int = 6,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Generate filter examples using LLM based on discovered fields.
 
@@ -196,7 +197,7 @@ Return ONLY a JSON array, no explanation."""
 
 
 def store_filter_examples(
-    examples: list[dict],
+    examples: list[dict[str, Any]],
     bucket: str,
     index_name: str = "default",
 ) -> str:
@@ -239,7 +240,9 @@ def store_filter_examples(
     return f"s3://{bucket}/{latest_key}"
 
 
-def update_config_with_examples(examples: list[dict], clear_disabled: bool = False) -> None:
+def update_config_with_examples(
+    examples: list[dict[str, Any]], clear_disabled: bool = False
+) -> None:
     """
     Update configuration table with filter examples.
 

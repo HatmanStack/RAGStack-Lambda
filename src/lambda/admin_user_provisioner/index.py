@@ -8,6 +8,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -18,7 +19,13 @@ logger.setLevel(logging.INFO)
 cognito = boto3.client("cognito-idp")
 
 
-def send_response(event: dict, context, status: str, reason: str = "", data: dict = None) -> None:
+def send_response(
+    event: dict[str, Any],
+    context: Any,
+    status: str,
+    reason: str = "",
+    data: dict[str, Any] | None = None,
+) -> None:
     """Send response to CloudFormation."""
     response_body = {
         "Status": status,
@@ -36,7 +43,7 @@ def send_response(event: dict, context, status: str, reason: str = "", data: dic
         event["ResponseURL"],
         data=body,
         method="PUT",
-        headers={"Content-Type": "", "Content-Length": len(body)},
+        headers={"Content-Type": "", "Content-Length": str(len(body))},
     )
 
     try:
@@ -74,7 +81,7 @@ def create_user(user_pool_id: str, email: str) -> dict:
         return {"created": True, "username": email}
 
 
-def lambda_handler(event: dict, context) -> None:
+def lambda_handler(event: dict[str, Any], context: Any) -> None:
     """Handle CloudFormation custom resource events."""
     # CRITICAL: Always respond to CloudFormation, even if we crash
     try:
@@ -87,7 +94,7 @@ def lambda_handler(event: dict, context) -> None:
             logger.error(f"Failed to send error response: {resp_error}")
 
 
-def _handle_event(event: dict, context) -> None:
+def _handle_event(event: dict[str, Any], context: Any) -> None:
     """Internal handler - separated for global exception handling."""
     logger.info(f"Event: {json.dumps(event)}")
 

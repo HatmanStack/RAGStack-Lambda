@@ -46,6 +46,11 @@ from ragstack_common.storage import (
     parse_s3_uri,
     write_metadata_to_s3,
 )
+from ragstack_common.types import (
+    ChatResponse,
+    ConversationTurn,
+    SourceInfo,
+)
 
 __all__ = [
     "batch_check_document_statuses",
@@ -80,4 +85,7 @@ __all__ = [
     "validate_image_size",
     "validate_image_type",
     "write_metadata_to_s3",
+    "ChatResponse",
+    "ConversationTurn",
+    "SourceInfo",
 ]

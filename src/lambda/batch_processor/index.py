@@ -31,6 +31,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 
@@ -49,10 +50,10 @@ SUCCESS_THRESHOLD = 0.95
 dynamodb = boto3.resource("dynamodb")
 
 # Module-level initialization (lazy-initialized)
-_config_manager = None
+_config_manager: ConfigurationManager | None = None
 
 
-def _get_config_manager():
+def _get_config_manager() -> ConfigurationManager:
     """Get or initialize ConfigurationManager (lazy initialization)."""
     global _config_manager
     if _config_manager is None:
@@ -162,9 +163,9 @@ def _update_tracking_and_check(
     )
 
     attrs = response["Attributes"]
-    batches_remaining = int(attrs.get("batches_remaining", 0))
-    total_succeeded = int(attrs.get("pages_succeeded", 0))
-    total_failed = int(attrs.get("pages_failed", 0))
+    batches_remaining = int(attrs.get("batches_remaining", 0))  # type: ignore[arg-type]
+    total_succeeded = int(attrs.get("pages_succeeded", 0))  # type: ignore[arg-type]
+    total_failed = int(attrs.get("pages_failed", 0))  # type: ignore[arg-type]
 
     is_last_batch = batches_remaining == 0
 
@@ -236,7 +237,7 @@ def _invoke_combine_pages(
     logger.info("CombinePages invoked successfully")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, list[dict[str, Any]]]:
     """
     Process SQS messages containing batch jobs.
 

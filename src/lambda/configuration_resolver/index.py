@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from decimal import Decimal
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -18,11 +19,11 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 # Initialize boto3 clients (lazy initialization for testing)
-dynamodb = None
-configuration_table = None
+dynamodb: Any = None
+configuration_table: Any = None
 
 
-def _initialize_tables():
+def _initialize_tables() -> None:
     """Initialize DynamoDB tables (called on first use)."""
     global dynamodb, configuration_table
     if dynamodb is None:
@@ -35,7 +36,7 @@ def _initialize_tables():
         configuration_table = dynamodb.Table(config_table_name)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> Any:
     """
     AWS Lambda handler for GraphQL configuration operations.
 
@@ -87,7 +88,7 @@ def lambda_handler(event, context):
         raise
 
 
-def handle_get_configuration():
+def handle_get_configuration() -> dict[str, Any]:
     """
     Handle getConfiguration query.
 
@@ -120,7 +121,7 @@ def handle_get_configuration():
             default_config["demo_mode_enabled"] = False
 
         # Convert Decimals to native Python types for JSON serialization
-        def convert_decimals(obj):
+        def convert_decimals(obj: Any) -> Any:
             if isinstance(obj, dict):
                 return {k: convert_decimals(v) for k, v in obj.items()}
             if isinstance(obj, list):
@@ -154,7 +155,7 @@ def handle_get_configuration():
         raise
 
 
-def handle_update_configuration(custom_config):
+def handle_update_configuration(custom_config: Any) -> bool:
     """
     Handle updateConfiguration mutation.
 
@@ -265,7 +266,7 @@ def handle_update_configuration(custom_config):
         raise
 
 
-def get_configuration_item(config_type):
+def get_configuration_item(config_type: str) -> dict[str, Any] | None:
     """
     Retrieve a configuration item from DynamoDB.
 
@@ -277,14 +278,15 @@ def get_configuration_item(config_type):
     """
     try:
         response = configuration_table.get_item(Key={"Configuration": config_type})
-        return response.get("Item")
+        item: dict[str, Any] | None = response.get("Item")
+        return item
 
     except ClientError:
         logger.exception(f"Error retrieving {config_type}")
         raise
 
 
-def remove_partition_key(item):
+def remove_partition_key(item: dict[str, Any] | None) -> dict[str, Any]:
     """
     Remove 'Configuration' partition key from DynamoDB item.
 

@@ -37,6 +37,9 @@ jobs:
       - name: Run vulture dead code check
         run: uvx vulture lib/ src/lambda/ vulture_whitelist.py --min-confidence 90
 
+      - name: Run mypy type check
+        run: uv run mypy lib/ src/lambda/
+
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest

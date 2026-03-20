@@ -18,6 +18,7 @@ import { useCollection } from '@cloudscape-design/collection-hooks';
 import type { DocumentItem } from '../../hooks/useDocuments';
 import type { DocumentTableProps, TablePreferences } from './types';
 import { useDemoMode } from '../../hooks/useDemoMode';
+import { useNotifications } from '../common/NotificationContext';
 
 // Date range options for document retention display
 const DATE_RANGE_OPTIONS = [
@@ -133,6 +134,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
   const [preferences, setPreferences] = useState<TablePreferences>(loadPreferences);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const { isEnabled: isDemoMode } = useDemoMode();
+  const { addNotification } = useNotifications();
 
   // Save preferences when they change
   useEffect(() => {
@@ -196,7 +198,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       );
 
       if (unprocessedItems.length === selectedItems.length) {
-        window.alert('Selected items have not been processed yet. Use Reprocess to run the full pipeline first.');
+        addNotification('warning', 'Selected items have not been processed yet. Use Reprocess to run the full pipeline first.');
         return;
       }
 
@@ -217,7 +219,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         setSelectedItems([]);
       } catch (err) {
         console.error('Reindex failed:', err);
-        window.alert(`Reindex failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        addNotification('error', `Reindex failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
       }
@@ -225,7 +227,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
       if (!onReprocess) return;
 
       if (scrapeItems.length > 0 && nonScrapeItems.length === 0) {
-        window.alert('Scrape jobs cannot be reprocessed. Please start a new scrape from the Scrape page.');
+        addNotification('warning', 'Scrape jobs cannot be reprocessed. Please start a new scrape from the Scrape page.');
         return;
       }
 
@@ -244,7 +246,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         setSelectedItems([]);
       } catch (err) {
         console.error('Reprocess failed:', err);
-        window.alert(`Reprocess failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        addNotification('error', `Reprocess failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
       }
@@ -263,6 +265,7 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         setSelectedItems([]);
       } catch (err) {
         console.error('Delete failed:', err);
+        addNotification('error', `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
       }

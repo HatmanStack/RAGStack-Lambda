@@ -62,11 +62,11 @@ class BedrockClient:
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff
         self.max_backoff = max_backoff
-        self._client = None
-        self.metering_data = {}  # Track token usage
+        self._client: Any = None
+        self.metering_data: dict[str, dict[str, int]] = {}
 
     @property
-    def client(self):
+    def client(self) -> Any:
         """Lazy-loaded Bedrock client."""
         if self._client is None:
             config = Config(
@@ -262,7 +262,8 @@ class BedrockClient:
         content = message.get("content", [])
 
         if isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict):
-            return content[0].get("text", "")
+            text: str = content[0].get("text", "")
+            return text
         return ""
 
     def _calculate_backoff(self, retry_count: int) -> float:
@@ -281,7 +282,7 @@ class BedrockClient:
         # Add jitter
         jitter = random.random()
 
-        return backoff_seconds + jitter
+        return float(backoff_seconds + jitter)
 
     def get_metering_data(self) -> dict[str, Any]:
         """

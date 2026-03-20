@@ -99,11 +99,11 @@ class KeyLibrary:
             cache_ttl_seconds: TTL for cached active keys (default 5 minutes).
         """
         self.table_name = table_name or os.environ.get("METADATA_KEY_LIBRARY_TABLE")
-        self._table = None
-        self._table_exists = None
+        self._table: Any = None
+        self._table_exists: bool | None = None
         self._cache_ttl = cache_ttl_seconds
-        self._active_keys_cache = None
-        self._active_keys_cache_time = None
+        self._active_keys_cache: list[dict[str, Any]] | None = None
+        self._active_keys_cache_time: float | None = None
 
         if self.table_name:
             logger.info(f"Initialized KeyLibrary with table: {self.table_name}")
@@ -114,7 +114,7 @@ class KeyLibrary:
             )
 
     @property
-    def table(self):
+    def table(self) -> Any:
         """Lazy-load DynamoDB table resource."""
         if self._table is None and self.table_name:
             dynamodb = boto3.resource("dynamodb")
@@ -175,7 +175,7 @@ class KeyLibrary:
                 ExpressionAttributeNames={"#status": "status"},
                 ExpressionAttributeValues={":active": "active"},
             )
-            items = response.get("Items", [])
+            items: list[dict[str, Any]] = response.get("Items", [])
 
             # Handle pagination for large tables
             while "LastEvaluatedKey" in response:
@@ -214,7 +214,7 @@ class KeyLibrary:
 
         try:
             response = self.table.get_item(Key={"key_name": key_name})
-            item = response.get("Item")
+            item: dict[str, Any] | None = response.get("Item")
 
             if item:
                 logger.debug(f"Retrieved key '{key_name}' from library")
