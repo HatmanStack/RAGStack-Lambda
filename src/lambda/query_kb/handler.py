@@ -145,8 +145,8 @@ def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, r
             }
         ]
 
-        # Add user quota check if authenticated
-        if is_authenticated and tracking_id:
+        # Add per-caller quota check (authenticated or anonymous with tracking ID)
+        if tracking_id:
             user_key = f"quota#user#{tracking_id}#{today}"
             transact_items.append(
                 {
@@ -271,23 +271,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     # Use conversationId as fallback tracking ID for anonymous users
     tracking_id = user_id or (f"anon:{conversation_id}" if conversation_id else None)
 
-    # Check quotas and select model (primary or fallback)
-    chat_model_id = atomic_quota_check_and_increment(tracking_id or "", is_authenticated, region)
-
-    # Log safe summary (not full event payload to avoid PII/user data leakage)
-    safe_summary = {
-        "query_length": len(query) if isinstance(query, str) else 0,
-        "has_conversation": conversation_id is not None,
-        "is_authenticated": is_authenticated,
-        "knowledge_base_id": knowledge_base_id[:8] + "..."
-        if len(knowledge_base_id) > 8
-        else knowledge_base_id,
-    }
-    logger.info(f"Querying Knowledge Base: {json.dumps(safe_summary)}")
-    logger.info(f"Using chat model: {chat_model_id}")
-
     try:
-        # Validate query
+        # Validate query before consuming quota
         if not query:
             return {
                 "answer": "",
@@ -311,6 +296,23 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 "sources": [],
                 "error": "Query exceeds maximum length of 10000 characters",
             }
+
+        # Check quotas and select model (primary or fallback) — after validation
+        chat_model_id = atomic_quota_check_and_increment(
+            tracking_id or "", is_authenticated, region
+        )
+
+        # Log safe summary (not full event payload to avoid PII/user data leakage)
+        safe_summary = {
+            "query_length": len(query),
+            "has_conversation": conversation_id is not None,
+            "is_authenticated": is_authenticated,
+            "knowledge_base_id": knowledge_base_id[:8] + "..."
+            if len(knowledge_base_id) > 8
+            else knowledge_base_id,
+        }
+        logger.info(f"Querying Knowledge Base: {json.dumps(safe_summary)}")
+        logger.info(f"Using chat model: {chat_model_id}")
 
         # Retrieve conversation history for multi-turn context
         history = []

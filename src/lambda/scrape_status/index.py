@@ -121,6 +121,7 @@ def _handle_step_functions(
         # Check queue depths to determine if discovery/processing are complete
         sqs = boto3.client("sqs")
 
+        # When queue URLs are unavailable, rely on count-based completion only
         discovery_complete = True
         processing_complete = True
 
@@ -326,7 +327,10 @@ def _get_status_api(jobs_tbl: Any, job_id: str) -> dict[str, Any]:
 
 def _list_urls(urls_tbl: Any, job_id: str, query_params: dict[str, str]) -> dict[str, Any]:
     """List URLs for a job with pagination."""
-    limit = min(int(query_params.get("limit", "50")), 100)
+    try:
+        limit = min(max(int(query_params.get("limit", "50")), 1), 100)
+    except (ValueError, TypeError):
+        return _response(400, {"error": "Invalid limit parameter, must be an integer between 1 and 100"})
     next_token = query_params.get("next_token")
     status_filter = query_params.get("status")
 

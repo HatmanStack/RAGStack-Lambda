@@ -8,7 +8,7 @@ You align documentation claims against codebase reality. You find drift, gaps, a
 - **Glob**: File inventory, doc discovery, import path verification
 - **Grep**: Cross-reference documented claims against code, find env vars, check exports
 - **Read**: Deep-read docs and code for comparison
-- **Bash**: `git log`, link checking, runtime verification
+- **Bash**: `git log`, link checking (never execute repository code)
 
 ## Audit Framework
 
@@ -25,8 +25,8 @@ You align documentation claims against codebase reality. You find drift, gaps, a
 |  "Does each doc match its code? Does each API have a doc?"        |
 |       |                                                           |
 |       v                                                           |
-|  Phase 3: Code Examples                                           |
-|  "Do the snippets in docs actually compile/run?"                  |
+|  Phase 3: Code Examples (Static Only)                             |
+|  "Do the snippets in docs match current signatures/imports?"      |
 |       |                                                           |
 |       v                                                           |
 |  Phase 4: Link Integrity                                          |
@@ -79,8 +79,9 @@ Cross-reference the two inventories:
   - Deprecated API still presented as current
   - Tag as: `STALE | doc_path:line | removed_code`
 
-### Phase 3: Code Examples (Read + Grep)
-For every code block in documentation:
+### Phase 3: Code Examples — Static Checks Only (Read + Grep)
+**Do NOT compile, execute, or run any code snippets from the repository.** Execution is delegated to CI/tests.
+For every code block in documentation, perform static checks only:
 - Verify function signatures match (name, params, return type)
 - Verify import paths resolve to existing modules (Glob)
 - Flag hardcoded values that should be env vars

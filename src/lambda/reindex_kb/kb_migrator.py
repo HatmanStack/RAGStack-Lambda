@@ -320,11 +320,14 @@ class KBMigrator:
             kb_config = kb_response.get("knowledgeBase", {})
             storage_config = kb_config.get("storageConfiguration", {})
 
-            # Extract vector index ARN if S3 storage
+            # Extract vector index ARN if S3 storage (handles both S3 and S3_VECTORS types)
             vector_index_arn = None
             storage_type = str(storage_config.get("type", ""))
-            if storage_type == "S3":
-                s3_config: dict[str, Any] = storage_config.get("s3Configuration", {})  # type: ignore[assignment]
+            if storage_type == "S3_VECTORS":
+                s3_config: dict[str, Any] = storage_config.get("s3VectorsConfiguration", {})  # type: ignore[assignment]
+                vector_index_arn = s3_config.get("vectorIndexArn")
+            elif storage_type == "S3":
+                s3_config = storage_config.get("s3Configuration", {})  # type: ignore[assignment]
                 vector_index_arn = s3_config.get("vectorIndexArn")
 
             # Delete data sources first

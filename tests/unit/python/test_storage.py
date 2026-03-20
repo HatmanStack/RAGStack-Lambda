@@ -83,18 +83,16 @@ class TestReadS3Binary:
         mock_client.get_object.assert_not_called()
 
     @patch("ragstack_common.storage.get_s3_client")
-    def test_head_failure_falls_through(self, mock_get_client):
-        """If HEAD fails, fall through to GET without blocking."""
+    def test_head_failure_raises(self, mock_get_client):
+        """If HEAD fails with max_size_bytes set, raise ClientError (fail closed)."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         mock_client.head_object.side_effect = ClientError(
             {"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject"
         )
-        mock_body = MagicMock()
-        mock_body.read.return_value = b"fallback content"
-        mock_client.get_object.return_value = {"Body": mock_body}
 
-        result = read_s3_binary("s3://bucket/key.bin", max_size_bytes=1000)
+        with pytest.raises(ClientError):
+            read_s3_binary("s3://bucket/key.bin", max_size_bytes=1000)
 
-        assert result == b"fallback content"
-        mock_client.get_object.assert_called_once()
+        # Should NOT proceed to GET when HEAD fails and size guard is active
+        mock_client.get_object.assert_not_called()

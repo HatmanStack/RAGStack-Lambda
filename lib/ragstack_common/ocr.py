@@ -8,11 +8,14 @@ Provides OCR capabilities using:
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import boto3
 import fitz  # PyMuPDF
 from botocore.exceptions import ClientError
+
+if TYPE_CHECKING:
+    from mypy_boto3_textract import TextractClient
 
 from .bedrock import BedrockClient
 from .image import prepare_bedrock_image_attachment
@@ -49,11 +52,11 @@ class OcrService:
         self.bedrock_model_id = bedrock_model_id or "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
         # Lazy-load clients
-        self._textract_client: Any = None
+        self._textract_client: TextractClient | None = None
         self._bedrock_client: BedrockClient | None = None
 
     @property
-    def textract_client(self) -> Any:
+    def textract_client(self) -> "TextractClient":
         """Lazy-loaded Textract client."""
         if self._textract_client is None:
             self._textract_client = boto3.client("textract", region_name=self.region)

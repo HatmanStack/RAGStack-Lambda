@@ -601,9 +601,9 @@ def process_text_item(
     Returns:
         Tuple of (processed_count, error_count, error_messages)
     """
-    doc_id = str(item.get("document_id", ""))
-    filename = str(item.get("filename", "unknown"))
-    output_s3_uri = str(item.get("output_s3_uri", ""))
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    output_s3_uri = item.get("output_s3_uri") or ""
 
     if not output_s3_uri:
         logger.warning(f"Item {doc_id} has no output_s3_uri, skipping")
@@ -674,11 +674,11 @@ def process_scraped_item(
     from datetime import UTC, datetime
     from urllib.parse import urlparse
 
-    doc_id = str(item.get("document_id", ""))
-    filename = str(item.get("filename", "unknown"))
-    output_s3_uri = str(item.get("output_s3_uri", ""))
-    input_s3_uri = item.get("input_s3_uri")
-    source_url = str(item.get("source_url", ""))
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
+    output_s3_uri = item.get("output_s3_uri") or ""
+    input_s3_uri = item.get("input_s3_uri") or ""
+    source_url = item.get("source_url") or ""
 
     if not output_s3_uri:
         logger.warning(f"Scraped item {doc_id} has no output_s3_uri, skipping")
@@ -1112,6 +1112,12 @@ def handle_finalize(event: dict) -> dict:
     kb_role_arn = os.environ.get("KB_ROLE_ARN")
     embedding_model_arn = os.environ.get("EMBEDDING_MODEL_ARN")
 
+    # Validate prerequisites before mutating config
+    if not stack_name:
+        raise ValueError("STACK_NAME environment variable is required")
+    if not new_data_source_id:
+        raise ValueError("new_data_source_id is required to update config")
+
     # Update config table first (primary source for KB IDs)
     publish_reindex_update(
         graphql_endpoint,
@@ -1122,14 +1128,12 @@ def handle_finalize(event: dict) -> dict:
         new_knowledge_base_id=new_kb_id,
     )
 
-    config_errors = update_config_kb_ids(new_kb_id, str(new_data_source_id or ""))
+    config_errors = update_config_kb_ids(new_kb_id, str(new_data_source_id))
     if config_errors:
         error_messages.extend(config_errors)
         logger.warning(f"Config table update issues: {config_errors}")
 
     # Also update Lambda env vars as fallback
-    if not stack_name:
-        raise ValueError("STACK_NAME environment variable is required")
     lambda_errors = update_lambda_kb_env_vars(stack_name, new_kb_id, new_data_source_id)
     if lambda_errors:
         error_messages.extend(lambda_errors)

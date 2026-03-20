@@ -131,17 +131,18 @@ def read_s3_binary(s3_uri: str, max_size_bytes: int | None = None) -> bytes:
 
     bucket, key = parse_s3_uri(s3_uri)
 
-    # Optional size guard: HEAD check before downloading
+    # Optional size guard: HEAD check before downloading (fail closed)
     if max_size_bytes is not None:
         try:
             head = get_s3_client().head_object(Bucket=bucket, Key=key)
             content_length: int = head["ContentLength"]
             if content_length > max_size_bytes:
                 raise FileSizeLimitExceededError(content_length, max_size_bytes, s3_uri)
-        except ClientError:
-            # If HEAD fails, fall through to GET (don't block on HEAD failures)
-            logger.warning(f"HEAD request failed for {s3_uri}, proceeding with GET")
         except FileSizeLimitExceededError:
+            raise
+        except ClientError:
+            # HEAD failed — fail closed to prevent downloading oversized objects
+            logger.error(f"HEAD request failed for {s3_uri}, aborting (max_size_bytes={max_size_bytes})")
             raise
 
     try:

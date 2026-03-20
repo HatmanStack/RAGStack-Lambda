@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from uuid import uuid4
 
 import boto3
 
@@ -93,14 +94,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
                 # FIFO queues require MessageGroupId and MessageDeduplicationId
                 if is_fifo:
-                    # Use original attributes if available, otherwise use defaults
                     attrs = msg.get("Attributes", {})
                     send_kwargs["MessageGroupId"] = attrs.get(
                         "MessageGroupId", "dlq-replay"
                     )
-                    send_kwargs["MessageDeduplicationId"] = (
-                        attrs.get("MessageDeduplicationId", msg["MessageId"])
-                    )
+                    # Always use a fresh dedup ID so SQS does not treat the
+                    # replay as a duplicate of the original message.
+                    send_kwargs["MessageDeduplicationId"] = uuid4().hex
 
                 client.send_message(**send_kwargs)
 

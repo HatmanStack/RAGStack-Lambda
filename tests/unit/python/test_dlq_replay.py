@@ -114,7 +114,10 @@ class TestDlqReplay:
         assert result == {"replayed": 1, "failed": 0}
         send_call = client.send_message.call_args
         assert send_call.kwargs["MessageGroupId"] == "sync-group"
-        assert send_call.kwargs["MessageDeduplicationId"] == "dedup-1"
+        # Dedup ID should be a fresh uuid, not the original (to avoid SQS dedup)
+        dedup_id = send_call.kwargs["MessageDeduplicationId"]
+        assert dedup_id != "dedup-1"
+        assert len(dedup_id) == 32  # uuid4().hex length
         assert send_call.kwargs["QueueUrl"] == ENV_VARS["SYNC_QUEUE_URL"]
 
     def test_empty_dlq(self, mock_sqs):
