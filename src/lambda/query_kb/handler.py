@@ -18,7 +18,11 @@ from botocore.exceptions import ClientError
 
 try:
     from ._clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
-    from .conversation import get_conversation_history, store_conversation_turn, update_conversation_turn
+    from .conversation import (
+        get_conversation_history,
+        store_conversation_turn,
+        update_conversation_turn,
+    )
     from .filters import (
         _get_filter_components,
         _get_filter_examples,
@@ -212,10 +216,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     """
     # Detect async invocation from AppSync resolver
     is_async = event.get("asyncInvocation", False)
-    request_id = event.get("requestId")
     turn_number = event.get("turnNumber")
 
     # Check public access control
+    allowed, error_msg = check_public_access(event, "chat", get_config_manager())
     if not allowed:
         return {
             "answer": "",

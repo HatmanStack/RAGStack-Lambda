@@ -24,7 +24,7 @@ def _mock_dependencies():
 
     mock_boto3 = MagicMock()
     mock_boto3.resource.return_value = mock_dynamodb_resource
-    mock_boto3.client.side_effect = lambda service, **kwargs: {
+    mock_boto3.client.side_effect = lambda service, **_kwargs: {
         "lambda": mock_lambda_client,
         "s3": mock_s3_client,
         "stepfunctions": mock_sfn_client,
@@ -62,57 +62,71 @@ def _mock_dependencies():
     mock_storage.is_valid_uuid.return_value = True
     mock_types = MagicMock()
 
-    with patch.dict(
-        "sys.modules",
-        {
-            "boto3": mock_boto3,
-            "boto3.dynamodb": MagicMock(),
-            "boto3.dynamodb.conditions": MagicMock(),
-            "botocore": MagicMock(),
-            "botocore.exceptions": MagicMock(ClientError=Exception),
-            "ragstack_common": MagicMock(),
-            "ragstack_common.auth": mock_auth,
-            "ragstack_common.config": mock_config,
-            "ragstack_common.demo_mode": mock_demo,
-            "ragstack_common.filter_examples": mock_filter_examples,
-            "ragstack_common.image": mock_image_mod,
-            "ragstack_common.ingestion": mock_ingestion,
-            "ragstack_common.key_library": mock_key_library,
-            "ragstack_common.metadata_extractor": mock_metadata_extractor,
-            "ragstack_common.scraper": mock_scraper,
-            "ragstack_common.storage": mock_storage,
-            "ragstack_common.types": mock_types,
-        },
-    ):
-        with patch.dict(
+    with (
+        patch.dict(
+            "sys.modules",
+            {
+                "boto3": mock_boto3,
+                "boto3.dynamodb": MagicMock(),
+                "boto3.dynamodb.conditions": MagicMock(),
+                "botocore": MagicMock(),
+                "botocore.exceptions": MagicMock(ClientError=Exception),
+                "ragstack_common": MagicMock(),
+                "ragstack_common.auth": mock_auth,
+                "ragstack_common.config": mock_config,
+                "ragstack_common.demo_mode": mock_demo,
+                "ragstack_common.filter_examples": mock_filter_examples,
+                "ragstack_common.image": mock_image_mod,
+                "ragstack_common.ingestion": mock_ingestion,
+                "ragstack_common.key_library": mock_key_library,
+                "ragstack_common.metadata_extractor": mock_metadata_extractor,
+                "ragstack_common.scraper": mock_scraper,
+                "ragstack_common.storage": mock_storage,
+                "ragstack_common.types": mock_types,
+                "ragstack_common.sources": MagicMock(),
+            },
+        ),
+        patch.dict(
             "os.environ",
             {
                 "TRACKING_TABLE": "test-tracking",
                 "DATA_BUCKET": "test-bucket",
-                "QUERY_KB_FUNCTION_ARN": "arn:aws:lambda:us-east-1:123456789:function:test-query-kb",
+                "QUERY_KB_FUNCTION_ARN": (
+                    "arn:aws:lambda:us-east-1:123456789:function:test-query-kb"
+                ),
                 "CONVERSATION_TABLE_NAME": "test-conversation-table",
             },
-        ):
-            # Clear cached module so it reimports with mocks
-            if "index" in sys.modules:
-                del sys.modules["index"]
+        ),
+    ):
+        # Clear cached module so it reimports with mocks
+        if "index" in sys.modules:
+            del sys.modules["index"]
 
-            import importlib
+        # Ensure our path is at the front of sys.path
+        appsync_path = str(Path(__file__).parents[3] / "src" / "lambda" / "appsync_resolvers")
+        old_path = sys.path[:]
+        # Remove any query_kb path entries that could shadow our import
+        sys.path = [p for p in sys.path if "query_kb" not in p]
+        if appsync_path not in sys.path:
+            sys.path.insert(0, appsync_path)
 
-            import index
+        import importlib
 
-            importlib.reload(index)
+        import index
 
-            # Make mocks accessible to tests
-            index._test_dynamodb = mock_dynamodb_resource
-            index._test_lambda_client = mock_lambda_client
-            index._test_auth = mock_auth
+        importlib.reload(index)
 
-            yield index
+        # Make mocks accessible to tests
+        index._test_dynamodb = mock_dynamodb_resource
+        index._test_lambda_client = mock_lambda_client
+        index._test_auth = mock_auth
 
-            # Cleanup
-            if "index" in sys.modules:
-                del sys.modules["index"]
+        yield index
+
+        # Cleanup
+        sys.path = old_path
+        if "index" in sys.modules:
+            del sys.modules["index"]
 
 
 class TestQueryKnowledgeBaseMutation:
@@ -222,7 +236,8 @@ class TestQueryKnowledgeBaseMutation:
         index._test_lambda_client.invoke.assert_called_once()
         call_kwargs = index._test_lambda_client.invoke.call_args[1]
         assert call_kwargs["InvocationType"] == "Event"
-        assert call_kwargs["FunctionName"] == "arn:aws:lambda:us-east-1:123456789:function:test-query-kb"
+        expected_arn = "arn:aws:lambda:us-east-1:123456789:function:test-query-kb"
+        assert call_kwargs["FunctionName"] == expected_arn
 
         payload = json.loads(call_kwargs["Payload"])
         assert payload["asyncInvocation"] is True
@@ -371,9 +386,9 @@ class TestGetConversation:
         """COMPLETED turn has parsed sources array."""
         index = _mock_dependencies
 
-        sources_json = json.dumps([
-            {"documentId": "doc-1", "s3Uri": "s3://bucket/doc1", "snippet": "test snippet"}
-        ])
+        sources_json = json.dumps(
+            [{"documentId": "doc-1", "s3Uri": "s3://bucket/doc1", "snippet": "test snippet"}]
+        )
 
         mock_table = MagicMock()
         mock_table.query.return_value = {

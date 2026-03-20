@@ -24,44 +24,46 @@ def _mock_dependencies():
 
     mock_types = MagicMock()
 
-    with patch.dict(
-        "sys.modules",
-        {
-            "boto3": MagicMock(),
-            "boto3.dynamodb": MagicMock(),
-            "boto3.dynamodb.conditions": MagicMock(),
-            "botocore": MagicMock(),
-            "botocore.exceptions": MagicMock(),
-            "ragstack_common": MagicMock(),
-            "ragstack_common.types": mock_types,
-            "_clients": mock_clients,
-        },
-    ):
-        with patch.dict(
+    with (
+        patch.dict(
+            "sys.modules",
+            {
+                "boto3": MagicMock(),
+                "boto3.dynamodb": MagicMock(),
+                "boto3.dynamodb.conditions": MagicMock(),
+                "botocore": MagicMock(),
+                "botocore.exceptions": MagicMock(),
+                "ragstack_common": MagicMock(),
+                "ragstack_common.types": mock_types,
+                "_clients": mock_clients,
+            },
+        ),
+        patch.dict(
             "os.environ",
             {"CONVERSATION_TABLE_NAME": "test-conversation-table"},
-        ):
-            # Clear cached module
-            for mod_name in list(sys.modules.keys()):
-                if mod_name == "conversation" or mod_name.startswith("conversation."):
-                    del sys.modules[mod_name]
+        ),
+    ):
+        # Clear cached module
+        for mod_name in list(sys.modules.keys()):
+            if mod_name == "conversation" or mod_name.startswith("conversation."):
+                del sys.modules[mod_name]
 
-            import importlib
+        import importlib
 
-            import conversation
+        import conversation
 
-            importlib.reload(conversation)
+        importlib.reload(conversation)
 
-            # Inject the mock for direct access
-            conversation._test_dynamodb = mock_dynamodb
-            conversation._test_table = mock_table
+        # Inject the mock for direct access
+        conversation._test_dynamodb = mock_dynamodb
+        conversation._test_table = mock_table
 
-            yield conversation
+        yield conversation
 
-            # Cleanup
-            for mod_name in list(sys.modules.keys()):
-                if mod_name == "conversation" or mod_name.startswith("conversation."):
-                    del sys.modules[mod_name]
+        # Cleanup
+        for mod_name in list(sys.modules.keys()):
+            if mod_name == "conversation" or mod_name.startswith("conversation."):
+                del sys.modules[mod_name]
 
 
 class TestUpdateConversationTurn:
