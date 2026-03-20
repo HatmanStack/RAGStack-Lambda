@@ -7,6 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+class MockClientError(Exception):
+    """Minimal ClientError stand-in with .response attribute for exception handling."""
+
+    def __init__(self, code: str = "UnknownError", message: str = ""):
+        super().__init__(message or code)
+        self.response = {"Error": {"Code": code}}
+
+
 # Add Lambda source directory to path
 sys.path.insert(0, str(Path(__file__).parents[3] / "src" / "lambda" / "appsync_resolvers"))
 
@@ -70,7 +79,7 @@ def _mock_dependencies():
                 "boto3.dynamodb": MagicMock(),
                 "boto3.dynamodb.conditions": MagicMock(),
                 "botocore": MagicMock(),
-                "botocore.exceptions": MagicMock(ClientError=Exception),
+                "botocore.exceptions": MagicMock(ClientError=MockClientError),
                 "ragstack_common": MagicMock(),
                 "ragstack_common.auth": mock_auth,
                 "ragstack_common.config": mock_config,
@@ -307,10 +316,7 @@ class TestQueryKnowledgeBaseMutation:
         mock_table.query.return_value = {"Items": [{"turnNumber": 1}]}
         index._test_dynamodb.Table.return_value = mock_table
 
-        # ClientError in the module is mocked as Exception (see fixture line 73)
-        # Create an error object that mimics ClientError's .response attribute
-        conflict_error = Exception("ConditionalCheckFailedException")
-        conflict_error.response = {"Error": {"Code": "ConditionalCheckFailedException"}}
+        conflict_error = MockClientError("ConditionalCheckFailedException")
 
         # First two puts fail with conflict, third succeeds
         mock_table.put_item.side_effect = [conflict_error, conflict_error, None]
@@ -339,8 +345,7 @@ class TestQueryKnowledgeBaseMutation:
         mock_table.query.return_value = {"Items": [{"turnNumber": 1}]}
         index._test_dynamodb.Table.return_value = mock_table
 
-        conflict_error = Exception("ConditionalCheckFailedException")
-        conflict_error.response = {"Error": {"Code": "ConditionalCheckFailedException"}}
+        conflict_error = MockClientError("ConditionalCheckFailedException")
         mock_table.put_item.side_effect = [conflict_error, conflict_error, conflict_error]
 
         args = {

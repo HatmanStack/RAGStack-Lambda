@@ -121,10 +121,18 @@ def store_conversation_turn(
         item["userId"] = user_id
 
     try:
-        table.put_item(Item=item)
+        table.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(turnNumber)",
+        )
         logger.info(f"Stored turn {turn_number} for conversation {conversation_id[:8]}...")
     except ClientError as e:
-        logger.error(f"Failed to store conversation turn: {e}")
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(
+                f"Turn {turn_number} already exists for {conversation_id[:8]}..., skipping"
+            )
+        else:
+            logger.error(f"Failed to store conversation turn: {e}")
 
 
 def update_conversation_turn(

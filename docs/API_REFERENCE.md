@@ -163,6 +163,16 @@ query GetConversation($conversationId: ID!) {
 
 Poll until the turn matching your `requestId` has `status: "COMPLETED"` or `status: "ERROR"`.
 
+**`ChatStatus` values:**
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Query accepted, Lambda processing in progress |
+| `COMPLETED` | Response ready — `assistantResponse` and `sources` populated |
+| `ERROR` | Processing failed — check the `error` field for details |
+
+**Polling strategy:** Start polling after ~1 second. Use exponential backoff (multiply interval by 1.5x) with a cap of 5 seconds. Set a hard timeout of 90 seconds. Typical response times are 30–50 seconds depending on query complexity.
+
 **curl (send mutation):**
 ```bash
 curl -X POST 'YOUR_GRAPHQL_ENDPOINT' \
