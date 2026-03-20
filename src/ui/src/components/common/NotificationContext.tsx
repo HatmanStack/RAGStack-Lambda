@@ -76,8 +76,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setItems(prev => {
         const next = [...prev, item];
-        // Drop oldest notifications when exceeding max
-        return next.length > MAX_NOTIFICATIONS ? next.slice(next.length - MAX_NOTIFICATIONS) : next;
+        if (next.length > MAX_NOTIFICATIONS) {
+          // Clean up timers for dropped notifications
+          const dropped = next.slice(0, next.length - MAX_NOTIFICATIONS);
+          for (const d of dropped) {
+            if (d.id) {
+              const t = timersRef.current.get(d.id);
+              if (t) {
+                clearTimeout(t);
+                timersRef.current.delete(d.id);
+              }
+            }
+          }
+          return next.slice(next.length - MAX_NOTIFICATIONS);
+        }
+        return next;
       });
 
       // Auto-dismiss success and info after timeout

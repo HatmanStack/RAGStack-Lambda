@@ -94,7 +94,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     logger.info(f"Initialized batch tracking: {total_batches} batches")
 
     # Send batch messages to SQS (in batches of 10, the SQS limit)
-    entries = []
+    entries: list[dict[str, str]] = []
+    failed_count = 0
     for i, batch in enumerate(batches):
         message_body = {
             "document_id": document_id,
@@ -114,11 +115,37 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         )
 
         if len(entries) == 10:
-            sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
+            resp = sqs.send_message_batch(
+                QueueUrl=batch_queue_url, Entries=entries
+            )  # type: ignore[arg-type]
+            batch_failed = resp.get("Failed", [])
+            if batch_failed:
+                failed_count += len(batch_failed)
+                for f in batch_failed:
+                    logger.error(
+                        f"SQS batch send failed: {f.get('Id')} "
+                        f"- {f.get('Message')}"
+                    )
             entries = []
 
     if entries:  # Send remaining
-        sqs.send_message_batch(QueueUrl=batch_queue_url, Entries=entries)  # type: ignore[arg-type]
+        resp = sqs.send_message_batch(
+            QueueUrl=batch_queue_url, Entries=entries
+        )  # type: ignore[arg-type]
+        batch_failed = resp.get("Failed", [])
+        if batch_failed:
+            failed_count += len(batch_failed)
+            for f in batch_failed:
+                logger.error(
+                    f"SQS batch send failed: {f.get('Id')} "
+                    f"- {f.get('Message')}"
+                )
+
+    if failed_count > 0:
+        raise RuntimeError(
+            f"{failed_count}/{total_batches} batch messages "
+            f"failed to enqueue for {document_id}"
+        )
 
     logger.info(f"Enqueued {total_batches} batch messages to SQS")
 

@@ -942,8 +942,8 @@ def process_image_item(
     Returns:
         Tuple of (processed_count, error_count, error_messages)
     """
-    doc_id = str(item.get("document_id", ""))
-    filename = str(item.get("filename", "unknown"))
+    doc_id = item.get("document_id") or ""
+    filename = item.get("filename") or "unknown"
     image_s3_uri = item.get("output_s3_uri") or item.get("input_s3_uri")
     caption_s3_uri = item.get("caption_s3_uri")
 
