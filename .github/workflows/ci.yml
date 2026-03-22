@@ -2,75 +2,92 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.claude/**'
   pull_request:
-    branches: [main, develop]
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.claude/**'
 
 env:
   CI: true
   FORCE_COLOR: 1
 
 jobs:
-  backend-lint:
-    name: Backend Linting
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      ui: ${{ steps.filter.outputs.ui }}
+      chat: ${{ steps.filter.outputs.chat }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'lib/**'
+              - 'src/lambda/**'
+              - 'tests/**'
+              - 'requirements.txt'
+            ui:
+              - 'src/ui/**'
+            chat:
+              - 'src/ragstack-chat/**'
+
+  backend:
+    name: Backend Lint & Tests
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+      PYTHONPATH: ${{ github.workspace }}/lib
+    steps:
+      - uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Run ruff check
+      - name: Ruff check
         run: uv run ruff check .
 
-      - name: Run ruff format check
+      - name: Ruff format check
         run: uv run ruff format . --check
 
-      - name: Run vulture dead code check
+      - name: Vulture dead code check
         run: uvx vulture lib/ src/lambda/ vulture_whitelist.py --min-confidence 90
 
-      - name: Run mypy type check
+      - name: Mypy type check
         run: uv run mypy lib/ src/lambda/
 
-  backend-tests:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        run: uv pip install --system -r requirements.txt
-
-      - name: Run pytest
+      - name: Tests
         run: uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short
-        env:
-          AWS_DEFAULT_REGION: us-east-1
-          PYTHONPATH: ${{ github.workspace }}/lib
 
-  frontend-lint:
-    name: Frontend Linting
+  ui:
+    name: UI Lint & Tests
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -80,39 +97,24 @@ jobs:
         working-directory: ./src/ui
         run: npm ci
 
-      - name: Run ESLint
+      - name: Lint
         working-directory: ./src/ui
         run: npm run lint
 
-  frontend-tests:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: src/ui/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./src/ui
-        run: npm ci
-
-      - name: Run tests
+      - name: Tests
         working-directory: ./src/ui
         run: npm test
 
-  ragstack-chat-lint:
-    name: RagStack Chat Linting
+  chat:
+    name: RagStack Chat Lint, Typecheck & Tests
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.chat == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -122,81 +124,38 @@ jobs:
         working-directory: ./src/ragstack-chat
         run: npm ci
 
-      - name: Run ESLint
+      - name: Setup generated config for CI
+        run: cp src/ragstack-chat/src/amplify-config.template.ts src/ragstack-chat/src/amplify-config.generated.ts
+
+      - name: Lint
         working-directory: ./src/ragstack-chat
         run: npm run lint
 
-  ragstack-chat-typecheck:
-    name: RagStack Chat Typecheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: src/ragstack-chat/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./src/ragstack-chat
-        run: npm ci
-
-      - name: Setup generated config for CI
-        run: cp src/ragstack-chat/src/amplify-config.template.ts src/ragstack-chat/src/amplify-config.generated.ts
-
-      - name: Run TypeScript check
+      - name: Type check
         working-directory: ./src/ragstack-chat
         run: npx tsc --noEmit
 
-  ragstack-chat-tests:
-    name: RagStack Chat Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: src/ragstack-chat/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./src/ragstack-chat
-        run: npm ci
-
-      - name: Setup generated config for CI
-        run: cp src/ragstack-chat/src/amplify-config.template.ts src/ragstack-chat/src/amplify-config.generated.ts
-
-      - name: Run tests
+      - name: Tests
         working-directory: ./src/ragstack-chat
         run: npm test
 
   status-check:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs:
-      - backend-lint
-      - backend-tests
-      - frontend-lint
-      - frontend-tests
-      - ragstack-chat-lint
-      - ragstack-chat-typecheck
-      - ragstack-chat-tests
+    needs: [backend, ui, chat]
     if: always()
     steps:
-      - name: Check if all jobs passed
+      - name: Verify
         run: |
-          if [ "${{ needs.backend-lint.result }}" != "success" ] || \
-             [ "${{ needs.backend-tests.result }}" != "success" ] || \
-             [ "${{ needs.frontend-lint.result }}" != "success" ] || \
-             [ "${{ needs.frontend-tests.result }}" != "success" ] || \
-             [ "${{ needs.ragstack-chat-lint.result }}" != "success" ] || \
-             [ "${{ needs.ragstack-chat-typecheck.result }}" != "success" ] || \
-             [ "${{ needs.ragstack-chat-tests.result }}" != "success" ]; then
-            echo "❌ Some checks failed"
-            exit 1
-          fi
-          echo "✅ All checks passed!"
+          results=(
+            "${{ needs.backend.result }}"
+            "${{ needs.ui.result }}"
+            "${{ needs.chat.result }}"
+          )
+          for result in "${results[@]}"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "One or more checks failed: $result"
+              exit 1
+            fi
+          done
+          echo "All checks passed!"
