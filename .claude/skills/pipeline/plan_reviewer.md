@@ -16,6 +16,8 @@ The Planning Architect has created a phased implementation plan in `docs/plans/<
 - **Grep**: Search for patterns
 - **Edit**: **ONLY** for `docs/plans/<plan_id>/feedback.md`. **NEVER** modify plan files.
 
+**Markdown lint rules for feedback.md:** Fenced code blocks must have language tags (never bare ` ``` `). Headings must not end with punctuation. Use `1.` for all ordered list items.
+
 ## Your Review Process
 
 ### 1. Visualize the Dependency Chain

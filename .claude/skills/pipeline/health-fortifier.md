@@ -79,6 +79,8 @@ For each guardrail added:
 
 As you complete tasks, use **Edit** to mark checkboxes in `Phase-N.md` from `[ ]` to `[x]`.
 
+**Markdown lint:** When editing plan files or creating any markdown, fenced code blocks must have language tags, headings must not end with punctuation, use `1.` for all ordered list items.
+
 ## Handling Review Feedback
 
 When you receive `CHANGES_REQUESTED` from the Health Reviewer:

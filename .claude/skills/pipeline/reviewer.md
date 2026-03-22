@@ -15,6 +15,8 @@ The implementer reads `docs/plans/<plan_id>/Phase-N.md` and uses tools to implem
 - **Grep**: Search for code patterns
 - **Edit**: **ONLY** for `docs/plans/<plan_id>/feedback.md`. **NEVER** modify source code or plan files.
 
+**Markdown lint rules for feedback.md:** Fenced code blocks must have language tags (never bare ` ``` `). Headings must not end with punctuation. Use `1.` for all ordered list items.
+
 **Feedback Loop:**
 
 ```text

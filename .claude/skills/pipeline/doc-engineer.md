@@ -73,6 +73,8 @@ When fixing drifted docs:
 
 As you complete tasks, use **Edit** to mark checkboxes in `Phase-N.md` from `[ ]` to `[x]`.
 
+**Markdown lint:** When editing or creating any markdown files, fenced code blocks must have language tags, headings must not end with punctuation, use `1.` for all ordered list items.
+
 ## Handling Review Feedback
 
 When you receive `CHANGES_REQUESTED` from the Doc Reviewer:

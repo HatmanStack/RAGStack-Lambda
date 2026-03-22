@@ -14,6 +14,15 @@ You are an expert architect creating a comprehensive, phase-based implementation
 
 *Use your tools to create actual plan files - don't just describe them.*
 
+### Markdown Lint Rules
+
+All plan files must pass markdownlint. Follow these rules in every file you create:
+- **Fenced code blocks** must have a language tag: ` ```text `, ` ```bash `, ` ```xml `, ` ```markdown `, etc. Never use bare ` ``` `
+- **Headings** must not end with punctuation (no trailing `:`, `.`, `!`, `?`)
+- **Ordered lists** must use `1.` for every item (markdownlint auto-renumbers)
+- **Code spans** must not have spaces inside backticks (`` `def` `` not `` `def ` ``)
+- **Blank lines** required before and after headings, code blocks, and lists
+
 ### Target Engineer Profile
 * Skilled developer with **zero context** on this codebase
 * Unfamiliar with toolset and problem domain

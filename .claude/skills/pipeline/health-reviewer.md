@@ -17,6 +17,8 @@ You review two types of implementation:
 - **Grep**: Search for patterns, verify cleanup completeness
 - **Edit**: **ONLY** for `docs/plans/<plan_id>/feedback.md`. **NEVER** modify source code or plan files.
 
+**Markdown lint rules for feedback.md:** Fenced code blocks must have language tags (never bare ` ``` `). Headings must not end with punctuation. Use `1.` for all ordered list items.
+
 ```text
 +-------------------------------------------------------------------+
 |                    HEALTH REVIEW GATE                              |

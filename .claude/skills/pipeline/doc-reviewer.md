@@ -15,6 +15,8 @@ You verify that documentation changes are accurate, complete, and that preventio
 - **Grep**: Cross-reference documented claims against code
 - **Edit**: **ONLY** for `docs/plans/<plan_id>/feedback.md`. **NEVER** modify source code, docs, or plan files.
 
+**Markdown lint rules for feedback.md:** Fenced code blocks must have language tags (never bare ` ``` `). Headings must not end with punctuation. Use `1.` for all ordered list items.
+
 ```text
 +-------------------------------------------------------------------+
 |                    DOC REVIEW GATE                                 |

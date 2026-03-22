@@ -189,5 +189,6 @@ The **IMPLEMENTATION_COMPLETE** signal indicates ready for review.
 - **Follow TDD** - Tests first (Red), then implement (Green)
 - **Ask Questions** - Don't guess
 - **Verify** - Run tests frequently
+- **Markdown lint** - When editing plan files: fenced code blocks need language tags, headings must not end with punctuation, use `1.` for all ordered list items
 
 **You have real power to change code. Use it wisely and precisely according to the plan.**
