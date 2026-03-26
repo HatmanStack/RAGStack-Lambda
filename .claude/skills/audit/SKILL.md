@@ -199,9 +199,9 @@ Create the directory.
 
 Before spawning agents, read all required role prompt files. Only read prompts for selected audits.
 
-- **If health selected:** Read `.claude/skills/pipeline/health-auditor.md`
-- **If eval selected:** Read `.claude/skills/pipeline/eval-hire.md`, `.claude/skills/pipeline/eval-stress.md`, `.claude/skills/pipeline/eval-day2.md`
-- **If docs selected:** Read `.claude/skills/pipeline/doc-auditor.md`
+- **If health selected:** Read `skills/pipeline/health-auditor.md`
+- **If eval selected:** Read `skills/pipeline/eval-hire.md`, `skills/pipeline/eval-stress.md`, `skills/pipeline/eval-day2.md`
+- **If docs selected:** Read `skills/pipeline/doc-auditor.md`
 
 ### Step 5: Spawn All Agents in Parallel
 
@@ -317,7 +317,24 @@ For agents with valid signals, write the intake docs:
 
 See the individual intake skill SKILL.md files (repo-health, repo-eval, doc-health) for the exact output templates.
 
-### Step 7: Handoff
+### Step 7: Log to Manifest
+
+Append an entry to `.claude/skill-runs.json` in the repo root. If the file does not exist, create it with an empty array first. Each entry records when a skill was run so that skill usage can be tracked across repos and OS wipes.
+
+```json
+{
+  "skill": "audit",
+  "date": "YYYY-MM-DD",
+  "plan": "YYYY-MM-DD-audit-slug",
+  "audits": ["health", "eval", "docs"]
+}
+```
+
+- `audits`: list which audits were selected (subset of health, eval, docs)
+- Read the existing file, parse the JSON array, append the new entry, and write it back
+- If the file is malformed, overwrite it with a fresh array containing only the new entry
+
+### Step 8: Handoff
 
 ```text
 Audit complete: docs/plans/YYYY-MM-DD-audit-slug/

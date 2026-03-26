@@ -306,6 +306,23 @@ If not ready: write feedback to docs/plans/$ARGUMENTS/feedback.md tagged FINAL_R
 
 ## Completion
 
+### Log to Manifest
+
+Before reporting the final verdict, append an entry to `.claude/skill-runs.json` in the repo root. If the file does not exist, create it with an empty array first.
+
+```json
+{
+  "skill": "pipeline",
+  "date": "YYYY-MM-DD",
+  "plan": "$ARGUMENTS",
+  "verdict": "GO | NO-GO | MAX_ITERATIONS"
+}
+```
+
+- `verdict`: the final outcome of this pipeline run
+- Read the existing file, parse the JSON array, append the new entry, and write it back
+- If the file is malformed, overwrite it with a fresh array containing only the new entry
+
 ### On GO
 
 ```text

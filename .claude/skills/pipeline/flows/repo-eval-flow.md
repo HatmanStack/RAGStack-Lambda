@@ -48,13 +48,13 @@ Report detected state to the user before continuing.
 ## Pre-Flight: Role File Validation
 
 Before spawning any agents, verify all required role prompt files exist using **Glob**:
-- `.claude/skills/pipeline/planner.md`
-- `.claude/skills/pipeline/plan_reviewer.md`
-- `.claude/skills/pipeline/implementer.md`
-- `.claude/skills/pipeline/reviewer.md`
-- `.claude/skills/pipeline/eval-hire.md`
-- `.claude/skills/pipeline/eval-stress.md`
-- `.claude/skills/pipeline/eval-day2.md`
+- `skills/pipeline/planner.md`
+- `skills/pipeline/plan_reviewer.md`
+- `skills/pipeline/implementer.md`
+- `skills/pipeline/reviewer.md`
+- `skills/pipeline/eval-hire.md`
+- `skills/pipeline/eval-stress.md`
+- `skills/pipeline/eval-day2.md`
 
 If any file is missing, **stop and report** which files are absent. Do not attempt to spawn agents with missing role prompts.
 

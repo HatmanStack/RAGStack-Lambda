@@ -91,9 +91,9 @@ Create the directory.
 
 **You** (the orchestrator) must read the role prompt files and embed their contents in each agent's prompt. Agents cannot access skill directory files.
 
-1. **Read** `.claude/skills/pipeline/eval-hire.md` — store contents as `HIRE_PROMPT`
-2. **Read** `.claude/skills/pipeline/eval-stress.md` — store contents as `STRESS_PROMPT`
-3. **Read** `.claude/skills/pipeline/eval-day2.md` — store contents as `DAY2_PROMPT`
+1. **Read** `skills/pipeline/eval-hire.md` — store contents as `HIRE_PROMPT`
+2. **Read** `skills/pipeline/eval-stress.md` — store contents as `STRESS_PROMPT`
+3. **Read** `skills/pipeline/eval-day2.md` — store contents as `DAY2_PROMPT`
 
 Then spawn **3 Agents in parallel**:
 
@@ -205,7 +205,22 @@ pillar_overrides:
 3. Overlapping findings consolidated]
 ```
 
-### Step 5: Handoff
+### Step 5: Log to Manifest
+
+Append an entry to `.claude/skill-runs.json` in the repo root. If the file does not exist, create it with an empty array first.
+
+```json
+{
+  "skill": "repo-eval",
+  "date": "YYYY-MM-DD",
+  "plan": "YYYY-MM-DD-eval-slug"
+}
+```
+
+- Read the existing file, parse the JSON array, append the new entry, and write it back
+- If the file is malformed, overwrite it with a fresh array containing only the new entry
+
+### Step 6: Handoff
 
 ```text
 Evaluation complete: docs/plans/YYYY-MM-DD-eval-slug/eval.md

@@ -59,13 +59,13 @@ Report detected state to the user before continuing.
 ## Pre-Flight: Role File Validation
 
 Before spawning any agents, verify all required role prompt files exist using **Glob**:
-- `.claude/skills/pipeline/planner.md`
-- `.claude/skills/pipeline/plan_reviewer.md`
+- `skills/pipeline/planner.md`
+- `skills/pipeline/plan_reviewer.md`
 
 Also validate the implementer/reviewer roles needed for each phase tag type. Based on which intake docs are present:
-- If `health-audit.md`: `.claude/skills/pipeline/health-hygienist.md`, `.claude/skills/pipeline/health-fortifier.md`, `.claude/skills/pipeline/health-reviewer.md`
-- If `eval.md`: `.claude/skills/pipeline/implementer.md`, `.claude/skills/pipeline/reviewer.md`
-- If `doc-audit.md`: `.claude/skills/pipeline/doc-engineer.md`, `.claude/skills/pipeline/doc-reviewer.md`
+- If `health-audit.md`: `skills/pipeline/health-hygienist.md`, `skills/pipeline/health-fortifier.md`, `skills/pipeline/health-reviewer.md`
+- If `eval.md`: `skills/pipeline/implementer.md`, `skills/pipeline/reviewer.md`
+- If `doc-audit.md`: `skills/pipeline/doc-engineer.md`, `skills/pipeline/doc-reviewer.md`
 
 Note: evaluator/auditor role files (eval-hire.md, eval-stress.md, eval-day2.md, health-auditor.md, doc-auditor.md) are NOT needed here — they were used during intake only.
 
