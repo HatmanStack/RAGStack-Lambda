@@ -18,9 +18,12 @@ def _mock_dependencies():
     mock_table = MagicMock()
     mock_dynamodb.Table.return_value = mock_table
 
-    # Mock the _clients module
+    # Mock the _clients and _compat modules
     mock_clients = MagicMock()
     mock_clients.dynamodb = mock_dynamodb
+
+    mock_compat = MagicMock()
+    mock_compat.dynamodb = mock_dynamodb
 
     mock_types = MagicMock()
 
@@ -36,6 +39,7 @@ def _mock_dependencies():
                 "ragstack_common": MagicMock(),
                 "ragstack_common.types": mock_types,
                 "_clients": mock_clients,
+                "_compat": mock_compat,
             },
         ),
         patch.dict(
@@ -43,7 +47,7 @@ def _mock_dependencies():
             {"CONVERSATION_TABLE_NAME": "test-conversation-table"},
         ),
     ):
-        # Clear cached module
+        # Clear cached module (keep _compat mock from patch.dict)
         for mod_name in list(sys.modules.keys()):
             if mod_name == "conversation" or mod_name.startswith("conversation."):
                 del sys.modules[mod_name]

@@ -10,11 +10,21 @@ import re
 from typing import Any
 
 try:
-    from ._compat import bedrock_runtime, dynamodb, s3_client
-    from .conversation import MAX_MESSAGE_LENGTH
+    from ._compat import (
+        MAX_MESSAGE_LENGTH,
+        bedrock_runtime,
+        dynamodb,
+        get_config_manager,
+        s3_client,
+    )
 except ImportError:
-    from _compat import bedrock_runtime, dynamodb, s3_client  # type: ignore[import-not-found]
-    from conversation import MAX_MESSAGE_LENGTH  # type: ignore[import-not-found]
+    from _compat import (  # type: ignore[import-not-found]
+        MAX_MESSAGE_LENGTH,
+        bedrock_runtime,
+        dynamodb,
+        get_config_manager,
+        s3_client,
+    )
 
 from ragstack_common.storage import parse_s3_uri
 
@@ -228,11 +238,6 @@ RULES:
 QUERY TO USE FOR SEARCH:"""
 
     # Use a lightweight model for query rewriting (configurable via DynamoDB)
-    try:
-        from .filters import get_config_manager
-    except ImportError:
-        from filters import get_config_manager  # type: ignore[import-not-found,no-redef]
-
     rewrite_model = str(
         get_config_manager().get_parameter(
             "chat_query_rewrite_model", default="us.amazon.nova-lite-v1:0"

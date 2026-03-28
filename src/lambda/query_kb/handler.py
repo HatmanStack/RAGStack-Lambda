@@ -18,54 +18,44 @@ from botocore.exceptions import ClientError
 
 try:
     from ._compat import (
+        _augment_with_id_lookup,
+        _get_filter_components,
+        _get_filter_examples,
         bedrock_agent,
         bedrock_runtime,
+        build_conversation_messages,
+        build_retrieval_query,
         dynamodb,
         dynamodb_client,
-        s3_client,
-    )
-    from .conversation import (
+        extract_sources,
+        fetch_image_for_converse,
+        format_timestamp,
+        get_config_manager,
         get_conversation_history,
+        s3_client,
         store_conversation_turn,
         update_conversation_turn,
     )
-    from .filters import (
-        _get_filter_components,
-        _get_filter_examples,
-        get_config_manager,
-    )
-    from .media import fetch_image_for_converse, format_timestamp
-    from .retrieval import (
-        _augment_with_id_lookup,
-        build_conversation_messages,
-        build_retrieval_query,
-    )
-    from .sources import extract_sources
 except ImportError:
     from _compat import (  # type: ignore[import-not-found]
+        _augment_with_id_lookup,
+        _get_filter_components,
+        _get_filter_examples,
         bedrock_agent,
         bedrock_runtime,
+        build_conversation_messages,
+        build_retrieval_query,
         dynamodb,
         dynamodb_client,
-        s3_client,
-    )
-    from conversation import (  # type: ignore[import-not-found]
+        extract_sources,
+        fetch_image_for_converse,
+        format_timestamp,
+        get_config_manager,
         get_conversation_history,
+        s3_client,
         store_conversation_turn,
         update_conversation_turn,
     )
-    from filters import (  # type: ignore[import-not-found]
-        _get_filter_components,
-        _get_filter_examples,
-        get_config_manager,
-    )
-    from media import fetch_image_for_converse, format_timestamp  # type: ignore[import-not-found]
-    from retrieval import (  # type: ignore[import-not-found]
-        _augment_with_id_lookup,
-        build_conversation_messages,
-        build_retrieval_query,
-    )
-    from sources import extract_sources  # type: ignore[import-not-found]
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import get_knowledge_base_config

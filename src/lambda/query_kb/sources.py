@@ -12,24 +12,26 @@ from typing import Any
 from urllib.parse import unquote
 
 try:
-    from ._compat import dynamodb, s3_client
-    from .filters import get_config_manager
-    from .media import (
+    from ._compat import (
         MEDIA_CONTENT_TYPES,
+        dynamodb,
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
         generate_media_url,
+        get_config_manager,
+        s3_client,
     )
 except ImportError:
-    from _compat import dynamodb, s3_client  # type: ignore[import-not-found]
-    from filters import get_config_manager  # type: ignore[import-not-found]
-    from media import (  # type: ignore[import-not-found]
+    from _compat import (  # type: ignore[import-not-found]
         MEDIA_CONTENT_TYPES,
+        dynamodb,
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
         generate_media_url,
+        get_config_manager,
+        s3_client,
     )
 
 from ragstack_common.kb_filters import extract_kb_scalar
