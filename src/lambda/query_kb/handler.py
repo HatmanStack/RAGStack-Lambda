@@ -17,7 +17,13 @@ import boto3
 from botocore.exceptions import ClientError
 
 try:
-    from ._clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
+    from ._compat import (
+        bedrock_agent,
+        bedrock_runtime,
+        dynamodb,
+        dynamodb_client,
+        s3_client,
+    )
     from .conversation import (
         get_conversation_history,
         store_conversation_turn,
@@ -37,34 +43,31 @@ try:
     )
     from .sources import extract_sources
 except ImportError:
-    from _clients import (  # type: ignore[import-not-found,no-redef]
+    from _compat import (  # type: ignore[import-not-found]
         bedrock_agent,
         bedrock_runtime,
         dynamodb,
         dynamodb_client,
         s3_client,
     )
-    from conversation import (  # type: ignore[import-not-found,no-redef]
+    from conversation import (  # type: ignore[import-not-found]
         get_conversation_history,
         store_conversation_turn,
         update_conversation_turn,
     )
-    from filters import (  # type: ignore[import-not-found,no-redef]
+    from filters import (  # type: ignore[import-not-found]
         _get_filter_components,
         _get_filter_examples,
         extract_kb_scalar,
         get_config_manager,
     )
-    from media import (  # type: ignore[import-not-found,no-redef]
-        fetch_image_for_converse,
-        format_timestamp,
-    )
-    from retrieval import (  # type: ignore[import-not-found,no-redef]
+    from media import fetch_image_for_converse, format_timestamp  # type: ignore[import-not-found]
+    from retrieval import (  # type: ignore[import-not-found]
         _augment_with_id_lookup,
         build_conversation_messages,
         build_retrieval_query,
     )
-    from sources import extract_sources  # type: ignore[import-not-found,no-redef]
+    from sources import extract_sources  # type: ignore[import-not-found]
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import get_knowledge_base_config

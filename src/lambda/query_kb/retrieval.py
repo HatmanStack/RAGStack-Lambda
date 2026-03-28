@@ -10,15 +10,11 @@ import re
 from typing import Any
 
 try:
-    from ._clients import bedrock_runtime, dynamodb, s3_client
+    from ._compat import bedrock_runtime, dynamodb, s3_client
     from .conversation import MAX_MESSAGE_LENGTH
 except ImportError:
-    from _clients import (  # type: ignore[import-not-found,no-redef]
-        bedrock_runtime,
-        dynamodb,
-        s3_client,
-    )
-    from conversation import MAX_MESSAGE_LENGTH  # type: ignore[import-not-found,no-redef]
+    from _compat import bedrock_runtime, dynamodb, s3_client  # type: ignore[import-not-found]
+    from conversation import MAX_MESSAGE_LENGTH  # type: ignore[import-not-found]
 
 from ragstack_common.storage import parse_s3_uri
 

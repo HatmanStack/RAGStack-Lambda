@@ -9,9 +9,9 @@ from decimal import Decimal
 from typing import Any
 
 try:
-    from ._clients import s3_client
+    from ._compat import s3_client
 except ImportError:
-    from _clients import s3_client  # type: ignore[import-not-found,no-redef]
+    from _compat import s3_client  # type: ignore[import-not-found]
 
 from ragstack_common.storage import parse_s3_uri
 

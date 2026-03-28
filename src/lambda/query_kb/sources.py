@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import unquote
 
 try:
-    from ._clients import dynamodb, s3_client
+    from ._compat import dynamodb, s3_client
     from .filters import extract_kb_scalar, get_config_manager
     from .media import (
         MEDIA_CONTENT_TYPES,
@@ -22,12 +22,9 @@ try:
         generate_media_url,
     )
 except ImportError:
-    from _clients import dynamodb, s3_client  # type: ignore[import-not-found,no-redef]
-    from filters import (  # type: ignore[import-not-found,no-redef]
-        extract_kb_scalar,
-        get_config_manager,
-    )
-    from media import (  # type: ignore[import-not-found,no-redef]
+    from _compat import dynamodb, s3_client  # type: ignore[import-not-found]
+    from filters import extract_kb_scalar, get_config_manager  # type: ignore[import-not-found]
+    from media import (  # type: ignore[import-not-found]
         MEDIA_CONTENT_TYPES,
         extract_image_caption_from_content,
         extract_source_url_from_content,

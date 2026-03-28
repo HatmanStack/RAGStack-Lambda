@@ -9,9 +9,9 @@ import os
 from typing import Any
 
 try:
-    from ._clients import bedrock_agent
+    from ._compat import bedrock_agent
 except ImportError:
-    from _clients import bedrock_agent  # type: ignore[import-not-found,no-redef]
+    from _compat import bedrock_agent  # type: ignore[import-not-found]
 
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.filter_generator import FilterGenerator
