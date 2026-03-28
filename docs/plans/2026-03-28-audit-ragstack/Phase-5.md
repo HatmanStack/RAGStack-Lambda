@@ -30,14 +30,16 @@ This is the single most impactful doc fix -- every deployment example is current
 - `CLAUDE.md` -- Deployment commands section
 - `docs/CONFIGURATION.md` -- Demo mode example
 - `docs/TROUBLESHOOTING.md` -- Any deployment references
+- `.serena/memories/suggested_commands.md` -- Deployment command examples (lines 35-37)
 
 **Prerequisites:** None
 
 **Implementation Steps:**
 
-1. Search ALL markdown files for `--project-name`:
-   `grep -rn "\-\-project-name" *.md docs/*.md`
-1. Replace every occurrence of `--project-name` with `--stack-name`
+1. Search ALL files recursively for `--project-name` (not just top-level and docs):
+   `grep -rn "\-\-project-name" --include="*.md" .`
+1. Replace every occurrence of `--project-name` with `--stack-name` in all matched files,
+   including `.serena/memories/suggested_commands.md`
 1. Verify the replacement is correct by checking `publish.py` argument parser for the
    exact flag name and syntax
 1. Also update any surrounding context if needed (e.g., if the help text says "project
@@ -45,7 +47,8 @@ This is the single most impactful doc fix -- every deployment example is current
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "\-\-project-name" *.md docs/*.md` returns zero results
+- [ ] `grep -rn "\-\-project-name" --include="*.md" .` returns zero results (excluding
+  plan docs)
 - [ ] All deployment examples use `--stack-name`
 - [ ] Examples match `publish.py --help` output
 
@@ -85,8 +88,13 @@ code examples 1, eval onboarding finding)
 1. Ensure the instructions mention that `uv` is required (link to uv installation docs
    if not already present in prerequisites)
 1. Also fix `CLAUDE.md` line 57: the `sam local invoke` example references
-   `tests/events/s3-put.json` which does not exist. List available event files by checking
-   `tests/events/` directory and update the example to use a real event file.
+   `tests/events/s3-put.json` which does not exist. Replace it with
+   `tests/events/sqs-processing-message.json`, which is the closest match to a document
+   processing event trigger. Available event files for reference:
+   `get_configuration.json`, `query_kb_expired_session.json`, `query_kb_new_session.json`,
+   `query_kb_with_session.json`, `s3_put_video.json`, `scrape-start.json`,
+   `search_kb.json`, `sqs-discovery-message.json`, `sqs-processing-message.json`,
+   `step_functions_media_success.json`.
 
 **Verification Checklist:**
 
@@ -350,7 +358,8 @@ docs(readme): add missing documentation links to index
 
 ## Phase Verification
 
-1. Run `grep -rn "\-\-project-name" *.md docs/*.md` -- should return zero results
+1. Run `grep -rn "\-\-project-name" --include="*.md" .` -- should return zero results
+   (excluding plan docs)
 1. Run `grep -rn "pip install" README.md` -- should return zero results
 1. Verify all referenced file paths in docs actually exist
 1. Verify no contradictory caching claims remain

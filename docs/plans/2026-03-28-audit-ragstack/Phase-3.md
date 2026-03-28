@@ -292,52 +292,41 @@ refactor(appsync-resolvers): complete resolver split, reduce index.py to dispatc
 
 1. Examine all `query_kb/*.py` files to catalog every import that uses the dual
    `try/except ImportError` pattern. List all symbols imported this way.
-1. Create `src/lambda/query_kb/_compat.py` that handles the import resolution ONCE:
+1. Review how `_clients.py` is already structured. It may already serve as a partial compat
+   layer that can be extended.
+1. Create `src/lambda/query_kb/_compat.py` that centralizes all cross-module import
+   resolution. This module handles imports from `ragstack_common` and from sibling modules
+   using the dual `try/except ImportError` pattern:
 
    ```python
    """Import compatibility layer for query_kb package.
 
-   Handles both package-relative imports (when deployed as a package)
-   and flat-directory imports (when deployed as individual files).
+   Centralizes try/except ImportError for both package-relative and
+   flat-directory deployment modes. Each consumer module imports from
+   this single module instead of repeating the pattern.
    """
    try:
        from ._clients import bedrock_agent, bedrock_runtime, ...
        from .conversation import get_conversation_history, ...
-       # ... all shared imports
+       # ... all shared cross-module imports
    except ImportError:
        from _clients import bedrock_agent, ...  # type: ignore[import-not-found,no-redef]
        from conversation import ...  # type: ignore[import-not-found,no-redef]
    ```
 
-1. Update each consumer module (`handler.py`, `conversation.py`, etc.) to import from
-   `_compat` using only the package-relative form:
-
-   ```python
-   from ._compat import bedrock_agent, get_conversation_history, ...
-   ```
-
-   Wait -- this will not work if the flat-directory import is what is used in Lambda.
-   The `_compat` module itself handles the import resolution, but consumer modules that
-   import from `_compat` also need to handle both modes.
-
-   Better approach: Have `_compat.py` import external dependencies (ragstack_common
-   modules) using the dual pattern, and have sibling modules import from `_compat` using
-   the same dual pattern but only for `_compat` itself:
+1. In each consumer module (`handler.py`, `conversation.py`, `filters.py`, etc.), replace
+   all `try/except ImportError` blocks with a single one that imports from `_compat`:
 
    ```python
    try:
-       from ._compat import bedrock_agent, ...
+       from ._compat import bedrock_agent, get_conversation_history, ...
    except ImportError:
-       from _compat import bedrock_agent, ...  # type: ignore[import-not-found]
+       from _compat import bedrock_agent, get_conversation_history, ...  # type: ignore[import-not-found]
    ```
 
-   This still has a try/except in each file, BUT it is only ONE try/except per file
-   (for `_compat`) instead of 5-6 try/except blocks. The `# type: ignore` is only on
-   one line per file instead of many.
-
-1. Actually, the simplest approach: make `_compat.py` export everything, and each consumer
-   module does ONE dual import of `_compat` and then accesses attributes. Review how
-   `_clients.py` is already structured -- it may already serve as a partial compat layer.
+   Each consumer file still has ONE `try/except` (to resolve `_compat` itself in both
+   deployment modes), but this replaces 5-6 separate try/except blocks per file. The
+   `# type: ignore` is reduced to one line per consumer file.
 1. Run tests after each module is updated.
 
 **Verification Checklist:**

@@ -27,7 +27,7 @@ are front-loaded into the earliest possible phase.
 | Phase | Tag | Goal | Est. Tokens |
 |-------|-----|------|-------------|
 | 0 | -- | Foundation: ADRs, conventions, testing strategy | ~3k |
-| 1 | [HYGIENIST] | Dead code removal, dependency fixes, quick wins | ~10k |
+| 1 | [HYGIENIST] | Dead code removal, dependency fixes, quick wins | ~6k |
 | 2 | [IMPLEMENTER] | Critical bug fixes and performance improvements | ~18k |
 | 3 | [IMPLEMENTER] | Architecture: resolver split, import cleanup, DRY | ~35k |
 | 4 | [FORTIFIER] | Guardrails: type safety, exception narrowing, CI | ~15k |

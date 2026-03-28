@@ -9,7 +9,7 @@ phases add structure.
 **Success criteria:** All vulnerability scans clean, dead code removed, quick-win bug fix
 deployed, tests green.
 
-**Estimated tokens:** ~10k
+**Estimated tokens:** ~6k
 
 ## Prerequisites
 
@@ -19,47 +19,48 @@ deployed, tests green.
 
 ## Tasks
 
-### Task 1: Fix Reindex Lock Key Mismatch (CRITICAL)
+### Task 1: Verify Reindex Lock Key Consistency
 
-**Goal:** Fix the DynamoDB key mismatch that defeats concurrent operation protection.
-This is the highest-priority bug in the codebase. (Health audit finding 1, quick win 1)
+**Goal:** Confirm that the DynamoDB key used in `check_reindex_lock()` is consistent
+across all Lambda functions. The original audit flagged a `"config_key"` vs
+`"Configuration"` mismatch, but the code already uses `"Configuration"`. This task
+verifies the fix is in place and no regression exists. (Health audit finding 1)
 
-**Files to Modify:**
+**Files to Inspect (no modifications expected):**
 
-- `src/lambda/appsync_resolvers/index.py` -- Fix key name in `check_reindex_lock()`
+- `src/lambda/appsync_resolvers/index.py` -- `check_reindex_lock()` function
+- `src/lambda/reindex_kb/index.py` -- Reindex lock creation
+- `src/lambda/queue_processor/index.py` -- Reindex lock check
 
 **Prerequisites:** None
 
 **Implementation Steps:**
 
-1. Open `src/lambda/appsync_resolvers/index.py` and find the `check_reindex_lock()` function
-   (around line 117-143)
-1. Find the `table.get_item()` call that uses `Key={"config_key": REINDEX_LOCK_KEY}`
-1. Change `"config_key"` to `"Configuration"` to match the key used by
-   `reindex_kb/index.py` and `queue_processor/index.py`
-1. Verify the fix by searching the codebase for all references to `REINDEX_LOCK_KEY` to
-   confirm `"Configuration"` is the correct partition key attribute name used everywhere else
+1. Search the codebase for all references to `REINDEX_LOCK_KEY`:
+   `grep -rn "REINDEX_LOCK_KEY" src/lambda/`
+1. Verify every DynamoDB `Key=` expression that uses `REINDEX_LOCK_KEY` uses
+   `"Configuration"` as the partition key attribute name
+1. If any file still uses a different key name (e.g., `"config_key"`, `"PK"`), fix it.
+   Otherwise, no changes are needed.
 
 **Verification Checklist:**
 
-- [x] `grep -rn "config_key" src/lambda/appsync_resolvers/index.py` returns zero results
-- [x] `grep -rn "REINDEX_LOCK_KEY" src/lambda/` shows consistent key attribute name across
-  all files
-- [x] `npm run test:backend` passes
+- [x] `grep -rn "REINDEX_LOCK_KEY" src/lambda/` shows consistent `"Configuration"` key
+  across all files
+- [x] `grep -rn "config_key" src/lambda/` returns zero results
 
 **Testing Instructions:**
 
-- The existing test suite should continue to pass. No new test is needed for this one-line
-  fix -- the key name is validated by cross-referencing with `reindex_kb` and
-  `queue_processor` which use the same DynamoDB table.
+- No code changes expected. If a fix was needed, run `npm run test:backend` to confirm.
 
 **Commit Message Template:**
+
+Only commit if a fix was needed:
 
 ```text
 fix(appsync-resolvers): correct DynamoDB key for reindex lock check
 
-- Change "config_key" to "Configuration" to match reindex_kb and queue_processor
-- Fixes bug where reindex lock was never detected, risking data loss
+- Change partition key attribute to "Configuration" to match all other Lambda functions
 ```
 
 ### Task 2: Fix npm Vulnerabilities
@@ -138,48 +139,7 @@ chore(deps): update pygments to fix CVE-2026-4539
 - Upgrade pygments dev dependency to patched version
 ```
 
-### Task 4: Remove Unused `min_per_slice` Parameter
-
-**Goal:** Clean up dead parameter in multislice retriever. (Health audit finding 16,
-quick win 3, vulture scan result)
-
-**Files to Modify:**
-
-- `lib/ragstack_common/multislice_retriever.py` -- Remove parameter from function signature
-  and docstring
-
-**Prerequisites:** None
-
-**Implementation Steps:**
-
-1. Open `lib/ragstack_common/multislice_retriever.py` and find
-   `merge_slices_with_guaranteed_minimum()` (around line 139)
-1. Remove the `min_per_slice` parameter from the function signature
-1. Update the docstring to remove any reference to `min_per_slice`
-1. Search the entire codebase for all callers of `merge_slices_with_guaranteed_minimum`
-1. Remove `min_per_slice=...` from all call sites
-1. Search for any tests that pass `min_per_slice` and update them
-
-**Verification Checklist:**
-
-- [x] `grep -rn "min_per_slice" .` returns zero results (excluding this plan)
-- [x] `npm run test:backend` passes
-
-**Testing Instructions:**
-
-- Run existing tests for multislice_retriever. If `min_per_slice` appears in test calls,
-  remove it from those calls as well.
-
-**Commit Message Template:**
-
-```text
-refactor(retrieval): remove unused min_per_slice parameter
-
-- Parameter was accepted but never used (confirmed by vulture scan)
-- Remove from function signature, docstring, and all call sites
-```
-
-### Task 5: Clean Up Unused Test Fixture Variables
+### Task 4: Clean Up Unused Test Fixture Variables
 
 **Goal:** Fix unused `mock_env` fixture variables in configuration_resolver tests.
 (Health audit finding 18)
@@ -226,5 +186,5 @@ style(tests): prefix unused mock_env fixture variables with underscore
 1. Run `npm run check` -- all lint and tests must pass
 1. Run `npm audit` -- should show 0 vulnerabilities
 1. Run `grep -rn "config_key" src/lambda/appsync_resolvers/index.py` -- should return nothing
-1. Run `grep -rn "min_per_slice" lib/ src/` -- should return nothing
-1. Verify git log shows 5 atomic commits with conventional commit messages
+1. Verify git log shows 3-4 atomic commits with conventional commit messages (Task 1 may
+   produce no commit if verification confirms the fix is already in place)
