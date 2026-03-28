@@ -553,14 +553,7 @@ def _delete_s3_content_folder(input_s3_uri: str, doc_id: str) -> None:
         doc_id: Document ID to identify the folder
     """
     try:
-        uri_path = input_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) < 2:
-            logger.warning(f"Invalid S3 URI format: {input_s3_uri}")
-            return
-
-        bucket = parts[0]
-        key = parts[1]
+        bucket, key = parse_s3_uri(input_s3_uri)
 
         # Determine folder prefix (content/{doc_id}/ or input/{doc_id}/)
         folder_prefix = None
@@ -736,13 +729,7 @@ def _list_kb_uris_for_document(input_s3_uri: str) -> list[str]:
         return []
 
     try:
-        uri_path = input_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) < 2:
-            return []
-
-        bucket = parts[0]
-        key = parts[1]
+        bucket, key = parse_s3_uri(input_s3_uri)
 
         # Determine folder prefix (content/{doc_id}/)
         folder_prefix = None
@@ -849,9 +836,7 @@ def _reprocess_image(document_id: str, item: dict[str, Any], table: Any) -> dict
     )
 
     # Build the S3 key from input_s3_uri (e.g., s3://bucket/content/uuid/file.jpg)
-    uri_path = input_s3_uri.replace("s3://", "")
-    parts = uri_path.split("/", 1)
-    s3_key = parts[1] if len(parts) > 1 else ""
+    _, s3_key = parse_s3_uri(input_s3_uri)
 
     # Invoke ProcessImageFunction
     process_event = {
@@ -1089,10 +1074,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
     for uri in text_uris:
         try:
             metadata_uri = f"{uri}.metadata.json"
-            uri_path = metadata_uri.replace("s3://", "")
-            parts = uri_path.split("/", 1)
-            bucket = parts[0]
-            key = parts[1]
+            bucket, key = parse_s3_uri(metadata_uri)
 
             response = s3.get_object(Bucket=bucket, Key=key)
             existing = json.loads(response["Body"].read().decode("utf-8"))
@@ -1579,12 +1561,7 @@ def generate_presigned_download_url(s3_uri: str, expiration: int = 3600) -> str 
     if not s3_uri or not s3_uri.startswith("s3://"):
         return None
     try:
-        # Parse s3://bucket/key format
-        path = s3_uri.replace("s3://", "")
-        parts = path.split("/", 1)
-        if len(parts) != 2:
-            return None
-        bucket, key = parts
+        bucket, key = parse_s3_uri(s3_uri)
         return s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": key},
@@ -2117,13 +2094,10 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
             return {"caption": None, "error": "Invalid S3 URI format. Must start with s3://"}
 
         # Parse S3 URI
-        uri_path = image_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) != 2 or not parts[1]:
+        try:
+            bucket, key = parse_s3_uri(image_s3_uri)
+        except ValueError:
             return {"caption": None, "error": "Invalid S3 URI format. Must be s3://bucket/key"}
-
-        bucket = parts[0]
-        key = parts[1]
 
         # Validate bucket matches DATA_BUCKET for security
         if bucket != DATA_BUCKET:
@@ -2309,10 +2283,7 @@ def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
             raise ValueError("Invalid S3 URI in tracking record")
 
         # Parse S3 URI
-        uri_path = input_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        bucket = parts[0]
-        key = parts[1] if len(parts) > 1 else ""
+        bucket, key = parse_s3_uri(input_s3_uri)
 
         # Verify image exists in S3
         try:
@@ -2598,12 +2569,8 @@ def delete_image(args: dict[str, Any]) -> Any:
 
         # Delete files from S3
         if input_s3_uri and input_s3_uri.startswith("s3://"):
-            uri_path = input_s3_uri.replace("s3://", "")
-            parts = uri_path.split("/", 1)
-            if len(parts) == 2:
-                bucket = parts[0]
-                image_key = parts[1]
-
+            bucket, image_key = parse_s3_uri(input_s3_uri)
+            if image_key:
                 # Delete image file
                 try:
                     s3.delete_object(Bucket=bucket, Key=image_key)
