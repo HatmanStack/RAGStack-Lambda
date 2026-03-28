@@ -54,10 +54,10 @@ handles the remaining broad catches.
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "except Exception" src/lambda/query_kb/` returns at most 1 result
+- [x] `grep -rn "except Exception" src/lambda/query_kb/` returns at most 1 result
   (the top-level safety net in handler.py)
-- [ ] Each narrowed except names specific exception types
-- [ ] `npm run test:backend` passes
+- [x] Each narrowed except names specific exception types
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -109,10 +109,10 @@ refactor(query-kb): narrow except Exception to specific types
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "except Exception" src/lambda/appsync_resolvers/` returns at most 1
+- [x] `grep -rn "except Exception" src/lambda/appsync_resolvers/` returns at most 1
   (the dispatcher safety net)
-- [ ] The silent `except ClientError: pass` (finding 19) now has a logger.debug call
-- [ ] `npm run test:backend` passes
+- [x] The silent `except ClientError: pass` (finding 19) now has a logger.debug call
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -165,11 +165,11 @@ in UI hooks and main.tsx. Replace with proper typed wrappers. (Health audit find
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "as any" src/ui/src/hooks/useDocuments.ts` returns zero results
-- [ ] `grep -rn "as any" src/ui/src/main.tsx` returns zero results
-- [ ] `grep -rn "eslint-disable" src/ui/src/hooks/useDocuments.ts` returns zero results
-- [ ] `npm run lint:frontend` passes with `--max-warnings 0`
-- [ ] `npm run test:frontend` passes
+- [x] `grep -rn "as any" src/ui/src/hooks/useDocuments.ts` returns zero results
+- [x] `grep -rn "as any" src/ui/src/main.tsx` returns zero results
+- [x] `grep -rn "eslint-disable" src/ui/src/hooks/useDocuments.ts` returns zero results
+- [x] `npm run lint:frontend` passes with `--max-warnings 0`
+- [x] `npm run test:frontend` passes
 
 **Testing Instructions:**
 
@@ -217,11 +217,11 @@ quality)
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "console\.\(log\|error\|warn\)" src/ui/src/` returns zero results
+- [x] `grep -rn "console\.\(log\|error\|warn\)" src/ui/src/` returns zero results
   (or only approved exceptions)
-- [ ] ESLint `no-console` rule is configured
-- [ ] `npm run lint:frontend` passes
-- [ ] `npm run test:frontend` passes
+- [x] ESLint `no-console` rule is configured
+- [x] `npm run lint:frontend` passes
+- [x] `npm run test:frontend` passes
 
 **Testing Instructions:**
 
@@ -265,10 +265,10 @@ value finding)
 
 **Verification Checklist:**
 
-- [ ] `--cov-fail-under` is configured in the pytest invocation
-- [ ] CI workflow uses the coverage-enforcing command
-- [ ] `pytest.importorskip` is used instead of manual skip guards where applicable
-- [ ] `npm run check` passes (including coverage threshold)
+- [x] `--cov-fail-under` is configured in the pytest invocation
+- [x] CI workflow uses the coverage-enforcing command
+- [x] `pytest.importorskip` is used instead of manual skip guards where applicable
+- [x] `npm run check` passes (including coverage threshold)
 
 **Testing Instructions:**
 
@@ -321,9 +321,9 @@ reproducibility finding)
 
 **Verification Checklist:**
 
-- [ ] `.pre-commit-config.yaml` exists at repo root
-- [ ] `pre-commit run --all-files` passes (if pre-commit is installed)
-- [ ] Hook versions match project tool versions
+- [x] `.pre-commit-config.yaml` exists at repo root
+- [x] `pre-commit run --all-files` passes (if pre-commit is installed)
+- [x] Hook versions match project tool versions
 
 **Testing Instructions:**
 
