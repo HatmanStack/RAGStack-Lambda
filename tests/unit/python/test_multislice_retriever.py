@@ -497,14 +497,14 @@ def test_filtered_score_boost_reorders_results():
     # max_boost=1.0 caps adaptive boost at 1.0 (no boost applied)
     # filtered 0.65 * 1.0 = 0.65 < unfiltered 0.73, so unfiltered ranks first
     merged_min_boost = merge_slices_with_guaranteed_minimum(
-        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.0
+        slice_results, total_results=4, filtered_score_boost=1.0
     )
     assert "carol1.jpg" in merged_min_boost[0]["location"]["s3Location"]["uri"]
 
     # max_boost=1.5, adaptive boost = (0.73/0.65)*1.10 ≈ 1.2354
     # filtered 0.65 * 1.2354 ≈ 0.803 > unfiltered 0.73, so filtered ranks first
     merged_with_boost = merge_slices_with_guaranteed_minimum(
-        slice_results, min_per_slice=1, total_results=4, filtered_score_boost=1.5
+        slice_results, total_results=4, filtered_score_boost=1.5
     )
     assert "judy1.jpg" in merged_with_boost[0]["location"]["s3Location"]["uri"]
 
