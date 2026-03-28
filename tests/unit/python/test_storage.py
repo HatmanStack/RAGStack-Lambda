@@ -6,7 +6,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from ragstack_common.exceptions import FileSizeLimitExceededError
-from ragstack_common.storage import parse_s3_uri, read_s3_binary
+from ragstack_common.storage import parse_s3_uri, read_s3_binary, read_s3_text
 
 
 class TestParseS3Uri:
@@ -96,3 +96,47 @@ class TestReadS3Binary:
 
         # Should NOT proceed to GET when HEAD fails and size guard is active
         mock_client.get_object.assert_not_called()
+
+
+class TestReadS3Text:
+    @patch("ragstack_common.storage.get_s3_client")
+    def test_normal_read_succeeds(self, mock_get_client):
+        """Normal-sized S3 text object reads successfully."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_body = MagicMock()
+        mock_body.read.return_value = b"hello world"
+        mock_client.get_object.return_value = {
+            "Body": mock_body,
+            "ContentLength": 11,
+        }
+
+        result = read_s3_text("s3://bucket/file.txt")
+        assert result == "hello world"
+
+    @patch("ragstack_common.storage.get_s3_client")
+    def test_over_max_size_raises_value_error(self, mock_get_client):
+        """Reading an object exceeding max_size_bytes raises ValueError."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_client.get_object.return_value = {
+            "ContentLength": 100_000_000,  # 100MB
+        }
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed size"):
+            read_s3_text("s3://bucket/huge.txt", max_size_bytes=50_000_000)
+
+    @patch("ragstack_common.storage.get_s3_client")
+    def test_under_max_size_reads_successfully(self, mock_get_client):
+        """Reading an object under max_size_bytes succeeds."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_body = MagicMock()
+        mock_body.read.return_value = b"small file"
+        mock_client.get_object.return_value = {
+            "Body": mock_body,
+            "ContentLength": 10,
+        }
+
+        result = read_s3_text("s3://bucket/file.txt", max_size_bytes=50_000_000)
+        assert result == "small file"
