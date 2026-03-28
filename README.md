@@ -203,11 +203,14 @@ Ask questions about your content. Sources show where answers came from.
 
 - [Configuration](docs/CONFIGURATION.md) - Settings, quotas, API keys & document management
 - [Nested Stack Deployment](docs/NESTED_STACK_DEPLOYMENT.md) - Deploy as part of larger CloudFormation stack
+- [Image Upload](docs/IMAGE_UPLOAD.md) - Image upload and captioning
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Metadata Filtering](docs/METADATA_FILTERING.md) - Auto-discover metadata and filter results
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
+- [API Reference](docs/API_REFERENCE.md) - GraphQL API documentation
 - [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
+- [Migration](docs/MIGRATION.md) - Version migration guide
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 - [Library Reference](docs/LIBRARY_REFERENCE.md) - Public API for lib/ragstack_common
 
