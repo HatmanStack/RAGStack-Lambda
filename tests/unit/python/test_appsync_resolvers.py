@@ -10,9 +10,12 @@ import pytest
 
 def _load_appsync_resolvers_module():
     """Load appsync_resolvers module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent.parent / "src/lambda/appsync_resolvers/index.py"
-    )
+    module_dir = Path(__file__).parent.parent.parent.parent / "src/lambda/appsync_resolvers"
+    module_path = module_dir / "index.py"
+    # Add the appsync_resolvers directory to sys.path so resolver subpackage imports work
+    dir_str = str(module_dir)
+    if dir_str not in sys.path:
+        sys.path.insert(0, dir_str)
     spec = importlib.util.spec_from_file_location("appsync_resolvers_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["appsync_resolvers_index"] = module
