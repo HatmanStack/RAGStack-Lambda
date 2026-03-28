@@ -32,7 +32,6 @@ try:
     from .filters import (
         _get_filter_components,
         _get_filter_examples,
-        extract_kb_scalar,
         get_config_manager,
     )
     from .media import fetch_image_for_converse, format_timestamp
@@ -58,7 +57,6 @@ except ImportError:
     from filters import (  # type: ignore[import-not-found]
         _get_filter_components,
         _get_filter_examples,
-        extract_kb_scalar,
         get_config_manager,
     )
     from media import fetch_image_for_converse, format_timestamp  # type: ignore[import-not-found]
@@ -72,6 +70,7 @@ except ImportError:
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import get_knowledge_base_config
 from ragstack_common.demo_mode import is_demo_mode_enabled
+from ragstack_common.kb_filters import extract_kb_scalar
 from ragstack_common.storage import parse_s3_uri
 from ragstack_common.types import ChatResponse
 

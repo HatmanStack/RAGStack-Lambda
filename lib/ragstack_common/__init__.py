@@ -28,6 +28,7 @@ from ragstack_common.ingestion import (
     ingest_documents_with_retry,
     start_ingestion_with_retry,
 )
+from ragstack_common.kb_filters import extract_kb_scalar
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.logging_utils import log_summary, safe_log_event
 from ragstack_common.metadata_extractor import MetadataExtractor
@@ -56,6 +57,7 @@ __all__ = [
     "batch_check_document_statuses",
     "check_document_status",
     "ConfigurationManager",
+    "extract_kb_scalar",
     "FilterGenerator",
     "generate_presigned_url",
     "get_config_manager_or_none",

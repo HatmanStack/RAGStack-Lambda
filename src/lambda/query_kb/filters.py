@@ -21,23 +21,6 @@ from ragstack_common.multislice_retriever import MultiSliceRetriever
 logger = logging.getLogger()
 
 
-def extract_kb_scalar(value: Any) -> str | None:
-    """Extract scalar value from KB metadata which returns lists with quoted strings.
-
-    KB returns metadata like: ['"0"'] or ['value1', 'value2']
-    This extracts the first value and strips extra quotes.
-    """
-    if value is None:
-        return None
-    if isinstance(value, list):
-        if not value:
-            return None
-        value = value[0]
-    if isinstance(value, str):
-        return value.strip('"')
-    return str(value)
-
-
 # Module-level lazy initialization (reused across Lambda invocations in same container)
 _config_manager: ConfigurationManager | None = None
 

@@ -13,7 +13,7 @@ from urllib.parse import unquote
 
 try:
     from ._compat import dynamodb, s3_client
-    from .filters import extract_kb_scalar, get_config_manager
+    from .filters import get_config_manager
     from .media import (
         MEDIA_CONTENT_TYPES,
         extract_image_caption_from_content,
@@ -23,7 +23,7 @@ try:
     )
 except ImportError:
     from _compat import dynamodb, s3_client  # type: ignore[import-not-found]
-    from filters import extract_kb_scalar, get_config_manager  # type: ignore[import-not-found]
+    from filters import get_config_manager  # type: ignore[import-not-found]
     from media import (  # type: ignore[import-not-found]
         MEDIA_CONTENT_TYPES,
         extract_image_caption_from_content,
@@ -32,6 +32,7 @@ except ImportError:
         generate_media_url,
     )
 
+from ragstack_common.kb_filters import extract_kb_scalar
 from ragstack_common.storage import generate_presigned_url, parse_s3_uri
 from ragstack_common.types import SourceInfo
 
