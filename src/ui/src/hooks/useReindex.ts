@@ -117,9 +117,12 @@ export function useReindex() {
             handleReindexUpdate(data.onReindexUpdate);
           }
         },
-        error: () => { /* subscription error handled by reconnection */ },
+        error: (err: unknown) => {
+          console.error('Reindex subscription error:', err);
+        },
       });
     } catch (err) {
+      console.error('Failed to subscribe to reindex updates:', err);
     }
 
     // Cleanup subscription on unmount

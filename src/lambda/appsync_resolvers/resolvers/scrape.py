@@ -58,12 +58,17 @@ def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
         pages = []
         if SCRAPE_URLS_TABLE:
             urls_table = dynamodb.Table(SCRAPE_URLS_TABLE)
-            urls_response = urls_table.query(
-                KeyConditionExpression="job_id = :jid",
-                ExpressionAttributeValues={":jid": job_id},
-                Limit=100,
-            )
-            page_items = urls_response.get("Items", [])
+            page_items = []
+            query_kwargs: dict[str, Any] = {
+                "KeyConditionExpression": "job_id = :jid",
+                "ExpressionAttributeValues": {":jid": job_id},
+            }
+            while True:
+                urls_response = urls_table.query(**query_kwargs)
+                page_items.extend(urls_response.get("Items", []))
+                if "LastEvaluatedKey" not in urls_response:
+                    break
+                query_kwargs["ExclusiveStartKey"] = urls_response["LastEvaluatedKey"]
 
             # Generate content URLs directly from document_id
             # Scraped content is stored at: input/{doc_id}/{doc_id}.scraped.md
@@ -272,16 +277,33 @@ def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
         if not item:
             raise ValueError("Scrape job not found")
 
-        # Check if job can be cancelled
-        status = str(item.get("status", ""))
+        # Atomically update status to CANCELLED (only if not already terminal)
         terminal_statuses = (
             ScrapeStatus.COMPLETED.value,
             ScrapeStatus.COMPLETED_WITH_ERRORS.value,
             ScrapeStatus.FAILED.value,
             ScrapeStatus.CANCELLED.value,
         )
-        if status in terminal_statuses:
-            raise ValueError(f"Cannot cancel job with status: {status}")
+        try:
+            table.update_item(
+                Key={"job_id": job_id},
+                UpdateExpression="SET #status = :status, updated_at = :ts",
+                ConditionExpression="NOT #status IN (:s1, :s2, :s3, :s4)",
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": ScrapeStatus.CANCELLED.value,
+                    ":ts": datetime.now(UTC).isoformat(),
+                    ":s1": terminal_statuses[0],
+                    ":s2": terminal_statuses[1],
+                    ":s3": terminal_statuses[2],
+                    ":s4": terminal_statuses[3],
+                },
+            )
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                current_status = str(item.get("status", "unknown"))
+                raise ValueError(f"Cannot cancel job with status: {current_status}") from e
+            raise
 
         # Stop Step Functions execution if running
         step_function_arn = str(item.get("step_function_arn", ""))
@@ -294,17 +316,6 @@ def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
                 logger.info(f"Stopped Step Functions execution: {step_function_arn}")
             except ClientError as e:
                 logger.warning(f"Could not stop Step Functions execution: {e}")
-
-        # Update job status
-        table.update_item(
-            Key={"job_id": job_id},
-            UpdateExpression="SET #status = :status, updated_at = :ts",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":status": ScrapeStatus.CANCELLED.value,
-                ":ts": datetime.now(UTC).isoformat(),
-            },
-        )
 
         # Return updated job
         response = table.get_item(Key={"job_id": job_id})

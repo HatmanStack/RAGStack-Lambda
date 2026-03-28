@@ -198,6 +198,7 @@ export const useDocuments = () => {
       }));
       setImages(transformedImages);
     } catch (err) {
+      console.error('Failed to fetch images:', err);
     }
   }, []);
 
@@ -239,6 +240,7 @@ export const useDocuments = () => {
       }));
       setScrapeJobs(transformedJobs);
     } catch (err) {
+      console.error('Failed to fetch scrape jobs:', err);
     }
   }, []);
 
@@ -283,16 +285,12 @@ export const useDocuments = () => {
   }, [fetchDocuments]);
 
   const fetchDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: gqlQuery(GET_DOCUMENT),
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(GET_DOCUMENT),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      return response.data?.getDocument;
-    } catch (err) {
-      throw err;
-    }
+    return response.data?.getDocument;
   }, []);
 
   // Handle real-time document update

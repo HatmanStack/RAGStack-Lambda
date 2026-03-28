@@ -1018,16 +1018,18 @@ def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
             ingested = _reindex_scraped_content(document_id, text_uris, kb_id, ds_id)
             logger.info(f"Reindexed {ingested} scraped pages for {document_id}")
 
-            # Update status to indexed
-            table.update_item(
-                Key={"document_id": document_id},
-                UpdateExpression="SET #status = :status, updated_at = :updated_at",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":status": "INDEXED",
-                    ":updated_at": datetime.now(UTC).isoformat(),
-                },
-            )
+            if ingested > 0:
+                table.update_item(
+                    Key={"document_id": document_id},
+                    UpdateExpression="SET #status = :status, updated_at = :updated_at",
+                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeValues={
+                        ":status": "INDEXED",
+                        ":updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+            else:
+                raise ValueError(f"No scraped pages ingested for {document_id}")
         except ValueError as e:
             logger.error(f"KB config not available for scraped reindex: {e}")
             # Revert status since we can't complete reindex

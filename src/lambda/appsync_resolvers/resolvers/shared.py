@@ -142,7 +142,7 @@ def check_reindex_lock() -> None:
     Raises:
         ValueError: If reindex is in progress.
     """
-    config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
+    config_table_name = CONFIGURATION_TABLE_NAME
     if not config_table_name:
         return
 

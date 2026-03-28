@@ -610,9 +610,8 @@ def list_images(args: dict[str, Any]) -> dict[str, Any]:
         logger.info(f"Retrieved {len(items)} images")
 
         result: dict[str, Any] = {"items": items}
-        if len(all_items) > limit:
-            last_item = all_items[limit - 1]
-            result["nextToken"] = json.dumps({"document_id": last_item["document_id"]})
+        if "LastEvaluatedKey" in response:
+            result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
 
         return result
 

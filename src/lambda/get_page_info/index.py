@@ -167,14 +167,23 @@ def lambda_handler(event, context):
             "batches": [],
         }
 
-    # Download PDF to count pages
+    # Download PDF to count pages (500MB limit to prevent OOM)
     logger.info(f"Downloading PDF to count pages: {input_s3_uri}")
-    pdf_bytes = read_s3_binary(input_s3_uri)
+    pdf_bytes = read_s3_binary(input_s3_uri, max_size_bytes=500 * 1024 * 1024)
 
     # Count pages
-    pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    total_pages = len(pdf_doc)
-    pdf_doc.close()
+    try:
+        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        total_pages = len(pdf_doc)
+        pdf_doc.close()
+    except Exception as e:
+        logger.error(f"Failed to open PDF: {e}")
+        return {
+            "total_pages": 0,
+            "needs_batching": False,
+            "is_text_native": False,
+            "error": f"Could not read PDF: {str(e)}",
+        }
     logger.info(f"PDF has {total_pages} pages")
 
     # Check if text-native

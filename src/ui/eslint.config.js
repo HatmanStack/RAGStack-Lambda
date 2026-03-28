@@ -58,7 +58,7 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-console': ['error', { allow: ['warn'] }],
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-require-imports': 'off',

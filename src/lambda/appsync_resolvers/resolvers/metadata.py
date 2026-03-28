@@ -576,7 +576,10 @@ def start_reindex(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         # Start the Step Functions execution
-        execution_name = f"reindex-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        import uuid
+
+        short_id = uuid.uuid4().hex[:6]
+        execution_name = f"reindex-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{short_id}"
 
         response = sfn.start_execution(
             stateMachineArn=REINDEX_STATE_MACHINE_ARN,

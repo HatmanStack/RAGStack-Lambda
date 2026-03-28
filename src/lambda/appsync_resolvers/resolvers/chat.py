@@ -56,6 +56,10 @@ def query_knowledge_base(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("CONVERSATION_TABLE_NAME environment variable is not configured")
     conversation_table_name: str = CONVERSATION_TABLE_NAME
 
+    if not QUERY_KB_FUNCTION_ARN:
+        raise ValueError("QUERY_KB_FUNCTION_ARN environment variable is not configured")
+    query_kb_function_arn: str = QUERY_KB_FUNCTION_ARN
+
     # Extract user identity for scoping conversations
     identity = get_current_event().get("identity") if get_current_event() else None
     user_id = None
@@ -121,7 +125,7 @@ def query_knowledge_base(args: dict[str, Any]) -> dict[str, Any]:
         }
         try:
             lambda_client.invoke(
-                FunctionName=QUERY_KB_FUNCTION_ARN,
+                FunctionName=query_kb_function_arn,
                 InvocationType="Event",
                 Payload=json.dumps(invoke_event).encode(),
             )

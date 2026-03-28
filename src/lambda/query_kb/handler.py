@@ -510,10 +510,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 # Extract document_id from URI (content/{docId}/...)
                 doc_id = None
                 if s3_uri:
-                    _, s3_key = parse_s3_uri(s3_uri)
-                    key_parts = s3_key.split("/")
-                    if len(key_parts) >= 2 and key_parts[0] == "content":
-                        doc_id = key_parts[1]
+                    try:
+                        _, s3_key = parse_s3_uri(s3_uri)
+                        key_parts = s3_key.split("/")
+                        if len(key_parts) >= 2 and key_parts[0] == "content":
+                            doc_id = key_parts[1]
+                    except (ValueError, IndexError):
+                        logger.warning(f"Skipping visual enrichment for malformed URI: {s3_uri}")
 
                 if doc_id and tracking_table:
                     try:
