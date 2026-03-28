@@ -1035,7 +1035,7 @@ Resources:
             - Ref: StackPrefix
             - Ref: AWS::StackName
       Description: Shared utilities for Lambda functions
-      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f1a95088405f33f97b43a76b95030f23
+      ContentUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/3382c4ae6675e3a76064142a99ac0a15
       CompatibleRuntimes:
       - python3.13
     Metadata:
@@ -1077,7 +1077,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/ba252c3647ce3518d1f574346a212fb5
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/5d52b2e350145cca88781d0b205f886d
       Handler: index.lambda_handler
       Description: Process document - OCR and text extraction
       Layers:
@@ -1148,7 +1148,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/bd6e0ff019dc5d08ee0fd3daf0eb90a0
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/5a651c78d65a8a2d51803257a1135f34
       Handler: index.lambda_handler
       Description: Detect file type and get page info for OCR routing
       Layers:
@@ -1181,7 +1181,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/97328cdc667d4137c4054bec62082464
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/4bc4c533c4584fcf8eb454e1987cf45e
       Handler: index.lambda_handler
       Description: Process text-based files (HTML, TXT, CSV, JSON, XML, EML, EPUB,
         DOCX, XLSX)
@@ -1226,7 +1226,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1cc7fe4002ea51097acf51256f016f25
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/83d48abcf7f2d24d943bad634219aafa
       Handler: index.lambda_handler
       Description: Process video/audio files through AWS Transcribe
       Layers:
@@ -1299,7 +1299,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/3e33677afecfc59abcce9701e7c93f50
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/be37d7ecaaba5f9b738b862026fc00fa
       Handler: index.lambda_handler
       Description: Combine partial text files from batch processing
       Layers:
@@ -1352,7 +1352,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/344321ab09078d937081aa5928d4fcb8
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/0910ff0dd4bb039989c45c2273827b6d
       Handler: index.lambda_handler
       Description: Process SQS messages to start Step Functions executions
       Runtime: python3.13
@@ -1401,7 +1401,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f4d3800553a0c389361b12b76a1813a6
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/766c9afd34ba060662b54d38bbad75aa
       Handler: index.lambda_handler
       Description: Queue individual batches to SQS for rate-limited processing
       Runtime: python3.13
@@ -1447,7 +1447,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c4c2ec341bef3d10ee8bb5152b6cbe66
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/b87cb3d4f3efdf70eafb81e28011032d
       Handler: index.lambda_handler
       Description: Process individual 10-page batches with global rate limiting
       Runtime: python3.13
@@ -1524,7 +1524,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/202a3b03936848ca6c61735c8751d90f
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c0d82175a1175f73dfd892853891776c
       Handler: index.lambda_handler
       Description: Ingest documents directly into Knowledge Base
       Runtime: python3.13
@@ -1606,7 +1606,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/fab9c6c3949a7d5634f520b4d5f6d69a
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/2cd939484bd9ff68402ee759b546e9bb
       Handler: index.lambda_handler
       Description: Ingest media content with dual embeddings (transcript + visual)
       Runtime: python3.13
@@ -1696,7 +1696,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c409600371d45be7d848096bdf49eafc
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f17490a4372d4072ef20dde0da5f6918
       Handler: index.lambda_handler
       Description: Process uploaded images and ingest to Knowledge Base
       Layers:
@@ -1782,7 +1782,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/462a34fb1011697cd73edbdcec70f829
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/40d6ef7bd22b79f365283a8f5d8d7def
       Handler: index.lambda_handler
       Description: Analyze Knowledge Base vectors to discover metadata fields and
         generate filter examples
@@ -1845,7 +1845,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/5b0307796cb47bbeb023ed40fea5ccb7
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/fd3a065318429ecb5f6f19f9d173bd83
       Handler: index.lambda_handler
       Description: Reindex Knowledge Base - creates new KB, re-ingests documents,
         deletes old KB
@@ -2042,7 +2042,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/4f0c26c5d9bd8b6c15ee84d41f4157c3
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/dca3ffc391b882300a804eb6a1ecbc62
       Handler: index.lambda_handler
       Description: Process ZIP archives containing images with optional captions manifest
       Layers:
@@ -2120,13 +2120,13 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c20971fdd76d6091589a14eac0f80c3e
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/e1127eec65a82519c4a9aec48b4ec942
       Handler: index.lambda_handler
       Description: Query Bedrock Knowledge Base
       Layers:
       - Ref: RagstackCommonLayer
       Runtime: python3.13
-      Timeout: 60
+      Timeout: 90
       MemorySize: 1769
       Environment:
         Variables:
@@ -2201,7 +2201,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/41c66246be32229c76a4bb0635cf42ba
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f2389642e64d904088f2d7c2f7d9d398
       Handler: index.lambda_handler
       Description: Search Bedrock Knowledge Base (raw vector search)
       Layers:
@@ -2278,7 +2278,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/6177f061ad6e800cfcf0dc3dbf5608f3
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/9bdcae5eb9f3e3f0a1fd7b7f79ddca92
       Handler: index.lambda_handler
       Description: GraphQL resolver for configuration management
       Layers:
@@ -2338,7 +2338,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/9da69d81df5e9c9ab476e75ff23acdff
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/aa65290665fd6a86f7ae1747f9f20a52
       Handler: index.lambda_handler
       Description: GraphQL resolver for API key management
       Runtime: python3.13
@@ -2373,7 +2373,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/29886d8973632063845913e47fe817b6
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1c05eb71899acde0856a441dde6c3428
       Handler: index.lambda_handler
       Description: Initiate web scraping job
       Layers:
@@ -2446,7 +2446,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/da6a66f101485f40ec989c050b83a443
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1584fa12ea3da12dc97bd41622b733d5
       Handler: index.lambda_handler
       Description: Discover URLs during web scraping
       Layers:
@@ -2513,7 +2513,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/e7d3de71f37a85c763a8a8feac75c6f5
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/669ee64fd977294bbbd8456d40b34e25
       Handler: index.lambda_handler
       Description: Process scraped pages and save to S3
       Layers:
@@ -2571,7 +2571,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/2c037fd4d10eb708f017a24d64cb9f9d
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1c563f1c714c85642c5682bf20b14ecb
       Handler: index.lambda_handler
       Description: Return scrape job status for Step Functions polling
       Layers:
@@ -2948,7 +2948,7 @@ Resources:
             - Ref: AWS::StackName
       DefinitionUri:
         Bucket: ragstack-quicklaunch-public
-        Key: ragstack-quicklaunch/1b005b7c565ece0d790a61c821947909
+        Key: ragstack-quicklaunch/39ba8e2df61acb840758e826cb4fb045
       DefinitionSubstitutions:
         ReindexKBFunctionArn:
           Fn::GetAtt:
@@ -3510,7 +3510,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/f754bd5eb3ef42af1e763c5e37b6ab5c
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/729ec5a9dbf01ea99a8748b069e8e1c3
       Handler: index.lambda_handler
       Description: Custom resource for Knowledge Base creation with S3 Vectors
       Layers:
@@ -3649,7 +3649,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/8e3c34383d656a6d0baf7b49166120ec
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/904e5d79ab34148ae885de780b62610b
       Handler: index.lambda_handler
       Description: Triggers initial KB sync on stack creation
       Runtime: python3.13
@@ -3950,7 +3950,7 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      DefinitionS3Location: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/4d68465e03bbfd783262c6e52e6ed1a3
+      DefinitionS3Location: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/ece10b43bdbc64db37573ca2c3c07376
     Metadata:
       SamResourceId: GraphQLSchema
   GraphQLApiKey:
@@ -3993,7 +3993,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/b2e75324a1188fbc5613f11826d06db5
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/957081bad225cde4d9c8d7023bb8b28c
       Handler: index.lambda_handler
       Layers:
       - Ref: RagstackCommonLayer
@@ -4038,6 +4038,12 @@ Resources:
             Fn::GetAtt:
             - IngestToKBFunction
             - Arn
+          QUERY_KB_FUNCTION_ARN:
+            Fn::GetAtt:
+            - QueryKBFunction
+            - Arn
+          CONVERSATION_TABLE_NAME:
+            Ref: ConversationHistoryTable
           DEMO_MODE:
             Ref: DemoMode
       Policies:
@@ -4103,6 +4109,17 @@ Resources:
       - Statement:
         - Effect: Allow
           Action:
+          - lambda:InvokeFunction
+          Resource:
+            Fn::GetAtt:
+            - QueryKBFunction
+            - Arn
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConversationHistoryTable
+      - Statement:
+        - Effect: Allow
+          Action:
           - states:StopExecution
           Resource:
             Fn::Sub:
@@ -4146,7 +4163,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1fb612e04e10498306a3bf43bc2e6347
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/c4492180da73a9db84f8511b3d04dd2f
       Handler: index.lambda_handler
       Description: Custom resource to trigger UI CodeBuild project
       Layers:
@@ -4523,14 +4540,30 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      TypeName: Query
+      TypeName: Mutation
       FieldName: queryKnowledgeBase
       DataSourceName:
         Fn::GetAtt:
-        - KBQueryDataSource
+        - AppSyncLambdaDataSource
         - Name
     Metadata:
       SamResourceId: QueryKBResolver
+  GetConversationResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getConversation
+      DataSourceName:
+        Fn::GetAtt:
+        - AppSyncLambdaDataSource
+        - Name
+    Metadata:
+      SamResourceId: GetConversationResolver
   SearchKBResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLSchema
@@ -5262,7 +5295,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/cd49fb7f3a46f5bba499498c0c8e2c20
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/599e5af3ba9b2268560c6a5ba335635f
       Handler: index.lambda_handler
       Description: Coordinates KB sync requests - waits for running syncs, then starts
         new one
@@ -5331,7 +5364,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/7fe2e9c7f2353c15f1ffbcfce2414627
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/1102f848060759e9a0efa7d2a9102a6e
       Handler: index.lambda_handler
       Description: Checks KB status for SYNC_QUEUED documents and updates tracking
         table
@@ -5513,6 +5546,94 @@ Resources:
           Ref: AWS::StackName
     Metadata:
       SamResourceId: ProcessDocumentErrorAlarm
+  DLQReplayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub:
+        - ${Prefix}-dlq-replay
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/84dc449a56cdcb9fa963f9cbe37fe814
+      Handler: index.lambda_handler
+      Description: Replays messages from DLQs back to source queues (manually triggered)
+      Runtime: python3.13
+      Timeout: 300
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          PROCESSING_DLQ_URL:
+            Ref: ProcessingDLQ
+          PROCESSING_QUEUE_URL:
+            Ref: DocumentProcessingQueue
+          BATCH_DLQ_URL:
+            Ref: BatchProcessingDLQ
+          BATCH_QUEUE_URL:
+            Ref: BatchProcessingQueue
+          SCRAPE_DISCOVERY_DLQ_URL:
+            Ref: ScrapeDiscoveryDLQ
+          SCRAPE_DISCOVERY_QUEUE_URL:
+            Ref: ScrapeDiscoveryQueue
+          SCRAPE_PROCESSING_DLQ_URL:
+            Ref: ScrapeProcessingDLQ
+          SCRAPE_PROCESSING_QUEUE_URL:
+            Ref: ScrapeProcessingQueue
+          SYNC_DLQ_URL:
+            Ref: SyncRequestDLQ
+          SYNC_QUEUE_URL:
+            Ref: SyncRequestQueue
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+          Resource:
+          - Fn::GetAtt:
+            - ProcessingDLQ
+            - Arn
+          - Fn::GetAtt:
+            - BatchProcessingDLQ
+            - Arn
+          - Fn::GetAtt:
+            - ScrapeDiscoveryDLQ
+            - Arn
+          - Fn::GetAtt:
+            - ScrapeProcessingDLQ
+            - Arn
+          - Fn::GetAtt:
+            - SyncRequestDLQ
+            - Arn
+        - Effect: Allow
+          Action:
+          - sqs:SendMessage
+          Resource:
+          - Fn::GetAtt:
+            - DocumentProcessingQueue
+            - Arn
+          - Fn::GetAtt:
+            - BatchProcessingQueue
+            - Arn
+          - Fn::GetAtt:
+            - ScrapeDiscoveryQueue
+            - Arn
+          - Fn::GetAtt:
+            - ScrapeProcessingQueue
+            - Arn
+          - Fn::GetAtt:
+            - SyncRequestQueue
+            - Arn
+      Tags:
+        Project:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: DLQReplayFunction
   DLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -5524,7 +5645,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      AlarmDescription: Alert when messages appear in DLQ
+      AlarmDescription: Alert when messages appear in Processing DLQ
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
       Statistic: Average
@@ -5549,6 +5670,150 @@ Resources:
           Ref: AWS::StackName
     Metadata:
       SamResourceId: DLQMessagesAlarm
+  BatchDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub:
+        - ${Prefix}-Batch-DLQ-Messages
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
+      AlarmDescription: Alert when messages appear in Batch Processing DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - BatchProcessingDLQ
+          - QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: BatchDLQMessagesAlarm
+  ScrapeDiscoveryDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub:
+        - ${Prefix}-ScrapeDiscovery-DLQ-Messages
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
+      AlarmDescription: Alert when messages appear in Scrape Discovery DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - ScrapeDiscoveryDLQ
+          - QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeDiscoveryDLQMessagesAlarm
+  ScrapeProcessingDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub:
+        - ${Prefix}-ScrapeProcessing-DLQ-Messages
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
+      AlarmDescription: Alert when messages appear in Scrape Processing DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - ScrapeProcessingDLQ
+          - QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: ScrapeProcessingDLQMessagesAlarm
+  SyncDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub:
+        - ${Prefix}-Sync-DLQ-Messages
+        - Prefix:
+            Fn::If:
+            - UseCustomPrefix
+            - Ref: StackPrefix
+            - Ref: AWS::StackName
+      AlarmDescription: Alert when messages appear in Sync Request DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - SyncRequestDLQ
+          - QueueName
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - Ref: AlarmTopic
+      OKActions:
+      - Ref: AlarmTopic
+      Tags:
+      - Key: Project
+        Value:
+          Ref: AWS::StackName
+    Metadata:
+      SamResourceId: SyncDLQMessagesAlarm
   StepFunctionsFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -5628,7 +5893,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/d3966e140dd3917dd2e571bc16575752
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/b2df0246cae491ead3eb4d9361a3a492
       Handler: index.lambda_handler
       Description: Sync budget configuration changes to AWS Budgets
       Runtime: python3.13
@@ -5953,7 +6218,7 @@ Resources:
             - UseCustomPrefix
             - Ref: StackPrefix
             - Ref: AWS::StackName
-      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/32fe04c46e3c2cf2fefa1d70465aea74
+      CodeUri: s3://ragstack-quicklaunch-public/ragstack-quicklaunch/20c674a46633677192cf208df11a7182
       Handler: index.lambda_handler
       Description: Creates admin user in Cognito idempotently (skips if exists)
       Runtime: python3.13

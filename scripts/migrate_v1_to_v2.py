@@ -274,16 +274,12 @@ def migrate_stack(
 
     # Step 1: Copy output/ -> content/
     logger.info("Step 1: Copying documents from output/ to content/...")
-    stats.documents_copied = copy_s3_prefix(
-        s3, bucket, "output/", "content/", dry_run=dry_run
-    )
+    stats.documents_copied = copy_s3_prefix(s3, bucket, "output/", "content/", dry_run=dry_run)
     logger.info(f"  Copied {stats.documents_copied} document files")
 
     # Step 2: Copy images/ -> content/
     logger.info("Step 2: Copying images from images/ to content/...")
-    stats.images_copied = copy_s3_prefix(
-        s3, bucket, "images/", "content/", dry_run=dry_run
-    )
+    stats.images_copied = copy_s3_prefix(s3, bucket, "images/", "content/", dry_run=dry_run)
     logger.info(f"  Copied {stats.images_copied} image files")
 
     # Step 3: Update tracking table

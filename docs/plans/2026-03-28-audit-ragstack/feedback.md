@@ -139,6 +139,18 @@ See Resolved Feedback below.
 
 1. Tasks 1, 2, 3, 4, 6, 7 all verified correct with no issues.
 
+#### Re-review after Issue 1 fix (2026-03-28)
+
+Verified all three documentation files are now consistent:
+
+1. `docs/DEVELOPMENT.md` ADR-001 (line 217): heading says "request-scoped caching", benefits list describes "reads once per invocation, cleared via `clear_cache()`".
+1. `docs/library/CONFIGURATION.md` Caching section (lines 135-138): describes request-scoped cache populated on first `get_effective_config()` call, cleared per invocation. No stale "add your own TTL cache" suggestion.
+1. `docs/CONFIGURATION.md` (line 3): "Lambda uses request-scoped caching (reads config once per invocation, cleared per request)." All three files agree.
+
+Grep for "no caching" across all `*.md` files returns zero hits outside `docs/plans/` (historical records only).
+
+Lint: `npm run lint` passes clean (all checks passed, 192 files formatted).
+
 PHASE_APPROVED
 
 ### CODE_REVIEW -- Phase 4 (2026-03-28)
