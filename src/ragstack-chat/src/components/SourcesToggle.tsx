@@ -53,7 +53,7 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
       if (stored !== null) {
         return stored === 'true';
       }
-    } catch (error) {
+    } catch {
       // Handle environments without sessionStorage (SSR, private browsing)
     }
     return defaultExpanded;
@@ -72,7 +72,7 @@ const SourcesToggleComponent: React.FC<SourcesToggleProps> = ({
     // Save to sessionStorage
     try {
       sessionStorage.setItem(STORAGE_KEY, String(newExpanded));
-    } catch (error) {
+    } catch {
       // Handle storage errors (quota exceeded, etc.)
     }
 
