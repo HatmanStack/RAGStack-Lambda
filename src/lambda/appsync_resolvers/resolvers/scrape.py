@@ -77,7 +77,7 @@ def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
                         Params={"Bucket": DATA_BUCKET, "Key": s3_key},
                         ExpiresIn=3600,
                     )
-                except Exception as e:
+                except ClientError as e:
                     logger.warning(f"Failed to generate content URL for {doc_id}: {e}")
                     return None
 

@@ -106,7 +106,7 @@ def analyze_metadata(args: dict[str, Any]) -> dict[str, Any]:
             "examplesGenerated": 0,
             "executionTimeMs": 0,
         }
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as e:
         logger.error(f"Unexpected error in analyze_metadata: {e}")
         return {
             "success": False,
@@ -196,7 +196,7 @@ def get_metadata_stats(args: dict[str, Any]) -> dict[str, Any]:
             "lastAnalyzed": None,
             "error": f"Failed to get metadata stats: {e}",
         }
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in get_metadata_stats: {e}")
         return {
             "keys": [],
@@ -267,7 +267,7 @@ def get_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
             "error": None,
         }
 
-    except Exception as e:
+    except (ClientError, ValueError, KeyError, json.JSONDecodeError) as e:
         logger.error(f"Error getting filter examples: {e}")
         return {
             "examples": [],
@@ -334,7 +334,7 @@ def get_key_library(args: dict[str, Any]) -> Any:
     except ClientError as e:
         logger.error(f"DynamoDB error getting key library: {e}")
         return []
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in get_key_library: {e}")
         return []
 
@@ -393,7 +393,7 @@ def check_key_similarity(args: dict[str, Any]) -> dict[str, Any]:
             "similarKeys": [],
             "hasSimilar": False,
         }
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in check_key_similarity: {e}")
         return {
             "proposedKey": key_name,
@@ -499,7 +499,7 @@ def regenerate_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
             "error": None,
         }
 
-    except Exception as e:
+    except (ClientError, ValueError, KeyError, TypeError) as e:
         logger.exception(f"Failed to regenerate filter examples: {e}")
         return {
             "success": False,
@@ -543,12 +543,12 @@ def delete_metadata_key(args: dict[str, Any]) -> dict[str, Any]:
                             {"metadata_filter_keys": updated_filter_keys}
                         )
                         logger.info(f"Removed '{key_name}' from filter keys allowlist")
-        except Exception as e:
+        except (ClientError, ValueError, KeyError) as e:
             # Non-critical - log but don't fail the deletion
             logger.warning(f"Failed to remove key from filter allowlist: {e}")
 
         return {"success": success, "keyName": key_name, "error": None}
-    except Exception as e:
+    except (ClientError, ValueError, KeyError, TypeError) as e:
         logger.error(f"Error deleting metadata key '{key_name}': {e}")
         return {"success": False, "keyName": key_name, "error": str(e)}
 
@@ -604,6 +604,6 @@ def start_reindex(args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("A reindex operation is already in progress") from e
 
         raise ValueError(f"Failed to start reindex: {error_msg}") from e
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error starting reindex: {e}")
         raise ValueError(f"Failed to start reindex: {str(e)}") from e

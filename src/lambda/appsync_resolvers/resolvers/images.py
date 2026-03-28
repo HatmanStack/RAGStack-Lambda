@@ -167,7 +167,7 @@ def create_image_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         raise
     except ValueError:
         raise
-    except Exception as e:
+    except (TypeError, KeyError) as e:
         logger.error(f"Unexpected error in create_image_upload_url: {e}")
         raise
 
@@ -224,7 +224,7 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
                 chat_model_id = config_manager.get_parameter(
                     "chat_primary_model", default="us.anthropic.claude-haiku-4-5-20251001-v1:0"
                 )
-            except Exception as e:
+            except (ClientError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to get config, using default model: {e}")
                 chat_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         else:
@@ -284,7 +284,7 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
                 system_prompt = config_manager.get_parameter(
                     "image_caption_prompt", default=default_caption_prompt
                 )
-            except Exception as e:
+            except (ClientError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to get caption prompt config: {e}")
                 system_prompt = default_caption_prompt
         else:
@@ -325,7 +325,7 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
         logger.info(f"Generated caption: {caption[:100]}...")
         return {"caption": caption, "error": None}
 
-    except Exception as e:
+    except (ClientError, ValueError, KeyError, TypeError) as e:
         logger.error(f"Unexpected error in generate_caption: {e}", exc_info=True)
         return {"caption": None, "error": "Failed to generate caption. Please try again."}
 
@@ -464,7 +464,7 @@ def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
     except ClientError as e:
         logger.error(f"AWS service error in submit_image: {e}")
         raise
-    except Exception as e:
+    except (TypeError, KeyError) as e:
         logger.error(f"Unexpected error in submit_image: {e}", exc_info=True)
         raise
 
@@ -552,7 +552,7 @@ def get_image(args: dict[str, Any]) -> dict[str, Any] | None:
         raise
     except ValueError:
         raise
-    except Exception as e:
+    except (TypeError, KeyError) as e:
         logger.error(f"Unexpected error in get_image: {e}")
         raise
 
@@ -621,7 +621,7 @@ def list_images(args: dict[str, Any]) -> dict[str, Any]:
         raise
     except ValueError:
         raise
-    except Exception as e:
+    except (TypeError, KeyError) as e:
         logger.error(f"Unexpected error in list_images: {e}")
         raise
 
@@ -708,7 +708,7 @@ def delete_image(args: dict[str, Any]) -> Any:
         raise
     except ValueError:
         raise
-    except Exception as e:
+    except (TypeError, KeyError) as e:
         logger.error(f"Unexpected error in delete_image: {e}")
         raise
 
@@ -788,6 +788,6 @@ def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     except ClientError as e:
         logger.error(f"AWS service error in create_zip_upload_url: {e}")
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in create_zip_upload_url: {e}")
         raise

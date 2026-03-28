@@ -74,7 +74,7 @@ def get_document(args: dict[str, Any]) -> dict[str, Any] | None:
     except ClientError as e:
         logger.error(f"DynamoDB error in get_document: {e}")
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in get_document: {e}")
         raise
 
@@ -123,7 +123,7 @@ def list_documents(args: dict[str, Any]) -> dict[str, Any]:
     except ClientError as e:
         logger.error(f"DynamoDB error in list_documents: {e}")
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in list_documents: {e}")
         raise
 
@@ -230,7 +230,7 @@ def delete_documents(args: dict[str, Any]) -> dict[str, Any]:
             failed_ids.append(doc_id)
             errors.append(f"Failed to delete {doc_id}: {error_code}")
             logger.error(f"DynamoDB error deleting {doc_id}: {e}")
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             failed_ids.append(doc_id)
             errors.append(f"Failed to delete {doc_id}: {str(e)}")
             logger.error(f"Unexpected error deleting {doc_id}: {e}")
@@ -807,8 +807,8 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
                 source_url = source_url[0] if source_url else ""
             if source_url:
                 source_url_map[source_url] = uri
-        except ClientError:
-            pass  # No sidecar, skip
+        except ClientError as e:
+            logger.debug(f"No metadata sidecar for {uri}: {e}")
 
     # Find the base page content URI
     base_page_uri = source_url_map.get(base_url)
@@ -861,7 +861,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
                     ExpressionAttributeValues={":metadata": job_metadata},
                 )
                 logger.info("Updated extracted_metadata in tracking table")
-        except Exception as e:
+        except (ClientError, ValueError, KeyError, TypeError) as e:
             logger.error(f"Failed to extract metadata from base page: {e}")
 
     logger.info(
@@ -905,7 +905,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
             )
             ingested_count += 1
 
-        except Exception as e:
+        except (ClientError, ValueError, KeyError, TypeError) as e:
             logger.error(f"Failed to prepare scraped page {uri}: {e}")
 
     # Ingest all documents in one batch
@@ -917,7 +917,7 @@ def _reindex_scraped_content(document_id: str, text_uris: list[str], kb_id: str,
                 documents=documents,
             )
             logger.info(f"Ingested {len(documents)} scraped pages: {ingest_response}")
-        except Exception as e:
+        except ClientError as e:
             logger.error(f"Failed to ingest scraped pages: {e}")
             raise  # Propagate to caller so job is marked FAILED, not INDEXED
 
@@ -1044,7 +1044,7 @@ def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
                 },
             )
             raise ValueError("Reindex requires Knowledge Base configuration") from e
-        except Exception as e:
+        except (ClientError, KeyError) as e:
             # Handle ingestion failures from _reindex_scraped_content
             logger.error(f"Scraped content reindex failed: {e}")
             table.update_item(
@@ -1195,7 +1195,7 @@ def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     except ClientError as e:
         logger.error(f"AWS service error in create_upload_url: {e}")
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in create_upload_url: {e}")
         raise
 
@@ -1274,7 +1274,7 @@ def process_document(args: dict[str, Any]) -> dict[str, Any]:
     except ClientError as e:
         logger.error(f"AWS service error in process_document: {e}")
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Unexpected error in process_document: {e}")
         raise
 

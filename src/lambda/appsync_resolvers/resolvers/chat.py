@@ -125,7 +125,7 @@ def query_knowledge_base(args: dict[str, Any]) -> dict[str, Any]:
                 InvocationType="Event",
                 Payload=json.dumps(invoke_event).encode(),
             )
-        except Exception as invoke_err:
+        except ClientError as invoke_err:
             # Clean up orphaned PENDING record if async invoke fails
             try:
                 table.delete_item(
