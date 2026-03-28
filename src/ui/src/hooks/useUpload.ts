@@ -43,7 +43,6 @@ export const useUpload = () => {
     const file = pendingUploads.current.get(uploadId);
 
     if (!file) {
-      console.error('Upload not found for ID:', uploadId);
       throw new Error('Upload not found');
     }
 
@@ -94,7 +93,6 @@ export const useUpload = () => {
       setTimeout(() => setCurrentUpload(null), 1500);
 
     } catch (err) {
-      console.error('Upload failed:', err);
       let errorMsg = 'Upload failed';
 
       if (err instanceof Error) {

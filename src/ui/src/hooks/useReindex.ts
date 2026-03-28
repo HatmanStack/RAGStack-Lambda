@@ -90,7 +90,6 @@ export function useReindex() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start reindex';
       setError(message);
-      console.error('[useReindex] Start reindex error:', err);
       return null;
     } finally {
       setIsStarting(false);
@@ -118,12 +117,9 @@ export function useReindex() {
             handleReindexUpdate(data.onReindexUpdate);
           }
         },
-        error: (err: Error) => {
-          console.error('[useReindex] Subscription error:', err);
-        },
+        error: () => { /* subscription error handled by reconnection */ },
       });
     } catch (err) {
-      console.error('[useReindex] Failed to set up subscription:', err);
     }
 
     // Cleanup subscription on unmount

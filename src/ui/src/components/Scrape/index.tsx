@@ -131,7 +131,6 @@ export const Scrape = () => {
         navigate('/');
       }
     } catch (err) {
-      console.error('[Scrape] Failed:', err);
     }
   };
 

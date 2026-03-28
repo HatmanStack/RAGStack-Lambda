@@ -87,7 +87,6 @@ export const useSearch = () => {
       }
 
     } catch (err) {
-      console.error('Search failed:', err);
       setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
     } finally {

@@ -174,7 +174,6 @@ export const useDocuments = () => {
         }) as GqlResponse;
 
         if (response.errors) {
-          console.error('[useDocuments] GraphQL errors fetching images:', response.errors);
           break;
         }
 
@@ -199,7 +198,6 @@ export const useDocuments = () => {
       }));
       setImages(transformedImages);
     } catch (err) {
-      console.error('Failed to fetch images:', err);
     }
   }, []);
 
@@ -215,7 +213,6 @@ export const useDocuments = () => {
         }) as GqlResponse;
 
         if (response.errors) {
-          console.error('[useDocuments] GraphQL errors fetching scrape jobs:', response.errors);
           break;
         }
 
@@ -242,7 +239,6 @@ export const useDocuments = () => {
       }));
       setScrapeJobs(transformedJobs);
     } catch (err) {
-      console.error('Failed to fetch scrape jobs:', err);
     }
   }, []);
 
@@ -254,10 +250,6 @@ export const useDocuments = () => {
       const response = await client.graphql({
         query: gqlQuery(LIST_DOCUMENTS)
       }) as GqlResponse;
-
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors fetching documents:', response.errors);
-      }
 
       const { data } = response;
       const listResult = data?.listDocuments as { items?: Record<string, unknown>[] } | undefined;
@@ -280,7 +272,6 @@ export const useDocuments = () => {
       await Promise.all([fetchScrapeJobs(), fetchImages()]);
 
     } catch (err) {
-      console.error('Failed to fetch documents:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -300,7 +291,6 @@ export const useDocuments = () => {
 
       return response.data?.getDocument;
     } catch (err) {
-      console.error('Failed to fetch document:', err);
       throw err;
     }
   }, []);
@@ -399,7 +389,6 @@ export const useDocuments = () => {
       }) as GqlResponse;
 
       if (response.errors) {
-        console.error('[useDocuments] GraphQL errors deleting documents:', response.errors);
         throw new Error(response.errors[0]?.message || 'Failed to delete documents');
       }
 
@@ -418,7 +407,6 @@ export const useDocuments = () => {
 
       return result;
     } catch (err) {
-      console.error('Failed to delete documents:', err);
       throw err;
     }
   }, []);
@@ -432,7 +420,6 @@ export const useDocuments = () => {
       }) as GqlResponse;
 
       if (response.errors) {
-        console.error('[useDocuments] GraphQL errors reprocessing document:', response.errors);
         throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
       }
 
@@ -463,7 +450,6 @@ export const useDocuments = () => {
 
       return result;
     } catch (err) {
-      console.error('Failed to reprocess document:', err);
       throw err;
     }
   }, []);
@@ -477,7 +463,6 @@ export const useDocuments = () => {
       }) as GqlResponse;
 
       if (response.errors) {
-        console.error('[useDocuments] GraphQL errors reindexing document:', response.errors);
         throw new Error(response.errors[0]?.message || 'Failed to reindex document');
       }
 
@@ -508,7 +493,6 @@ export const useDocuments = () => {
 
       return result;
     } catch (err) {
-      console.error('Failed to reindex document:', err);
       throw err;
     }
   }, []);
@@ -532,9 +516,7 @@ export const useDocuments = () => {
             handleDocumentUpdate(data.onDocumentUpdate);
           }
         },
-        error: (err: Error) => {
-          console.error('[useDocuments] Document subscription error:', err);
-        }
+        error: () => { /* subscription error handled by reconnection */ }
       });
 
       // Subscribe to scrape updates
@@ -546,9 +528,7 @@ export const useDocuments = () => {
             handleScrapeUpdate(data.onScrapeUpdate);
           }
         },
-        error: (err: Error) => {
-          console.error('[useDocuments] Scrape subscription error:', err);
-        }
+        error: () => { /* subscription error handled by reconnection */ }
       });
 
       // Subscribe to image updates
@@ -560,13 +540,10 @@ export const useDocuments = () => {
             handleImageUpdate(data.onImageUpdate);
           }
         },
-        error: (err: Error) => {
-          console.error('[useDocuments] Image subscription error:', err);
-        }
+        error: () => { /* subscription error handled by reconnection */ }
       });
 
     } catch (err) {
-      console.error('[useDocuments] Failed to set up subscriptions:', err);
     }
 
     // Cleanup subscriptions on unmount

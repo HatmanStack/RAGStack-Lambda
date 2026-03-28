@@ -90,7 +90,6 @@ export function Chat() {
         setOriginalPrompt(prompt);
         setConfigLoaded(true);
       } catch (err) {
-        console.error('Error loading config:', err);
         setConfigLoaded(true); // Still mark loaded so we don't spin forever
       }
     }
@@ -138,7 +137,6 @@ export function Chat() {
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err) {
-      console.error('Error saving config:', err);
       setSaveStatus('error');
     } finally {
       setIsSaving(false);

@@ -50,7 +50,6 @@ export function useKeyLibrary(): UseKeyLibraryReturn {
         setKeys([]);
       }
     } catch (err) {
-      console.error('Failed to fetch key library:', err);
       setError((err as Error).message);
       setKeys([]);
     } finally {

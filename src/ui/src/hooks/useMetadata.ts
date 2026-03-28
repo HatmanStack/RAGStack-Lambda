@@ -129,7 +129,6 @@ export const useMetadataStats = () => {
         setLastAnalyzed(result?.lastAnalyzed || null);
       }
     } catch (err) {
-      console.error('Failed to fetch metadata stats:', err);
       setError((err as Error).message);
       setStats([]);
     } finally {
@@ -154,10 +153,8 @@ export const useMetadataStats = () => {
         setTotalKeys(prev => prev - 1);
         return true;
       }
-      console.error('Failed to delete metadata key:', result?.error);
       return false;
     } catch (err) {
-      console.error('Error deleting metadata key:', err);
       return false;
     }
   }, []);
@@ -199,7 +196,6 @@ export const useFilterExamples = () => {
         setLastGenerated(result?.lastGenerated || null);
       }
     } catch (err) {
-      console.error('Failed to fetch filter examples:', err);
       setError((err as Error).message);
       setExamples([]);
     } finally {
@@ -252,7 +248,6 @@ export const useMetadataAnalyzer = () => {
       setResult(typedResult);
       return typedResult;
     } catch (err) {
-      console.error('Metadata analysis failed:', err);
       const errorMessage = (err as Error).message;
       setError(errorMessage);
       return null;

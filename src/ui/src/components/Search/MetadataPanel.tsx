@@ -54,7 +54,6 @@ export const MetadataPanel: React.FC = () => {
       try {
         const response = await client.graphql({ query: getConfiguration }) as GqlResponse;
         if (response.errors?.length) {
-          console.error('GraphQL errors loading configuration:', response.errors);
           return;
         }
         const config = response.data?.getConfiguration as { Custom?: string } | undefined;
@@ -68,7 +67,6 @@ export const MetadataPanel: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Failed to load configuration:', err);
       }
     };
     loadConfig();
@@ -110,12 +108,10 @@ export const MetadataPanel: React.FC = () => {
           },
         }) as GqlResponse;
         if (response.errors?.length) {
-          console.error('Failed to save disabled examples:', response.errors);
           // Rollback optimistic update on error
           setDisabledExamples(previousDisabled);
         }
       } catch (err: unknown) {
-        console.error('Failed to save disabled examples:', err);
         // Rollback optimistic update on error
         setDisabledExamples(previousDisabled);
       }
@@ -143,11 +139,9 @@ export const MetadataPanel: React.FC = () => {
         },
       }) as GqlResponse;
       if (response.errors?.length) {
-        console.error('Failed to save filter keys:', response.errors);
         setFilterKeys(previousKeys);
       }
     } catch (err) {
-      console.error('Failed to save filter keys:', err);
       setFilterKeys(previousKeys);
     }
   }, [client, filterKeys]);

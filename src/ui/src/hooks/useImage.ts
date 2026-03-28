@@ -52,7 +52,6 @@ export const useImage = () => {
 
       return response.data.createImageUploadUrl as { imageId: string; s3Uri: string };
     } catch (err) {
-      console.error('Failed to create upload URL:', err);
       setError(err instanceof Error ? err.message : 'Failed to create upload URL');
       throw err;
     }
@@ -108,7 +107,6 @@ export const useImage = () => {
       return { imageId, s3Uri, filename: file.name };
 
     } catch (err) {
-      console.error('Upload failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload image');
       throw err;
     } finally {
@@ -133,7 +131,6 @@ export const useImage = () => {
 
       return captionResult?.caption || '';
     } catch (err) {
-      console.error('Caption generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate caption');
       throw err;
     } finally {
@@ -178,7 +175,6 @@ export const useImage = () => {
 
       return submitResult;
     } catch (err) {
-      console.error('Submit failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to submit image');
       throw err;
     }
@@ -201,7 +197,6 @@ export const useImage = () => {
 
       return false;
     } catch (err) {
-      console.error('Delete failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete image');
       throw err;
     }
@@ -218,7 +213,6 @@ export const useImage = () => {
 
       return response.data?.getImage;
     } catch (err) {
-      console.error('Failed to get image:', err);
       setError(err instanceof Error ? err.message : 'Failed to get image');
       throw err;
     }
@@ -246,7 +240,6 @@ export const useImage = () => {
 
       return response.data.createZipUploadUrl as { uploadId: string };
     } catch (err) {
-      console.error('Failed to create ZIP upload URL:', err);
       setError(err instanceof Error ? err.message : 'Failed to create ZIP upload URL');
       throw err;
     }
@@ -279,7 +272,6 @@ export const useImage = () => {
       return { uploadId };
 
     } catch (err) {
-      console.error('ZIP upload failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload ZIP');
       throw err;
     } finally {
