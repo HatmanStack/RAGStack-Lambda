@@ -235,7 +235,7 @@ aws dynamodb scan --table-name RAGStack-<project>-Documents
 
 # Check configuration
 aws dynamodb get-item --table-name RAGStack-<project>-Configuration \
-  --key '{"PK": {"S": "Schema"}}'
+  --key '{"Configuration": {"S": "Schema"}}'
 ```
 
 **Check Bedrock Knowledge Base**
