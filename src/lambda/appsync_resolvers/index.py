@@ -126,7 +126,7 @@ def check_reindex_lock() -> None:
 
     try:
         table = dynamodb.Table(config_table_name)
-        response = table.get_item(Key={"config_key": REINDEX_LOCK_KEY})
+        response = table.get_item(Key={"Configuration": REINDEX_LOCK_KEY})
         lock = response.get("Item")
 
         if lock and lock.get("is_locked"):
