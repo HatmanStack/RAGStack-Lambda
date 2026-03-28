@@ -123,9 +123,91 @@ e579379 refactor(appsync-resolvers): extract document resolvers to dedicated mod
 b2e6593 refactor(appsync-resolvers): extract shared utilities into resolvers/shared.py
 ```
 
-CHANGES_REQUESTED
+### CODE_REVIEW -- Phase 5 (2026-03-28)
+
+#### ~~Issue 1: Task 5 (caching contradictions) incomplete -- two docs still claim "no caching"~~ RESOLVED
+
+See Resolved Feedback below.
+
+#### Observations (no action required)
+
+1. `README.md:137` has `pip install ragstack-mcp` for the MCP server section. This is an external PyPI package install, not a local dev setup command. The Task 2 spec targeted Quick Start pip/venv only. No action needed.
+
+1. Lint passes clean. All checks passed, 192 files formatted.
+
+1. 8 commits total (7 task commits + 1 checklist update). Conventional commit format, atomic changes, each task in its own commit.
+
+1. Tasks 1, 2, 3, 4, 6, 7 all verified correct with no issues.
+
+PHASE_APPROVED
+
+### CODE_REVIEW -- Phase 4 (2026-03-28)
+
+All six tasks verified against the spec. No issues found.
+
+#### Verification Results
+
+1. **Task 1 (query_kb exception narrowing):** `grep -rn "except Exception" src/lambda/query_kb/` returns exactly 1 result: the top-level safety net in `handler.py:727` with the required comment. All other catches narrowed to specific types.
+
+1. **Task 2 (appsync_resolvers exception narrowing):** `grep -rn "except Exception" src/lambda/appsync_resolvers/` returns exactly 1 result: the dispatcher safety net in `index.py:177` with comment. Silent `except ClientError: pass` for metadata sidecar replaced with `logger.debug` at `resolvers/documents.py:811`.
+
+1. **Task 3 (frontend type safety):** Zero `as any` in `useDocuments.ts` and `main.tsx`. Zero `eslint-disable` in `useDocuments.ts`. The `as unknown as string` cast is consolidated into `src/ui/src/utils/graphql.ts` (a typed wrapper), keeping the cast in one place rather than scattered across call sites. The only `as any` reference in the UI source is a comment in `graphql.ts` describing the purpose of the module.
+
+1. **Task 4 (console.log removal):** Zero `console.log/error/warn` calls in `src/ui/src/` (only match is a comment in `ErrorBoundary.test.tsx`). ESLint `no-console` rule configured at `src/ui/eslint.config.js:61` as `['error', { allow: ['warn'] }]`. Note: `src/ragstack-chat/src/` still has 12 console calls, but the spec scoped Task 4 to `src/ui/src/` only, and ragstack-chat is a separate published package with its own lint config.
+
+1. **Task 5 (coverage enforcement):** `--cov-fail-under=60` configured in `.github/workflows/ci.yml:79`. Three test files converted to `pytest.importorskip()` (`test_epub_extractor.py`, `test_xlsx_extractor.py`, `test_docx_extractor.py`). The `test_text_extractor_registry.py` retains `pytest.skip()` inside helper methods, which is correct since `importorskip` at module level would skip the entire file rather than individual binary-format tests.
+
+1. **Task 6 (pre-commit hooks):** `.pre-commit-config.yaml` exists at repo root with ruff-pre-commit v0.14.2 (ruff check with `--fix` and ruff-format). Appropriate `exclude` patterns for `publish.py`, `vulture_whitelist.py`, and `src/ragstack-mcp/`.
+
+#### Test and Lint Results
+
+- `npm run lint`: all checks passed, 192 files formatted
+- `npm run lint:frontend`: ESLint passes with zero warnings. TypeScript check fails on pre-existing `Scrape.test.tsx` error (identical failure before and after Phase 4 commits, not introduced by this phase)
+- `npm run test:backend`: 1058 passed, 54 failed (all pre-existing, identical failure set before Phase 4 commits)
+
+#### Commit Quality
+
+7 commits (6 task commits + 1 checklist update). Conventional commit format, atomic changes, each task in its own commit.
+
+```text
+ba3198f docs(plans): mark Phase 4 verification checklists complete
+235196e ci(hooks): add pre-commit configuration for ruff
+8ae5f8f ci(tests): add coverage enforcement and improve skip guards
+8ec1b19 style(ui): remove console.log calls and add no-console lint rule
+1469a48 style(ui): remove type safety bypasses in hooks and config
+fe95f50 refactor(appsync-resolvers): narrow exception handling to specific types
+52370ba refactor(query-kb): narrow except Exception to specific types
+```
+
+PHASE_APPROVED
+
+### CODE_REVIEW -- Phase 3, Re-review (2026-03-28)
+
+All items from the previous review verified as resolved.
+
+#### Verification Results
+
+1. **_compat.py re-exports all cross-module symbols:** Confirmed. Imports from `_clients`, `conversation`, `filters`, `media`, `retrieval`, and `sources`. `__all__` lists 26 symbols across all 6 modules.
+
+1. **handler.py has a single import try/except block:** Confirmed. Lines 19-39 contain the sole `try/except ImportError`. The remaining 8 `try` blocks are application logic (quota transactions, error handling).
+
+1. **index.py has a single import try/except block:** Confirmed. Lines 8-31.
+
+1. **type: ignore count reduced:** 16 total (down from 25). 6 isolated in `_compat.py`, 7 import-related (1 per consumer module), 2 non-import `arg-type` annotations in `handler.py`, 1 in `index.py` for the `handler` module fallback import. The target of ~6 was aspirational; 16 is the correct minimum given each consumer module still needs 1 fallback import marker.
+
+1. **Tests pass:** 1058 passed, 54 failed (all pre-existing, identical to previous runs). No regressions.
+
+1. **Lint clean:** All ruff checks passed, 192 files already formatted.
+
+PHASE_APPROVED
 
 ## Resolved Feedback
+
+### CODE_REVIEW -- Phase 5 (2026-03-28)
+
+1. **Issue 1: Task 5 (caching contradictions) incomplete -- two docs still claim "no caching"**
+
+   **Resolution:** Updated `docs/DEVELOPMENT.md` ADR-001 heading and benefits list to describe request-scoped caching instead of "no caching". Updated `docs/library/CONFIGURATION.md` caching section to reflect the actual behavior: request-scoped cache populated on first `get_effective_config()` call, cleared per invocation via `clear_cache()`. Removed the stale suggestion for callers to add their own TTL cache. Both files now align with `docs/CONFIGURATION.md` line 3.
 
 ### CODE_REVIEW -- Phase 3 (2026-03-28)
 

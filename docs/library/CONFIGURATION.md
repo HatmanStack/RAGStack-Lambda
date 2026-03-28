@@ -132,12 +132,10 @@ Configuration stored in DynamoDB table with partition key `Configuration`.
 
 ## Caching
 
-`ConfigurationManager` reads from DynamoDB on every call (no caching). This ensures:
-- Changes apply immediately
+`ConfigurationManager` uses request-scoped caching. The first call to `get_effective_config()` reads from DynamoDB and caches the result; subsequent calls within the same invocation return the cached value. Each Lambda handler calls `clear_cache()` at entry to ensure fresh config per request. This means:
+- Changes take effect on the next Lambda invocation
 - Multiple Lambda instances see consistent state
-- No cache invalidation needed
-
-For high-frequency reads, consider caching in calling code with short TTL (5-60 seconds).
+- No cross-request staleness (cache is cleared per invocation)
 
 ## Error Handling
 

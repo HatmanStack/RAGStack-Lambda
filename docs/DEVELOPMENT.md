@@ -214,7 +214,7 @@ npm test
 ## Architecture Decisions (ADRs)
 
 ### ADR-001: Configuration Management
-**Pattern**: DynamoDB-backed runtime configuration with no caching
+**Pattern**: DynamoDB-backed runtime configuration with request-scoped caching
 
 ConfigurationManager reads from DynamoDB table with structure:
 - **Schema** entry: Defines available parameters (read-only)
@@ -223,7 +223,7 @@ ConfigurationManager reads from DynamoDB table with structure:
 
 Benefits:
 - ✅ Runtime changes without redeployment
-- ✅ No caching issues
+- ✅ Request-scoped caching (reads once per invocation, cleared via `clear_cache()`)
 - ✅ Centralized configuration
 - ✅ Audit trail via DynamoDB
 
