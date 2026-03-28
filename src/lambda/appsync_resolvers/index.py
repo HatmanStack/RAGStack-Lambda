@@ -1,28 +1,8 @@
-"""
-AppSync Lambda resolvers for document, scrape, image, and metadata operations.
+"""AppSync Lambda resolver dispatcher.
 
-Handles:
-- getDocument
-- listDocuments
-- createUploadUrl
-- processDocument
-- getScrapeJob
-- listScrapeJobs
-- checkScrapeUrl
-- startScrape
-- cancelScrape
-- createImageUploadUrl
-- generateCaption
-- submitImage
-- getImage
-- listImages
-- deleteImage
-- deleteDocuments
-- analyzeMetadata
-- getMetadataStats
-- getFilterExamples
-- getKeyLibrary
-- checkKeySimilarity
+Routes GraphQL field names to domain-specific resolver modules.
+Shared state (clients, env vars, helpers) is defined in resolvers/shared.py
+and re-exported here for backward compatibility during the resolver split.
 """
 
 import json
@@ -87,11 +67,16 @@ def get_config_manager() -> ConfigurationManager:
     return _config_manager
 
 
-def get_current_user_id() -> str | None:
-    """Get user ID from current event's identity."""
-    if not _current_event:
+def get_current_user_id(event: dict[str, Any] | None = None) -> str | None:
+    """Get user ID from the event's identity.
+
+    Args:
+        event: The AppSync event. Falls back to _current_event if None.
+    """
+    evt = event if event is not None else _current_event
+    if not evt:
         return None
-    identity = _current_event.get("identity") or {}
+    identity = evt.get("identity") or {}
     return identity.get("sub") or identity.get("username")
 
 
@@ -111,18 +96,14 @@ REINDEX_LOCK_KEY = "reindex_lock"
 
 
 def check_reindex_lock() -> None:
-    """
-    Check if a full KB reindex is in progress and raise error if so.
-
-    This prevents individual document operations (reindex, reprocess, delete)
-    from interfering with a full KB reindex operation.
+    """Check if a full KB reindex is in progress and raise error if so.
 
     Raises:
         ValueError: If reindex is in progress.
     """
     config_table_name = os.environ.get("CONFIGURATION_TABLE_NAME")
     if not config_table_name:
-        return  # Can't check lock without config table
+        return
 
     try:
         table = dynamodb.Table(config_table_name)
@@ -136,10 +117,8 @@ def check_reindex_lock() -> None:
                 f"(started: {started_at}). Please wait for the reindex to complete."
             )
     except ClientError as e:
-        # Log but don't block operations if we can't check the lock
         logger.warning(f"Error checking reindex lock: {e}")
     except ValueError:
-        # Re-raise ValueError (our lock error)
         raise
 
 
@@ -149,48 +128,29 @@ STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID")
 DATA_SOURCE_ID = os.environ.get("DATA_SOURCE_ID")
 
-# Scrape-related environment variables (optional, only available when scraping is enabled)
 SCRAPE_JOBS_TABLE = os.environ.get("SCRAPE_JOBS_TABLE")
 SCRAPE_URLS_TABLE = os.environ.get("SCRAPE_URLS_TABLE")
 SCRAPE_START_FUNCTION_ARN = os.environ.get("SCRAPE_START_FUNCTION_ARN")
 
-# Metadata analyzer function (optional)
 METADATA_ANALYZER_FUNCTION_ARN = os.environ.get("METADATA_ANALYZER_FUNCTION_ARN")
-
-# Process image function for submitImage
 PROCESS_IMAGE_FUNCTION_ARN = os.environ.get("PROCESS_IMAGE_FUNCTION_ARN")
-
-# Query KB function for async chat invocation
 QUERY_KB_FUNCTION_ARN = os.environ.get("QUERY_KB_FUNCTION_ARN")
-
-# Conversation history table for async chat
 CONVERSATION_TABLE_NAME = os.environ.get("CONVERSATION_TABLE_NAME")
-
-# Metadata key library table (optional)
 METADATA_KEY_LIBRARY_TABLE = os.environ.get("METADATA_KEY_LIBRARY_TABLE")
-
-# Configuration table (optional, for caption generation and filter examples)
 CONFIGURATION_TABLE_NAME = os.environ.get("CONFIGURATION_TABLE_NAME")
-
-# Reindex state machine (optional, for KB reindex operations)
 REINDEX_STATE_MACHINE_ARN = os.environ.get("REINDEX_STATE_MACHINE_ARN")
-
-# Ingest to KB function for single document reindexing
 INGEST_TO_KB_FUNCTION_ARN = os.environ.get("INGEST_TO_KB_FUNCTION_ARN")
 
-# Initialize Bedrock runtime client for caption generation (use Lambda's region)
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION"))
 
 # Validation constants
 MAX_FILENAME_LENGTH = 255
 MAX_DOCUMENTS_LIMIT = 100
-# Strip ASCII control characters (0x00-0x1F, 0x7F) — everything else is valid in S3 keys
 CONTROL_CHARS_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def sanitize_filename(filename: str) -> str:
-    """
-    Sanitize filename by stripping control characters.
+    """Sanitize filename by stripping control characters.
 
     S3 keys accept any UTF-8 character, so only ASCII control characters
     are removed. Path traversal is handled separately in the upload resolvers.
@@ -205,6 +165,22 @@ def sanitize_filename(filename: str) -> str:
         return "unnamed"
 
     return sanitized
+
+
+def generate_presigned_download_url(s3_uri: str, expiration: int = 3600) -> str | None:
+    """Generate presigned URL for S3 object download."""
+    if not s3_uri or not s3_uri.startswith("s3://"):
+        return None
+    try:
+        bucket, key = parse_s3_uri(s3_uri)
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=expiration,
+        )
+    except ClientError as e:
+        logger.warning(f"Failed to generate presigned URL: {e}")
+        return None
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> Any:
@@ -1407,7 +1383,7 @@ def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
         cm = get_config_manager()
         if is_demo_mode_enabled(cm):
-            user_id = get_current_user_id()
+            user_id = get_current_user_id(_current_event)
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
@@ -1554,22 +1530,6 @@ def process_document(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Unexpected error in process_document: {e}")
         raise
-
-
-def generate_presigned_download_url(s3_uri: str, expiration: int = 3600) -> str | None:
-    """Generate presigned URL for S3 object download."""
-    if not s3_uri or not s3_uri.startswith("s3://"):
-        return None
-    try:
-        bucket, key = parse_s3_uri(s3_uri)
-        return s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket, "Key": key},
-            ExpiresIn=expiration,
-        )
-    except ClientError as e:
-        logger.warning(f"Failed to generate presigned URL for {s3_uri}: {e}")
-        return None
 
 
 def format_document(item: dict[str, Any]) -> dict[str, Any]:
@@ -1985,7 +1945,7 @@ def create_image_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
         cm = get_config_manager()
         if is_demo_mode_enabled(cm):
-            user_id = get_current_user_id()
+            user_id = get_current_user_id(_current_event)
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
@@ -2636,7 +2596,7 @@ def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         # Check demo mode upload quota (after args parsing, ZIP counts as a single upload)
         cm = get_config_manager()
         if is_demo_mode_enabled(cm):
-            user_id = get_current_user_id()
+            user_id = get_current_user_id(_current_event)
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(
