@@ -409,7 +409,9 @@ class TestKBRetrievalErrorHandling:
 
             # Mock context with invoked_function_arn
             mock_context = MagicMock()
-            mock_context.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
+            mock_context.invoked_function_arn = (
+                "arn:aws:lambda:us-east-1:123456789012:function:test"
+            )
 
             result = handler.lambda_handler(
                 {"query": "test question", "arguments": {"query": "test question"}},
@@ -445,7 +447,9 @@ class TestKBRetrievalErrorHandling:
             mock_bedrock_agent.retrieve.side_effect = self._make_access_denied_error()
 
             mock_context = MagicMock()
-            mock_context.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
+            mock_context.invoked_function_arn = (
+                "arn:aws:lambda:us-east-1:123456789012:function:test"
+            )
 
             result = handler.lambda_handler(
                 {"query": "test question", "arguments": {"query": "test question"}},
@@ -453,7 +457,8 @@ class TestKBRetrievalErrorHandling:
             )
 
             assert "error" in result
-            assert "unable to search" in result["error"].lower() or "knowledge base" in result["error"].lower()
+            error_lower = result["error"].lower()
+            assert "unable to search" in error_lower or "knowledge base" in error_lower
             assert result["answer"] == ""
 
     def test_unexpected_error_propagates(self):
@@ -482,7 +487,9 @@ class TestKBRetrievalErrorHandling:
             mock_bedrock_agent.retrieve.side_effect = ValueError("unexpected error")
 
             mock_context = MagicMock()
-            mock_context.invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test"
+            mock_context.invoked_function_arn = (
+                "arn:aws:lambda:us-east-1:123456789012:function:test"
+            )
 
             # The outer except Exception in lambda_handler will catch this, but
             # the inner retrieval try/except should NOT catch it

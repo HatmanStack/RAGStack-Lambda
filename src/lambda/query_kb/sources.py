@@ -364,7 +364,8 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                             # Validate key looks reasonable (has document ID and filename)
                             if "/" in doc_key and len(doc_key) > 10:
                                 logger.info(
-                                    f"[SOURCE] Generating presigned URL: bucket={doc_bucket}, key={doc_key}"
+                                    f"[SOURCE] Generating presigned URL: "
+                                    f"bucket={doc_bucket}, key={doc_key}"
                                 )
                                 document_url = generate_presigned_url(doc_bucket, doc_key)
                                 if document_url:

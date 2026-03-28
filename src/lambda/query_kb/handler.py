@@ -714,9 +714,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         error_msg = e.response.get("Error", {}).get("Message", "")
         if error_code == "ThrottlingException":
             logger.warning(f"Throttled by Bedrock: {error_msg}")
-            error_msg_for_user = (
-                "The system is currently busy. Please try again in a moment."
-            )
+            error_msg_for_user = "The system is currently busy. Please try again in a moment."
         else:
             logger.error(f"Bedrock client error: {error_code} - {error_msg}")
             error_msg_for_user = "Unable to search the knowledge base. Please try again."
