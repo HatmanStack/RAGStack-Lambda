@@ -76,6 +76,7 @@ For customization or development:
 **Prerequisites:**
 - AWS Account with admin access
 - Python 3.13+, Node.js 24+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 - AWS CLI, SAM CLI (configured)
 - Docker (for Lambda layer builds)
 
@@ -83,10 +84,8 @@ For customization or development:
 git clone https://github.com/HatmanStack/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
-# Create virtual environment and install dependencies
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# Install dependencies
+uv sync
 
 # Deploy (defaults to us-east-1 for Nova Multimodal Embeddings)
 python publish.py \

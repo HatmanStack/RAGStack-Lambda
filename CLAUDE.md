@@ -53,7 +53,7 @@ python publish.py --stack-name my-docs --admin-email admin@example.com --demo-mo
 
 # Development
 sam build
-sam local invoke ProcessDocumentFunction --event tests/events/s3-put.json
+sam local invoke ProcessDocumentFunction --event tests/events/sqs-processing-message.json
 cd src/ui && npm run dev  # Frontend dev server
 ```
 
