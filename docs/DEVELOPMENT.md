@@ -59,21 +59,17 @@ RAGStack-Lambda/
 │   └── appsync.py              # AppSync subscription publishing
 │
 ├── src/
-│   ├── lambda/                 # Lambda function handlers
+│   ├── lambda/                 # 32 Lambda functions (see docs/ARCHITECTURE.md for full list)
 │   │   ├── process_document/   # OCR extraction
+│   │   ├── process_text/       # Text extraction (HTML, CSV, etc.)
 │   │   ├── process_media/      # Video/audio transcription
 │   │   ├── ingest_to_kb/       # Bedrock KB ingestion
 │   │   ├── query_kb/           # Chat queries with sources
-│   │   ├── process_image/      # Image ingestion
+│   │   ├── search_kb/          # Direct KB search
 │   │   ├── appsync_resolvers/  # GraphQL resolvers
+│   │   │   └── resolvers/      # Domain modules (chat, documents, images, metadata, scrape)
 │   │   ├── configuration_resolver/
-│   │   ├── kb_custom_resource/ # KB provisioning
-│   │   ├── start_codebuild/    # Web component build trigger
-│   │   ├── scrape_start/       # Web scraping initiation
-│   │   ├── scrape_discover/    # URL discovery
-│   │   ├── scrape_process/     # Content extraction
-│   │   ├── scrape_status/      # Scrape job status
-│   │   └── process_zip/        # ZIP file handling
+│   │   └── ...                 # And 23 more
 │   ├── statemachine/           # Step Functions workflow
 │   │   ├── pipeline.asl.json
 │   │   ├── scrape.asl.json

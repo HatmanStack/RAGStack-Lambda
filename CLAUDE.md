@@ -64,12 +64,17 @@ cd src/ui && npm run dev  # Frontend dev server
 ```
 ├── lib/ragstack_common/          # Shared Python utilities (OCR, embeddings, config, storage)
 ├── src/
-│   ├── lambda/                   # Lambda function handlers
+│   ├── lambda/                   # 32 Lambda functions (see docs/ARCHITECTURE.md for full list)
 │   │   ├── process_document/     # OCR extraction (Textract/Bedrock)
+│   │   ├── process_text/         # Text extraction (HTML, CSV, JSON, XML, EPUB, DOCX, XLSX)
+│   │   ├── process_media/        # Video/audio transcription (AWS Transcribe)
 │   │   ├── ingest_to_kb/         # Ingest embeddings to Bedrock KB
 │   │   ├── query_kb/             # Query knowledge base (chat API)
+│   │   ├── search_kb/            # Direct KB search (no chat context)
 │   │   ├── appsync_resolvers/    # GraphQL resolvers for AppSync
-│   │   └── configuration_resolver/ # DynamoDB config resolver
+│   │   │   └── resolvers/        # Domain modules (chat, documents, images, metadata, scrape)
+│   │   ├── configuration_resolver/ # DynamoDB config resolver
+│   │   └── ...                   # And 23 more
 │   ├── ui/                       # React 19 + Vite dashboard (Cloudscape Design)
 │   ├── ragstack-chat/            # Reusable chat React component + web component
 │   ├── api/                      # GraphQL schema
