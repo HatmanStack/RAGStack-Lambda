@@ -143,8 +143,8 @@ def check_reindex_lock() -> None:
         raise
 
 
-TRACKING_TABLE = os.environ["TRACKING_TABLE"]
-DATA_BUCKET = os.environ["DATA_BUCKET"]
+TRACKING_TABLE = os.environ.get("TRACKING_TABLE")
+DATA_BUCKET = os.environ.get("DATA_BUCKET")
 STATE_MACHINE_ARN = os.environ.get("STATE_MACHINE_ARN")
 KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID")
 DATA_SOURCE_ID = os.environ.get("DATA_SOURCE_ID")
@@ -213,6 +213,12 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
     """
     global _current_event
     _current_event = event  # Store for use by resolvers that need identity
+
+    # Validate required environment variables
+    if not TRACKING_TABLE:
+        raise ValueError("TRACKING_TABLE environment variable is required")
+    if not DATA_BUCKET:
+        raise ValueError("DATA_BUCKET environment variable is required")
 
     # Clear config cache at handler entry to ensure fresh reads per invocation
     if _config_manager is not None:

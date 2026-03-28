@@ -76,7 +76,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     check_reindex_lock()
 
     sfn_client = boto3.client("stepfunctions")
-    state_machine_arn = os.environ["STATE_MACHINE_ARN"]
+    state_machine_arn = os.environ.get("STATE_MACHINE_ARN")
+    if not state_machine_arn:
+        raise ValueError("STATE_MACHINE_ARN environment variable is required")
 
     for record in event["Records"]:
         message = json.loads(record["body"])

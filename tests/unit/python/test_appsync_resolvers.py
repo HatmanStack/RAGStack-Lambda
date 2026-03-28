@@ -1338,3 +1338,33 @@ class TestRegenerateFilterExamples:
 
             assert result["success"] is False
             assert "None of the configured filter keys are active" in result["error"]
+
+
+class TestEnvVarValidation:
+    """Tests for environment variable validation at handler entry."""
+
+    def test_missing_tracking_table_raises_value_error(self, monkeypatch, mock_boto3):
+        """Handler raises ValueError with descriptive message when TRACKING_TABLE missing."""
+        monkeypatch.delenv("TRACKING_TABLE", raising=False)
+        monkeypatch.setenv("DATA_BUCKET", "test-bucket")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config")
+
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            module = _load_appsync_resolvers_module()
+
+        event = {"info": {"fieldName": "listDocuments"}, "arguments": {}}
+        with pytest.raises(ValueError, match="TRACKING_TABLE environment variable is required"):
+            module.lambda_handler(event, None)
+
+    def test_missing_data_bucket_raises_value_error(self, monkeypatch, mock_boto3):
+        """Handler raises ValueError with descriptive message when DATA_BUCKET missing."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-table")
+        monkeypatch.delenv("DATA_BUCKET", raising=False)
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config")
+
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            module = _load_appsync_resolvers_module()
+
+        event = {"info": {"fieldName": "listDocuments"}, "arguments": {}}
+        with pytest.raises(ValueError, match="DATA_BUCKET environment variable is required"):
+            module.lambda_handler(event, None)

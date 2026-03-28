@@ -58,8 +58,12 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         raise ValueError(f"Invalid dlq_name '{dlq_name}'. Must be one of: {valid_names}")
 
     dlq_env, source_env, is_fifo = QUEUE_MAP[dlq_name]
-    dlq_url = os.environ[dlq_env]
-    source_url = os.environ[source_env]
+    dlq_url = os.environ.get(dlq_env)
+    if not dlq_url:
+        raise ValueError(f"{dlq_env} environment variable is required")
+    source_url = os.environ.get(source_env)
+    if not source_url:
+        raise ValueError(f"{source_env} environment variable is required")
 
     logger.info(f"Replaying DLQ '{dlq_name}' from {dlq_url} to {source_url}")
 
