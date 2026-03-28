@@ -54,11 +54,11 @@ finding 3)
 
 **Verification Checklist:**
 
-- [ ] No bare `except Exception` remains around the KB retrieval call
-- [ ] Throttling errors return a user-friendly message (not a stack trace)
-- [ ] Other ClientErrors return a user-friendly message
-- [ ] Unexpected errors propagate up (not caught)
-- [ ] `npm run test:backend` passes
+- [x] No bare `except Exception` remains around the KB retrieval call
+- [x] Throttling errors return a user-friendly message (not a stack trace)
+- [x] Other ClientErrors return a user-friendly message
+- [x] Unexpected errors propagate up (not caught)
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -116,10 +116,10 @@ health audit finding 8 related)
 
 **Verification Checklist:**
 
-- [ ] `ConfigurationManager` has a `clear_cache()` method
-- [ ] `get_effective_config()` returns cached result on second call within same invocation
-- [ ] Each Lambda handler that uses ConfigurationManager calls `clear_cache()` at entry
-- [ ] `npm run test:backend` passes
+- [x] `ConfigurationManager` has a `clear_cache()` method
+- [x] `get_effective_config()` returns cached result on second call within same invocation
+- [x] Each Lambda handler that uses ConfigurationManager calls `clear_cache()` at entry
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -183,9 +183,9 @@ error messages to prevent opaque KeyError on cold start. (Eval defensiveness fin
 
 **Verification Checklist:**
 
-- [ ] `grep -rn 'os.environ\[' src/lambda/` returns zero results (all use `.get()`)
-- [ ] Required env vars are validated at handler entry with clear ValueError messages
-- [ ] `npm run test:backend` passes
+- [x] `grep -rn 'os.environ\[' src/lambda/` returns zero results (all use `.get()`)
+- [x] Required env vars are validated at handler entry with clear ValueError messages
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -227,9 +227,9 @@ fix(appsync-resolvers): replace bare os.environ[] with safe access
 
 **Verification Checklist:**
 
-- [ ] `read_s3_text()` has a `max_size_bytes` parameter with a default
-- [ ] Reading an object larger than the limit raises `ValueError`
-- [ ] `npm run test:backend` passes
+- [x] `read_s3_text()` has a `max_size_bytes` parameter with a default
+- [x] Reading an object larger than the limit raises `ValueError`
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -277,9 +277,9 @@ to the existing `parse_s3_uri()` utility. (Health audit finding 4)
 
 **Verification Checklist:**
 
-- [ ] `grep -rn 'replace.*s3://' src/lambda/` returns zero results
-- [ ] All replacements use `parse_s3_uri()` from `ragstack_common.storage`
-- [ ] `npm run test:backend` passes
+- [x] `grep -rn 'replace.*s3://' src/lambda/` returns zero results
+- [x] All replacements use `parse_s3_uri()` from `ragstack_common.storage`
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -317,9 +317,9 @@ for connection reuse across warm invocations. (Health audit finding 13)
 
 **Verification Checklist:**
 
-- [ ] `src/lambda/combine_pages/index.py` creates boto3 clients at module level
-- [ ] No boto3 client creation inside function bodies in this file
-- [ ] `npm run test:backend` passes
+- [x] `src/lambda/combine_pages/index.py` creates boto3 clients at module level
+- [x] No boto3 client creation inside function bodies in this file
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
