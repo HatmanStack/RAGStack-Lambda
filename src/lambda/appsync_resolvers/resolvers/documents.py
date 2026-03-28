@@ -1134,7 +1134,7 @@ def create_upload_url(args: dict[str, Any]) -> dict[str, Any]:
         # Check demo mode upload quota (after validation to not consume quota for invalid requests)
         cm = get_config_manager()
         if is_demo_mode_enabled(cm):
-            user_id = get_current_user_id(_current_event)
+            user_id = get_current_user_id()
             config_table = os.environ.get("CONFIGURATION_TABLE_NAME")
             if config_table:
                 allowed, message = demo_quota_check_and_increment(

@@ -107,22 +107,41 @@ def get_config_manager() -> ConfigurationManager:
 
 
 # =========================================================================
+# Current Event (set by dispatcher, read by resolvers)
+# =========================================================================
+
+_current_event: dict[str, Any] | None = None
+
+
+def set_current_event(event: dict[str, Any] | None) -> None:
+    """Set the current event (called by dispatcher at handler entry)."""
+    global _current_event
+    _current_event = event
+
+
+def get_current_event() -> dict[str, Any] | None:
+    """Get the current event."""
+    return _current_event
+
+
+# =========================================================================
 # Identity Helper
 # =========================================================================
 
 
-def get_current_user_id(event: dict[str, Any]) -> str | None:
+def get_current_user_id(event: dict[str, Any] | None = None) -> str | None:
     """Get user ID from the event's identity.
 
     Args:
-        event: The AppSync event containing identity information.
+        event: The AppSync event. Falls back to _current_event if None.
 
     Returns:
         User ID string or None if not available.
     """
-    if not event:
+    evt = event if event is not None else _current_event
+    if not evt:
         return None
-    identity = event.get("identity") or {}
+    identity = evt.get("identity") or {}
     return identity.get("sub") or identity.get("username")
 
 
