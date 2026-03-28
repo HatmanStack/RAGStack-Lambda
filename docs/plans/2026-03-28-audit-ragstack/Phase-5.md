@@ -47,10 +47,10 @@ This is the single most impactful doc fix -- every deployment example is current
 
 **Verification Checklist:**
 
-- [ ] `grep -rn "\-\-project-name" --include="*.md" .` returns zero results (excluding
+- [x] `grep -rn "\-\-project-name" --include="*.md" .` returns zero results (excluding
   plan docs)
-- [ ] All deployment examples use `--stack-name`
-- [ ] Examples match `publish.py --help` output
+- [x] All deployment examples use `--stack-name`
+- [x] Examples match `publish.py --help` output
 
 **Testing Instructions:**
 
@@ -98,10 +98,10 @@ code examples 1, eval onboarding finding)
 
 **Verification Checklist:**
 
-- [ ] `grep -n "pip install" README.md` returns zero results
-- [ ] `grep -n "python -m venv" README.md` returns zero results
-- [ ] Quick Start uses `uv sync`
-- [ ] `CLAUDE.md` references an event file that actually exists in `tests/events/`
+- [x] `grep -n "pip install" README.md` returns zero results
+- [x] `grep -n "python -m venv" README.md` returns zero results
+- [x] Quick Start uses `uv sync`
+- [x] `CLAUDE.md` references an event file that actually exists in `tests/events/`
 
 **Testing Instructions:**
 
@@ -157,11 +157,11 @@ drift 2-7, 11; stale 1-3; broken links 2-3)
 
 **Verification Checklist:**
 
-- [ ] No references to `lint:backend`, `format`, `format:check`, or
+- [x] No references to `lint:backend`, `format`, `format:check`, or
   `test:backend:integration` scripts that do not exist
-- [ ] `zip_processor` replaced with `process_zip`
-- [ ] All referenced file paths verified to exist
-- [ ] `npm run lint` description accurately describes check-only behavior
+- [x] `zip_processor` replaced with `process_zip`
+- [x] All referenced file paths verified to exist
+- [x] `npm run lint` description accurately describes check-only behavior
 
 **Testing Instructions:**
 
@@ -200,8 +200,8 @@ drift 10)
 
 **Verification Checklist:**
 
-- [ ] `grep -n '"PK"' docs/TROUBLESHOOTING.md` returns zero results
-- [ ] DynamoDB query example uses `"Configuration"` as the key attribute
+- [x] `grep -n '"PK"' docs/TROUBLESHOOTING.md` returns zero results
+- [x] DynamoDB query example uses `"Configuration"` as the key attribute
 
 **Testing Instructions:**
 
@@ -247,9 +247,9 @@ may have changed
 
 **Verification Checklist:**
 
-- [ ] No contradictory caching claims across docs
-- [ ] Lambda caching behavior accurately described
-- [ ] Frontend caching behavior (if any) accurately described and distinguished from
+- [x] No contradictory caching claims across docs
+- [x] Lambda caching behavior accurately described
+- [x] Frontend caching behavior (if any) accurately described and distinguished from
   Lambda behavior
 
 **Testing Instructions:**
@@ -297,9 +297,9 @@ structure issues 1-2)
 
 **Verification Checklist:**
 
-- [ ] CLAUDE.md notes the abbreviated listing and points to ARCHITECTURE.md
-- [ ] ARCHITECTURE.md lists `admin_user_provisioner`, `initial_sync`, `dlq_replay`
-- [ ] CLAUDE.md shows the new `resolvers/` subdirectory under `appsync_resolvers`
+- [x] CLAUDE.md notes the abbreviated listing and points to ARCHITECTURE.md
+- [x] ARCHITECTURE.md lists `admin_user_provisioner`, `initial_sync`, `dlq_replay`
+- [x] CLAUDE.md shows the new `resolvers/` subdirectory under `appsync_resolvers`
 
 **Testing Instructions:**
 
@@ -339,9 +339,9 @@ issues 3)
 
 **Verification Checklist:**
 
-- [ ] All `.md` files in `docs/` are linked from README.md or have a clear reason not to
+- [x] All `.md` files in `docs/` are linked from README.md or have a clear reason not to
   be (e.g., internal-only docs)
-- [ ] All links in README.md point to files that exist
+- [x] All links in README.md point to files that exist
 
 **Testing Instructions:**
 
