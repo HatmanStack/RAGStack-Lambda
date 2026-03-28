@@ -214,6 +214,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
     global _current_event
     _current_event = event  # Store for use by resolvers that need identity
 
+    # Clear config cache at handler entry to ensure fresh reads per invocation
+    if _config_manager is not None:
+        _config_manager.clear_cache()
+
     field_name_for_log = event["info"]["fieldName"]
     logger.info(f"AppSync resolver invoked for field: {field_name_for_log}")
     # Redact user query content from logs to avoid writing chat prompts to CloudWatch

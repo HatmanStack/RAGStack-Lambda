@@ -7,8 +7,8 @@ storage backend. Configuration is structured as three entries:
 - Custom: User-overridden values (read-write)
 
 The ConfigurationManager merges Custom → Default to provide effective configuration.
-No caching is used; configuration is read from DynamoDB on every call for
-immediate consistency.
+Request-scoped caching ensures DynamoDB is read once per Lambda invocation;
+call clear_cache() at handler entry points to reset between invocations.
 """
 
 import logging
@@ -130,7 +130,8 @@ class ConfigurationManager:
         ocr_backend = config_manager.get_parameter('ocr_backend')
 
     Design Decisions:
-        - No caching: reads from DynamoDB on every call for immediate consistency
+        - Request-scoped caching: first call per invocation reads DynamoDB,
+          subsequent calls return cached result. Call clear_cache() at handler entry.
         - Fails fast: raises exceptions if table access fails (no fallback)
         - Merges Custom → Default: Custom values override Default values
     """
@@ -156,6 +157,7 @@ class ConfigurationManager:
         self.dynamodb = boto3.resource("dynamodb")
         self.table = self.dynamodb.Table(table_name)
         self.table_name = table_name
+        self._cache: dict[str, Any] | None = None
 
         logger.info(f"Initialized ConfigurationManager with table: {table_name}")
 
@@ -187,12 +189,24 @@ class ConfigurationManager:
             logger.exception(f"Error retrieving {config_type} configuration")
             raise
 
+    def clear_cache(self) -> None:
+        """
+        Clear the request-scoped configuration cache.
+
+        Call this at the start of each Lambda handler invocation to ensure
+        fresh configuration is read from DynamoDB. Within a single invocation,
+        subsequent calls to get_effective_config() return the cached result.
+        """
+        self._cache = None
+
     def get_effective_config(self) -> dict[str, Any]:
         """
         Get effective configuration by merging Custom → Default.
 
-        NO CACHING: This method reads from DynamoDB on every call to ensure
-        immediate consistency when configuration changes.
+        Uses request-scoped caching: the first call reads from DynamoDB and
+        caches the result. Subsequent calls within the same Lambda invocation
+        return the cached result. Call clear_cache() at handler entry points
+        to reset.
 
         Returns:
             Merged configuration dictionary with Custom values overriding Defaults
@@ -200,6 +214,9 @@ class ConfigurationManager:
         Raises:
             ClientError: If DynamoDB access fails
         """
+        if self._cache is not None:
+            return self._cache
+
         # Get Default configuration
         default_item = self.get_configuration_item("Default")
         default_config = self._remove_partition_key(default_item) if default_item else {}
@@ -226,6 +243,7 @@ class ConfigurationManager:
         }
         logger.debug(f"Effective config values: {masked}")
 
+        self._cache = effective_config
         return effective_config
 
     def get_parameter(self, param_name: str, default: Any = None) -> Any:

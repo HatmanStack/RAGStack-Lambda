@@ -194,6 +194,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         dict: KBQueryResult with query, results, total, and optional error
     """
+    # Clear config cache at handler entry to ensure fresh reads per invocation
+    get_config_manager().clear_cache()
+
     # Check public access control
     allowed, error_msg = check_public_access(event, "search", get_config_manager())
     if not allowed:

@@ -370,3 +370,56 @@ def test_get_effective_config_defaults_only_new_fields(config_manager):
     assert result["ocr_backend"] == "textract"
     assert result["bedrock_ocr_model_id"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     assert result["chat_model_id"] == "us.amazon.nova-pro-v1:0"
+
+
+# Test: Request-scoped caching
+
+
+def test_get_effective_config_caches_result(config_manager, sample_default_config):
+    """Test that get_effective_config caches on second call within same invocation."""
+    config_manager.table.get_item.return_value = {"Item": sample_default_config}
+
+    # First call reads from DynamoDB
+    result1 = config_manager.get_effective_config()
+    first_call_count = config_manager.table.get_item.call_count
+
+    # Second call should return cached result (no additional DynamoDB reads)
+    result2 = config_manager.get_effective_config()
+    second_call_count = config_manager.table.get_item.call_count
+
+    assert result1 == result2
+    assert second_call_count == first_call_count  # No additional calls
+
+
+def test_clear_cache_forces_refresh(config_manager, sample_default_config):
+    """Test that clear_cache forces DynamoDB re-read on next call."""
+    config_manager.table.get_item.return_value = {"Item": sample_default_config}
+
+    # First call populates cache
+    config_manager.get_effective_config()
+    calls_after_first = config_manager.table.get_item.call_count
+
+    # Clear cache
+    config_manager.clear_cache()
+
+    # Next call should read from DynamoDB again
+    config_manager.get_effective_config()
+    calls_after_clear = config_manager.table.get_item.call_count
+
+    assert calls_after_clear > calls_after_first
+
+
+def test_get_parameter_uses_cache(config_manager, sample_default_config):
+    """Test that get_parameter benefits from caching via get_effective_config."""
+    config_manager.table.get_item.return_value = {"Item": sample_default_config}
+
+    # Multiple get_parameter calls should only read DynamoDB once
+    config_manager.get_parameter("ocr_backend")
+    config_manager.get_parameter("chat_model_id")
+    config_manager.get_parameter("bedrock_ocr_model_id")
+
+    # get_effective_config is called each time, but DynamoDB should only be hit once
+    # (first call populates cache, subsequent calls use it)
+    # get_effective_config calls get_configuration_item twice (Default + Custom)
+    # so first call = 2 DynamoDB reads, subsequent calls = 0
+    assert config_manager.table.get_item.call_count == 2

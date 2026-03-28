@@ -214,6 +214,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     Returns:
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
+    # Clear config cache at handler entry to ensure fresh reads per invocation
+    get_config_manager().clear_cache()
+
     # Detect async invocation from AppSync resolver
     is_async = event.get("asyncInvocation", False)
     turn_number = event.get("turnNumber")
