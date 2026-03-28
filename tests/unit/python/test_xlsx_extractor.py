@@ -5,10 +5,8 @@ from datetime import datetime
 
 import pytest
 
-try:
-    from openpyxl import Workbook
-except ImportError:
-    Workbook = None
+openpyxl = pytest.importorskip("openpyxl", reason="openpyxl not installed")
+Workbook = openpyxl.Workbook
 
 from ragstack_common.text_extractors.base import ExtractionResult
 from ragstack_common.text_extractors.xlsx_extractor import XlsxExtractor
@@ -22,9 +20,6 @@ def create_minimal_xlsx(
     Args:
         sheets: Dict of sheet_name -> list of rows (each row is list of cell values)
     """
-    if Workbook is None:
-        pytest.skip("openpyxl not installed")
-
     wb = Workbook()
 
     if sheets:

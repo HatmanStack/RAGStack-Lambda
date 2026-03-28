@@ -4,10 +4,8 @@ import io
 
 import pytest
 
-try:
-    from docx import Document
-except ImportError:
-    Document = None
+docx = pytest.importorskip("docx", reason="python-docx not installed")
+Document = docx.Document
 
 from ragstack_common.text_extractors.base import ExtractionResult
 from ragstack_common.text_extractors.docx_extractor import DocxExtractor
@@ -20,8 +18,6 @@ def create_minimal_docx(
     table_data: list[list[str]] | None = None,
 ) -> bytes:
     """Create a minimal DOCX file for testing."""
-    if Document is None:
-        pytest.skip("python-docx not installed")
 
     doc = Document()
 

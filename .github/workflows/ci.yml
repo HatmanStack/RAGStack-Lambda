@@ -75,8 +75,8 @@ jobs:
       - name: Mypy type check
         run: uv run mypy lib/ src/lambda/
 
-      - name: Tests
-        run: uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short
+      - name: Tests with coverage
+        run: uv run pytest tests/unit/python/ -m 'not integration' -v --tb=short --cov=lib --cov=src/lambda --cov-fail-under=60
 
   ui:
     name: UI Lint & Tests
