@@ -189,7 +189,7 @@ def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, r
         logger.error(f"Error in quota transaction: {e}")
         return fallback_model
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Error in quota check: {e}")
         # On error, default to fallback model (conservative approach)
         return fallback_model
@@ -262,7 +262,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         try:
             sts = boto3.client("sts")
             account_id = sts.get_caller_identity()["Account"]
-        except Exception as e:
+        except ClientError as e:
             logger.error(f"Failed to get account ID from STS: {e}")
             raise ValueError("Could not determine AWS account ID for ARN construction") from e
 
@@ -367,7 +367,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                     logger.info(f"Generated filter: {json.dumps(generated_filter)}")
                 else:
                     logger.info("No filter intent detected in query")
-            except Exception as e:
+            except (ClientError, ValueError, KeyError, TypeError) as e:
                 logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
         # Single unified query with optional metadata filter
@@ -565,7 +565,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                                     txt = resp["Body"].read().decode("utf-8")
                                     visual_context = f"\nTranscript (first segment): {txt}"
                                     logger.info(f"Visual video match: {doc_id}")
-                    except Exception as e:
+                    except (ClientError, KeyError, UnicodeDecodeError) as e:
                         logger.warning(f"Failed to get visual context for {doc_id}: {e}")
 
                 # Build visual hint with context - use tracking table type for label
@@ -725,7 +725,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         }
 
     except Exception as e:
-        # Generic error handling
+        # Safety net: catch unexpected errors to return user-friendly message
         logger.error(f"Error querying KB: {e}", exc_info=True)
         error_msg_for_user = "Failed to query knowledge base. Please try again."
         if is_async and conversation_id and turn_number:

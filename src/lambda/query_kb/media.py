@@ -8,6 +8,8 @@ import logging
 from decimal import Decimal
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 try:
     from ._compat import s3_client
 except ImportError:
@@ -77,7 +79,7 @@ def fetch_image_for_converse(s3_uri: str, content_type: str | None = None) -> di
         # Return ImageBlock for Converse API
         return {"image": {"format": image_format, "source": {"bytes": image_bytes}}}
 
-    except Exception as e:
+    except (ClientError, KeyError, ValueError) as e:
         logger.warning(f"Failed to fetch image {s3_uri}: {e}")
         return None
 
@@ -118,7 +120,7 @@ def generate_media_url(
                 return f"{base_url}#t={timestamp_start},{timestamp_end}"
             return f"{base_url}#t={timestamp_start}"
         return base_url
-    except Exception as e:
+    except ClientError as e:
         logger.error(f"Failed to generate media URL for {bucket}/{key}: {e}")
         return None
 

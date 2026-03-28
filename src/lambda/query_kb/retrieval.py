@@ -9,6 +9,8 @@ import logging
 import re
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 try:
     from ._compat import (
         MAX_MESSAGE_LENGTH,
@@ -131,7 +133,7 @@ def _augment_with_id_lookup(
                     content = s3_response["Body"].read().decode("utf-8")[:10000]
                 except UnicodeDecodeError:
                     logger.info(f"Binary file, adding as source only: {filename}")
-                except Exception as e:
+                except ClientError as e:
                     logger.warning(f"Could not read content for {filename}: {e}")
 
             # Add as a retrieval result (always include in sources)
@@ -152,7 +154,7 @@ def _augment_with_id_lookup(
 
         return retrieval_results
 
-    except Exception as e:
+    except ClientError as e:
         logger.warning(f"DynamoDB fallback lookup failed: {e}")
         return retrieval_results
 
@@ -204,7 +206,7 @@ def build_retrieval_query(current_query: str, history: list[dict[str, Any]]) -> 
         if rewritten and rewritten != current_query:
             logger.info(f"Query rewritten: '{current_query[:50]}...' -> '{rewritten[:50]}...'")
         return rewritten or current_query
-    except Exception as e:
+    except (ClientError, KeyError, ValueError) as e:
         logger.warning(f"Query rewrite failed, using original: {e}")
         return current_query
 

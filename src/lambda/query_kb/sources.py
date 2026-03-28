@@ -11,6 +11,8 @@ import os
 from typing import Any
 from urllib.parse import unquote
 
+from botocore.exceptions import ClientError
+
 try:
     from ._compat import (
         MEDIA_CONTENT_TYPES,
@@ -214,7 +216,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                                 f"[SOURCE] Tracking lookup EMPTY: "
                                 f"No item found for document_id={document_id}"
                             )
-                    except Exception as e:
+                    except ClientError as e:
                         doc_type = "document"  # Default on error
                         logger.error(f"[SOURCE] Tracking lookup FAILED: {e}", exc_info=True)
                 else:
@@ -297,7 +299,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                                     logger.info(
                                         f"[SOURCE] Got source_url from metadata: {source_url}"
                                     )
-                        except Exception as e:
+                        except (ClientError, json.JSONDecodeError, KeyError) as e:
                             logger.debug(f"[SOURCE] Could not read metadata sidecar: {e}")
 
                     # Fallback: try tracking table (old format has source_url per-page)
@@ -521,7 +523,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 else:
                     logger.debug(f"Skipping duplicate source: {source_key}")
 
-            except Exception as e:
+            except (ClientError, KeyError, IndexError, ValueError, TypeError) as e:
                 logger.error(f"Failed to parse source: {e}")
                 continue
 

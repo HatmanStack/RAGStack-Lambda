@@ -543,7 +543,11 @@ class TestMediaUrlGeneration:
 
         importlib.reload(index)
 
-        index.s3_client.generate_presigned_url.side_effect = Exception("S3 error")
+        from botocore.exceptions import ClientError
+
+        index.s3_client.generate_presigned_url.side_effect = ClientError(
+            {"Error": {"Code": "InternalError", "Message": "S3 error"}}, "GeneratePresignedUrl"
+        )
 
         url = index.generate_media_url("test-bucket", "video.mp4", 0, 30)
 
