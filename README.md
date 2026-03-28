@@ -90,7 +90,7 @@ pip install -r requirements.txt
 
 # Deploy (defaults to us-east-1 for Nova Multimodal Embeddings)
 python publish.py \
-  --project-name my-docs \
+  --stack-name my-docs \
   --admin-email admin@example.com
 ```
 
@@ -224,16 +224,16 @@ npm run check  # Lint + test all (backend + frontend)
 
 ```bash
 # Full deployment (defaults to us-east-1)
-python publish.py --project-name myapp --admin-email admin@example.com
+python publish.py --stack-name myapp --admin-email admin@example.com
 
 # Skip dashboard build (still builds web component)
-python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
+python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui
 
 # Skip ALL UI builds (dashboard and web component)
-python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
+python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui-all
 
 # Enable demo mode (rate limits: 5 uploads/day, 30 chats/day; disables reindex/reprocess/delete)
-python publish.py --project-name myapp --admin-email admin@example.com --demo-mode
+python publish.py --stack-name myapp --admin-email admin@example.com --demo-mode
 ```
 
 ### Publish to AWS Marketplace (Maintainers)

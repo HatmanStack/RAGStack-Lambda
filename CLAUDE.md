@@ -46,11 +46,10 @@ npm run lint:frontend     # TypeScript (ESLint --max-warnings 0)
 npm run check             # Lint + test (CI equivalent)
 
 # Deployment (defaults to us-east-1 for Nova Multimodal Embeddings)
-python publish.py --project-name my-docs --admin-email admin@example.com
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
-python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode   # Enable demo mode (rate limits, disabled features)
-python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode    # Enable demo mode
+python publish.py --stack-name my-docs --admin-email admin@example.com
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
+python publish.py --stack-name my-docs --admin-email admin@example.com --demo-mode    # Enable demo mode
 
 # Development
 sam build
