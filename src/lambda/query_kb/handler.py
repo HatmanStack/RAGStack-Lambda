@@ -376,54 +376,51 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
         # Single unified query with optional metadata filter
-        try:
-            if multislice_enabled and generated_filter:
-                # Use multi-slice retrieval with filter
-                _, _, multislice_retriever = _get_filter_components(filtered_score_boost)
-                logger.info(
-                    f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
-                )
-                retrieval_results = multislice_retriever.retrieve(
-                    query=retrieval_query,
-                    knowledge_base_id=knowledge_base_id,
-                    data_source_id=None,  # No data source filtering with unified content/
-                    metadata_filter=generated_filter,
-                    num_results=25,
-                )
-                logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
-                for i, r in enumerate(retrieval_results):
-                    uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
-                    score = r.get("score", "N/A")
-                    logger.debug(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
-            else:
-                # Standard single-query retrieval
-                retrieval_config: dict[str, Any] = {
-                    "vectorSearchConfiguration": {
-                        "numberOfResults": 25,
-                    }
-                }
-                # Apply generated filter if available
-                if generated_filter:
-                    retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
-
-                # Log exactly what we're sending to the KB
-                logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
-
-                retrieve_response = bedrock_agent.retrieve(
-                    knowledgeBaseId=knowledge_base_id,
-                    retrievalQuery={"text": retrieval_query},
-                    retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
-                )
-                retrieval_results = list(retrieve_response.get("retrievalResults", []))
-            logger.info(f"Retrieved {len(retrieval_results)} results")
-
-            # Log each result's URI and score for debugging
+        if multislice_enabled and generated_filter:
+            # Use multi-slice retrieval with filter
+            _, _, multislice_retriever = _get_filter_components(filtered_score_boost)
+            logger.info(
+                f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
+            )
+            retrieval_results = multislice_retriever.retrieve(
+                query=retrieval_query,
+                knowledge_base_id=knowledge_base_id,
+                data_source_id=None,  # No data source filtering with unified content/
+                metadata_filter=generated_filter,
+                num_results=25,
+            )
+            logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
             for i, r in enumerate(retrieval_results):
                 uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
                 score = r.get("score", "N/A")
-                logger.debug(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
-        except Exception as e:
-            logger.warning(f"Retrieval failed: {e}")
+                logger.debug(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
+        else:
+            # Standard single-query retrieval
+            retrieval_config: dict[str, Any] = {
+                "vectorSearchConfiguration": {
+                    "numberOfResults": 25,
+                }
+            }
+            # Apply generated filter if available
+            if generated_filter:
+                retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
+
+            # Log exactly what we're sending to the KB
+            logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
+
+            retrieve_response = bedrock_agent.retrieve(
+                knowledgeBaseId=knowledge_base_id,
+                retrievalQuery={"text": retrieval_query},
+                retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
+            )
+            retrieval_results = list(retrieve_response.get("retrievalResults", []))
+        logger.info(f"Retrieved {len(retrieval_results)} results")
+
+        # Log each result's URI and score for debugging
+        for i, r in enumerate(retrieval_results):
+            uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+            score = r.get("score", "N/A")
+            logger.debug(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
 
         logger.info(f"Retrieved {len(retrieval_results)} total results from KB")
 
@@ -711,8 +708,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         error_msg = e.response.get("Error", {}).get("Message", "")
-        logger.error(f"Bedrock client error: {error_code} - {error_msg}")
-        error_msg_for_user = f"Failed to query knowledge base: {error_msg}"
+        if error_code == "ThrottlingException":
+            logger.warning(f"Throttled by Bedrock: {error_msg}")
+            error_msg_for_user = (
+                "The system is currently busy. Please try again in a moment."
+            )
+        else:
+            logger.error(f"Bedrock client error: {error_code} - {error_msg}")
+            error_msg_for_user = "Unable to search the knowledge base. Please try again."
         if is_async and conversation_id and turn_number:
             update_conversation_turn(
                 conversation_id=conversation_id,
