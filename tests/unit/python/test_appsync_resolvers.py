@@ -317,6 +317,7 @@ class TestGenerateCaption:
         module.bedrock_runtime = mock_bedrock
         # Also patch in resolver submodules
         import resolvers.shared as shared
+
         shared.bedrock_runtime = mock_bedrock
         if "resolvers.images" in sys.modules:
             sys.modules["resolvers.images"].bedrock_runtime = mock_bedrock
@@ -430,6 +431,7 @@ class TestGenerateCaption:
         module.bedrock_runtime = mock_bedrock
         # Also patch in resolver submodules
         import resolvers.shared as shared
+
         shared.bedrock_runtime = mock_bedrock
         if "resolvers.images" in sys.modules:
             sys.modules["resolvers.images"].bedrock_runtime = mock_bedrock
@@ -1024,7 +1026,9 @@ class TestGetKeyLibrary:
     def test_get_key_library_no_table_configured(self, mock_env, mock_boto3):
         """Test returns empty list when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
         _patch_resolver_clients(module, mock_boto3)
 
         event = {
@@ -1121,7 +1125,9 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_no_table_configured(self, mock_env, mock_boto3):
         """Test returns empty when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
         _patch_resolver_clients(module, mock_boto3)
 
         event = {
@@ -1172,7 +1178,9 @@ class TestDeleteMetadataKey:
     def test_delete_metadata_key_no_table(self, mock_env, mock_boto3):
         """Test returns error when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
         _patch_resolver_clients(module, mock_boto3)
 
         event = {
@@ -1209,9 +1217,11 @@ class TestDeleteMetadataKey:
         mock_config = MagicMock()
         mock_config.get_parameter.return_value = ["location", "year", "author"]
 
+        import resolvers.metadata as metadata_mod
+
         with (
             patch("ragstack_common.key_library.KeyLibrary.delete_key") as mock_delete,
-            patch.object(module, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
         ):
             mock_delete.return_value = True
 
@@ -1254,7 +1264,9 @@ class TestRegenerateFilterExamples:
         mock_config = MagicMock()
         mock_config.get_parameter.return_value = []
 
-        with patch.object(module, "get_config_manager", return_value=mock_config):
+        import resolvers.metadata as metadata_mod
+
+        with patch.object(metadata_mod, "get_config_manager", return_value=mock_config):
             event = {
                 "info": {"fieldName": "regenerateFilterExamples"},
                 "arguments": {},
@@ -1270,6 +1282,8 @@ class TestRegenerateFilterExamples:
         """Only uses keys from the filter allowlist."""
         module = _load_appsync_resolvers_module()
         _patch_resolver_clients(module, mock_boto3)
+
+        import resolvers.metadata as metadata_mod
 
         mock_config = MagicMock()
 
@@ -1288,13 +1302,13 @@ class TestRegenerateFilterExamples:
             {"key_name": "author", "data_type": "string", "occurrence_count": 3},
         ]
 
-        # Patch at module level where it's imported
+        # Patch at metadata module level where it's imported
         with (
-            patch.object(module, "get_config_manager", return_value=mock_config),
-            patch.object(module, "KeyLibrary", return_value=mock_key_library),
-            patch.object(module, "generate_filter_examples") as mock_generate,
-            patch.object(module, "store_filter_examples"),
-            patch.object(module, "update_config_with_examples"),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "KeyLibrary", return_value=mock_key_library),
+            patch.object(metadata_mod, "generate_filter_examples") as mock_generate,
+            patch.object(metadata_mod, "store_filter_examples"),
+            patch.object(metadata_mod, "update_config_with_examples"),
         ):
             mock_generate.return_value = [{"name": "test", "filter": {}}]
 
@@ -1320,6 +1334,8 @@ class TestRegenerateFilterExamples:
         module = _load_appsync_resolvers_module()
         _patch_resolver_clients(module, mock_boto3)
 
+        import resolvers.metadata as metadata_mod
+
         mock_config = MagicMock()
         mock_config.get_parameter.side_effect = lambda key, default=None: (
             ["nonexistent_key"] if key == "metadata_filter_keys" else default
@@ -1331,8 +1347,8 @@ class TestRegenerateFilterExamples:
         ]
 
         with (
-            patch.object(module, "get_config_manager", return_value=mock_config),
-            patch.object(module, "KeyLibrary", return_value=mock_key_library),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "KeyLibrary", return_value=mock_key_library),
         ):
             event = {
                 "info": {"fieldName": "regenerateFilterExamples"},

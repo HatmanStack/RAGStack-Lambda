@@ -13,12 +13,19 @@ from uuid import uuid4
 
 from botocore.exceptions import ClientError
 
+from ragstack_common.config import get_knowledge_base_config
+from ragstack_common.demo_mode import (
+    demo_quota_check_and_increment,
+    get_demo_upload_conditions,
+    is_demo_mode_enabled,
+)
+from ragstack_common.ingestion import ingest_documents_with_retry
+from ragstack_common.key_library import KeyLibrary
+from ragstack_common.metadata_extractor import MetadataExtractor
+from ragstack_common.storage import is_valid_uuid, parse_s3_uri, read_s3_text, write_metadata_to_s3
 from resolvers.shared import (
-    CONFIGURATION_TABLE_NAME,
-    CONTROL_CHARS_PATTERN,
     DATA_BUCKET,
     INGEST_TO_KB_FUNCTION_ARN,
-    MAX_DOCUMENTS_LIMIT,
     MAX_FILENAME_LENGTH,
     METADATA_KEY_LIBRARY_TABLE,
     PROCESS_IMAGE_FUNCTION_ARN,
@@ -27,7 +34,6 @@ from resolvers.shared import (
     STATE_MACHINE_ARN,
     TRACKING_TABLE,
     bedrock_agent,
-    bedrock_runtime,
     check_reindex_lock,
     dynamodb,
     dynamodb_client,
@@ -39,16 +45,6 @@ from resolvers.shared import (
     sanitize_filename,
     sfn,
 )
-from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
-from ragstack_common.demo_mode import (
-    demo_quota_check_and_increment,
-    get_demo_upload_conditions,
-    is_demo_mode_enabled,
-)
-from ragstack_common.ingestion import ingest_documents_with_retry
-from ragstack_common.key_library import KeyLibrary
-from ragstack_common.metadata_extractor import MetadataExtractor
-from ragstack_common.storage import is_valid_uuid, parse_s3_uri, read_s3_text, write_metadata_to_s3
 
 logger = logging.getLogger()
 
@@ -1312,6 +1308,3 @@ def format_document(item: dict[str, Any]) -> dict[str, Any]:
         "mediaType": item.get("media_type"),  # video, audio
         "durationSeconds": item.get("duration_seconds"),
     }
-
-
-

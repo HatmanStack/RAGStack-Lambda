@@ -12,6 +12,8 @@ from urllib.parse import urlparse
 
 from botocore.exceptions import ClientError
 
+from ragstack_common.scraper import ScrapeStatus
+from ragstack_common.storage import is_valid_uuid
 from resolvers.shared import (
     DATA_BUCKET,
     MAX_DOCUMENTS_LIMIT,
@@ -23,8 +25,6 @@ from resolvers.shared import (
     s3,
     sfn,
 )
-from ragstack_common.scraper import ScrapeStatus
-from ragstack_common.storage import is_valid_uuid
 
 logger = logging.getLogger()
 
@@ -358,5 +358,3 @@ def format_scrape_page(item: dict[str, Any], content_url: str | None = None) -> 
         "error": item.get("error"),
         "depth": int(item.get("depth", 0)),
     }
-
-

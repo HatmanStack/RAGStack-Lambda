@@ -13,6 +13,14 @@ from uuid import uuid4
 
 from botocore.exceptions import ClientError
 
+from ragstack_common.config import ConfigurationManager
+from ragstack_common.demo_mode import (
+    demo_quota_check_and_increment,
+    get_demo_upload_conditions,
+    is_demo_mode_enabled,
+)
+from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
+from ragstack_common.storage import is_valid_uuid, parse_s3_uri
 from resolvers.shared import (
     CONFIGURATION_TABLE_NAME,
     DATA_BUCKET,
@@ -30,14 +38,6 @@ from resolvers.shared import (
     lambda_client,
     s3,
 )
-from ragstack_common.config import ConfigurationManager
-from ragstack_common.demo_mode import (
-    demo_quota_check_and_increment,
-    get_demo_upload_conditions,
-    is_demo_mode_enabled,
-)
-from ragstack_common.image import ImageStatus, is_supported_image, validate_image_type
-from ragstack_common.storage import is_valid_uuid, parse_s3_uri
 
 logger = logging.getLogger()
 
@@ -791,6 +791,3 @@ def create_zip_upload_url(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Unexpected error in create_zip_upload_url: {e}")
         raise
-
-
-
