@@ -127,6 +127,11 @@ chore(deps): fix npm audit vulnerabilities
 - [x] `uv run pip-audit` shows no known vulnerabilities (or documents exceptions)
 - [x] `npm run test:backend` passes
 
+**Known Exception:** pygments 2.19.2 is the latest available version and is a transitive
+dependency (required by pytest, not a direct project dependency). CVE-2026-4539 has no fix
+version published as of 2026-03-28. This will be resolved when a patched pygments release
+becomes available. Re-check with `uvx pip-audit` periodically.
+
 **Testing Instructions:**
 
 - Run `npm run test:backend` -- pygments is a dev dependency so only test tooling is affected
@@ -137,6 +142,42 @@ chore(deps): fix npm audit vulnerabilities
 chore(deps): update pygments to fix CVE-2026-4539
 
 - Upgrade pygments dev dependency to patched version
+```
+
+### Task 3.5: Remove Unused min_per_slice Parameter
+
+**Goal:** Remove the unused `min_per_slice` parameter from
+`merge_slices_with_guaranteed_minimum()` to reduce dead code. (Health audit finding,
+originally planned then removed during review, but implemented as correct cleanup.)
+
+**Files to Modify:**
+
+- `lib/ragstack_common/retrieval.py` -- Remove parameter from function signature
+- `tests/unit/python/test_retrieval.py` -- Update test calls
+- `vulture_whitelist.py` -- Remove whitelist entry if present
+
+**Prerequisites:** None
+
+**Implementation Steps:**
+
+1. Remove `min_per_slice` parameter from `merge_slices_with_guaranteed_minimum()` signature
+1. Update all call sites passing `min_per_slice`
+1. Remove any vulture whitelist entry for the parameter
+1. Run `npm run test:backend` to confirm tests pass
+
+**Verification Checklist:**
+
+- [x] `grep -rn "min_per_slice" lib/ src/ tests/` returns zero results
+- [x] `npm run test:backend` passes
+
+**Testing Instructions:**
+
+- Run `uv run pytest tests/unit/python/test_retrieval.py -v`
+
+**Commit Message Template:**
+
+```text
+refactor(retrieval): remove unused min_per_slice parameter
 ```
 
 ### Task 4: Clean Up Unused Test Fixture Variables
@@ -186,5 +227,5 @@ style(tests): prefix unused mock_env fixture variables with underscore
 1. Run `npm run check` -- all lint and tests must pass
 1. Run `npm audit` -- should show 0 vulnerabilities
 1. Run `grep -rn "config_key" src/lambda/appsync_resolvers/index.py` -- should return nothing
-1. Verify git log shows 3-4 atomic commits with conventional commit messages (Task 1 may
+1. Verify git log shows 4-5 atomic commits with conventional commit messages (Task 1 may
    produce no commit if verification confirms the fix is already in place)

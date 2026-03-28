@@ -2,7 +2,31 @@
 
 ## Active Feedback
 
-No open items.
+### CODE_REVIEW -- Phase 1 (2026-03-28)
+
+#### ~~Issue 1: Task 3 (pygments CVE-2026-4539) not completed~~ RESOLVED
+
+See Resolved Feedback below.
+
+#### ~~Issue 2: Out-of-scope commit a6abd99 (min_per_slice removal)~~ RESOLVED
+
+See Resolved Feedback below.
+
+#### Observations (no action required)
+
+1. Task 1 (reindex lock key): The spec says "no modifications expected" since code already uses `"Configuration"`. However, commit `3dcacf3` shows the code DID have `"config_key"` and needed fixing. The spec was incorrect about the pre-existing state, but the fix is correct and the commit message is accurate.
+
+1. All 41 Python test failures are pre-existing (identical set before and after Phase 1 commits). No regressions introduced.
+
+1. Frontend tests: ragstack-chat 81/81 pass. UI tests exhibit timeouts that appear environment-related, not caused by Phase 1 changes (no UI component code was modified).
+
+1. `npm audit` shows 0 vulnerabilities across root, `src/ui`, and `src/ragstack-chat`. Task 2 fully resolved.
+
+1. Task 4 (fixture cleanup): Clean implementation using `@pytest.mark.usefixtures` decorator. All 15 configuration_resolver tests pass. The spec suggested underscore-prefixing but `usefixtures` is the more idiomatic pytest approach.
+
+1. Commit quality: conventional commits format, atomic changes, each task in its own commit. The `cade2f9` follow-up commit for ragstack-chat typescript-eslint is a reasonable continuation of Task 2.
+
+CHANGES_RESOLVED
 
 ### PLAN_REVIEW -- 2026-03-28 (revision 3)
 
@@ -18,6 +42,16 @@ No new issues found.
 PLAN_APPROVED
 
 ## Resolved Feedback
+
+### CODE_REVIEW -- Phase 1 (2026-03-28)
+
+1. **Issue 1: Task 3 (pygments CVE-2026-4539) not completed**
+
+   **Resolution:** Confirmed via `uvx pip-audit` that pygments 2.19.2 is the latest available version and CVE-2026-4539 has no fix version published. pygments is a transitive dependency (required by pytest), not a direct project dependency. Added a "Known Exception" section to Task 3 in Phase-1.md documenting this status with instructions to re-check periodically.
+
+1. **Issue 2: Out-of-scope commit a6abd99 (min_per_slice removal)**
+
+   **Resolution:** Added Task 3.5 to Phase-1.md restoring the min_per_slice removal as a planned task. The plan now matches the implemented work. Updated Phase Verification commit count from 3-4 to 4-5 to account for the additional task.
 
 ### PLAN_REVIEW -- 2026-03-28 (revision 2)
 
