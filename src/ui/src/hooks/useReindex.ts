@@ -3,6 +3,7 @@ import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import { startReindex as startReindexMutation } from '../graphql/mutations/startReindex';
 import type { ReindexStatus, ReindexProgress, ReindexJob, ReindexUpdate } from '../types/graphql';
+import { gqlQuery, gqlSubscribe } from '../utils/graphql';
 
 // Type helper for GraphQL responses
 type GqlResponse<T = Record<string, unknown>> = { data?: T; errors?: Array<{ message: string }> };
@@ -72,7 +73,7 @@ export function useReindex() {
 
     try {
       const response = await client.graphql({
-        query: startReindexMutation as unknown as string,
+        query: gqlQuery(startReindexMutation),
       }) as GqlResponse<{ startReindex: ReindexJob }>;
 
       if (response.errors?.length) {
@@ -109,11 +110,10 @@ export function useReindex() {
     let subscription: { unsubscribe: () => void } | null = null;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      subscription = (client.graphql({
-        query: ON_REINDEX_UPDATE as unknown as string,
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onReindexUpdate?: ReindexUpdate } }) => {
+      subscription = gqlSubscribe<{ onReindexUpdate?: ReindexUpdate }>(
+        client, ON_REINDEX_UPDATE
+      ).subscribe({
+        next: ({ data }) => {
           if (data?.onReindexUpdate) {
             handleReindexUpdate(data.onReindexUpdate);
           }

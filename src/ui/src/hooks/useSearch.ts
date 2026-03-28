@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import gql from 'graphql-tag';
 import type { GqlResponse } from '../types/graphql';
+import { gqlQuery } from '../utils/graphql';
 
 export interface SearchResult {
   content: string;
@@ -70,7 +71,7 @@ export const useSearch = () => {
 
     try {
       const response = await client.graphql({
-        query: SEARCH_KB as unknown as string,
+        query: gqlQuery(SEARCH_KB),
         variables: {
           query: searchQuery,
           maxResults

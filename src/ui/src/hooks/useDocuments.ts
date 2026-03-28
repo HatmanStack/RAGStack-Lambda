@@ -6,6 +6,7 @@ import { listImages } from '../graphql/queries/listImages';
 import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations/deleteDocuments';
 import { reprocessDocument as reprocessDocumentMutation } from '../graphql/mutations/reprocessDocument';
 import { reindexDocument as reindexDocumentMutation } from '../graphql/mutations/reindexDocument';
+import { gqlQuery, gqlSubscribe } from '../utils/graphql';
 
 // Type helper for GraphQL responses - Amplify returns a union type but we know queries return this shape
 type GqlResponse<T = Record<string, unknown>> = { data?: T; errors?: Array<{ message: string }> };
@@ -168,7 +169,7 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listImages as unknown as string,
+          query: gqlQuery(listImages),
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -209,7 +210,7 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listScrapeJobs as unknown as string,
+          query: listScrapeJobs,
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -251,7 +252,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: LIST_DOCUMENTS as unknown as string
+        query: gqlQuery(LIST_DOCUMENTS)
       }) as GqlResponse;
 
       if (response.errors) {
@@ -293,7 +294,7 @@ export const useDocuments = () => {
   const fetchDocument = useCallback(async (documentId: string) => {
     try {
       const response = await client.graphql({
-        query: GET_DOCUMENT as unknown as string,
+        query: gqlQuery(GET_DOCUMENT),
         variables: { documentId }
       }) as GqlResponse;
 
@@ -393,7 +394,7 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteDocumentsMutation as unknown as string,
+        query: gqlQuery(deleteDocumentsMutation),
         variables: { documentIds }
       }) as GqlResponse;
 
@@ -426,7 +427,7 @@ export const useDocuments = () => {
   const reprocessDocument = useCallback(async (documentId: string) => {
     try {
       const response = await client.graphql({
-        query: reprocessDocumentMutation as unknown as string,
+        query: gqlQuery(reprocessDocumentMutation),
         variables: { documentId }
       }) as GqlResponse;
 
@@ -471,7 +472,7 @@ export const useDocuments = () => {
   const reindexDocument = useCallback(async (documentId: string) => {
     try {
       const response = await client.graphql({
-        query: reindexDocumentMutation as unknown as string,
+        query: gqlQuery(reindexDocumentMutation),
         variables: { documentId }
       }) as GqlResponse;
 
@@ -523,11 +524,10 @@ export const useDocuments = () => {
 
     try {
       // Subscribe to document updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      docSubscription = (client.graphql({
-        query: ON_DOCUMENT_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onDocumentUpdate?: DocumentUpdateEvent } }) => {
+      docSubscription = gqlSubscribe<{ onDocumentUpdate?: DocumentUpdateEvent }>(
+        client, ON_DOCUMENT_UPDATE
+      ).subscribe({
+        next: ({ data }) => {
           if (data?.onDocumentUpdate) {
             handleDocumentUpdate(data.onDocumentUpdate);
           }
@@ -538,11 +538,10 @@ export const useDocuments = () => {
       });
 
       // Subscribe to scrape updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      scrapeSubscription = (client.graphql({
-        query: ON_SCRAPE_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onScrapeUpdate?: ScrapeUpdateEvent } }) => {
+      scrapeSubscription = gqlSubscribe<{ onScrapeUpdate?: ScrapeUpdateEvent }>(
+        client, ON_SCRAPE_UPDATE
+      ).subscribe({
+        next: ({ data }) => {
           if (data?.onScrapeUpdate) {
             handleScrapeUpdate(data.onScrapeUpdate);
           }
@@ -553,11 +552,10 @@ export const useDocuments = () => {
       });
 
       // Subscribe to image updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      imageSubscription = (client.graphql({
-        query: ON_IMAGE_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onImageUpdate?: ImageUpdateEvent } }) => {
+      imageSubscription = gqlSubscribe<{ onImageUpdate?: ImageUpdateEvent }>(
+        client, ON_IMAGE_UPDATE
+      ).subscribe({
+        next: ({ data }) => {
           if (data?.onImageUpdate) {
             handleImageUpdate(data.onImageUpdate);
           }

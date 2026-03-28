@@ -8,6 +8,7 @@ import { submitImage as submitImageMutation } from '../graphql/mutations/submitI
 import { deleteImage as deleteImageMutation } from '../graphql/mutations/deleteImage';
 import { getImage as getImageQuery } from '../graphql/queries/getImage';
 import type { GqlResponse } from '../types/graphql';
+import { gqlQuery } from '../utils/graphql';
 
 export interface ImageUpload {
   id: string;
@@ -41,7 +42,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createImageUploadUrl as unknown as string,
+        query: gqlQuery(createImageUploadUrl),
         variables: { filename }
       }) as GqlResponse;
 
@@ -121,7 +122,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: generateCaptionMutation as unknown as string,
+        query: gqlQuery(generateCaptionMutation),
         variables: { imageS3Uri }
       }) as GqlResponse;
 
@@ -151,7 +152,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: submitImageMutation as unknown as string,
+        query: gqlQuery(submitImageMutation),
         variables: {
           input: {
             imageId,
@@ -188,7 +189,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteImageMutation as unknown as string,
+        query: gqlQuery(deleteImageMutation),
         variables: { imageId }
       }) as GqlResponse;
 
@@ -211,7 +212,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: getImageQuery as unknown as string,
+        query: gqlQuery(getImageQuery),
         variables: { imageId }
       }) as GqlResponse;
 
@@ -235,7 +236,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createZipUploadUrlMutation as unknown as string,
+        query: gqlQuery(createZipUploadUrlMutation),
         variables: { generateCaptions }
       }) as GqlResponse;
 
