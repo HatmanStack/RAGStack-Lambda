@@ -59,11 +59,11 @@ modules. This task creates the skeleton; subsequent tasks move functions into it
 
 **Verification Checklist:**
 
-- [ ] `src/lambda/appsync_resolvers/resolvers/` directory exists with `__init__.py` and
+- [x] `src/lambda/appsync_resolvers/resolvers/` directory exists with `__init__.py` and
   `shared.py`
-- [ ] `shared.py` contains all boto3 clients, env vars, and shared utilities
-- [ ] `index.py` imports from `resolvers.shared`
-- [ ] `npm run test:backend` passes
+- [x] `shared.py` contains all boto3 clients, env vars, and shared utilities
+- [x] `index.py` imports from `resolvers.shared`
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -113,9 +113,9 @@ refactor(appsync-resolvers): extract shared utilities into resolvers/shared.py
 
 **Verification Checklist:**
 
-- [ ] `resolvers/documents.py` contains all document resolver functions
-- [ ] No document resolver functions remain in `index.py` (only the import and dispatch)
-- [ ] `npm run test:backend` passes
+- [x] `resolvers/documents.py` contains all document resolver functions
+- [x] No document resolver functions remain in `index.py` (only the import and dispatch)
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -158,8 +158,8 @@ refactor(appsync-resolvers): extract document resolvers to dedicated module
 
 **Verification Checklist:**
 
-- [ ] `resolvers/images.py` contains all image resolver functions
-- [ ] `npm run test:backend` passes
+- [x] `resolvers/images.py` contains all image resolver functions
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -197,8 +197,8 @@ refactor(appsync-resolvers): extract image resolvers to dedicated module
 
 **Verification Checklist:**
 
-- [ ] `resolvers/scrape.py` contains all scrape resolver functions
-- [ ] `npm run test:backend` passes
+- [x] `resolvers/scrape.py` contains all scrape resolver functions
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -245,11 +245,11 @@ to a pure dispatcher.
 
 **Verification Checklist:**
 
-- [ ] `index.py` is under 200 lines
-- [ ] `index.py` contains only dispatcher logic (no business logic)
-- [ ] All resolver functions live in domain modules under `resolvers/`
-- [ ] `npm run test:backend` passes
-- [ ] `npm run check` passes (lint + tests)
+- [x] `index.py` is under 200 lines
+- [x] `index.py` contains only dispatcher logic (no business logic)
+- [x] All resolver functions live in domain modules under `resolvers/`
+- [x] `npm run test:backend` passes
+- [x] `npm run check` passes (lint + tests)
 
 **Testing Instructions:**
 
@@ -331,10 +331,10 @@ refactor(appsync-resolvers): complete resolver split, reduce index.py to dispatc
 
 **Verification Checklist:**
 
-- [ ] `_compat.py` exists and handles all cross-module imports
-- [ ] Each consumer module has at most ONE `try/except ImportError` block (for `_compat`)
-- [ ] `# type: ignore` comments reduced to at most 1 per consumer module
-- [ ] `npm run test:backend` passes
+- [x] `_compat.py` exists and handles all cross-module imports
+- [x] Each consumer module has at most ONE `try/except ImportError` block (for `_compat`)
+- [x] `# type: ignore` comments reduced to at most 1 per consumer module
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
@@ -386,10 +386,10 @@ audit finding 5, ADR-007)
 
 **Verification Checklist:**
 
-- [ ] `extract_kb_scalar` exists in `lib/ragstack_common/kb_filters.py`
-- [ ] Both `search_kb` and `query_kb` import from `ragstack_common`
-- [ ] No duplicate `extract_kb_scalar` implementations in Lambda code
-- [ ] `npm run test:backend` passes
+- [x] `extract_kb_scalar` exists in `lib/ragstack_common/kb_filters.py`
+- [x] Both `search_kb` and `query_kb` import from `ragstack_common`
+- [x] No duplicate `extract_kb_scalar` implementations in Lambda code
+- [x] `npm run test:backend` passes
 
 **Testing Instructions:**
 
