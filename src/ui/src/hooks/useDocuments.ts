@@ -495,45 +495,47 @@ export const useDocuments = () => {
     let scrapeSubscription: { unsubscribe: () => void } | null = null;
     let imageSubscription: { unsubscribe: () => void } | null = null;
 
-    try {
-      // Subscribe to document updates
-      docSubscription = gqlSubscribe<{ onDocumentUpdate?: DocumentUpdateEvent }>(
-        client, ON_DOCUMENT_UPDATE
-      ).subscribe({
-        next: ({ data }) => {
-          if (data?.onDocumentUpdate) {
-            handleDocumentUpdate(data.onDocumentUpdate);
-          }
-        },
-        error: (err: unknown) => { console.error('Document subscription error:', err); }
-      });
+    if (client?.graphql) {
+      try {
+        // Subscribe to document updates
+        docSubscription = gqlSubscribe<{ onDocumentUpdate?: DocumentUpdateEvent }>(
+          client, ON_DOCUMENT_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onDocumentUpdate) {
+              handleDocumentUpdate(data.onDocumentUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Document subscription error:', err); }
+        });
 
-      // Subscribe to scrape updates
-      scrapeSubscription = gqlSubscribe<{ onScrapeUpdate?: ScrapeUpdateEvent }>(
-        client, ON_SCRAPE_UPDATE
-      ).subscribe({
-        next: ({ data }) => {
-          if (data?.onScrapeUpdate) {
-            handleScrapeUpdate(data.onScrapeUpdate);
-          }
-        },
-        error: (err: unknown) => { console.error('Scrape subscription error:', err); }
-      });
+        // Subscribe to scrape updates
+        scrapeSubscription = gqlSubscribe<{ onScrapeUpdate?: ScrapeUpdateEvent }>(
+          client, ON_SCRAPE_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onScrapeUpdate) {
+              handleScrapeUpdate(data.onScrapeUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Scrape subscription error:', err); }
+        });
 
-      // Subscribe to image updates
-      imageSubscription = gqlSubscribe<{ onImageUpdate?: ImageUpdateEvent }>(
-        client, ON_IMAGE_UPDATE
-      ).subscribe({
-        next: ({ data }) => {
-          if (data?.onImageUpdate) {
-            handleImageUpdate(data.onImageUpdate);
-          }
-        },
-        error: (err: unknown) => { console.error('Image subscription error:', err); }
-      });
+        // Subscribe to image updates
+        imageSubscription = gqlSubscribe<{ onImageUpdate?: ImageUpdateEvent }>(
+          client, ON_IMAGE_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onImageUpdate) {
+              handleImageUpdate(data.onImageUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Image subscription error:', err); }
+        });
 
-    } catch (err) {
-      console.error('Failed to set up subscriptions:', err);
+      } catch (err) {
+        console.error('Failed to set up subscriptions:', err);
+      }
     }
 
     // Cleanup subscriptions on unmount

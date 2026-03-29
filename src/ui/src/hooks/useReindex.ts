@@ -109,18 +109,20 @@ export function useReindex() {
     let subscription: { unsubscribe: () => void } | null = null;
 
     try {
-      subscription = gqlSubscribe<{ onReindexUpdate?: ReindexUpdate }>(
-        client, ON_REINDEX_UPDATE
-      ).subscribe({
-        next: ({ data }) => {
-          if (data?.onReindexUpdate) {
-            handleReindexUpdate(data.onReindexUpdate);
-          }
-        },
-        error: (err: unknown) => {
-          console.error('Reindex subscription error:', err);
-        },
-      });
+      if (client?.graphql) {
+        subscription = gqlSubscribe<{ onReindexUpdate?: ReindexUpdate }>(
+          client, ON_REINDEX_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onReindexUpdate) {
+              handleReindexUpdate(data.onReindexUpdate);
+            }
+          },
+          error: (err: unknown) => {
+            console.error('Reindex subscription error:', err);
+          },
+        });
+      }
     } catch (err) {
       console.error('Failed to subscribe to reindex updates:', err);
     }
