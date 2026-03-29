@@ -442,8 +442,8 @@ def regenerate_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
         key_library = KeyLibrary(table_name=METADATA_KEY_LIBRARY_TABLE)
         active_keys = key_library.get_active_keys()
 
-        # Normalize filter keys for comparison
-        filter_keys_norm = {k.lower().replace(" ", "_") for k in filter_keys}
+        # Normalize filter keys for comparison (skip non-string entries)
+        filter_keys_norm = {k.lower().replace(" ", "_") for k in filter_keys if isinstance(k, str)}
 
         # Filter to only keys in the allowlist
         allowed_keys = [
@@ -522,12 +522,12 @@ def delete_metadata_key(args: dict[str, Any]) -> dict[str, Any]:
                     "metadata_filter_keys", default=[]
                 )
                 if current_filter_keys:
-                    # Normalize for comparison
+                    # Normalize for comparison (skip non-string entries)
                     key_name_norm = key_name.lower().replace(" ", "_")
                     updated_filter_keys = [
                         k
                         for k in current_filter_keys
-                        if k.lower().replace(" ", "_") != key_name_norm
+                        if not isinstance(k, str) or k.lower().replace(" ", "_") != key_name_norm
                     ]
                     # Only update if something was removed
                     if len(updated_filter_keys) != len(current_filter_keys):

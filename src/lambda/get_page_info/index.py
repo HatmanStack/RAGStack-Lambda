@@ -64,30 +64,33 @@ def _update_tracking_table(
 
     now = datetime.now(UTC).isoformat()
 
-    table.update_item(
-        Key={"document_id": document_id},
-        UpdateExpression=(
-            "SET #status = :status, "
-            "filename = if_not_exists(filename, :filename), "
-            "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
-            "total_pages = :total_pages, "
-            "is_text_native = :is_text_native, "
-            "needs_batching = :needs_batching, "
-            "created_at = if_not_exists(created_at, :now), "
-            "updated_at = :now"
-        ),
-        ExpressionAttributeNames={"#status": "status"},
-        ExpressionAttributeValues={
-            ":status": "processing",
-            ":filename": filename,
-            ":input_s3_uri": input_s3_uri,
-            ":total_pages": total_pages,
-            ":is_text_native": is_text_native,
-            ":needs_batching": needs_batching,
-            ":now": now,
-        },
-    )
-    logger.info(f"Updated tracking table for {document_id}: {filename}, {total_pages} pages")
+    try:
+        table.update_item(
+            Key={"document_id": document_id},
+            UpdateExpression=(
+                "SET #status = :status, "
+                "filename = if_not_exists(filename, :filename), "
+                "input_s3_uri = if_not_exists(input_s3_uri, :input_s3_uri), "
+                "total_pages = :total_pages, "
+                "is_text_native = :is_text_native, "
+                "needs_batching = :needs_batching, "
+                "created_at = if_not_exists(created_at, :now), "
+                "updated_at = :now"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":status": "processing",
+                ":filename": filename,
+                ":input_s3_uri": input_s3_uri,
+                ":total_pages": total_pages,
+                ":is_text_native": is_text_native,
+                ":needs_batching": needs_batching,
+                ":now": now,
+            },
+        )
+        logger.info(f"Updated tracking table for {document_id}: {filename}, {total_pages} pages")
+    except Exception as e:
+        logger.error(f"Failed to update tracking table for {document_id}: {e}")
 
 
 def _is_text_native_pdf(pdf_bytes: bytes) -> bool:

@@ -209,7 +209,7 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listScrapeJobs,
+          query: gqlQuery(listScrapeJobs),
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
@@ -383,119 +383,107 @@ export const useDocuments = () => {
       return { deletedCount: 0, failedIds: [] as string[], errors: [] as string[] };
     }
 
-    try {
-      const response = await client.graphql({
-        query: gqlQuery(deleteDocumentsMutation),
-        variables: { documentIds }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(deleteDocumentsMutation),
+      variables: { documentIds }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        throw new Error(response.errors[0]?.message || 'Failed to delete documents');
-      }
-
-      const result = response.data?.deleteDocuments as { deletedCount: number; failedIds?: string[] } || { deletedCount: 0 };
-
-      // Remove successfully deleted documents from local state
-      if (result.deletedCount > 0) {
-        const deletedSet = new Set(documentIds);
-        const failedSet = new Set(result.failedIds || []);
-
-        // Filter out successfully deleted items from all collections
-        setDocuments(prev => prev.filter(d => !deletedSet.has(d.documentId) || failedSet.has(d.documentId)));
-        setScrapeJobs(prev => prev.filter(j => !deletedSet.has(j.documentId) || failedSet.has(j.documentId)));
-        setImages(prev => prev.filter(i => !deletedSet.has(i.documentId) || failedSet.has(i.documentId)));
-      }
-
-      return result;
-    } catch (err) {
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to delete documents');
     }
+
+    const result = response.data?.deleteDocuments as { deletedCount: number; failedIds?: string[] } || { deletedCount: 0 };
+
+    // Remove successfully deleted documents from local state
+    if (result.deletedCount > 0) {
+      const deletedSet = new Set(documentIds);
+      const failedSet = new Set(result.failedIds || []);
+
+      // Filter out successfully deleted items from all collections
+      setDocuments(prev => prev.filter(d => !deletedSet.has(d.documentId) || failedSet.has(d.documentId)));
+      setScrapeJobs(prev => prev.filter(j => !deletedSet.has(j.documentId) || failedSet.has(j.documentId)));
+      setImages(prev => prev.filter(i => !deletedSet.has(i.documentId) || failedSet.has(i.documentId)));
+    }
+
+    return result;
   }, []);
 
   // Reprocess a document by ID
   const reprocessDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: gqlQuery(reprocessDocumentMutation),
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(reprocessDocumentMutation),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
-      }
-
-      const result = response.data?.reprocessDocument as {
-        documentId: string;
-        type: string;
-        status: string;
-        executionArn?: string;
-        error?: string;
-      };
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      // Update local state to show processing status
-      if (result) {
-        const updateStatus = (prev: DocumentItem[]) =>
-          prev.map(d =>
-            d.documentId === documentId
-              ? { ...d, status: result.status || 'PROCESSING' }
-              : d
-          );
-        setDocuments(updateStatus);
-        setScrapeJobs(updateStatus);
-        setImages(updateStatus);
-      }
-
-      return result;
-    } catch (err) {
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
     }
+
+    const result = response.data?.reprocessDocument as {
+      documentId: string;
+      type: string;
+      status: string;
+      executionArn?: string;
+      error?: string;
+    };
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    // Update local state to show processing status
+    if (result) {
+      const updateStatus = (prev: DocumentItem[]) =>
+        prev.map(d =>
+          d.documentId === documentId
+            ? { ...d, status: result.status || 'PROCESSING' }
+            : d
+        );
+      setDocuments(updateStatus);
+      setScrapeJobs(updateStatus);
+      setImages(updateStatus);
+    }
+
+    return result;
   }, []);
 
   // Reindex a document by ID (re-extract metadata, skip OCR)
   const reindexDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: gqlQuery(reindexDocumentMutation),
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(reindexDocumentMutation),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        throw new Error(response.errors[0]?.message || 'Failed to reindex document');
-      }
-
-      const result = response.data?.reindexDocument as {
-        documentId: string;
-        type: string;
-        status: string;
-        executionArn?: string;
-        error?: string;
-      };
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      // Update local state to show processing status
-      if (result) {
-        const updateStatus = (prev: DocumentItem[]) =>
-          prev.map(d =>
-            d.documentId === documentId
-              ? { ...d, status: result.status || 'PROCESSING' }
-              : d
-          );
-        setDocuments(updateStatus);
-        setScrapeJobs(updateStatus);
-        setImages(updateStatus);
-      }
-
-      return result;
-    } catch (err) {
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to reindex document');
     }
+
+    const result = response.data?.reindexDocument as {
+      documentId: string;
+      type: string;
+      status: string;
+      executionArn?: string;
+      error?: string;
+    };
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    // Update local state to show processing status
+    if (result) {
+      const updateStatus = (prev: DocumentItem[]) =>
+        prev.map(d =>
+          d.documentId === documentId
+            ? { ...d, status: result.status || 'PROCESSING' }
+            : d
+        );
+      setDocuments(updateStatus);
+      setScrapeJobs(updateStatus);
+      setImages(updateStatus);
+    }
+
+    return result;
   }, []);
 
   useEffect(() => {

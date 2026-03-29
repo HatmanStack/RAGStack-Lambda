@@ -1,4 +1,6 @@
-export const listScrapeJobs = /* GraphQL */ `
+import gql from 'graphql-tag';
+
+export const listScrapeJobs = gql`
   query ListScrapeJobs($limit: Int, $nextToken: String) {
     listScrapeJobs(limit: $limit, nextToken: $nextToken) {
       items {

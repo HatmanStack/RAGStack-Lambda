@@ -164,7 +164,8 @@ def check_reindex_lock() -> None:
                 f"(started: {started_at}). Please wait for the reindex to complete."
             )
     except ClientError as e:
-        logger.warning(f"Error checking reindex lock: {e}")
+        logger.error(f"Cannot verify reindex lock, failing closed: {e}")
+        raise ValueError("Unable to check reindex lock status. Please try again.") from e
     except ValueError:
         raise
 
