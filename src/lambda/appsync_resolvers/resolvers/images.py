@@ -218,6 +218,7 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
             return {"caption": None, "error": f"Failed to retrieve image: {error_code}"}
 
         # Get configured chat model from ConfigurationManager
+        config_manager = None
         if CONFIGURATION_TABLE_NAME:
             try:
                 config_manager = ConfigurationManager(CONFIGURATION_TABLE_NAME)
@@ -279,7 +280,7 @@ def generate_caption(args: dict[str, Any]) -> dict[str, Any]:
             "that are suitable for use as search keywords. Focus on the main subject, "
             "setting, and any notable visual elements. Keep captions under 200 characters."
         )
-        if CONFIGURATION_TABLE_NAME:
+        if config_manager is not None:
             try:
                 system_prompt = config_manager.get_parameter(
                     "image_caption_prompt", default=default_caption_prompt

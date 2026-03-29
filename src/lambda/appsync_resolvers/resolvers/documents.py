@@ -301,17 +301,17 @@ def _delete_s3_content_folder(input_s3_uri: str, doc_id: str) -> None:
                         f"Deleted {len(delete_keys)} files from s3://{bucket}/{folder_prefix}"
                     )
 
-            # Also check for output folder if this was input
+            # Also clean up related folders if this was input
             if folder_prefix.startswith("input/"):
-                output_prefix = f"output/{doc_id}/"
-                for page in paginator.paginate(Bucket=bucket, Prefix=output_prefix):
-                    objects = page.get("Contents", [])
-                    if objects:
-                        delete_keys = [{"Key": obj["Key"]} for obj in objects]
-                        s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})  # type: ignore[typeddict-item]
-                        logger.info(
-                            f"Deleted {len(delete_keys)} files from s3://{bucket}/{output_prefix}"
-                        )
+                for extra_prefix in [f"output/{doc_id}/", f"content/{doc_id}/"]:
+                    for page in paginator.paginate(Bucket=bucket, Prefix=extra_prefix):
+                        objects = page.get("Contents", [])
+                        if objects:
+                            delete_keys = [{"Key": obj["Key"]} for obj in objects]
+                            s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_keys})  # type: ignore[typeddict-item]
+                            logger.info(
+                                f"Deleted {len(delete_keys)} files from s3://{bucket}/{extra_prefix}"
+                            )
         else:
             # Fallback: delete just the individual file
             s3.delete_object(Bucket=bucket, Key=key)

@@ -130,10 +130,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
         raise ValueError("DATA_BUCKET environment variable is required")
 
     # Clear config cache at handler entry to ensure fresh reads per invocation
-    from resolvers.shared import _config_manager as shared_cm
+    from resolvers.shared import clear_config_cache
 
-    if shared_cm is not None:
-        shared_cm.clear_cache()
+    clear_config_cache()
 
     field_name = event["info"]["fieldName"]
     logger.info(f"AppSync resolver invoked for field: {field_name}")

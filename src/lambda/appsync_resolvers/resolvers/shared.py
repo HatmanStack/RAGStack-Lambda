@@ -81,6 +81,12 @@ def get_config_manager() -> ConfigurationManager:
     return _config_manager
 
 
+def clear_config_cache() -> None:
+    """Clear the config manager's request-scoped cache if initialized."""
+    if _config_manager is not None:
+        _config_manager.clear_cache()
+
+
 # =========================================================================
 # Current Event (set by dispatcher, read by resolvers)
 # =========================================================================

@@ -312,6 +312,7 @@ class ConfigurationManager:
                 ExpressionAttributeValues=expression_values,
             )
 
+            self._cache = None
             logger.info("Updated Custom configuration in DynamoDB")
 
         except ClientError:
