@@ -25,7 +25,7 @@ try:
         s3_client,
     )
 except ImportError:
-    from _compat import (  # type: ignore[import-not-found]
+    from _compat import (  # type: ignore[import-not-found,no-redef]
         MEDIA_CONTENT_TYPES,
         dynamodb,
         extract_image_caption_from_content,

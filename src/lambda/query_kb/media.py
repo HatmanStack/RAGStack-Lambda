@@ -13,7 +13,7 @@ from botocore.exceptions import ClientError
 try:
     from ._compat import s3_client
 except ImportError:
-    from _compat import s3_client  # type: ignore[import-not-found]
+    from _compat import s3_client  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.storage import parse_s3_uri
 

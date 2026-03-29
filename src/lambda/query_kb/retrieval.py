@@ -20,7 +20,7 @@ try:
         s3_client,
     )
 except ImportError:
-    from _compat import (  # type: ignore[import-not-found]
+    from _compat import (  # type: ignore[import-not-found,no-redef]
         MAX_MESSAGE_LENGTH,
         bedrock_runtime,
         dynamodb,

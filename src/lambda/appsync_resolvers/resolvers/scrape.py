@@ -46,7 +46,7 @@ def get_scrape_job(args: dict[str, Any]) -> dict[str, Any] | None:
         if not is_valid_uuid(job_id):
             raise ValueError("Invalid job ID format")
 
-        jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
+        jobs_table = dynamodb.Table(SCRAPE_JOBS_TABLE)
         response = jobs_table.get_item(Key={"job_id": job_id})
 
         item = response.get("Item")
@@ -114,7 +114,7 @@ def list_scrape_jobs(args: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f"Listing scrape jobs with limit: {limit}")
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
         scan_kwargs: dict[str, Any] = {"Limit": limit}
 
         if next_token:
@@ -153,8 +153,7 @@ def check_scrape_url(args: dict[str, Any]) -> dict[str, Any]:
         parsed = urlparse(url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
-
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
         # Query using BaseUrlIndex GSI
         response = table.query(
             IndexName="BaseUrlIndex",
@@ -232,7 +231,7 @@ def start_scrape(args: dict[str, Any]) -> dict[str, Any]:
         # Fetch the created job
         job_id = payload.get("job_id")
         if job_id:
-            table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
+            table = dynamodb.Table(SCRAPE_JOBS_TABLE)
             job_response = table.get_item(Key={"job_id": job_id})
             if job_response.get("Item"):
                 return format_scrape_job(job_response["Item"])
@@ -272,8 +271,7 @@ def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
         if not is_valid_uuid(job_id):
             raise ValueError("Invalid job ID format")
 
-        table = dynamodb.Table(SCRAPE_JOBS_TABLE)  # type: ignore[arg-type]
-
+        table = dynamodb.Table(SCRAPE_JOBS_TABLE)
         # Get job
         response = table.get_item(Key={"job_id": job_id})
         item = response.get("Item")

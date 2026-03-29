@@ -37,7 +37,7 @@ try:
         update_conversation_turn,
     )
 except ImportError:
-    from _compat import (  # type: ignore[import-not-found]
+    from _compat import (  # type: ignore[import-not-found,no-redef]
         _augment_with_id_lookup,
         _get_filter_components,
         _get_filter_examples,

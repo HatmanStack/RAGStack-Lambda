@@ -11,7 +11,7 @@ from typing import Any
 try:
     from ._compat import bedrock_agent
 except ImportError:
-    from _compat import bedrock_agent  # type: ignore[import-not-found]
+    from _compat import bedrock_agent  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.config import ConfigurationManager
 from ragstack_common.filter_generator import FilterGenerator

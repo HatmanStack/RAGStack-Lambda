@@ -29,7 +29,7 @@ try:
     )
     from .handler import atomic_quota_check_and_increment, lambda_handler  # noqa: F401
 except ImportError:
-    from _compat import (  # type: ignore[import-not-found]  # noqa: F401
+    from _compat import (  # type: ignore[import-not-found,no-redef]  # noqa: F401
         IMAGE_FORMAT_MAP,
         MAX_IMAGE_SIZE_BYTES,
         MEDIA_CONTENT_TYPES,
@@ -50,7 +50,7 @@ except ImportError:
         s3_client,
         store_conversation_turn,
     )
-    from handler import (  # type: ignore[import-not-found]  # noqa: F401
+    from handler import (  # type: ignore[import-not-found,no-redef]  # noqa: F401
         atomic_quota_check_and_increment,
         lambda_handler,
     )

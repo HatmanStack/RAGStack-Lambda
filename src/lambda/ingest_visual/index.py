@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import time
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -82,7 +83,7 @@ def is_valid_video_path(key: str) -> bool:
     return key.endswith("/video.mp4")
 
 
-def lambda_handler(event: dict, context) -> dict:
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Trigger StartIngestionJob for visual embedding ingestion.
 
@@ -113,12 +114,13 @@ def lambda_handler(event: dict, context) -> dict:
         return {"status": "skipped", "message": "Metadata file, skipping"}
 
     # Validate path pattern (videos only - images handled by ProcessImageFunction)
-    if not is_valid_video_path(key):
+    if not key or not is_valid_video_path(str(key)):
         logger.info(f"Skipping non-video file or invalid path: {key}")
         return {"status": "skipped", "message": f"Not a valid video path: {key}"}
 
     # Extract document ID for logging
-    parts = key.split("/")
+    key_str: str = str(key)
+    parts = key_str.split("/")
     doc_id = parts[1] if len(parts) > 1 else "unknown"
     logger.info(f"Starting ingestion for document: {doc_id}")
 

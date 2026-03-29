@@ -18,7 +18,7 @@ from ragstack_common.types import SourceInfo
 try:
     from ._compat import dynamodb
 except ImportError:
-    from _compat import dynamodb  # type: ignore[import-not-found]
+    from _compat import dynamodb  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger()
 

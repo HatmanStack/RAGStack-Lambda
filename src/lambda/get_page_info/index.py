@@ -30,6 +30,7 @@ Output:
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 import fitz  # PyMuPDF
@@ -127,7 +128,7 @@ def _is_text_native_pdf(pdf_bytes: bytes) -> bool:
         return False
 
 
-def lambda_handler(event, context):
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     Main Lambda handler.
 
