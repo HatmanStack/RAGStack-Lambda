@@ -137,6 +137,8 @@ def list_scrape_jobs(args: dict[str, Any]) -> dict[str, Any]:
     except ClientError as e:
         logger.error(f"DynamoDB error in list_scrape_jobs: {e}")
         raise
+    except ValueError:
+        raise
 
 
 def check_scrape_url(args: dict[str, Any]) -> dict[str, Any]:
@@ -254,6 +256,8 @@ def start_scrape(args: dict[str, Any]) -> dict[str, Any]:
 
     except ClientError as e:
         logger.error(f"Error in start_scrape: {e}")
+        raise
+    except (ValueError, json.JSONDecodeError):
         raise
 
 
