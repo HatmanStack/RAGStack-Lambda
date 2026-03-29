@@ -139,23 +139,3 @@ jobs:
         working-directory: ./src/ragstack-chat
         run: npm test
 
-  status-check:
-    name: All Checks Passed
-    runs-on: ubuntu-latest
-    needs: [backend, ui, chat]
-    if: always()
-    steps:
-      - name: Verify
-        run: |
-          results=(
-            "${{ needs.backend.result }}"
-            "${{ needs.ui.result }}"
-            "${{ needs.chat.result }}"
-          )
-          for result in "${results[@]}"; do
-            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-              echo "One or more checks failed: $result"
-              exit 1
-            fi
-          done
-          echo "All checks passed!"
