@@ -192,6 +192,6 @@ def generate_presigned_download_url(s3_uri: str, expiration: int = 3600) -> str 
             Params={"Bucket": bucket, "Key": key},
             ExpiresIn=expiration,
         )
-    except ClientError as e:
+    except (ClientError, ValueError) as e:
         logger.warning(f"Failed to generate presigned URL: {e}")
         return None

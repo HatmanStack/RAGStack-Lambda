@@ -33,11 +33,11 @@ Tests the full pipeline: upload, OCR, ingest, query.
 - [ ] Upload a non-PDF file (DOCX, XLSX, or plain text)
 - [ ] Verify it processes correctly
 
-**What this validates:** Step Functions payload (documents.py:1251), env var access (os.environ.get), S3 size guard (won't block normal uploads)
+**What this validates:** Step Functions payload in `reprocess_document` resolver, env var access via `os.environ.get`, S3 size guard (won't block normal uploads)
 
 ## 3. Chat (Query KB)
 
-Tests the refactored query_kb with exception narrowing and _compat.py changes.
+Tests the refactored `query_kb` with exception narrowing and `_compat.py` changes.
 
 - [ ] Send a chat message about an uploaded document
 - [ ] Verify you get a response with source citations

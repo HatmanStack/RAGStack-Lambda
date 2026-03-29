@@ -290,6 +290,9 @@ export const useDocuments = () => {
       variables: { documentId }
     }) as GqlResponse;
 
+    if (response.errors?.length) {
+      throw new Error(response.errors.map(e => e.message).join(', '));
+    }
     return response.data?.getDocument;
   }, []);
 
@@ -514,7 +517,7 @@ export const useDocuments = () => {
             handleDocumentUpdate(data.onDocumentUpdate);
           }
         },
-        error: () => { /* subscription error handled by reconnection */ }
+        error: (err: unknown) => { console.error('Document subscription error:', err); }
       });
 
       // Subscribe to scrape updates
@@ -526,7 +529,7 @@ export const useDocuments = () => {
             handleScrapeUpdate(data.onScrapeUpdate);
           }
         },
-        error: () => { /* subscription error handled by reconnection */ }
+        error: (err: unknown) => { console.error('Scrape subscription error:', err); }
       });
 
       // Subscribe to image updates
@@ -538,10 +541,11 @@ export const useDocuments = () => {
             handleImageUpdate(data.onImageUpdate);
           }
         },
-        error: () => { /* subscription error handled by reconnection */ }
+        error: (err: unknown) => { console.error('Image subscription error:', err); }
       });
 
     } catch (err) {
+      console.error('Failed to set up subscriptions:', err);
     }
 
     // Cleanup subscriptions on unmount

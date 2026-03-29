@@ -416,15 +416,7 @@ def regenerate_filter_examples(args: dict[str, Any]) -> dict[str, Any]:
     start_time = time.time()
 
     try:
-        # Get config manager
         config_manager = get_config_manager()
-        if not config_manager:
-            return {
-                "success": False,
-                "examplesGenerated": 0,
-                "executionTimeMs": 0,
-                "error": "Configuration not available",
-            }
 
         # Get filter keys from config (empty list if not set)
         filter_keys = config_manager.get_parameter("metadata_filter_keys", default=[])

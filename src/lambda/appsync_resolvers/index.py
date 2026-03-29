@@ -178,3 +178,5 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
         # Safety net: catch unexpected errors for GraphQL error formatting
         logger.exception(f"Unexpected error in {field_name}: {e}")
         raise
+    finally:
+        set_current_event(None)

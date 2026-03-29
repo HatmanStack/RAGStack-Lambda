@@ -169,7 +169,20 @@ def lambda_handler(event, context):
 
     # Download PDF to count pages (500MB limit to prevent OOM)
     logger.info(f"Downloading PDF to count pages: {input_s3_uri}")
-    pdf_bytes = read_s3_binary(input_s3_uri, max_size_bytes=500 * 1024 * 1024)
+    error_response = {
+        "document_id": document_id,
+        "input_s3_uri": input_s3_uri,
+        "output_s3_prefix": output_s3_prefix,
+        "total_pages": 0,
+        "needs_batching": False,
+        "is_text_native": False,
+        "batches": [],
+    }
+    try:
+        pdf_bytes = read_s3_binary(input_s3_uri, max_size_bytes=500 * 1024 * 1024)
+    except Exception as e:
+        logger.error(f"Failed to download PDF: {e}")
+        return {**error_response, "error": f"Could not download PDF: {str(e)}"}
 
     # Count pages
     try:
@@ -178,12 +191,7 @@ def lambda_handler(event, context):
         pdf_doc.close()
     except Exception as e:
         logger.error(f"Failed to open PDF: {e}")
-        return {
-            "total_pages": 0,
-            "needs_batching": False,
-            "is_text_native": False,
-            "error": f"Could not read PDF: {str(e)}",
-        }
+        return {**error_response, "error": f"Could not read PDF: {str(e)}"}
     logger.info(f"PDF has {total_pages} pages")
 
     # Check if text-native
