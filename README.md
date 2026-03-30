@@ -41,6 +41,10 @@ Serverless document and media processing with AI chat. Scale-to-zero architectur
 - 🚀 One-click deploy
 - 💰 $7-10/month (1000 docs, Textract + Haiku)
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/hatmanstack-ragstack-mcp).
+
 ## Live Demo
 
 | Environment | URL | Credentials |
