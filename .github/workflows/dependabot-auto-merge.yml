@@ -10,11 +10,23 @@ jobs:
   auto-merge:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: dependabot/fetch-metadata@v2
         id: meta
+      - name: Skip major updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "Major update detected (${{ steps.meta.outputs.dependency-names }}), skipping auto-merge"
+          exit 0
+      - name: Wait for CI to pass
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: gh pr checks "$PR_URL" --watch --fail-on-pending
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Auto-merge
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
