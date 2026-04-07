@@ -68,7 +68,7 @@ Auditor agents are **token-expensive**. They run exactly twice in the full lifec
 
 **NEVER** re-run the auditor agent at any point during the pipeline. The planner, implementer, and verification reviewer work from health-audit.md and feedback.md.
 
-## Stage 2: Planning (Planner ↔ Plan Reviewer GAN Loop)
+## Stage 2: Planning (Planner ↔ Plan Reviewer Adversarial Loop)
 
 **Max iterations: 3.**
 
@@ -114,7 +114,7 @@ Standard plan review process — see main SKILL.md Stage 1b.
 
 Loop until `PLAN_APPROVED` or max iterations.
 
-## Stage 3: Implementation (Per-Phase GAN Loops)
+## Stage 3: Implementation (Per-Phase Adversarial Loops)
 
 **Max iterations per phase: 3.**
 
