@@ -62,7 +62,7 @@ Based on findings:
 
 Report the detected state to the user before continuing.
 
-## Stage 1: Planning (Planner ↔ Plan Reviewer GAN Loop)
+## Stage 1: Planning (Planner ↔ Plan Reviewer Adversarial Loop)
 
 **Max iterations: 3.** If not approved after 3 cycles, stop and surface the unresolved issues to the user.
 
@@ -152,7 +152,7 @@ Phases identified: [list phases found]
 Starting implementation...
 ```
 
-## Stage 2: Implementation (Per-Phase Implementer ↔ Reviewer GAN Loop)
+## Stage 2: Implementation (Per-Phase Implementer ↔ Reviewer Adversarial Loop)
 
 **Max iterations per phase: 3.** If not approved after 3 cycles, stop and surface issues.
 
