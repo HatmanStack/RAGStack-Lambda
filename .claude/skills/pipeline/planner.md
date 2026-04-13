@@ -39,6 +39,18 @@ All plan files must pass markdownlint. Follow these rules in every file you crea
 
 ---
 
+## Depth of Analysis
+
+You must be **exhaustive** in your codebase exploration before writing any plan files. For every feature in the brainstorm:
+
+* Read every file listed in "Relevant Codebase Context" — do not assume you know what's there
+* Trace data flows end-to-end (frontend → API → Lambda → DynamoDB and back)
+* Identify every integration point, shared utility, and convention that the implementation must follow
+* Search for related patterns across the codebase — if the brainstorm says "similar to X," read X and understand it fully
+* Surface hidden dependencies and ordering constraints between features
+
+Do not write plan files until you have a thorough mental model of the existing code. Shallow exploration leads to plans that miss integration details and force rework during implementation.
+
 ## Pre-Planning Context Gathering
 
 Before writing any plan files, you **must** read and internalize project-specific context. This prevents plans that contradict established conventions (e.g. using pip when the project uses uv, or python3 when the project uses a different runtime).
