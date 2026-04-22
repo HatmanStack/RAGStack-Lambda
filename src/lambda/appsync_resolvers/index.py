@@ -171,7 +171,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> Any:
         logger.info(f"Resolver {field_name} completed successfully")
         return result
     except ValueError as e:
-        logger.exception(f"Validation error in {field_name}: {e}")
+        # Validation failures are user-input errors, not system faults. Log at warning
+        # without a stack trace so CloudWatch/Lumigo don't treat them as Lambda errors.
+        logger.warning(f"Validation error in {field_name}: {e}")
         raise
     except Exception as e:
         # Safety net: catch unexpected errors for GraphQL error formatting

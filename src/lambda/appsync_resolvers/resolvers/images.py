@@ -611,7 +611,12 @@ def list_images(args: dict[str, Any]) -> dict[str, Any]:
         logger.info(f"Retrieved {len(items)} images")
 
         result: dict[str, Any] = {"items": items}
-        if "LastEvaluatedKey" in response:
+        if len(all_items) > limit:
+            # We over-scanned and truncated — hand the client a token built from the
+            # last item we're returning so they can resume from there.
+            last_returned = all_items[limit - 1]
+            result["nextToken"] = json.dumps({"document_id": last_returned["document_id"]})
+        elif "LastEvaluatedKey" in response:
             result["nextToken"] = json.dumps(response["LastEvaluatedKey"])
 
         return result
