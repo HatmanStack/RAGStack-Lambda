@@ -32,7 +32,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-import boto3
+	import boto3
 
 from ragstack_common.appsync import publish_document_update
 from ragstack_common.config import ConfigurationManager
