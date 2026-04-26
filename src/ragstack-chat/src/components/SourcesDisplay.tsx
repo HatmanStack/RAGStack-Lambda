@@ -52,14 +52,18 @@ const SourceItem: React.FC<{
 }> = ({ source, index, defaultExpanded }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  // Determine source type label - check isImage first since images may have isMedia set
+  // Determine source type label - check isImage first since images may have isMedia set.
+  // For typed sources (Image / Video / Web Page) include the filename so the header
+  // shows both the type AND the file, matching the pre-refactor layout.
   const getSourceLabel = (): string => {
-    if (source.isImage) return 'Image';
+    const name = source.filename || source.title;
+    if (source.isImage) return name ? `Image — ${name}` : 'Image';
     if (source.isSegment || source.isMedia) {
-      return source.contentType === 'transcript' ? 'Video Transcript' : 'Video';
+      const kind = source.contentType === 'transcript' ? 'Video Transcript' : 'Video';
+      return name ? `${kind} — ${name}` : kind;
     }
-    if (source.isScraped) return 'Web Page';
-    return source.filename || source.title || `Document ${index + 1}`;
+    if (source.isScraped) return name ? `Web Page — ${name}` : 'Web Page';
+    return name || `Document ${index + 1}`;
   };
 
   // Check if we have a valid score to display (> 0 and not null/undefined)
@@ -84,7 +88,7 @@ const SourceItem: React.FC<{
           }
         }}
       >
-        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
+        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         <span className={styles.sourceLabel}>{getSourceLabel()}</span>
         {hasValidScore && (
           <span className={`${styles.badge} ${getRelevanceClass(source.score!)}`}>
@@ -236,7 +240,7 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
           }
         }}
       >
-        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
+        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         <span className={styles.sourcesIcon}>📄</span>
         <span className={styles.sourcesLabel}>Sources</span>
         <span className={styles.sourceCount}>({sources.length})</span>
