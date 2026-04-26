@@ -15,7 +15,21 @@ const path = require('path');
 
 const DIST_DIR = path.join(__dirname, '../dist');
 const JS_FILE = path.join(DIST_DIR, 'wc.js');
-const CSS_FILE = path.join(DIST_DIR, 'style.css');
+
+/**
+ * Find the CSS file vite emitted into dist/. Modern vite library mode names
+ * the file after the package (e.g. "ragstack-chat.css"); older versions used
+ * "style.css". Glob for any .css so a vite upgrade doesn't silently strip
+ * styles from the bundle.
+ */
+function findCssFile() {
+  if (!fs.existsSync(DIST_DIR)) return null;
+  const candidates = fs
+    .readdirSync(DIST_DIR)
+    .filter((name) => name.endsWith('.css'))
+    .map((name) => path.join(DIST_DIR, name));
+  return candidates[0] || null;
+}
 
 function main() {
   console.log('💉 Injecting CSS into IIFE bundle...');
@@ -26,10 +40,15 @@ function main() {
     process.exit(1);
   }
 
-  if (!fs.existsSync(CSS_FILE)) {
-    console.log('ℹ CSS file not found (styles may be inlined by bundler). Skipping CSS injection.');
-    return;
+  const CSS_FILE = findCssFile();
+  if (!CSS_FILE) {
+    console.error(
+      '❌ Error: no .css file found in dist/. Vite library mode should have ' +
+        'emitted one — refusing to ship a bundle without styles.'
+    );
+    process.exit(1);
   }
+  console.log(`✓ Found CSS at ${path.basename(CSS_FILE)}`);
 
   // Read CSS content
   const cssContent = fs.readFileSync(CSS_FILE, 'utf-8');
