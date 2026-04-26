@@ -26,7 +26,7 @@ Input event:
 Output:
 {
     "document_id": "abc123",
-    "status": "INDEXED",
+    "status": "SYNC_QUEUED",
     "text_indexed": true,
     "segments_indexed": 4,
     "metadata_keys": ["main_topic", "speakers", ...]
@@ -547,7 +547,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             ds_id=ds_id,
         )
 
-        # Update tracking table with actually ingested metadata
+        # Park at SYNC_QUEUED — text transcripts are ingested inline, but visual frames
+        # are still pending the StartIngestionJob queued below. sync_status_checker
+        # (EventBridge rate(1m)) promotes to INDEXED once Bedrock confirms the visual
+        # job completed. Writing INDEXED here would be a lie until that's done.
         tracking_table.update_item(
             Key={"document_id": document_id},
             UpdateExpression=(
@@ -555,7 +558,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
-                ":status": "INDEXED",
+                ":status": "SYNC_QUEUED",
                 ":updated_at": datetime.now(UTC).isoformat(),
                 ":metadata": ingested_metadata,
             },
@@ -566,7 +569,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             graphql_endpoint,
             document_id,
             filename,
-            "INDEXED",
+            "SYNC_QUEUED",
             total_pages=total_segments,
         )
 
@@ -600,7 +603,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         return {
             "document_id": document_id,
-            "status": "INDEXED",
+            "status": "SYNC_QUEUED",
             "text_indexed": text_indexed,
             "segments_indexed": segments_indexed,
             "metadata_keys": list(extracted_metadata.keys()),
