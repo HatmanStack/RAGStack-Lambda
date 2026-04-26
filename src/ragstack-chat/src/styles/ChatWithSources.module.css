@@ -262,6 +262,13 @@
   animation-delay: 0.4s;
 }
 
+.slowResponseMessage {
+  font-size: 0.8rem;
+  color: var(--chat-color-text-secondary, #666);
+  margin-top: var(--chat-spacing-xs, 4px);
+  text-align: center;
+}
+
 @keyframes loadingDot {
   0%,
   80%,
@@ -520,16 +527,19 @@
 }
 
 .expandIcon {
-  font-size: var(--chat-font-size-xs);
+  font-size: 10px;
   color: var(--chat-color-text-secondary);
   transition: transform var(--chat-transition-fast);
-  /* Fixed-width container so ▼ (collapsed) and ▶ (expanded) glyphs occupy the
-     same horizontal space — otherwise the wider ▼ shifts everything to its
-     right, making the outer Sources arrow and inner item arrows look
-     mismatched and changing the indent on expand. */
-  display: inline-block;
   width: 12px;
-  text-align: center;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.expandIconOpen {
+  transform: rotate(90deg);
 }
 
 .sourceLabel {

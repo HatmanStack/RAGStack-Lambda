@@ -52,31 +52,21 @@ const SourceItem: React.FC<{
 }> = ({ source, index, defaultExpanded }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  // Determine source type label - check isImage first since images may have isMedia set.
-  // For typed sources (Image / Video / Web Page) include the filename so the header
-  // shows both the type AND the file, matching the pre-refactor layout.
+  // Determine source type label - check isImage first since images may have isMedia set
   const getSourceLabel = (): string => {
-    const name = source.filename || source.title;
-    if (source.isImage) return name ? `Image — ${name}` : 'Image';
+    if (source.isImage) return 'Image';
     if (source.isSegment || source.isMedia) {
-      const kind = source.contentType === 'transcript' ? 'Video Transcript' : 'Video';
-      return name ? `${kind} — ${name}` : kind;
+      return source.contentType === 'transcript' ? 'Video Transcript' : 'Video';
     }
-    if (source.isScraped) return name ? `Web Page — ${name}` : 'Web Page';
-    return name || `Document ${index + 1}`;
+    if (source.isScraped) return 'Web Page';
+    return source.filename || source.title || `Document ${index + 1}`;
   };
 
   // Check if we have a valid score to display (> 0 and not null/undefined)
   const hasValidScore = source.score !== undefined && source.score !== null && source.score > 0;
 
-  // Show timestamp only when the backend gave us a real numeric start. Full-transcript
-  // chunks come back with timestampStart=null (no specific segment) — using `!==
-  // undefined` was wrong because JSON null parses to JS null, which !== undefined.
-  const hasTimestamp = !source.isImage && typeof source.timestampStart === 'number';
-  // Backend pre-formats timestampDisplay as "MM:SS-MM:SS"; prefer it when present.
-  const timestampLabel = hasTimestamp
-    ? source.timestampDisplay || formatTimestampRange(source.timestampStart!, source.timestampEnd)
-    : null;
+  // Check if we should show timestamp (media sources with timestamp data, not images)
+  const hasTimestamp = !source.isImage && (source.isSegment || source.isMedia) && source.timestampStart !== undefined;
 
   return (
     <div className={styles.sourceItem}>
@@ -94,16 +84,16 @@ const SourceItem: React.FC<{
           }
         }}
       >
-        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
         <span className={styles.sourceLabel}>{getSourceLabel()}</span>
         {hasValidScore && (
           <span className={`${styles.badge} ${getRelevanceClass(source.score!)}`}>
             {Math.round(source.score! * 100)}% relevant
           </span>
         )}
-        {timestampLabel && (
+        {hasTimestamp && (
           <span className={`${styles.badge} ${styles.badgeBlue}`}>
-            {timestampLabel}
+            {formatTimestampRange(source.timestampStart!, source.timestampEnd)}
           </span>
         )}
       </div>
@@ -246,7 +236,7 @@ const SourcesDisplayComponent: React.FC<SourcesDisplayProps> = ({
           }
         }}
       >
-        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+        <span className={`${styles.expandIcon} ${isExpanded ? styles.expandIconOpen : ''}`}>▶</span>
         <span className={styles.sourcesIcon}>📄</span>
         <span className={styles.sourcesLabel}>Sources</span>
         <span className={styles.sourceCount}>({sources.length})</span>
