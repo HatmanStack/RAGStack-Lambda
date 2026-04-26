@@ -24,7 +24,6 @@ import styles from '../styles/ChatWithSources.module.css';
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
   isLoading,
-  isSlowResponse,
   error,
   showSources = true,
 }) => {
@@ -74,11 +73,6 @@ export const MessageList: React.FC<MessageListProps> = ({
             <span>.</span>
             <span>.</span>
           </span>
-          {isSlowResponse && (
-            <div className={styles.slowResponseMessage}>
-              Taking longer than usual...
-            </div>
-          )}
         </div>
       )}
 

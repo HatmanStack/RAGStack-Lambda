@@ -257,7 +257,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSlowResponse, setIsSlowResponse] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
 
   // Use ref to track retry count to avoid stale closure issues in handleSend
@@ -336,7 +335,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       // Set loading state
       setIsLoading(true);
       setError(null);
-      setIsSlowResponse(false);
 
       // Abort any in-flight polling from a previous send
       abortControllerRef.current?.abort();
@@ -354,7 +352,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         const response = await pollForResult(
           conversationId,
           requestId,
-          () => setIsSlowResponse(true),
+          () => {},
           controller.signal,
         );
 
@@ -461,7 +459,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         });
       } finally {
         setIsLoading(false);
-        setIsSlowResponse(false);
       }
     },
     // Callbacks accessed via refs (onSendMessageRef, onResponseReceivedRef) — always current.
@@ -480,7 +477,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       <MessageList
         messages={messages}
         isLoading={isLoading}
-        isSlowResponse={isSlowResponse}
         error={error}
         showSources={showSources}
       />

@@ -397,46 +397,4 @@ describe('ChatInterface', () => {
 
     vi.mocked(Date.now).mockRestore();
   });
-
-  it('shows slow response indicator after 30s threshold', async () => {
-    // Mock Date.now: first call returns start, subsequent calls return 31s later
-    const startTime = Date.now();
-    let dateNowCallCount = 0;
-
-    vi.spyOn(Date, 'now').mockImplementation(() => {
-      dateNowCallCount++;
-      if (dateNowCallCount <= 1) return startTime;
-      return startTime + 31000;
-    });
-
-    let pollCount = 0;
-    mockIamFetch.mockImplementation(async (_url, body) => {
-      if (isMutationCall(body)) return makeMutationResponse();
-      pollCount++;
-      // After slow threshold fires, return COMPLETED to end the test
-      if (pollCount > 1) return makePollResponse('COMPLETED');
-      return makePollResponse('PENDING');
-    });
-
-    render(<ChatInterface conversationId="test-1" showSources={true} />);
-
-    const input = screen.getByPlaceholderText(/type your message/i);
-    const sendButton = screen.getByRole('button', { name: /send/i });
-
-    fireEvent.change(input, { target: { value: 'Slow test' } });
-    fireEvent.click(sendButton);
-
-    // The slow response message should appear after Date.now reports > 30s
-    // The onSlowThreshold callback fires during the polling loop,
-    // but React may not re-render immediately. Wait with longer timeout
-    // to account for the 2s real setTimeout delay in polling.
-    await waitFor(
-      () => {
-        expect(screen.getByText('Taking longer than usual...')).toBeInTheDocument();
-      },
-      { timeout: 10000 }
-    );
-
-    vi.mocked(Date.now).mockRestore();
-  });
 });

@@ -228,11 +228,6 @@ export interface MessageListProps {
   isLoading: boolean;
 
   /**
-   * Whether the current request is taking longer than usual
-   */
-  isSlowResponse?: boolean;
-
-  /**
    * Error state (if any)
    */
   error?: ErrorState | null;
