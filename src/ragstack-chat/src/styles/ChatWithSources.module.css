@@ -523,7 +523,13 @@
   font-size: var(--chat-font-size-xs);
   color: var(--chat-color-text-secondary);
   transition: transform var(--chat-transition-fast);
-  min-width: 12px;
+  /* Fixed-width container so ▼ (collapsed) and ▶ (expanded) glyphs occupy the
+     same horizontal space — otherwise the wider ▼ shifts everything to its
+     right, making the outer Sources arrow and inner item arrows look
+     mismatched and changing the indent on expand. */
+  display: inline-block;
+  width: 12px;
+  text-align: center;
 }
 
 .sourceLabel {
