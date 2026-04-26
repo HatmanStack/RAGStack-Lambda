@@ -69,8 +69,14 @@ const SourceItem: React.FC<{
   // Check if we have a valid score to display (> 0 and not null/undefined)
   const hasValidScore = source.score !== undefined && source.score !== null && source.score > 0;
 
-  // Check if we should show timestamp (media sources with timestamp data, not images)
-  const hasTimestamp = !source.isImage && (source.isSegment || source.isMedia) && source.timestampStart !== undefined;
+  // Show timestamp only when the backend gave us a real numeric start. Full-transcript
+  // chunks come back with timestampStart=null (no specific segment) — using `!==
+  // undefined` was wrong because JSON null parses to JS null, which !== undefined.
+  const hasTimestamp = !source.isImage && typeof source.timestampStart === 'number';
+  // Backend pre-formats timestampDisplay as "MM:SS-MM:SS"; prefer it when present.
+  const timestampLabel = hasTimestamp
+    ? source.timestampDisplay || formatTimestampRange(source.timestampStart!, source.timestampEnd)
+    : null;
 
   return (
     <div className={styles.sourceItem}>
@@ -95,9 +101,9 @@ const SourceItem: React.FC<{
             {Math.round(source.score! * 100)}% relevant
           </span>
         )}
-        {hasTimestamp && (
+        {timestampLabel && (
           <span className={`${styles.badge} ${styles.badgeBlue}`}>
-            {formatTimestampRange(source.timestampStart!, source.timestampEnd)}
+            {timestampLabel}
           </span>
         )}
       </div>
