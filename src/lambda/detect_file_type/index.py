@@ -283,13 +283,31 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     logger.info(f"DetectFileType: Received event: {event}")
 
-    # Extract event data
-    document_id = event["document_id"]
+    # Extract event data. The EventBridge InputTransformer passes the full S3 key
+    # as `document_id` (e.g. "input/<uuid>/<filename>") and constructs
+    # `output_s3_prefix=s3://<bucket>/content/<key>/`, which yields the broken path
+    # `content/input/<uuid>/<filename>/`. Normalize both here so every downstream
+    # Lambda (process_document, enqueue_batches, batch_processor, combine_pages)
+    # sees the canonical `<uuid>` and `s3://<bucket>/content/<uuid>/`.
+    raw_document_id = event["document_id"]
     input_s3_uri = event["input_s3_uri"]
     output_s3_prefix = event["output_s3_prefix"]
 
+    key_parts = raw_document_id.split("/")
+    if len(key_parts) >= 2 and key_parts[0] == "input":
+        document_id = key_parts[1]
+    else:
+        document_id = raw_document_id
+
+    if "/content/input/" in output_s3_prefix:
+        bucket_and_prefix = output_s3_prefix.split("/content/input/")[0]
+        output_s3_prefix = f"{bucket_and_prefix}/content/{document_id}/"
+
     filename = extract_filename_from_s3_uri(input_s3_uri)
-    logger.info(f"Detecting file type for: {filename}")
+    logger.info(
+        f"Detecting file type for: {filename} (document_id={document_id}, "
+        f"output_s3_prefix={output_s3_prefix})"
+    )
 
     # Check for markdown passthrough first (skip content download)
     if _is_markdown_file(filename):
