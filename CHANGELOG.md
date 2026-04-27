@@ -1,5 +1,15 @@
 # Changelog
 
+## [ragstack-mcp 0.1.8] - 2026-04-27
+
+### Fixed
+
+- **`get_key_library` crashed with `'NoneType' object has no attribute 'get'` when invoked with API-key auth.** AppSync nullifies inner fields of objects whose return-type lacks the caller's auth directive — `getKeyLibrary` is `@aws_api_key @aws_cognito_user_pools` but its return type `MetadataKey` was only `@aws_cognito_user_pools`, so each list element came back as `null`. MCP now filters out None elements and reports the entries-hidden count instead of crashing.
+
+### Changed (backend)
+
+- **AppSync schema**: added `@aws_api_key` to `MetadataKey`, `KeySimilarityResult`, and `SimilarKey` so API-key clients can read inner fields. Requires a stack redeploy to take effect; until then the MCP defensive filter prevents the crash but the data won't be visible to API-key callers.
+
 ## [ragstack-mcp 0.1.7] - 2026-04-27
 
 ### Fixed

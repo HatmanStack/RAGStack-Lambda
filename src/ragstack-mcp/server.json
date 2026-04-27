@@ -6,13 +6,13 @@
     "url": "https://github.com/HatmanStack/RAGStack-Lambda",
     "source": "github"
   },
-  "version": "0.1.7",
+  "version": "0.1.8",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "ragstack-mcp",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

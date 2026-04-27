@@ -1286,19 +1286,34 @@ def get_key_library() -> str:
     if not keys:
         return "Key library is empty. Process documents with metadata extraction enabled to populate it."
 
-    output = [f"Key Library ({len(keys)} keys)\n"]
+    # AppSync nullifies inner fields when the caller's auth (e.g. API key) lacks
+    # access to the return type — list-of-Key comes back as [None, None, ...].
+    # Filter so a schema-auth gap in the backend doesn't crash the tool.
+    visible = [k for k in keys if isinstance(k, dict)]
+    hidden = len(keys) - len(visible)
+    if not visible:
+        return (
+            f"Key library has {len(keys)} entries but none are readable with the current "
+            "auth context. Likely cause: the MetadataKey GraphQL type is missing "
+            "@aws_api_key. Use Cognito auth or have the backend grant API-key access."
+        )
 
-    for key in keys:
+    output = [f"Key Library ({len(visible)} keys)\n"]
+
+    for key in visible:
         name = key.get("keyName", "Unknown")
         dtype = key.get("dataType", "string")
         count = key.get("occurrenceCount", 0)
         status = key.get("status", "active")
-        samples = key.get("sampleValues", [])
+        samples = key.get("sampleValues") or []
 
         output.append(f"{name} ({dtype}, {count} occurrences, {status})")
         if samples:
             sample_str = ", ".join(samples[:5])
             output.append(f"  Samples: {sample_str}")
+
+    if hidden:
+        output.append(f"\n({hidden} entries hidden by auth)")
 
     return "\n".join(output)
 
