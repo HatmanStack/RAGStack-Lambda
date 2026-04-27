@@ -890,11 +890,14 @@ def get_configuration() -> str:
             return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
         return "Configuration not available."
 
-    # Parse JSON strings
+    # Parse JSON strings. Use `or "{}"` (not the dict default) because the GraphQL
+    # response sets these fields to JSON null when absent — dict.get(k, default)
+    # only returns the default when the key is missing, not when its value is None,
+    # so without this guard json.loads(None) raises TypeError.
     try:
-        schema = json.loads(data.get("Schema", "{}"))
-        default = json.loads(data.get("Default", "{}"))
-        custom = json.loads(data.get("Custom", "{}"))
+        schema = json.loads(data.get("Schema") or "{}")
+        default = json.loads(data.get("Default") or "{}")
+        custom = json.loads(data.get("Custom") or "{}")
     except json.JSONDecodeError as e:
         return f"Error parsing configuration: {e}"
 

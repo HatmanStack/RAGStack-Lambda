@@ -1,5 +1,11 @@
 # Changelog
 
+## [ragstack-mcp 0.1.6] - 2026-04-27
+
+### Fixed
+
+- **`get_configuration` tool errored with `the JSON object must be str, bytes or bytearray, not NoneType`**: GraphQL returns `Schema/Default/Custom` as JSON null when absent; `data.get(k, "{}")` only falls back when the key is missing, not when the value is `None`. Switched to `data.get(k) or "{}"`.
+
 ## [ragstack-mcp 0.1.5] - 2026-04-27
 
 ### Changed
