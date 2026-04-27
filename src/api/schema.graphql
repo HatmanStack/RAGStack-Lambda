@@ -693,7 +693,7 @@ type FilterExample @aws_iam @aws_api_key @aws_cognito_user_pools {
 }
 
 # Metadata key from key library (for suggestions)
-type MetadataKey @aws_cognito_user_pools {
+type MetadataKey @aws_api_key @aws_cognito_user_pools {
   keyName: String!
   dataType: String!
   occurrenceCount: Int!
@@ -702,14 +702,14 @@ type MetadataKey @aws_cognito_user_pools {
 }
 
 # Key similarity check result
-type KeySimilarityResult @aws_cognito_user_pools {
+type KeySimilarityResult @aws_api_key @aws_cognito_user_pools {
   proposedKey: String!
   similarKeys: [SimilarKey!]!
   hasSimilar: Boolean!
 }
 
 # Similar key with similarity score
-type SimilarKey @aws_cognito_user_pools {
+type SimilarKey @aws_api_key @aws_cognito_user_pools {
   keyName: String!
   similarity: Float!
   occurrenceCount: Int!
