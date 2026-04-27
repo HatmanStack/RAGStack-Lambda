@@ -1,5 +1,11 @@
 # Changelog
 
+## [ragstack-mcp 0.1.5] - 2026-04-27
+
+### Changed
+
+- **No functional change.** Pure `ruff format` cleanup in `server.py` (import ordering, quote-style consistency, multi-line list literals). Republished so the publish workflow advances past the `0.1.4` already-on-PyPI 400.
+
 ## [2.5.1] - 2026-03-28
 
 ### Fixed
