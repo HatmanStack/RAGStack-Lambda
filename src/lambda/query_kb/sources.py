@@ -260,14 +260,11 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
 
                 logger.debug(f"[SOURCE] Final document_s3_uri: {document_s3_uri}")
 
-                # Extract page number if available (from metadata or filename)
+                # Page number is no longer derivable from the URI — the pages/page-N.json
+                # path format was replaced by a unified content/{docId}/extracted_text.txt
+                # layout, and the old branch always evaluated to false. Leave page_num
+                # None unless a future format puts a page index back into the path.
                 page_num = None
-                if "pages" in parts and len(parts) > 3:
-                    page_file = parts[-1]  # e.g., "page-3.json"
-                    try:
-                        page_num = int(page_file.split("-")[1].split(".")[0])
-                    except (IndexError, ValueError):
-                        logger.debug(f"Could not extract page number from: {page_file}")
 
                 # Extract snippet (content_text already extracted above)
                 snippet = content_text[:200] if content_text else ""

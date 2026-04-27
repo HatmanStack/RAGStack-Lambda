@@ -59,6 +59,10 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
     monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
     monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+    monkeypatch.setenv(
+        "PROCESS_IMAGE_FUNCTION_ARN",
+        "arn:aws:lambda:us-east-1:123:function:test-process-image",
+    )
     # Patch check_public_access to always allow access in tests
     with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
         yield

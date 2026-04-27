@@ -307,7 +307,11 @@ def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(f"Cannot cancel job with status: {current_status}") from e
             raise
 
-        # Stop Step Functions execution if running
+        # Stop Step Functions execution if running. Log at error level so a failed
+        # stop is visible — there's a narrow race where SFN can complete (and write
+        # COMPLETED back to the row) between the DDB cancel above and this stop call.
+        # We log it; closing that race window fully would require ConditionExpression
+        # guards on every state-machine status write.
         step_function_arn = str(item.get("step_function_arn", ""))
         if step_function_arn:
             try:
@@ -317,7 +321,10 @@ def cancel_scrape(args: dict[str, Any]) -> dict[str, Any]:
                 )
                 logger.info(f"Stopped Step Functions execution: {step_function_arn}")
             except ClientError as e:
-                logger.warning(f"Could not stop Step Functions execution: {e}")
+                logger.error(
+                    f"Could not stop Step Functions execution {step_function_arn} "
+                    f"after CANCELLED was written; SFN may overwrite the row: {e}"
+                )
 
         # Return updated job
         response = table.get_item(Key={"job_id": job_id})

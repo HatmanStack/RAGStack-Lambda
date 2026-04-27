@@ -449,7 +449,23 @@ def submit_image(args: dict[str, Any]) -> dict[str, Any] | None:
                 Payload=json.dumps(process_event),
             )
         else:
-            logger.warning("PROCESS_IMAGE_FUNCTION_ARN not configured, skipping invocation")
+            # Without the processing Lambda there is no path forward — mark FAILED
+            # so the row doesn't sit at PROCESSING forever and operators get a clear
+            # diagnosis instead of a silent stall.
+            err_msg = "PROCESS_IMAGE_FUNCTION_ARN not configured; processing skipped"
+            logger.error(err_msg)
+            table.update_item(
+                Key={"document_id": image_id},
+                UpdateExpression=(
+                    "SET #status = :status, error_message = :error, updated_at = :updated_at"
+                ),
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":status": ImageStatus.FAILED.value,
+                    ":error": err_msg,
+                    ":updated_at": datetime.now(UTC).isoformat(),
+                },
+            )
 
         # Get updated item
         response = table.get_item(Key={"document_id": image_id})

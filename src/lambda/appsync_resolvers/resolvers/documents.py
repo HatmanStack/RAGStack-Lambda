@@ -278,13 +278,15 @@ def _delete_s3_content_folder(input_s3_uri: str, doc_id: str) -> None:
     try:
         bucket, key = parse_s3_uri(input_s3_uri)
 
-        # Determine folder prefix (content/{doc_id}/ or input/{doc_id}/)
+        # Determine folder prefix (content/{doc_id}/, content/input/{doc_id}/, or input/{doc_id}/).
+        # Always scope by the supplied doc_id rather than parsing key_parts[1] — for legacy
+        # records whose URI is content/input/<doc_id>/file, key_parts[1] is the literal "input"
+        # and a prefix of "content/input/" would broadside every legacy document on delete.
         folder_prefix = None
-        if key.startswith("content/"):
-            # Extract content/{doc_id}/ prefix
-            key_parts = key.split("/")
-            if len(key_parts) >= 2:
-                folder_prefix = f"content/{key_parts[1]}/"
+        if key.startswith("content/input/"):
+            folder_prefix = f"content/input/{doc_id}/"
+        elif key.startswith("content/"):
+            folder_prefix = f"content/{doc_id}/"
         elif key.startswith("input/"):
             # For documents, delete from both input and output folders
             folder_prefix = f"input/{doc_id}/"
@@ -1031,8 +1033,12 @@ def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
             else:
                 raise ValueError(f"No scraped pages ingested for {document_id}")
         except ValueError as e:
-            logger.error(f"KB config not available for scraped reindex: {e}")
-            # Revert status since we can't complete reindex
+            # The same except handles two distinct failures: KB config missing AND
+            # ingested == 0 ("No scraped pages ingested..."). Persist the actual
+            # exception message so operators don't get a misleading "Reindex requires
+            # Knowledge Base configuration" diagnosis when the real cause was no pages.
+            err_msg = str(e)
+            logger.error(f"Scraped reindex failed for {document_id}: {err_msg}")
             table.update_item(
                 Key={"document_id": document_id},
                 UpdateExpression=(
@@ -1042,10 +1048,10 @@ def reindex_document(args: dict[str, Any]) -> dict[str, Any]:
                 ExpressionAttributeValues={
                     ":status": "FAILED",
                     ":updated_at": datetime.now(UTC).isoformat(),
-                    ":error": "Reindex requires Knowledge Base configuration",
+                    ":error": err_msg,
                 },
             )
-            raise ValueError("Reindex requires Knowledge Base configuration") from e
+            raise
         except (ClientError, KeyError) as e:
             # Handle ingestion failures from _reindex_scraped_content
             logger.error(f"Scraped content reindex failed: {e}")
@@ -1249,10 +1255,23 @@ def process_document(args: dict[str, Any]) -> dict[str, Any]:
             },
         )
 
-        # Start Step Functions execution
+        # Start Step Functions execution. Include output_s3_prefix so downstream states
+        # (process_document, enqueue_batches, batch_processor, combine_pages) see the
+        # canonical s3://<bucket>/content/<doc_id>/ location instead of inferring or
+        # writing to a missing key. detect_file_type would otherwise normalize from the
+        # EventBridge-shaped payload, but a manual reindex bypasses EventBridge entirely.
+        input_s3_uri = item.get("input_s3_uri")
+        output_s3_prefix = None
+        if input_s3_uri:
+            try:
+                bucket, _ = parse_s3_uri(str(input_s3_uri))
+                output_s3_prefix = f"s3://{bucket}/content/{document_id}/"
+            except ValueError:
+                logger.warning(f"Could not parse input_s3_uri for {document_id}: {input_s3_uri}")
         execution_input = {
             "document_id": document_id,
-            "input_s3_uri": item.get("input_s3_uri"),
+            "input_s3_uri": input_s3_uri,
+            "output_s3_prefix": output_s3_prefix,
             "filename": item.get("filename"),
         }
 
