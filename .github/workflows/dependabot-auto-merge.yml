@@ -15,13 +15,11 @@ jobs:
       - uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2
         id: meta
 
-      - name: Wait for CI to pass
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
-        run: gh pr checks "$PR_URL" --watch
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      # `gh pr merge --auto` queues the merge server-side and GitHub fires it
+      # once branch-protection's required checks pass. We do NOT pre-wait with
+      # `gh pr checks --watch` because this job itself shows up as the
+      # `auto-merge` check on the PR — watching all checks deadlocks waiting
+      # for itself, and the 30-minute timeout cancels every dependabot run.
       - name: Auto-merge
         if: steps.meta.outputs.update-type != 'version-update:semver-major'
         run: gh pr merge --auto --squash "$PR_URL"
