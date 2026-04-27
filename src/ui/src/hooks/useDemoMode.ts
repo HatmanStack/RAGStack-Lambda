@@ -62,7 +62,6 @@ export const useDemoMode = (): DemoModeState & { refresh: () => Promise<void> } 
         error: null,
       });
     } catch (err) {
-      console.error('Failed to load demo mode config:', err);
       setState(prev => ({
         ...prev,
         loading: false,

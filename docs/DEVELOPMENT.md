@@ -33,18 +33,16 @@ cd src/ui && npm test -- --run src/components/Button.test.tsx # Single React tes
 ### Linting & Formatting
 
 ```bash
-npm run lint                    # Auto-fix and lint all code
-npm run lint:backend            # Lint Python (ruff)
-npm run lint:frontend           # Lint React (ESLint)
-npm run format                  # Format Python code (ruff)
-npm run format:check            # Check formatting without modifying
+npm run lint                    # Check Python lint (ruff check + format --check, no auto-fix)
+npm run lint:fix                # Auto-fix Python lint (ruff check --fix + format)
+npm run lint:frontend           # Lint React (ESLint) and type-check (tsc --noEmit)
 ```
 
 ### Building
 
 ```bash
 sam build                       # Build Lambda functions
-sam local invoke ProcessDocumentFunction -e tests/events/sample.json  # Test Lambda locally
+sam local invoke ProcessDocumentFunction -e tests/events/sqs-processing-message.json  # Test Lambda locally
 ```
 
 ## Project Structure
@@ -61,29 +59,27 @@ RAGStack-Lambda/
 │   └── appsync.py              # AppSync subscription publishing
 │
 ├── src/
-│   ├── lambda/                 # Lambda function handlers
+│   ├── lambda/                 # 32 Lambda functions (see docs/ARCHITECTURE.md for full list)
 │   │   ├── process_document/   # OCR extraction
+│   │   ├── process_text/       # Text extraction (HTML, CSV, etc.)
 │   │   ├── process_media/      # Video/audio transcription
 │   │   ├── ingest_to_kb/       # Bedrock KB ingestion
 │   │   ├── query_kb/           # Chat queries with sources
-│   │   ├── process_image/      # Image ingestion
+│   │   ├── search_kb/          # Direct KB search
 │   │   ├── appsync_resolvers/  # GraphQL resolvers
+│   │   │   └── resolvers/      # Domain modules (chat, documents, images, metadata, scrape)
 │   │   ├── configuration_resolver/
-│   │   ├── kb_custom_resource/ # KB provisioning
-│   │   ├── start_codebuild/    # Web component build trigger
-│   │   ├── scrape_start/       # Web scraping initiation
-│   │   ├── scrape_discover/    # URL discovery
-│   │   ├── scrape_process/     # Content extraction
-│   │   ├── scrape_status/      # Scrape job status
-│   │   └── zip_processor/      # ZIP file handling
+│   │   └── ...                 # And 23 more
 │   ├── statemachine/           # Step Functions workflow
-│   │   └── pipeline.asl.json
+│   │   ├── pipeline.asl.json
+│   │   ├── scrape.asl.json
+│   │   └── reindex.asl.json
 │   ├── api/                    # GraphQL schema
 │   │   └── schema.graphql
 │   ├── ui/                     # React web UI (Cloudscape)
 │   │   ├── src/
 │   │   ├── package.json
-│   │   └── vite.config.ts
+│   │   └── vite.config.js
 │   └── ragstack-chat/          # AI chat web component
 │       ├── src/
 │       ├── package.json
@@ -117,7 +113,7 @@ RAGStack-Lambda/
 - **Framework**: Vite + React
 - **Testing**: Vitest
 - **UI Library**: Cloudscape Design System
-- **State Management**: AWS Amplify DataStore
+- **State Management**: React state + Amplify for auth/API
 
 ### Updating Dependencies
 
@@ -138,18 +134,18 @@ npm test
 **Lambda-specific dependencies**:
 - Each Lambda has its own requirements.txt
 - During `sam build`, dependencies are installed per-function
-- Common libraries should go in lib/ragstack_common/setup.py
+- Common libraries should go in lib/setup.py
 
 ## Testing
 
 ### Test Organization
 
-- **Unit tests**: Located in `tests/unit/` and `lib/ragstack_common/test_*.py`
+- **Unit tests**: Located in `tests/unit/python/`
   - Run with `npm run test:backend` (exclude integration tests by default)
   - Fast (~1s), no AWS credentials needed
 
 - **Integration tests**: Located in `tests/integration/`, marked with `@pytest.mark.integration`
-  - Run with `npm run test:backend:integration`
+  - Run with `npm run test:integration`
   - Require AWS credentials and actual AWS services
 
 - **Frontend tests**: Vitest files colocated with components (`*.test.tsx`)
@@ -177,7 +173,7 @@ npm run test:frontend   # No AWS needed
 Test Lambda functions locally with actual handlers:
 ```bash
 sam build
-sam local invoke ProcessDocumentFunction -e tests/events/sample.json
+sam local invoke ProcessDocumentFunction -e tests/events/sqs-processing-message.json
 ```
 
 Check tests/events/ for sample event files.
@@ -218,7 +214,7 @@ npm test
 ## Architecture Decisions (ADRs)
 
 ### ADR-001: Configuration Management
-**Pattern**: DynamoDB-backed runtime configuration with no caching
+**Pattern**: DynamoDB-backed runtime configuration with request-scoped caching
 
 ConfigurationManager reads from DynamoDB table with structure:
 - **Schema** entry: Defines available parameters (read-only)
@@ -227,7 +223,7 @@ ConfigurationManager reads from DynamoDB table with structure:
 
 Benefits:
 - ✅ Runtime changes without redeployment
-- ✅ No caching issues
+- ✅ Request-scoped caching (reads once per invocation, cleared via `clear_cache()`)
 - ✅ Centralized configuration
 - ✅ Audit trail via DynamoDB
 
@@ -254,7 +250,7 @@ Benefits:
 
 ## CI/CD Integration
 
-GitHub Actions workflow (.github/workflows/test.yml):
+GitHub Actions workflow (.github/workflows/ci.yml):
 - Runs on every push and PR
 - Tests Python 3.13, Node 24
 - Lints backend (ruff) and frontend (ESLint)

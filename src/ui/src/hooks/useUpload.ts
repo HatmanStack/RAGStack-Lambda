@@ -3,6 +3,7 @@ import { generateClient } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import gql from 'graphql-tag';
 import type { GqlResponse } from '../types/graphql';
+import { gqlQuery } from '../utils/graphql';
 
 const CREATE_UPLOAD_URL = gql`
   mutation CreateUploadUrl($filename: String!) {
@@ -42,7 +43,6 @@ export const useUpload = () => {
     const file = pendingUploads.current.get(uploadId);
 
     if (!file) {
-      console.error('Upload not found for ID:', uploadId);
       throw new Error('Upload not found');
     }
 
@@ -54,7 +54,7 @@ export const useUpload = () => {
       // Get presigned URL
       setCurrentUpload({ filename: file.name, progress: 5, status: 'uploading' });
       const response = await client.graphql({
-        query: CREATE_UPLOAD_URL as unknown as string,
+        query: gqlQuery(CREATE_UPLOAD_URL),
         variables: { filename: file.name }
       }) as GqlResponse;
 
@@ -93,7 +93,6 @@ export const useUpload = () => {
       setTimeout(() => setCurrentUpload(null), 1500);
 
     } catch (err) {
-      console.error('Upload failed:', err);
       let errorMsg = 'Upload failed';
 
       if (err instanceof Error) {

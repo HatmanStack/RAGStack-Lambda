@@ -19,7 +19,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -55,11 +54,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                          errorName.includes('UserUnAuthenticatedException') ||
                          errorName === 'UserNotFoundException';
 
-      // Only log unexpected errors (network, config issues)
-      if (!isAuthError) {
-        console.error('[AuthProvider] Error checking auth status:', errorName, err instanceof Error ? err.message : err);
-      }
-
       // Always set user to null on any error (same UI behavior)
       setUser(null);
     } finally {
@@ -76,7 +70,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await signOut();
       setUser(null);
     } catch (err) {
-      console.error('Error signing out:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }, []);

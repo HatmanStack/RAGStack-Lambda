@@ -4,6 +4,7 @@ import gql from 'graphql-tag';
 import { deleteMetadataKey as deleteMetadataKeyMutation } from '../graphql/mutations/deleteMetadataKey';
 import { regenerateFilterExamples as regenerateFilterExamplesMutation } from '../graphql/mutations/regenerateFilterExamples';
 import type { GqlResponse } from '../types/graphql';
+import { gqlQuery } from '../utils/graphql';
 
 interface MetadataStatsResult {
   keys?: MetadataKeyStats[];
@@ -115,7 +116,7 @@ export const useMetadataStats = () => {
 
     try {
       const response = (await client.graphql({
-        query: GET_METADATA_STATS as unknown as string,
+        query: gqlQuery(GET_METADATA_STATS),
       })) as GqlResponse;
 
       const result = response.data?.getMetadataStats as MetadataStatsResult | undefined;
@@ -128,7 +129,6 @@ export const useMetadataStats = () => {
         setLastAnalyzed(result?.lastAnalyzed || null);
       }
     } catch (err) {
-      console.error('Failed to fetch metadata stats:', err);
       setError((err as Error).message);
       setStats([]);
     } finally {
@@ -143,7 +143,7 @@ export const useMetadataStats = () => {
   const deleteKey = useCallback(async (keyName: string): Promise<boolean> => {
     try {
       const response = (await client.graphql({
-        query: deleteMetadataKeyMutation as unknown as string,
+        query: gqlQuery(deleteMetadataKeyMutation),
         variables: { keyName },
       })) as GqlResponse;
 
@@ -153,10 +153,8 @@ export const useMetadataStats = () => {
         setTotalKeys(prev => prev - 1);
         return true;
       }
-      console.error('Failed to delete metadata key:', result?.error);
       return false;
     } catch (err) {
-      console.error('Error deleting metadata key:', err);
       return false;
     }
   }, []);
@@ -185,7 +183,7 @@ export const useFilterExamples = () => {
 
     try {
       const response = (await client.graphql({
-        query: GET_FILTER_EXAMPLES as unknown as string,
+        query: gqlQuery(GET_FILTER_EXAMPLES),
       })) as GqlResponse;
 
       const result = response.data?.getFilterExamples as FilterExamplesResult | undefined;
@@ -198,7 +196,6 @@ export const useFilterExamples = () => {
         setLastGenerated(result?.lastGenerated || null);
       }
     } catch (err) {
-      console.error('Failed to fetch filter examples:', err);
       setError((err as Error).message);
       setExamples([]);
     } finally {
@@ -232,7 +229,7 @@ export const useMetadataAnalyzer = () => {
 
     try {
       const response = (await client.graphql({
-        query: ANALYZE_METADATA as unknown as string,
+        query: gqlQuery(ANALYZE_METADATA),
       })) as GqlResponse;
 
       const analysisResult = response.data?.analyzeMetadata as AnalyzeResult | undefined;
@@ -251,7 +248,6 @@ export const useMetadataAnalyzer = () => {
       setResult(typedResult);
       return typedResult;
     } catch (err) {
-      console.error('Metadata analysis failed:', err);
       const errorMessage = (err as Error).message;
       setError(errorMessage);
       return null;
@@ -286,7 +282,7 @@ export const useRegenerateFilterExamples = () => {
 
     try {
       const response = (await client.graphql({
-        query: regenerateFilterExamplesMutation as unknown as string,
+        query: gqlQuery(regenerateFilterExamplesMutation),
       })) as GqlResponse;
 
       const regenerateResult = response.data?.regenerateFilterExamples as RegenerateFilterExamplesResult | undefined;

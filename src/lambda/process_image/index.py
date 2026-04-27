@@ -45,6 +45,7 @@ from ragstack_common.metadata_extractor import MetadataExtractor
 from ragstack_common.storage import (
     get_file_type_from_filename,
     is_valid_uuid,
+    parse_s3_uri,
     write_metadata_to_s3,
 )
 
@@ -276,13 +277,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             raise ValueError(f"No input_s3_uri in tracking record for image: {image_id}")
 
         # Parse S3 URI to get bucket and key
-        uri_path = input_s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) != 2:
-            raise ValueError(f"Invalid S3 URI format: {input_s3_uri}")
-
-        bucket = parts[0]
-        image_key = parts[1]
+        bucket, image_key = parse_s3_uri(input_s3_uri)
 
         # Verify image exists in S3
         try:
@@ -653,13 +648,7 @@ def extract_text_from_image(s3_uri: str) -> str:
     """
     try:
         # Parse S3 URI
-        uri_path = s3_uri.replace("s3://", "")
-        parts = uri_path.split("/", 1)
-        if len(parts) != 2:
-            logger.error(f"Invalid S3 URI for text extraction: {s3_uri}")
-            return ""
-
-        bucket, key = parts
+        bucket, key = parse_s3_uri(s3_uri)
 
         # Get image from S3
         response = s3.get_object(Bucket=bucket, Key=key)

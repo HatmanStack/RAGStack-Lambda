@@ -1,0 +1,9 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.2
+    hooks:
+      - id: ruff
+        args: [--fix]
+        exclude: ^(publish\.py|vulture_whitelist\.py|src/ragstack-mcp/)
+      - id: ruff-format
+        exclude: ^(publish\.py|vulture_whitelist\.py|src/ragstack-mcp/)

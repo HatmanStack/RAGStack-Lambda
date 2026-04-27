@@ -39,30 +39,13 @@ from botocore.exceptions import ClientError
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import ConfigurationManager, get_knowledge_base_config
 from ragstack_common.filter_generator import FilterGenerator
+from ragstack_common.kb_filters import extract_kb_scalar
 from ragstack_common.key_library import KeyLibrary
 from ragstack_common.multislice_retriever import MultiSliceRetriever
 from ragstack_common.storage import generate_presigned_url, parse_s3_uri
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-def extract_kb_scalar(value: Any) -> str | None:
-    """Extract scalar value from KB metadata which returns lists with quoted strings.
-
-    KB returns metadata like: ['"0"'] or ['value1', 'value2']
-    This extracts the first value and strips extra quotes.
-    """
-    if value is None:
-        return None
-    if isinstance(value, list):
-        if not value:
-            return None
-        value = value[0]
-    if isinstance(value, str):
-        # Strip extra quotes that KB adds (e.g., '"0"' -> '0')
-        return value.strip('"')
-    return str(value)
 
 
 # Module-level initialization (reused across Lambda invocations)
@@ -194,6 +177,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         dict: KBQueryResult with query, results, total, and optional error
     """
+    # Clear config cache at handler entry to ensure fresh reads per invocation
+    get_config_manager().clear_cache()
+
     # Check public access control
     allowed, error_msg = check_public_access(event, "search", get_config_manager())
     if not allowed:

@@ -130,7 +130,7 @@ class TestIngestMediaLambda:
         module = load_ingest_media_module()
         result = module.lambda_handler(sample_media_event, None)
 
-        assert result["status"] == "INDEXED"
+        assert result["status"] == "SYNC_QUEUED"
         assert result["document_id"] == "media-123"
 
     @patch("ragstack_common.appsync.publish_document_update")
@@ -246,7 +246,7 @@ class TestIngestMediaLambda:
         module = load_ingest_media_module()
         result = module.lambda_handler(event, None)
 
-        assert result["status"] == "INDEXED"
+        assert result["status"] == "SYNC_QUEUED"
         assert result.get("visual_segments_indexed", 0) == 0
 
 

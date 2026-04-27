@@ -34,7 +34,6 @@ export const Dashboard = () => {
       await cancelScrape(jobId);
       refreshDocuments();
     } catch (err) {
-      console.error('Failed to cancel scrape:', err);
     }
   };
 
@@ -44,7 +43,6 @@ export const Dashboard = () => {
       // Partial failures are returned in result.failedIds if any
       return result;
     } catch (err) {
-      console.error('Failed to delete documents:', err);
       throw err;
     }
   };
@@ -53,10 +51,6 @@ export const Dashboard = () => {
     const results = await Promise.allSettled(
       documentIds.map(id => reprocessDocument(id))
     );
-    const failures = results.filter(r => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error('Some reprocess operations failed:', failures);
-    }
     refreshDocuments();
     return results;
   };
@@ -65,10 +59,6 @@ export const Dashboard = () => {
     const results = await Promise.allSettled(
       documentIds.map(id => reindexDocument(id))
     );
-    const failures = results.filter(r => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error('Some reindex operations failed:', failures);
-    }
     refreshDocuments();
     return results;
   };

@@ -130,7 +130,6 @@ export function Settings() {
 
       setLoading(false);
     } catch (err) {
-      console.error('Error loading configuration:', err);
       setError('Failed to load configuration. Please try again.');
       setLoading(false);
     }
@@ -150,7 +149,6 @@ export function Settings() {
         setApiKeyData(data);
       }
     } catch (err) {
-      console.error('Error loading API key:', err);
       setApiKeyError('Failed to load API key');
     } finally {
       setApiKeyLoading(false);
@@ -176,7 +174,6 @@ export function Settings() {
         setShowApiKey(true); // Show the new key
       }
     } catch (err) {
-      console.error('Error regenerating API key:', err);
       setApiKeyError('Failed to regenerate API key');
     } finally {
       setRegenerating(false);
@@ -193,14 +190,12 @@ export function Settings() {
     try {
       // Block save if there are validation errors
       if (Object.keys(validationErrors).length > 0) {
-        console.error('[Settings] Blocked by validation errors:', validationErrors);
         setError('Please fix validation errors before saving');
         return;
       }
 
       await saveConfiguration(formValues);
     } catch (err) {
-      console.error('[Settings] Error in handleSave:', err);
       setError('Failed to save configuration. Please try again.');
     }
   };
@@ -243,9 +238,7 @@ export function Settings() {
       }, 2000);
 
     } catch (err: unknown) {
-      console.error('[Settings] Error saving configuration:', err);
       const errorObj = err as { errors?: unknown; message?: string };
-      console.error('[Settings] Error details:', errorObj.errors || errorObj.message || err);
       setError('Failed to save configuration. Please try again.');
       setSaving(false);
     }

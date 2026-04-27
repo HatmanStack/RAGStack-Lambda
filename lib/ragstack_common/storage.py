@@ -88,20 +88,37 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     raise ValueError(f"Invalid S3 URI: {s3_uri}")
 
 
-def read_s3_text(s3_uri: str, encoding: str = "utf-8") -> str:
+def read_s3_text(
+    s3_uri: str,
+    encoding: str = "utf-8",
+    max_size_bytes: int = 50 * 1024 * 1024,
+) -> str:
     """
     Read text content from S3.
 
     Args:
         s3_uri: S3 URI to text file
         encoding: Text encoding (default utf-8)
+        max_size_bytes: Maximum allowed object size in bytes (default 50MB).
+            If the S3 response's ContentLength exceeds this limit, a ValueError
+            is raised before reading the body.
 
     Returns:
         Text content as string
+
+    Raises:
+        ValueError: If the object exceeds max_size_bytes
+        ClientError: If the S3 operation fails
     """
     bucket, key = parse_s3_uri(s3_uri)
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
+        content_length = response.get("ContentLength", 0)
+        if content_length > max_size_bytes:
+            raise ValueError(
+                f"S3 object {s3_uri} ({content_length} bytes) exceeds maximum "
+                f"allowed size ({max_size_bytes} bytes)"
+            )
         result: str = response["Body"].read().decode(encoding)
         return result
     except ClientError:

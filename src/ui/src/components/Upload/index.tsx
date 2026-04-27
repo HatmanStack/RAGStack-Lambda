@@ -185,7 +185,6 @@ const DocumentUploadContent = () => {
         await uploadFile(uploadId);
         completed++;
       } catch (err) {
-        console.error('Upload failed:', err);
       }
     }
     if (completed > 0) {

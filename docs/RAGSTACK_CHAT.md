@@ -149,7 +149,7 @@ When `chat_allow_document_access` is enabled (admin UI -> Configuration):
 
 **Admin controls:**
 - Toggle on/off in real-time (no redeployment)
-- Changes apply within 60 seconds (DynamoDB config cache)
+- Changes take effect on the next Lambda invocation (request-scoped cache)
 
 ### Media Sources (Video/Audio)
 

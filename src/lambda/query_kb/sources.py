@@ -11,31 +11,33 @@ import os
 from typing import Any
 from urllib.parse import unquote
 
+from botocore.exceptions import ClientError
+
 try:
-    from ._clients import dynamodb, s3_client
-    from .filters import extract_kb_scalar, get_config_manager
-    from .media import (
+    from ._compat import (
         MEDIA_CONTENT_TYPES,
+        dynamodb,
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
         generate_media_url,
+        get_config_manager,
+        s3_client,
     )
 except ImportError:
-    from _clients import dynamodb, s3_client  # type: ignore[import-not-found,no-redef]
-    from filters import (  # type: ignore[import-not-found,no-redef]
-        extract_kb_scalar,
-        get_config_manager,
-    )
-    from media import (  # type: ignore[import-not-found,no-redef]
+    from _compat import (  # type: ignore[import-not-found,no-redef]
         MEDIA_CONTENT_TYPES,
+        dynamodb,
         extract_image_caption_from_content,
         extract_source_url_from_content,
         format_timestamp,
         generate_media_url,
+        get_config_manager,
+        s3_client,
     )
 
-from ragstack_common.storage import generate_presigned_url
+from ragstack_common.kb_filters import extract_kb_scalar
+from ragstack_common.storage import generate_presigned_url, parse_s3_uri
 from ragstack_common.types import SourceInfo
 
 logger = logging.getLogger()
@@ -93,15 +95,14 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
             # 3. Images: s3://bucket/content/{imageId}/caption.txt
             #    Actual image: s3://bucket/content/{imageId}/{filename}.ext
             try:
-                uri_path = uri.replace("s3://", "")
-                parts = uri_path.split("/")
+                bucket, s3_key = parse_s3_uri(uri)
+                parts = s3_key.split("/")
                 logger.info(f"Parsing URI: {uri}, parts count: {len(parts)}")
 
-                if len(parts) < 3:
+                if len(parts) < 2:
                     logger.warning(f"Invalid S3 URI format (too few parts): {parts}")
                     continue
 
-                bucket = parts[0]
                 document_id = None
                 original_filename = None
                 input_prefix = None
@@ -109,9 +110,9 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 is_image = False
 
                 # Detect structure based on path prefix
-                if len(parts) > 2 and parts[1] == "content":
-                    # Unified content structure: bucket/content/{docId}/...
-                    document_id = unquote(parts[2])
+                if len(parts) > 1 and parts[0] == "content":
+                    # Unified content structure: content/{docId}/...
+                    document_id = unquote(parts[1])
 
                     # Determine content type from filename
                     last_part = parts[-1] if parts else ""
@@ -147,10 +148,10 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                         input_prefix = "input"
                         logger.info(f"Document content detected: docId={document_id}")
 
-                elif len(parts) > 3 and parts[1] == "input":
-                    # Input structure: bucket/input/{docId}/{filename}
-                    document_id = unquote(parts[2])
-                    original_filename = unquote(parts[3]) if len(parts) > 3 else None
+                elif len(parts) > 2 and parts[0] == "input":
+                    # Input structure: input/{docId}/{filename}
+                    document_id = unquote(parts[1])
+                    original_filename = unquote(parts[2]) if len(parts) > 2 else None
                     input_prefix = "input"
                     # Check if scraped based on filename
                     if original_filename and original_filename.endswith(".md"):
@@ -159,8 +160,8 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
 
                 else:
                     # Fallback: try to parse as generic structure
-                    document_id = unquote(parts[1]) if len(parts) > 1 else None
-                    original_filename = unquote(parts[2]) if len(parts) > 2 else None
+                    document_id = unquote(parts[0]) if len(parts) > 0 else None
+                    original_filename = unquote(parts[1]) if len(parts) > 1 else None
                     logger.info(f"Generic structure detected: docId={document_id}")
 
                 logger.info(f"Parsed: bucket={bucket}, doc={document_id}, file={original_filename}")
@@ -215,7 +216,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                                 f"[SOURCE] Tracking lookup EMPTY: "
                                 f"No item found for document_id={document_id}"
                             )
-                    except Exception as e:
+                    except ClientError as e:
                         doc_type = "document"  # Default on error
                         logger.error(f"[SOURCE] Tracking lookup FAILED: {e}", exc_info=True)
                 else:
@@ -259,14 +260,11 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
 
                 logger.debug(f"[SOURCE] Final document_s3_uri: {document_s3_uri}")
 
-                # Extract page number if available (from metadata or filename)
+                # Page number is no longer derivable from the URI — the pages/page-N.json
+                # path format was replaced by a unified content/{docId}/extracted_text.txt
+                # layout, and the old branch always evaluated to false. Leave page_num
+                # None unless a future format puts a page index back into the path.
                 page_num = None
-                if "pages" in parts and len(parts) > 3:
-                    page_file = parts[-1]  # e.g., "page-3.json"
-                    try:
-                        page_num = int(page_file.split("-")[1].split(".")[0])
-                    except (IndexError, ValueError):
-                        logger.debug(f"Could not extract page number from: {page_file}")
 
                 # Extract snippet (content_text already extracted above)
                 snippet = content_text[:200] if content_text else ""
@@ -281,11 +279,10 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                     if uri.endswith(".md"):
                         metadata_uri = f"{uri}.metadata.json"
                         try:
-                            metadata_path = metadata_uri.replace("s3://", "")
-                            meta_parts = metadata_path.split("/", 1)
-                            if len(meta_parts) == 2:
+                            meta_bucket, meta_key = parse_s3_uri(metadata_uri)
+                            if meta_bucket and meta_key:
                                 meta_response = s3_client.get_object(
-                                    Bucket=meta_parts[0], Key=meta_parts[1]
+                                    Bucket=meta_bucket, Key=meta_key
                                 )
                                 meta_body = meta_response["Body"].read().decode("utf-8")
                                 meta_content = json.loads(meta_body)
@@ -299,7 +296,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                                     logger.info(
                                         f"[SOURCE] Got source_url from metadata: {source_url}"
                                     )
-                        except Exception as e:
+                        except (ClientError, json.JSONDecodeError, KeyError) as e:
                             logger.debug(f"[SOURCE] Could not read metadata sidecar: {e}")
 
                     # Fallback: try tracking table (old format has source_url per-page)
@@ -361,17 +358,15 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                         and document_s3_uri.startswith("s3://")
                     ):
                         # Parse S3 URI to get bucket and key
-                        s3_path = document_s3_uri.replace("s3://", "")
-                        s3_match = s3_path.split("/", 1)
-                        if len(s3_match) == 2 and s3_match[1]:
-                            bucket = s3_match[0]
-                            key = s3_match[1]
+                        doc_bucket, doc_key = parse_s3_uri(document_s3_uri)
+                        if doc_bucket and doc_key:
                             # Validate key looks reasonable (has document ID and filename)
-                            if "/" in key and len(key) > 10:
+                            if "/" in doc_key and len(doc_key) > 10:
                                 logger.info(
-                                    f"[SOURCE] Generating presigned URL: bucket={bucket}, key={key}"
+                                    f"[SOURCE] Generating presigned URL: "
+                                    f"bucket={doc_bucket}, key={doc_key}"
                                 )
-                                document_url = generate_presigned_url(bucket, key)
+                                document_url = generate_presigned_url(doc_bucket, doc_key)
                                 if document_url:
                                     logger.info(
                                         f"[SOURCE] Presigned URL generated: {document_url[:80]}..."
@@ -379,7 +374,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                                 else:
                                     logger.warning("[SOURCE] Presigned URL returned None")
                             else:
-                                logger.warning(f"[SOURCE] Skipping malformed key: {key}")
+                                logger.warning(f"[SOURCE] Skipping malformed key: {doc_key}")
                         else:
                             logger.warning(f"[SOURCE] Could not parse S3 URI: {document_s3_uri}")
                     else:
@@ -460,11 +455,8 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                     # For media sources, generate both full URL and segment URL with timestamp
                     segment_url = None
                     if is_media and allow_document_access and document_s3_uri:
-                        s3_path = document_s3_uri.replace("s3://", "")
-                        s3_match = s3_path.split("/", 1)
-                        if len(s3_match) == 2 and s3_match[1]:
-                            media_bucket = s3_match[0]
-                            media_key = s3_match[1]
+                        media_bucket, media_key = parse_s3_uri(document_s3_uri)
+                        if media_bucket and media_key:
                             # Full video URL (no timestamp)
                             document_url = generate_presigned_url(media_bucket, media_key)
                             # Segment URL with timestamp fragment for deep linking
@@ -528,7 +520,7 @@ def extract_sources(citations: list[Any]) -> list[SourceInfo]:
                 else:
                     logger.debug(f"Skipping duplicate source: {source_key}")
 
-            except Exception as e:
+            except (ClientError, KeyError, IndexError, ValueError, TypeError) as e:
                 logger.error(f"Failed to parse source: {e}")
                 continue
 

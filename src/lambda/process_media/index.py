@@ -151,7 +151,6 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if not tracking_table:
         raise ValueError("TRACKING_TABLE environment variable is required")
 
-    vector_bucket = os.environ.get("VECTOR_BUCKET")
     graphql_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
 
     logger.info(f"ProcessMedia: Received event: {json.dumps(event)[:500]}")
@@ -242,14 +241,16 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             f"Media file: {content_length} bytes, estimated duration: {estimated_duration}s"
         )
 
-        # Start transcription job
+        # Start transcription job. Output goes to the data bucket — the same place
+        # we read transcripts back from below. VECTOR_BUCKET points at an S3 Vectors
+        # bucket which Transcribe rejects.
         output_bucket, _ = parse_s3_uri(output_s3_prefix)
         transcribe_client = TranscribeClient()
 
         job_name = transcribe_client.start_transcription_job(
             document_id=document_id,
             input_s3_uri=input_s3_uri,
-            output_bucket=vector_bucket or output_bucket,
+            output_bucket=output_bucket,
             language_code=language_code,
             enable_speaker_diarization=enable_diarization,
             max_speakers=4,

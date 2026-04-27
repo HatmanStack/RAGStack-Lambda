@@ -10,14 +10,46 @@ import pytest
 
 def _load_appsync_resolvers_module():
     """Load appsync_resolvers module using importlib (avoids 'lambda' keyword issue)."""
-    module_path = (
-        Path(__file__).parent.parent.parent.parent / "src/lambda/appsync_resolvers/index.py"
-    )
+    module_dir = Path(__file__).parent.parent.parent.parent / "src/lambda/appsync_resolvers"
+    module_path = module_dir / "index.py"
+    # Add the appsync_resolvers directory to sys.path so resolver subpackage imports work
+    dir_str = str(module_dir)
+    if dir_str not in sys.path:
+        sys.path.insert(0, dir_str)
+    # Clear cached resolver modules so they pick up fresh boto3 mocks on each reload
+    for mod_name in list(sys.modules):
+        if mod_name.startswith("resolvers"):
+            del sys.modules[mod_name]
     spec = importlib.util.spec_from_file_location("appsync_resolvers_index", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["appsync_resolvers_index"] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _patch_resolver_clients(module, mock_boto3):
+    """Patch boto3 clients in both index.py and resolver submodules.
+
+    Tests set module.s3 = mock, but domain modules import from resolvers.shared.
+    This helper propagates mocked clients to all loaded resolver modules.
+    """
+    module.s3 = mock_boto3["s3"]
+    module.dynamodb = mock_boto3["dynamodb"]
+
+    # Also patch the shared module used by domain resolver modules
+    import resolvers.shared as shared
+
+    shared.s3 = mock_boto3["s3"]
+    shared.dynamodb = mock_boto3["dynamodb"]
+
+    # Patch domain modules that have already imported these clients
+    for mod_name in list(sys.modules):
+        if mod_name.startswith("resolvers.") and mod_name != "resolvers.shared":
+            mod = sys.modules[mod_name]
+            if hasattr(mod, "s3"):
+                mod.s3 = mock_boto3["s3"]
+            if hasattr(mod, "dynamodb"):
+                mod.dynamodb = mock_boto3["dynamodb"]
 
 
 @pytest.fixture
@@ -27,6 +59,10 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("DATA_BUCKET", "test-data-bucket")
     monkeypatch.setenv("STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123:stateMachine:test")
     monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config-table")
+    monkeypatch.setenv(
+        "PROCESS_IMAGE_FUNCTION_ARN",
+        "arn:aws:lambda:us-east-1:123:function:test-process-image",
+    )
     # Patch check_public_access to always allow access in tests
     with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
         yield
@@ -78,8 +114,7 @@ class TestCreateImageUploadUrl:
         module = _load_appsync_resolvers_module()
 
         # Reinitialize module-level variables with mocked values
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -110,8 +145,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_jpg(self, mock_env, mock_boto3):
         """Test successful image upload URL creation for JPG file."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -127,8 +161,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_gif(self, mock_env, mock_boto3):
         """Test successful image upload URL creation for GIF file."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -141,8 +174,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_webp(self, mock_env, mock_boto3):
         """Test successful image upload URL creation for WebP file."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -155,8 +187,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_pdf(self, mock_env, mock_boto3):
         """Test rejection of non-image file (PDF)."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -169,8 +200,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_doc(self, mock_env, mock_boto3):
         """Test rejection of non-image file (DOC)."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -183,8 +213,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_path_traversal(self, mock_env, mock_boto3):
         """Test rejection of filename with path traversal."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -197,8 +226,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_forward_slash(self, mock_env, mock_boto3):
         """Test rejection of filename with forward slash."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -211,8 +239,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_long_filename(self, mock_env, mock_boto3):
         """Test rejection of filename exceeding max length."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         long_filename = "a" * 256 + ".png"
         event = {
@@ -226,8 +253,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_reject_empty_filename(self, mock_env, mock_boto3):
         """Test rejection of empty filename."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -240,8 +266,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_case_insensitive(self, mock_env, mock_boto3):
         """Test that file extension check is case insensitive."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -254,8 +279,7 @@ class TestCreateImageUploadUrl:
     def test_create_image_upload_url_jpeg_extension(self, mock_env, mock_boto3):
         """Test successful image upload URL creation for JPEG extension."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "createImageUploadUrl"},
@@ -277,8 +301,7 @@ class TestGenerateCaption:
     def test_generate_caption_success(self, mock_env, mock_boto3):
         """Test successful caption generation."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Mock S3 get_object
         mock_body = MagicMock()
@@ -296,6 +319,12 @@ class TestGenerateCaption:
             }
         }
         module.bedrock_runtime = mock_bedrock
+        # Also patch in resolver submodules
+        import resolvers.shared as shared
+
+        shared.bedrock_runtime = mock_bedrock
+        if "resolvers.images" in sys.modules:
+            sys.modules["resolvers.images"].bedrock_runtime = mock_bedrock
 
         event = {
             "info": {"fieldName": "generateCaption"},
@@ -318,8 +347,7 @@ class TestGenerateCaption:
     def test_generate_caption_invalid_s3_uri_format(self, mock_env, mock_boto3):
         """Test rejection of invalid S3 URI format."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "generateCaption"},
@@ -334,8 +362,7 @@ class TestGenerateCaption:
     def test_generate_caption_empty_s3_uri(self, mock_env, mock_boto3):
         """Test rejection of empty S3 URI."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "generateCaption"},
@@ -350,8 +377,7 @@ class TestGenerateCaption:
     def test_generate_caption_wrong_bucket(self, mock_env, mock_boto3):
         """Test rejection of image from unauthorized bucket."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "generateCaption"},
@@ -366,8 +392,7 @@ class TestGenerateCaption:
     def test_generate_caption_s3_not_found(self, mock_env, mock_boto3):
         """Test handling of S3 NoSuchKey error."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Mock S3 to raise NoSuchKey
         from botocore.exceptions import ClientError
@@ -389,8 +414,7 @@ class TestGenerateCaption:
     def test_generate_caption_bedrock_error(self, mock_env, mock_boto3):
         """Test handling of Bedrock API error."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Mock S3 get_object
         mock_body = MagicMock()
@@ -409,6 +433,12 @@ class TestGenerateCaption:
             "Converse",
         )
         module.bedrock_runtime = mock_bedrock
+        # Also patch in resolver submodules
+        import resolvers.shared as shared
+
+        shared.bedrock_runtime = mock_bedrock
+        if "resolvers.images" in sys.modules:
+            sys.modules["resolvers.images"].bedrock_runtime = mock_bedrock
 
         event = {
             "info": {"fieldName": "generateCaption"},
@@ -432,8 +462,7 @@ class TestSubmitImage:
     def test_submit_image_success(self, mock_env, mock_boto3):
         """Test successful image submission with both captions."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Setup DynamoDB mocks
         mock_boto3["table"].get_item.return_value = {
@@ -479,8 +508,7 @@ class TestSubmitImage:
     def test_submit_image_user_caption_only(self, mock_env, mock_boto3):
         """Test submission with only user caption."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -513,8 +541,7 @@ class TestSubmitImage:
     def test_submit_image_not_found(self, mock_env, mock_boto3):
         """Test rejection when image not found."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {}  # No Item
 
@@ -533,8 +560,7 @@ class TestSubmitImage:
     def test_submit_image_not_image_type(self, mock_env, mock_boto3):
         """Test rejection when record is not an image type."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -561,8 +587,7 @@ class TestSubmitImage:
     def test_submit_image_wrong_status(self, mock_env, mock_boto3):
         """Test rejection when image not in PENDING status."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -589,8 +614,7 @@ class TestSubmitImage:
     def test_submit_image_s3_file_not_found(self, mock_env, mock_boto3):
         """Test rejection when image file not in S3."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -625,8 +649,7 @@ class TestSubmitImage:
     def test_submit_image_missing_image_id(self, mock_env, mock_boto3):
         """Test rejection when imageId is missing."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "submitImage"},
@@ -639,8 +662,7 @@ class TestSubmitImage:
     def test_submit_image_invalid_uuid(self, mock_env, mock_boto3):
         """Test rejection when imageId is not a valid UUID."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "submitImage"},
@@ -666,8 +688,7 @@ class TestGetImage:
     def test_get_image_success(self, mock_env, mock_boto3):
         """Test successful image retrieval."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -694,8 +715,7 @@ class TestGetImage:
     def test_get_image_not_found(self, mock_env, mock_boto3):
         """Test image not found returns None."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {}
 
@@ -710,8 +730,7 @@ class TestGetImage:
     def test_get_image_not_image_type(self, mock_env, mock_boto3):
         """Test returns None for non-image type."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -731,8 +750,7 @@ class TestGetImage:
     def test_get_image_invalid_uuid(self, mock_env, mock_boto3):
         """Test rejection of invalid UUID."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "getImage"},
@@ -754,8 +772,7 @@ class TestListImages:
     def test_list_images_success(self, mock_env, mock_boto3):
         """Test successful image listing."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].scan.return_value = {
             "Items": [
@@ -790,8 +807,7 @@ class TestListImages:
     def test_list_images_with_pagination(self, mock_env, mock_boto3):
         """Test listing with pagination token."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Mock returns 1 item without LastEvaluatedKey (final page)
         mock_boto3["table"].scan.return_value = {
@@ -821,8 +837,7 @@ class TestListImages:
     def test_list_images_invalid_limit(self, mock_env, mock_boto3):
         """Test rejection of invalid limit."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "listImages"},
@@ -844,8 +859,7 @@ class TestDeleteImage:
     def test_delete_image_success(self, mock_env, mock_boto3):
         """Test successful image deletion."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -874,8 +888,7 @@ class TestDeleteImage:
     def test_delete_image_not_found(self, mock_env, mock_boto3):
         """Test error when image not found."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {}
 
@@ -890,8 +903,7 @@ class TestDeleteImage:
     def test_delete_image_not_image_type(self, mock_env, mock_boto3):
         """Test error when record is not an image."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].get_item.return_value = {
             "Item": {
@@ -911,8 +923,7 @@ class TestDeleteImage:
     def test_delete_image_missing_id(self, mock_env, mock_boto3):
         """Test error when imageId is missing."""
         module = _load_appsync_resolvers_module()
-        module.s3 = mock_boto3["s3"]
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "deleteImage"},
@@ -945,7 +956,7 @@ class TestGetKeyLibrary:
     def test_get_key_library_success(self, mock_env_with_key_library, mock_boto3):
         """Test successful retrieval of key library."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].scan.return_value = {
             "Items": [
@@ -981,7 +992,7 @@ class TestGetKeyLibrary:
     def test_get_key_library_filters_inactive(self, mock_env_with_key_library, mock_boto3):
         """Test that inactive keys are filtered out."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].scan.return_value = {
             "Items": [
@@ -1003,7 +1014,7 @@ class TestGetKeyLibrary:
     def test_get_key_library_empty(self, mock_env_with_key_library, mock_boto3):
         """Test empty key library returns empty list."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_boto3["table"].scan.return_value = {"Items": []}
 
@@ -1019,8 +1030,10 @@ class TestGetKeyLibrary:
     def test_get_key_library_no_table_configured(self, mock_env, mock_boto3):
         """Test returns empty list when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
-        module.dynamodb = mock_boto3["dynamodb"]
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "getKeyLibrary"},
@@ -1049,7 +1062,7 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_success(self, mock_env_with_key_library, mock_boto3):
         """Test successful key similarity check."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         # Mock KeyLibrary.check_key_similarity
         with patch("ragstack_common.key_library.KeyLibrary.check_key_similarity") as mock_check:
@@ -1071,7 +1084,7 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_no_matches(self, mock_env_with_key_library, mock_boto3):
         """Test similarity check with no matches."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         with patch("ragstack_common.key_library.KeyLibrary.check_key_similarity") as mock_check:
             mock_check.return_value = []
@@ -1090,7 +1103,7 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_missing_key_name(self, mock_env_with_key_library, mock_boto3):
         """Test error when keyName is missing."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "checkKeySimilarity"},
@@ -1103,7 +1116,7 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_invalid_threshold(self, mock_env_with_key_library, mock_boto3):
         """Test error when threshold is out of range."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "checkKeySimilarity"},
@@ -1116,8 +1129,10 @@ class TestCheckKeySimilarity:
     def test_check_key_similarity_no_table_configured(self, mock_env, mock_boto3):
         """Test returns empty when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
-        module.dynamodb = mock_boto3["dynamodb"]
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "checkKeySimilarity"},
@@ -1148,7 +1163,7 @@ class TestDeleteMetadataKey:
     def test_delete_metadata_key_success(self, mock_env_with_key_library, mock_boto3):
         """Test successful key deletion."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         with patch("ragstack_common.key_library.KeyLibrary.delete_key") as mock_delete:
             mock_delete.return_value = True
@@ -1167,8 +1182,10 @@ class TestDeleteMetadataKey:
     def test_delete_metadata_key_no_table(self, mock_env, mock_boto3):
         """Test returns error when table not configured."""
         module = _load_appsync_resolvers_module()
-        module.METADATA_KEY_LIBRARY_TABLE = None
-        module.dynamodb = mock_boto3["dynamodb"]
+        import resolvers.metadata as metadata_mod
+
+        metadata_mod.METADATA_KEY_LIBRARY_TABLE = None
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "deleteMetadataKey"},
@@ -1183,7 +1200,7 @@ class TestDeleteMetadataKey:
     def test_delete_metadata_key_missing_key_name(self, mock_env_with_key_library, mock_boto3):
         """Test returns error when keyName is missing."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         event = {
             "info": {"fieldName": "deleteMetadataKey"},
@@ -1199,14 +1216,16 @@ class TestDeleteMetadataKey:
     ):
         """Test that deleting a key also removes it from filter keys allowlist."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_config = MagicMock()
         mock_config.get_parameter.return_value = ["location", "year", "author"]
 
+        import resolvers.metadata as metadata_mod
+
         with (
             patch("ragstack_common.key_library.KeyLibrary.delete_key") as mock_delete,
-            patch.object(module, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
         ):
             mock_delete.return_value = True
 
@@ -1244,12 +1263,14 @@ class TestRegenerateFilterExamples:
     def test_no_filter_keys_returns_error(self, mock_env_with_key_library, mock_boto3):
         """When no filter keys configured, returns helpful error."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
 
         mock_config = MagicMock()
         mock_config.get_parameter.return_value = []
 
-        with patch.object(module, "get_config_manager", return_value=mock_config):
+        import resolvers.metadata as metadata_mod
+
+        with patch.object(metadata_mod, "get_config_manager", return_value=mock_config):
             event = {
                 "info": {"fieldName": "regenerateFilterExamples"},
                 "arguments": {},
@@ -1264,7 +1285,9 @@ class TestRegenerateFilterExamples:
     def test_generates_examples_with_allowed_keys_only(self, mock_env_with_key_library, mock_boto3):
         """Only uses keys from the filter allowlist."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
+
+        import resolvers.metadata as metadata_mod
 
         mock_config = MagicMock()
 
@@ -1283,13 +1306,13 @@ class TestRegenerateFilterExamples:
             {"key_name": "author", "data_type": "string", "occurrence_count": 3},
         ]
 
-        # Patch at module level where it's imported
+        # Patch at metadata module level where it's imported
         with (
-            patch.object(module, "get_config_manager", return_value=mock_config),
-            patch.object(module, "KeyLibrary", return_value=mock_key_library),
-            patch.object(module, "generate_filter_examples") as mock_generate,
-            patch.object(module, "store_filter_examples"),
-            patch.object(module, "update_config_with_examples"),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "KeyLibrary", return_value=mock_key_library),
+            patch.object(metadata_mod, "generate_filter_examples") as mock_generate,
+            patch.object(metadata_mod, "store_filter_examples"),
+            patch.object(metadata_mod, "update_config_with_examples"),
         ):
             mock_generate.return_value = [{"name": "test", "filter": {}}]
 
@@ -1313,7 +1336,9 @@ class TestRegenerateFilterExamples:
     def test_no_active_keys_matching_filter(self, mock_env_with_key_library, mock_boto3):
         """Returns error when no active keys match the filter allowlist."""
         module = _load_appsync_resolvers_module()
-        module.dynamodb = mock_boto3["dynamodb"]
+        _patch_resolver_clients(module, mock_boto3)
+
+        import resolvers.metadata as metadata_mod
 
         mock_config = MagicMock()
         mock_config.get_parameter.side_effect = lambda key, default=None: (
@@ -1326,8 +1351,8 @@ class TestRegenerateFilterExamples:
         ]
 
         with (
-            patch.object(module, "get_config_manager", return_value=mock_config),
-            patch.object(module, "KeyLibrary", return_value=mock_key_library),
+            patch.object(metadata_mod, "get_config_manager", return_value=mock_config),
+            patch.object(metadata_mod, "KeyLibrary", return_value=mock_key_library),
         ):
             event = {
                 "info": {"fieldName": "regenerateFilterExamples"},
@@ -1338,3 +1363,33 @@ class TestRegenerateFilterExamples:
 
             assert result["success"] is False
             assert "None of the configured filter keys are active" in result["error"]
+
+
+class TestEnvVarValidation:
+    """Tests for environment variable validation at handler entry."""
+
+    def test_missing_tracking_table_raises_value_error(self, monkeypatch, mock_boto3):
+        """Handler raises ValueError with descriptive message when TRACKING_TABLE missing."""
+        monkeypatch.delenv("TRACKING_TABLE", raising=False)
+        monkeypatch.setenv("DATA_BUCKET", "test-bucket")
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config")
+
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            module = _load_appsync_resolvers_module()
+
+        event = {"info": {"fieldName": "listDocuments"}, "arguments": {}}
+        with pytest.raises(ValueError, match="TRACKING_TABLE environment variable is required"):
+            module.lambda_handler(event, None)
+
+    def test_missing_data_bucket_raises_value_error(self, monkeypatch, mock_boto3):
+        """Handler raises ValueError with descriptive message when DATA_BUCKET missing."""
+        monkeypatch.setenv("TRACKING_TABLE", "test-table")
+        monkeypatch.delenv("DATA_BUCKET", raising=False)
+        monkeypatch.setenv("CONFIGURATION_TABLE_NAME", "test-config")
+
+        with patch("ragstack_common.auth.check_public_access", return_value=(True, None)):
+            module = _load_appsync_resolvers_module()
+
+        event = {"info": {"fieldName": "listDocuments"}, "arguments": {}}
+        with pytest.raises(ValueError, match="DATA_BUCKET environment variable is required"):
+            module.lambda_handler(event, None)

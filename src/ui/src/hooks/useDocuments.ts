@@ -6,6 +6,7 @@ import { listImages } from '../graphql/queries/listImages';
 import { deleteDocuments as deleteDocumentsMutation } from '../graphql/mutations/deleteDocuments';
 import { reprocessDocument as reprocessDocumentMutation } from '../graphql/mutations/reprocessDocument';
 import { reindexDocument as reindexDocumentMutation } from '../graphql/mutations/reindexDocument';
+import { gqlQuery, gqlSubscribe } from '../utils/graphql';
 
 // Type helper for GraphQL responses - Amplify returns a union type but we know queries return this shape
 type GqlResponse<T = Record<string, unknown>> = { data?: T; errors?: Array<{ message: string }> };
@@ -168,12 +169,11 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listImages as unknown as string,
+          query: gqlQuery(listImages),
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
         if (response.errors) {
-          console.error('[useDocuments] GraphQL errors fetching images:', response.errors);
           break;
         }
 
@@ -209,12 +209,11 @@ export const useDocuments = () => {
 
       do {
         const response = await client.graphql({
-          query: listScrapeJobs as unknown as string,
+          query: gqlQuery(listScrapeJobs),
           variables: { limit: 100, nextToken }
         }) as GqlResponse;
 
         if (response.errors) {
-          console.error('[useDocuments] GraphQL errors fetching scrape jobs:', response.errors);
           break;
         }
 
@@ -251,12 +250,8 @@ export const useDocuments = () => {
 
     try {
       const response = await client.graphql({
-        query: LIST_DOCUMENTS as unknown as string
+        query: gqlQuery(LIST_DOCUMENTS)
       }) as GqlResponse;
-
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors fetching documents:', response.errors);
-      }
 
       const { data } = response;
       const listResult = data?.listDocuments as { items?: Record<string, unknown>[] } | undefined;
@@ -279,7 +274,6 @@ export const useDocuments = () => {
       await Promise.all([fetchScrapeJobs(), fetchImages()]);
 
     } catch (err) {
-      console.error('Failed to fetch documents:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -291,17 +285,15 @@ export const useDocuments = () => {
   }, [fetchDocuments]);
 
   const fetchDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: GET_DOCUMENT as unknown as string,
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(GET_DOCUMENT),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      return response.data?.getDocument;
-    } catch (err) {
-      console.error('Failed to fetch document:', err);
-      throw err;
+    if (response.errors?.length) {
+      throw new Error(response.errors.map(e => e.message).join(', '));
     }
+    return response.data?.getDocument;
   }, []);
 
   // Handle real-time document update
@@ -391,125 +383,107 @@ export const useDocuments = () => {
       return { deletedCount: 0, failedIds: [] as string[], errors: [] as string[] };
     }
 
-    try {
-      const response = await client.graphql({
-        query: deleteDocumentsMutation as unknown as string,
-        variables: { documentIds }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(deleteDocumentsMutation),
+      variables: { documentIds }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors deleting documents:', response.errors);
-        throw new Error(response.errors[0]?.message || 'Failed to delete documents');
-      }
-
-      const result = response.data?.deleteDocuments as { deletedCount: number; failedIds?: string[] } || { deletedCount: 0 };
-
-      // Remove successfully deleted documents from local state
-      if (result.deletedCount > 0) {
-        const deletedSet = new Set(documentIds);
-        const failedSet = new Set(result.failedIds || []);
-
-        // Filter out successfully deleted items from all collections
-        setDocuments(prev => prev.filter(d => !deletedSet.has(d.documentId) || failedSet.has(d.documentId)));
-        setScrapeJobs(prev => prev.filter(j => !deletedSet.has(j.documentId) || failedSet.has(j.documentId)));
-        setImages(prev => prev.filter(i => !deletedSet.has(i.documentId) || failedSet.has(i.documentId)));
-      }
-
-      return result;
-    } catch (err) {
-      console.error('Failed to delete documents:', err);
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to delete documents');
     }
+
+    const result = response.data?.deleteDocuments as { deletedCount: number; failedIds?: string[] } || { deletedCount: 0 };
+
+    // Remove successfully deleted documents from local state
+    if (result.deletedCount > 0) {
+      const deletedSet = new Set(documentIds);
+      const failedSet = new Set(result.failedIds || []);
+
+      // Filter out successfully deleted items from all collections
+      setDocuments(prev => prev.filter(d => !deletedSet.has(d.documentId) || failedSet.has(d.documentId)));
+      setScrapeJobs(prev => prev.filter(j => !deletedSet.has(j.documentId) || failedSet.has(j.documentId)));
+      setImages(prev => prev.filter(i => !deletedSet.has(i.documentId) || failedSet.has(i.documentId)));
+    }
+
+    return result;
   }, []);
 
   // Reprocess a document by ID
   const reprocessDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: reprocessDocumentMutation as unknown as string,
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(reprocessDocumentMutation),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors reprocessing document:', response.errors);
-        throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
-      }
-
-      const result = response.data?.reprocessDocument as {
-        documentId: string;
-        type: string;
-        status: string;
-        executionArn?: string;
-        error?: string;
-      };
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      // Update local state to show processing status
-      if (result) {
-        const updateStatus = (prev: DocumentItem[]) =>
-          prev.map(d =>
-            d.documentId === documentId
-              ? { ...d, status: result.status || 'PROCESSING' }
-              : d
-          );
-        setDocuments(updateStatus);
-        setScrapeJobs(updateStatus);
-        setImages(updateStatus);
-      }
-
-      return result;
-    } catch (err) {
-      console.error('Failed to reprocess document:', err);
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to reprocess document');
     }
+
+    const result = response.data?.reprocessDocument as {
+      documentId: string;
+      type: string;
+      status: string;
+      executionArn?: string;
+      error?: string;
+    };
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    // Update local state to show processing status
+    if (result) {
+      const updateStatus = (prev: DocumentItem[]) =>
+        prev.map(d =>
+          d.documentId === documentId
+            ? { ...d, status: result.status || 'PROCESSING' }
+            : d
+        );
+      setDocuments(updateStatus);
+      setScrapeJobs(updateStatus);
+      setImages(updateStatus);
+    }
+
+    return result;
   }, []);
 
   // Reindex a document by ID (re-extract metadata, skip OCR)
   const reindexDocument = useCallback(async (documentId: string) => {
-    try {
-      const response = await client.graphql({
-        query: reindexDocumentMutation as unknown as string,
-        variables: { documentId }
-      }) as GqlResponse;
+    const response = await client.graphql({
+      query: gqlQuery(reindexDocumentMutation),
+      variables: { documentId }
+    }) as GqlResponse;
 
-      if (response.errors) {
-        console.error('[useDocuments] GraphQL errors reindexing document:', response.errors);
-        throw new Error(response.errors[0]?.message || 'Failed to reindex document');
-      }
-
-      const result = response.data?.reindexDocument as {
-        documentId: string;
-        type: string;
-        status: string;
-        executionArn?: string;
-        error?: string;
-      };
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      // Update local state to show processing status
-      if (result) {
-        const updateStatus = (prev: DocumentItem[]) =>
-          prev.map(d =>
-            d.documentId === documentId
-              ? { ...d, status: result.status || 'PROCESSING' }
-              : d
-          );
-        setDocuments(updateStatus);
-        setScrapeJobs(updateStatus);
-        setImages(updateStatus);
-      }
-
-      return result;
-    } catch (err) {
-      console.error('Failed to reindex document:', err);
-      throw err;
+    if (response.errors) {
+      throw new Error(response.errors[0]?.message || 'Failed to reindex document');
     }
+
+    const result = response.data?.reindexDocument as {
+      documentId: string;
+      type: string;
+      status: string;
+      executionArn?: string;
+      error?: string;
+    };
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    // Update local state to show processing status
+    if (result) {
+      const updateStatus = (prev: DocumentItem[]) =>
+        prev.map(d =>
+          d.documentId === documentId
+            ? { ...d, status: result.status || 'PROCESSING' }
+            : d
+        );
+      setDocuments(updateStatus);
+      setScrapeJobs(updateStatus);
+      setImages(updateStatus);
+    }
+
+    return result;
   }, []);
 
   useEffect(() => {
@@ -521,54 +495,47 @@ export const useDocuments = () => {
     let scrapeSubscription: { unsubscribe: () => void } | null = null;
     let imageSubscription: { unsubscribe: () => void } | null = null;
 
-    try {
-      // Subscribe to document updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      docSubscription = (client.graphql({
-        query: ON_DOCUMENT_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onDocumentUpdate?: DocumentUpdateEvent } }) => {
-          if (data?.onDocumentUpdate) {
-            handleDocumentUpdate(data.onDocumentUpdate);
-          }
-        },
-        error: (err: Error) => {
-          console.error('[useDocuments] Document subscription error:', err);
-        }
-      });
+    if (client?.graphql) {
+      try {
+        // Subscribe to document updates
+        docSubscription = gqlSubscribe<{ onDocumentUpdate?: DocumentUpdateEvent }>(
+          client, ON_DOCUMENT_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onDocumentUpdate) {
+              handleDocumentUpdate(data.onDocumentUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Document subscription error:', err); }
+        });
 
-      // Subscribe to scrape updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      scrapeSubscription = (client.graphql({
-        query: ON_SCRAPE_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onScrapeUpdate?: ScrapeUpdateEvent } }) => {
-          if (data?.onScrapeUpdate) {
-            handleScrapeUpdate(data.onScrapeUpdate);
-          }
-        },
-        error: (err: Error) => {
-          console.error('[useDocuments] Scrape subscription error:', err);
-        }
-      });
+        // Subscribe to scrape updates
+        scrapeSubscription = gqlSubscribe<{ onScrapeUpdate?: ScrapeUpdateEvent }>(
+          client, ON_SCRAPE_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onScrapeUpdate) {
+              handleScrapeUpdate(data.onScrapeUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Scrape subscription error:', err); }
+        });
 
-      // Subscribe to image updates
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      imageSubscription = (client.graphql({
-        query: ON_IMAGE_UPDATE as unknown as string
-      }) as any).subscribe({
-        next: ({ data }: { data?: { onImageUpdate?: ImageUpdateEvent } }) => {
-          if (data?.onImageUpdate) {
-            handleImageUpdate(data.onImageUpdate);
-          }
-        },
-        error: (err: Error) => {
-          console.error('[useDocuments] Image subscription error:', err);
-        }
-      });
+        // Subscribe to image updates
+        imageSubscription = gqlSubscribe<{ onImageUpdate?: ImageUpdateEvent }>(
+          client, ON_IMAGE_UPDATE
+        ).subscribe({
+          next: ({ data }) => {
+            if (data?.onImageUpdate) {
+              handleImageUpdate(data.onImageUpdate);
+            }
+          },
+          error: (err: unknown) => { console.error('Image subscription error:', err); }
+        });
 
-    } catch (err) {
-      console.error('[useDocuments] Failed to set up subscriptions:', err);
+      } catch (err) {
+        console.error('Failed to set up subscriptions:', err);
+      }
     }
 
     // Cleanup subscriptions on unmount

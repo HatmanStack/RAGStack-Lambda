@@ -112,7 +112,7 @@ exclude = [
 ]
 # Each Lambda handler directory has its own index.py
 explicit_package_bases = true
-mypy_path = "lib"
+mypy_path = "lib:src/lambda/appsync_resolvers"
 
 # Third-party libraries without stubs
 [[tool.mypy.overrides]]
@@ -147,6 +147,12 @@ disallow_untyped_calls = false
 disallow_any_generics = false
 disallow_untyped_decorators = false
 warn_return_any = false
+
+# Resolver modules use env vars validated at dispatcher level (index.py).
+# Env vars are str|None but guaranteed non-None by the time resolvers run.
+[[tool.mypy.overrides]]
+module = "resolvers.*"
+disable_error_code = ["arg-type", "union-attr", "type-arg"]
 
 # text_extractors and scraper have complex third-party types - ignore errors
 [[tool.mypy.overrides]]

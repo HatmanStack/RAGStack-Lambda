@@ -4,10 +4,8 @@ import io
 
 import pytest
 
-try:
-    from ebooklib import epub
-except ImportError:
-    epub = None
+ebooklib = pytest.importorskip("ebooklib", reason="ebooklib not installed")
+epub = ebooklib.epub
 
 from ragstack_common.text_extractors.base import ExtractionResult
 from ragstack_common.text_extractors.epub_extractor import EpubExtractor
@@ -19,8 +17,6 @@ def create_minimal_epub(
     chapters: list[tuple[str, str]] | None = None,
 ) -> bytes:
     """Create a minimal EPUB file for testing."""
-    if epub is None:
-        pytest.skip("ebooklib not installed")
 
     book = epub.EpubBook()
     book.set_identifier("test-id-12345")

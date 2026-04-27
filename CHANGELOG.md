@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.5.1] - 2026-03-28
+
+### Fixed
+
+- **KB retrieval failures silently swallowed**: `except Exception: pass` around Bedrock KB retrieval in `query_kb/handler.py` hid all errors. Now surfaces `ClientError` with specific handling for `ThrottlingException` (user-friendly retry message) vs other errors.
+- **Unsafe `os.environ[]` access across Lambdas**: Replaced all bracket-style env var access with `os.environ.get()` plus explicit `ValueError` for required vars in `appsync_resolvers`, `queue_processor`, and `dlq_replay`.
+- **Unbounded S3 reads risk OOM**: `read_s3_text()` and `read_s3_binary()` now check `ContentLength` before reading, with a configurable `max_size_bytes` (default 50MB).
+- **DynamoDB partition key wrong in troubleshooting docs**: Query example used `"PK"` instead of `"Configuration"`.
+- **`--project-name` flag references across docs**: All documentation now uses `--stack-name` (the actual CLI flag).
+- **Caching documentation contradictions**: Three docs claimed "no caching" while `ConfigurationManager` uses request-scoped caching. All now consistent.
+- **12 drift findings in DEVELOPMENT.md**: Corrected nonexistent scripts, wrong filenames, stale descriptions, and missing Lambda functions.
+
+### Changed
+
+- **AppSync resolvers split into domain modules**: `appsync_resolvers/index.py` reduced from 1,400+ lines to 179-line dispatcher. Business logic extracted into `resolvers/shared.py`, `documents.py`, `images.py`, `scrape.py`, `metadata.py`, `chat.py`.
+- **`query_kb` dual-import pattern consolidated**: `_compat.py` now centralizes all cross-module imports. Consumer modules use a single `try/except ImportError` block each (was 5-6 per file). `type: ignore` comments reduced from ~25 to ~16.
+- **`extract_kb_scalar` deduplicated**: Moved from inline implementations in both `search_kb` and `query_kb` to shared `ragstack_common.kb_filters` module with unit tests.
+- **S3 URI parsing consolidated**: 16 inline `replace("s3://", "").split(...)` patterns replaced with `parse_s3_uri()` from `ragstack_common.storage`.
+- **Exception handling narrowed**: Bare `except Exception` blocks replaced with specific types (`ClientError`, `ValueError`, `KeyError`, `TypeError`) across `query_kb` and `appsync_resolvers`. One documented safety-net catch-all retained per Lambda.
+- **`combine_pages` boto3 clients moved to module level**: Lazy-init singletons for connection reuse across warm Lambda invocations.
+
+### Added
+
+- **Request-scoped config caching**: `ConfigurationManager.get_effective_config()` caches results within a single Lambda invocation. `clear_cache()` called at handler entry points.
+- **Frontend type safety wrappers**: `graphql.ts` with `gqlQuery()` and `gqlSubscribe()` replaces all `as unknown as string` and `as any` casts in UI hooks.
+- **`no-console` ESLint rule**: 66 `console.log/error/warn` calls removed from frontend source. Rule enforced for all `.ts/.tsx` files.
+- **Coverage enforcement**: `--cov-fail-under=60` in CI pytest (current coverage: 65%).
+- **Pre-commit hooks**: `.pre-commit-config.yaml` with ruff check and format hooks.
+- **Missing doc links**: IMAGE_UPLOAD.md, API_REFERENCE.md, and MIGRATION.md added to README documentation index.
+- **Repository structure updated**: CLAUDE.md and DEVELOPMENT.md reflect resolver split, 32 Lambda functions, and current architecture.
+
+### Removed
+
+- **Unused `min_per_slice` parameter**: Removed from `merge_slices_with_guaranteed_minimum()` along with vulture whitelist entry.
+
+### Security
+
+- **npm audit vulnerabilities resolved**: Zero vulnerabilities across root, `src/ui`, and `src/ragstack-chat`.
+- **pygments CVE-2026-4539**: No fix version available (transitive dep from pytest). Documented as known exception.
+
 ## [2.5.0] - 2026-03-20
 
 ### Breaking Changes

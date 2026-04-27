@@ -15,7 +15,6 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -29,14 +28,15 @@ from botocore.exceptions import ClientError
 
 class Colors:
     """ANSI color codes for terminal output."""
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
+
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
 
 
 def log_info(msg):
@@ -68,7 +68,7 @@ def run_command(cmd, check=True, capture_output=False, cwd=None):
 
 def validate_email(email):
     """Validate email format."""
-    pattern = r'^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$'
+    pattern = r"^[\w.+-]+@([\w-]+\.)+[\w-]{2,6}$"
     return re.match(pattern, email) is not None
 
 
@@ -107,7 +107,7 @@ def validate_stack_name(stack_name):
 
     # Check all characters are lowercase alphanumeric or hyphen
     for char in stack_name:
-        if not (char.islower() or char.isdigit() or char == '-'):
+        if not (char.islower() or char.isdigit() or char == "-"):
             raise ValueError(
                 f"Stack name contains invalid character '{char}'. "
                 "Only lowercase letters, numbers, and hyphens are allowed"
@@ -136,30 +136,45 @@ def validate_region(region):
         raise ValueError("Region cannot be empty")
 
     # AWS region pattern: 2-letter country code, direction, number
-    pattern = r'^[a-z]{2}-[a-z]+-\d+$'
+    pattern = r"^[a-z]{2}-[a-z]+-\d+$"
 
     if not re.match(pattern, region):
         raise ValueError(
-            f"Invalid AWS region format: {region}. "
-            "Expected format like 'us-east-1', 'eu-west-2'"
+            f"Invalid AWS region format: {region}. Expected format like 'us-east-1', 'eu-west-2'"
         )
 
     # Optional: Check against known regions (as of 2025)
     # Log warning if region is not in known list (may be a new region)
     known_regions = [
-        'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-        'af-south-1',
-        'ap-east-1', 'ap-south-1', 'ap-south-2',
-        'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
-        'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4',
-        'ca-central-1', 'ca-west-1',
-        'eu-central-1', 'eu-central-2',
-        'eu-west-1', 'eu-west-2', 'eu-west-3',
-        'eu-south-1', 'eu-south-2',
-        'eu-north-1',
-        'il-central-1',
-        'me-south-1', 'me-central-1',
-        'sa-east-1',
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "af-south-1",
+        "ap-east-1",
+        "ap-south-1",
+        "ap-south-2",
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-northeast-3",
+        "ap-southeast-1",
+        "ap-southeast-2",
+        "ap-southeast-3",
+        "ap-southeast-4",
+        "ca-central-1",
+        "ca-west-1",
+        "eu-central-1",
+        "eu-central-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "eu-south-1",
+        "eu-south-2",
+        "eu-north-1",
+        "il-central-1",
+        "me-south-1",
+        "me-central-1",
+        "sa-east-1",
     ]
 
     if region not in known_regions:
@@ -215,9 +230,7 @@ def check_nodejs_version(skip_ui=False):
     log_info("Checking Node.js dependencies for UI build...")
 
     # Check Node.js exists
-    node_result = subprocess.run(['node', '--version'],
-                                capture_output=True,
-                                text=True)
+    node_result = subprocess.run(["node", "--version"], capture_output=True, text=True)
 
     if node_result.returncode != 0:
         log_error("Node.js not found but is required for UI build")
@@ -226,9 +239,7 @@ def check_nodejs_version(skip_ui=False):
         sys.exit(1)
 
     # Check npm exists
-    npm_result = subprocess.run(['npm', '--version'],
-                               capture_output=True,
-                               text=True)
+    npm_result = subprocess.run(["npm", "--version"], capture_output=True, text=True)
 
     if npm_result.returncode != 0:
         log_error("npm not found but is required for UI build")
@@ -236,11 +247,11 @@ def check_nodejs_version(skip_ui=False):
         sys.exit(1)
 
     # Parse Node.js version
-    node_version = node_result.stdout.strip().lstrip('v')
+    node_version = node_result.stdout.strip().lstrip("v")
     npm_version = npm_result.stdout.strip()
 
     try:
-        node_major = int(node_version.split('.')[0])
+        node_major = int(node_version.split(".")[0])
 
         if node_major < 24:
             log_error(f"Node.js {node_version} found, but 24+ is required for UI build")
@@ -269,9 +280,7 @@ def check_aws_cli():
     log_info("Checking AWS CLI configuration...")
 
     # Check AWS CLI exists
-    aws_result = subprocess.run(['aws', '--version'],
-                               capture_output=True,
-                               text=True)
+    aws_result = subprocess.run(["aws", "--version"], capture_output=True, text=True)
 
     if aws_result.returncode != 0:
         log_error("AWS CLI not found")
@@ -279,9 +288,9 @@ def check_aws_cli():
         sys.exit(1)
 
     # Check credentials are configured
-    creds_result = subprocess.run(['aws', 'sts', 'get-caller-identity'],
-                                 capture_output=True,
-                                 text=True)
+    creds_result = subprocess.run(
+        ["aws", "sts", "get-caller-identity"], capture_output=True, text=True
+    )
 
     if creds_result.returncode != 0:
         log_error("AWS credentials not configured")
@@ -304,13 +313,13 @@ def check_sam_cli():
     """
     log_info("Checking SAM CLI...")
 
-    sam_result = subprocess.run(['sam', '--version'],
-                               capture_output=True,
-                               text=True)
+    sam_result = subprocess.run(["sam", "--version"], capture_output=True, text=True)
 
     if sam_result.returncode != 0:
         log_error("SAM CLI not found")
-        log_info("Install SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html")
+        log_info(
+            "Install SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html"
+        )
         sys.exit(1)
 
     # Parse version from output (format: "SAM CLI, version X.Y.Z")
@@ -345,39 +354,54 @@ def handle_failed_stack(stack_name, region):
     Raises:
         OSError: If deletion fails
     """
-    cf_client = boto3.client('cloudformation', region_name=region)
+    cf_client = boto3.client("cloudformation", region_name=region)
 
     try:
         response = cf_client.describe_stacks(StackName=stack_name)
-        stack = response['Stacks'][0]
-        stack_status = stack['StackStatus']
+        stack = response["Stacks"][0]
+        stack_status = stack["StackStatus"]
 
         # Check if stack is already being deleted
-        if stack_status == 'DELETE_IN_PROGRESS':
+        if stack_status == "DELETE_IN_PROGRESS":
             log_info(f"Stack '{stack_name}' is already being deleted, waiting for completion...")
             try:
-                waiter = cf_client.get_waiter('stack_delete_complete')
-                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter = cf_client.get_waiter("stack_delete_complete")
+                log_info(
+                    "Waiting for stack deletion to complete (this may take several minutes)..."
+                )
                 waiter.wait(
                     StackName=stack_name,
                     WaiterConfig={
-                        'Delay': 30,  # Check every 30 seconds
-                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
-                    }
+                        "Delay": 30,  # Check every 30 seconds
+                        "MaxAttempts": 20,  # Wait up to 10 minutes (20 * 30s)
+                    },
                 )
                 log_success(f"Stack '{stack_name}' deleted successfully")
                 return True
             except Exception as e:
                 log_error(f"Stack deletion timed out or failed: {e}")
-                log_error(f"Stack '{stack_name}' is still deleting. Please wait for deletion to complete:")
-                log_error("  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
-                log_error(f"  2. Or run: aws cloudformation wait stack-delete-complete --stack-name {stack_name}")
+                log_error(
+                    f"Stack '{stack_name}' is still deleting. Please wait for deletion to complete:"
+                )
+                log_error(
+                    "  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation"
+                )
+                log_error(
+                    f"  2. Or run: aws cloudformation wait stack-delete-complete --stack-name {stack_name}"
+                )
                 log_error("  3. Then retry this deployment")
-                raise OSError(f"Stack deletion timeout - stack '{stack_name}' may still be deleting") from e
+                raise OSError(
+                    f"Stack deletion timeout - stack '{stack_name}' may still be deleting"
+                ) from e
 
         # Check if stack is in an unrecoverable state (creation failures only)
         # UPDATE_ROLLBACK_COMPLETE is healthy and can be updated again
-        if stack_status in ['ROLLBACK_COMPLETE', 'CREATE_FAILED', 'DELETE_FAILED', 'ROLLBACK_FAILED']:
+        if stack_status in [
+            "ROLLBACK_COMPLETE",
+            "CREATE_FAILED",
+            "DELETE_FAILED",
+            "ROLLBACK_FAILED",
+        ]:
             log_warning(f"Stack '{stack_name}' is in {stack_status} state")
             log_info(f"Deleting failed stack '{stack_name}'...")
 
@@ -385,35 +409,47 @@ def handle_failed_stack(stack_name, region):
                 cf_client.delete_stack(StackName=stack_name)
 
                 # Wait for deletion to complete
-                waiter = cf_client.get_waiter('stack_delete_complete')
-                log_info("Waiting for stack deletion to complete (this may take several minutes)...")
+                waiter = cf_client.get_waiter("stack_delete_complete")
+                log_info(
+                    "Waiting for stack deletion to complete (this may take several minutes)..."
+                )
                 waiter.wait(
                     StackName=stack_name,
                     WaiterConfig={
-                        'Delay': 30,  # Check every 30 seconds
-                        'MaxAttempts': 20  # Wait up to 10 minutes (20 * 30s)
-                    }
+                        "Delay": 30,  # Check every 30 seconds
+                        "MaxAttempts": 20,  # Wait up to 10 minutes (20 * 30s)
+                    },
                 )
 
                 log_success(f"Stack '{stack_name}' deleted successfully")
                 return True
             except Exception as e:
                 log_error(f"Stack deletion timed out: {e}")
-                log_error(f"Stack '{stack_name}' deletion is taking longer than expected. Please verify deletion:")
-                log_error("  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation")
-                log_error(f"  2. Or run: aws cloudformation describe-stacks --stack-name {stack_name}")
-                log_error(f"  3. If stuck, manually delete: aws cloudformation delete-stack --stack-name {stack_name}")
+                log_error(
+                    f"Stack '{stack_name}' deletion is taking longer than expected. Please verify deletion:"
+                )
+                log_error(
+                    "  1. Check CloudFormation console: https://console.aws.amazon.com/cloudformation"
+                )
+                log_error(
+                    f"  2. Or run: aws cloudformation describe-stacks --stack-name {stack_name}"
+                )
+                log_error(
+                    f"  3. If stuck, manually delete: aws cloudformation delete-stack --stack-name {stack_name}"
+                )
                 log_error("  4. Then retry this deployment")
-                raise OSError(f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting") from e
+                raise OSError(
+                    f"Stack deletion timeout - cannot proceed while stack '{stack_name}' may still be deleting"
+                ) from e
 
         # Stack exists and is in a healthy state
         return False
 
     except cf_client.exceptions.ClientError as e:
-        error_code = e.response['Error']['Code']
+        error_code = e.response["Error"]["Code"]
 
         # Stack doesn't exist - this is fine, we can proceed
-        if error_code == 'ValidationError' and 'does not exist' in str(e):
+        if error_code == "ValidationError" and "does not exist" in str(e):
             log_info(f"Stack '{stack_name}' does not exist, proceeding with fresh deployment")
             return True
 
@@ -439,52 +475,61 @@ def create_sam_artifact_bucket(stack_name, region):
     Raises:
         OSError: If bucket creation fails
     """
-    s3_client = boto3.client('s3', region_name=region)
-    sts_client = boto3.client('sts', region_name=region)
+    s3_client = boto3.client("s3", region_name=region)
+    sts_client = boto3.client("sts", region_name=region)
 
     # Get account ID for bucket naming
     try:
-        account_id = sts_client.get_caller_identity()['Account']
+        account_id = sts_client.get_caller_identity()["Account"]
     except ClientError as e:
         raise OSError(f"Failed to get AWS account ID: {e}") from e
 
     # Use project-specific bucket for all deployment artifacts
-    bucket_name = f'{stack_name}-artifacts-{account_id}'
+    bucket_name = f"{stack_name}-artifacts-{account_id}"
 
     # Create bucket if it doesn't exist
     try:
         s3_client.head_bucket(Bucket=bucket_name)
         log_info(f"Using existing artifact bucket: {bucket_name}")
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code', '')
+        error_code = e.response.get("Error", {}).get("Code", "")
 
-        if error_code == '404' or error_code == 'NoSuchBucket':
+        if error_code == "404" or error_code == "NoSuchBucket":
             log_info(f"Creating artifact bucket: {bucket_name}")
             try:
-                if region == 'us-east-1':
+                if region == "us-east-1":
                     s3_client.create_bucket(Bucket=bucket_name)
                 else:
                     s3_client.create_bucket(
-                        Bucket=bucket_name,
-                        CreateBucketConfiguration={'LocationConstraint': region}
+                        Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": region}
                     )
 
                 # Enable versioning for artifact tracking
                 s3_client.put_bucket_versioning(
-                    Bucket=bucket_name,
-                    VersioningConfiguration={'Status': 'Enabled'}
+                    Bucket=bucket_name, VersioningConfiguration={"Status": "Enabled"}
                 )
 
                 log_success(f"Created artifact bucket: {bucket_name}")
             except ClientError as create_error:
-                raise OSError(f"Failed to create S3 bucket {bucket_name}: {create_error}") from create_error
+                raise OSError(
+                    f"Failed to create S3 bucket {bucket_name}: {create_error}"
+                ) from create_error
         else:
             raise OSError(f"Failed to access S3 bucket {bucket_name}: {e}") from e
 
     return bucket_name
 
 
-def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=None, wc_source_key=None, skip_ui=False, demo_mode=False):
+def sam_deploy(
+    stack_name,
+    admin_email,
+    region,
+    artifact_bucket,
+    ui_source_key=None,
+    wc_source_key=None,
+    skip_ui=False,
+    demo_mode=False,
+):
     """
     Deploy SAM application with project-based naming.
 
@@ -526,11 +571,17 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
         param_overrides.append(f"WebComponentSourceKey={wc_source_key}")
 
     cmd = [
-        "sam", "deploy",
-        "--stack-name", stack_name,
-        "--region", region,
-        "--capabilities", "CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND",
-        "--s3-bucket", artifact_bucket,
+        "sam",
+        "deploy",
+        "--stack-name",
+        stack_name,
+        "--region",
+        region,
+        "--capabilities",
+        "CAPABILITY_IAM",
+        "CAPABILITY_AUTO_EXPAND",
+        "--s3-bucket",
+        artifact_bucket,
         "--no-confirm-changeset",
         "--parameter-overrides",
     ] + param_overrides
@@ -538,12 +589,11 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
     run_command(cmd)
 
     # Enable termination protection on the stack to prevent accidental deletion
-    cf_client = boto3.client('cloudformation', region_name=region)
+    cf_client = boto3.client("cloudformation", region_name=region)
     try:
         log_info("Enabling stack termination protection...")
         cf_client.update_termination_protection(
-            StackName=stack_name,
-            EnableTerminationProtection=True
+            StackName=stack_name, EnableTerminationProtection=True
         )
         log_success("Stack termination protection enabled")
     except Exception as e:
@@ -553,7 +603,9 @@ def sam_deploy(stack_name, admin_email, region, artifact_bucket, ui_source_key=N
     return stack_name
 
 
-def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive_prefix, s3_key_prefix):
+def _package_source_to_s3(
+    source_dir, bucket_name, region, exclude_dirs, archive_prefix, s3_key_prefix
+):
     """
     Shared implementation for packaging source code and uploading to S3.
 
@@ -573,7 +625,6 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
         OSError: If packaging or upload fails
     """
     import tempfile
-    import time
     import zipfile
     from pathlib import Path
 
@@ -582,13 +633,13 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
         raise FileNotFoundError(f"Source directory not found: {source_path}")
 
     # Create temporary zip file
-    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
         zip_path = tmp_file.name
 
     try:
         # Create zip file with exclusions
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_path in source_path.rglob('*'):
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in source_path.rglob("*"):
                 if file_path.is_file():
                     # Skip excluded directories
                     if any(excluded in file_path.parts for excluded in exclude_dirs):
@@ -603,9 +654,9 @@ def _package_source_to_s3(source_dir, bucket_name, region, exclude_dirs, archive
                     zipf.write(file_path, arcname)
 
         # Upload to S3
-        s3_client = boto3.client('s3', region_name=region)
+        s3_client = boto3.client("s3", region_name=region)
         timestamp = int(time.time())
-        key = f'{s3_key_prefix}-{timestamp}.zip'
+        key = f"{s3_key_prefix}-{timestamp}.zip"
 
         log_info(f"Uploading to s3://{bucket_name}/{key}...")
         try:
@@ -651,12 +702,12 @@ def package_ui_source(bucket_name, region):
     log_info("Packaging UI source code...")
 
     key = _package_source_to_s3(
-        source_dir='src/ui',
+        source_dir="src/ui",
         bucket_name=bucket_name,
         region=region,
-        exclude_dirs=['node_modules', 'build'],
+        exclude_dirs=["node_modules", "build"],
         archive_prefix=None,  # Keep original structure (ui/* in zip)
-        s3_key_prefix='ui-source'
+        s3_key_prefix="ui-source",
     )
 
     log_success("UI source uploaded to S3")
@@ -684,12 +735,12 @@ def package_ragstack_chat_source(bucket_name, region):
     log_info("Packaging RagStack chat web component source...")
 
     key = _package_source_to_s3(
-        source_dir='src/ragstack-chat',
+        source_dir="src/ragstack-chat",
         bucket_name=bucket_name,
         region=region,
-        exclude_dirs=['node_modules', 'dist'],
-        archive_prefix='src/ragstack-chat',  # CodeBuild BuildSpec does 'cd src/ragstack-chat'
-        s3_key_prefix='web-component-source'
+        exclude_dirs=["node_modules", "dist"],
+        archive_prefix="src/ragstack-chat",  # CodeBuild BuildSpec does 'cd src/ragstack-chat'
+        s3_key_prefix="web-component-source",
     )
 
     log_success("RagStack chat web component source uploaded to S3")
@@ -700,15 +751,15 @@ def get_stack_outputs(stack_name, region="us-east-1"):
     """Get CloudFormation stack outputs."""
     log_info(f"Fetching stack outputs for {stack_name}...")
 
-    cf_client = boto3.client('cloudformation', region_name=region)
+    cf_client = boto3.client("cloudformation", region_name=region)
 
     try:
         response = cf_client.describe_stacks(StackName=stack_name)
-        outputs = response['Stacks'][0].get('Outputs', [])
+        outputs = response["Stacks"][0].get("Outputs", [])
 
         output_dict = {}
         for item in outputs:
-            output_dict[item['OutputKey']] = item['OutputValue']
+            output_dict[item["OutputKey"]] = item["OutputValue"]
 
         return output_dict
     except Exception as e:
@@ -725,11 +776,11 @@ def configure_ui(outputs, region="us-east-1"):
         return outputs
 
     env_content = f"""REACT_APP_AWS_REGION={region}
-REACT_APP_USER_POOL_ID={outputs.get('UserPoolId', '')}
-REACT_APP_USER_POOL_CLIENT_ID={outputs.get('UserPoolClientId', '')}
-REACT_APP_IDENTITY_POOL_ID={outputs.get('IdentityPoolId', '')}
-REACT_APP_GRAPHQL_URL={outputs.get('GraphQLApiUrl', '')}
-REACT_APP_DATA_BUCKET={outputs.get('DataBucketName', '')}
+REACT_APP_USER_POOL_ID={outputs.get("UserPoolId", "")}
+REACT_APP_USER_POOL_CLIENT_ID={outputs.get("UserPoolClientId", "")}
+REACT_APP_IDENTITY_POOL_ID={outputs.get("IdentityPoolId", "")}
+REACT_APP_GRAPHQL_URL={outputs.get("GraphQLApiUrl", "")}
+REACT_APP_DATA_BUCKET={outputs.get("DataBucketName", "")}
 """
 
     env_file = Path("src/ui/.env.production")
@@ -754,28 +805,28 @@ def print_outputs(outputs, stack_name, region):
     print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
     # Print UI URL if available
-    if 'UIUrl' in outputs:
+    if "UIUrl" in outputs:
         print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {outputs['UIUrl']}")
-    elif 'CloudFrontDomain' in outputs:
+    elif "CloudFrontDomain" in outputs:
         ui_url = f"https://{outputs['CloudFrontDomain']}"
         print(f"{Colors.OKGREEN}UI URL:{Colors.ENDC} {ui_url}")
-    elif 'UIBucketName' in outputs:
+    elif "UIBucketName" in outputs:
         # Fallback to S3 website URL if CloudFront not configured
         ui_url = f"http://{outputs['UIBucketName']}.s3-website-{region}.amazonaws.com"
         print(f"{Colors.WARNING}UI URL (S3 - no HTTPS):{Colors.ENDC} {ui_url}")
 
-    if 'GraphQLApiUrl' in outputs:
+    if "GraphQLApiUrl" in outputs:
         print(f"{Colors.OKGREEN}GraphQL API:{Colors.ENDC} {outputs['GraphQLApiUrl']}")
 
     # Print Chat CDN URL if available
-    if 'ChatCDN' in outputs:
+    if "ChatCDN" in outputs:
         print(f"\n{Colors.OKGREEN}Chat Component:{Colors.ENDC}")
         print(f"CDN URL: {outputs['ChatCDN']}")
         print("\nEmbed on your website:")
         print(f'<script src="{outputs["ChatCDN"]}"></script>')
         print('<ragstack-chat conversation-id="my-site"></ragstack-chat>')
 
-    if outputs.get('UserPoolId'):
+    if outputs.get("UserPoolId"):
         print(f"\n{Colors.OKGREEN}Next Steps:{Colors.ENDC}")
         print("1. Check your email for temporary password")
         print("2. Sign in to the UI and change your password")
@@ -800,7 +851,7 @@ def extract_knowledge_base_id(stack_name, region):
     """
     outputs = get_stack_outputs(stack_name, region)
 
-    kb_id = outputs.get('KnowledgeBaseId')
+    kb_id = outputs.get("KnowledgeBaseId")
     if not kb_id:
         raise ValueError(
             f"KnowledgeBaseId not found in stack outputs. "
@@ -842,12 +893,12 @@ def publish_to_marketplace(region="us-east-1"):
 
         # Step 2: Package and upload UI source
         log_info("Step 2: Packaging UI source code...")
-        import zipfile
         import tempfile
+        import zipfile
 
         # Create UI source zip (files stored as ui/* to match buildspec 'cd ui')
         ui_zip_path = Path(tempfile.gettempdir()) / "ui-source.zip"
-        with zipfile.ZipFile(ui_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(ui_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             ui_dir = Path("src/ui")
             for file in ui_dir.rglob("*"):
                 if file.is_file() and "node_modules" not in str(file):
@@ -857,7 +908,7 @@ def publish_to_marketplace(region="us-east-1"):
 
         # Create ragstack-chat source zip (files stored as src/ragstack-chat/* to match buildspec)
         wc_zip_path = Path(tempfile.gettempdir()) / "ragstack-chat-source.zip"
-        with zipfile.ZipFile(wc_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(wc_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             wc_dir = Path("src/ragstack-chat")
             for file in wc_dir.rglob("*"):
                 if file.is_file() and "node_modules" not in str(file):
@@ -867,38 +918,63 @@ def publish_to_marketplace(region="us-east-1"):
 
         # Upload source zips
         log_info("Uploading UI source to S3...")
-        run_command([
-            "aws", "s3", "cp", str(ui_zip_path),
-            f"s3://{marketplace_bucket}/source/ui.zip",
-            "--region", region
-        ])
-        run_command([
-            "aws", "s3", "cp", str(wc_zip_path),
-            f"s3://{marketplace_bucket}/source/ragstack-chat.zip",
-            "--region", region
-        ])
+        run_command(
+            [
+                "aws",
+                "s3",
+                "cp",
+                str(ui_zip_path),
+                f"s3://{marketplace_bucket}/source/ui.zip",
+                "--region",
+                region,
+            ]
+        )
+        run_command(
+            [
+                "aws",
+                "s3",
+                "cp",
+                str(wc_zip_path),
+                f"s3://{marketplace_bucket}/source/ragstack-chat.zip",
+                "--region",
+                region,
+            ]
+        )
         log_success("UI source uploaded")
 
         # Step 3: SAM package
         log_info("Step 3: Packaging SAM application...")
-        run_command([
-            "sam", "package",
-            "--template-file", ".aws-sam/build/template.yaml",
-            "--output-template-file", "ragstack-packaged.yaml",
-            "--s3-bucket", marketplace_bucket,
-            "--s3-prefix", "ragstack-quicklaunch",
-            "--region", region
-        ])
+        run_command(
+            [
+                "sam",
+                "package",
+                "--template-file",
+                ".aws-sam/build/template.yaml",
+                "--output-template-file",
+                "ragstack-packaged.yaml",
+                "--s3-bucket",
+                marketplace_bucket,
+                "--s3-prefix",
+                "ragstack-quicklaunch",
+                "--region",
+                region,
+            ]
+        )
         log_success("SAM package complete")
 
         # Step 4: Upload packaged template
         log_info("Step 4: Uploading packaged template...")
-        run_command([
-            "aws", "s3", "cp",
-            "ragstack-packaged.yaml",
-            f"s3://{marketplace_bucket}/{template_key}",
-            "--region", region
-        ])
+        run_command(
+            [
+                "aws",
+                "s3",
+                "cp",
+                "ragstack-packaged.yaml",
+                f"s3://{marketplace_bucket}/{template_key}",
+                "--region",
+                region,
+            ]
+        )
         log_success("Template uploaded")
 
         print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
@@ -924,6 +1000,7 @@ def publish_to_marketplace(region="us-east-1"):
     except Exception as e:
         log_error(f"Marketplace publishing failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -952,47 +1029,42 @@ Examples:
 
   # Publish to AWS Marketplace (updates one-click deploy template)
   python publish.py --publish-marketplace
-        """
+        """,
     )
 
     parser.add_argument(
         "--publish-marketplace",
         action="store_true",
-        help="Publish to AWS Marketplace (updates one-click deploy template)"
+        help="Publish to AWS Marketplace (updates one-click deploy template)",
     )
 
     parser.add_argument(
         "--stack-name",
-        help="Stack name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)"
+        help="Stack name (lowercase alphanumeric + hyphens, 2-32 chars, must start with letter)",
     )
 
-    parser.add_argument(
-        "--admin-email",
-        help="Admin email for Cognito user and CloudWatch alerts"
-    )
+    parser.add_argument("--admin-email", help="Admin email for Cognito user and CloudWatch alerts")
 
     parser.add_argument(
         "--region",
         default="us-east-1",
-        help="AWS region (default: us-east-1). Nova Multimodal Embeddings currently requires us-east-1."
+        help="AWS region (default: us-east-1). Nova Multimodal Embeddings currently requires us-east-1.",
     )
 
     parser.add_argument(
-        "--skip-ui",
-        action="store_true",
-        help="Skip dashboard build (still builds web component)"
+        "--skip-ui", action="store_true", help="Skip dashboard build (still builds web component)"
     )
 
     parser.add_argument(
         "--skip-ui-all",
         action="store_true",
-        help="Skip all UI builds (dashboard and web component)"
+        help="Skip all UI builds (dashboard and web component)",
     )
 
     parser.add_argument(
         "--demo-mode",
         action="store_true",
-        help="Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)"
+        help="Enable demo mode with rate limits (5 uploads/day, 30 chats/day) and disabled features (reindex, reprocess, delete)",
     )
 
     args = parser.parse_args()
@@ -1029,11 +1101,19 @@ Examples:
 
         # Check for us-east-1 requirement (Nova Multimodal Embeddings)
         if args.region != "us-east-1":
-            log_warning(f"Region '{args.region}' selected, but Nova Multimodal Embeddings is currently only available in us-east-1.")
-            log_warning("The Knowledge Base will fail to create unless the embedding model is available in your region.")
-            response = input(f"{Colors.WARNING}Continue anyway? (y/N): {Colors.ENDC}").strip().lower()
-            if response != 'y':
-                log_info("Deployment cancelled. Use --region us-east-1 for Nova Multimodal Embeddings support.")
+            log_warning(
+                f"Region '{args.region}' selected, but Nova Multimodal Embeddings is currently only available in us-east-1."
+            )
+            log_warning(
+                "The Knowledge Base will fail to create unless the embedding model is available in your region."
+            )
+            response = (
+                input(f"{Colors.WARNING}Continue anyway? (y/N): {Colors.ENDC}").strip().lower()
+            )
+            if response != "y":
+                log_info(
+                    "Deployment cancelled. Use --region us-east-1 for Nova Multimodal Embeddings support."
+                )
                 sys.exit(0)
 
         log_success("All inputs validated")
@@ -1106,7 +1186,7 @@ Examples:
             ui_source_key=ui_source_key,
             wc_source_key=wc_source_key,
             skip_ui=args.skip_ui,
-            demo_mode=args.demo_mode
+            demo_mode=args.demo_mode,
         )
 
         # Get outputs
@@ -1135,6 +1215,7 @@ Examples:
     except Exception as e:
         log_error(f"Deployment failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

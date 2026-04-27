@@ -32,9 +32,9 @@ cd src/ui && npm run dev
 
 ## Deployment (DO NOT RUN WITHOUT USER REQUEST)
 ```bash
-python publish.py --project-name my-docs --admin-email admin@example.com
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
+python publish.py --stack-name my-docs --admin-email admin@example.com
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
 ```
 
 ## Python Package Management

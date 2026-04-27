@@ -24,7 +24,7 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | EnqueueBatches Lambda | Queue batch jobs to SQS (internal) |
 | BatchProcessor Lambda | Process 10-page batches (max 10 concurrent, internal) |
 | CombinePages Lambda | Merge partial outputs into final document (internal) |
-| ZipProcessor Lambda | Handle ZIP batch uploads (internal) |
+| ProcessZip Lambda | Handle ZIP batch uploads (internal) |
 | IngestToKB Lambda | Trigger Bedrock KB ingestion (Nova Multimodal embeddings) |
 | IngestMedia Lambda | Ingest transcribed media segments to KB |
 | QueryKB Lambda | Query documents, chat with sources |
@@ -40,6 +40,11 @@ Upload → OCR → Bedrock KB (embeddings + indexing)
 | ConfigurationResolver Lambda | Resolve DynamoDB configuration |
 | AppSyncResolvers Lambda | GraphQL resolver implementations |
 | ApiKeyResolver Lambda | API key validation and management |
+| AdminUserProvisioner Lambda | Idempotent Cognito admin user provisioning (CloudFormation custom resource) |
+| InitialSync Lambda | Trigger initial KB ingestion on stack creation (CloudFormation custom resource) |
+| DlqReplay Lambda | Move messages from DLQ back to source queue (manual trigger) |
+| QueueProcessor Lambda | Process SQS queue messages (internal) |
+| MoveVideo Lambda | Move video files between S3 locations (internal) |
 | Step Functions | Orchestrate document/scrape/reindex workflows |
 | Bedrock KB | Vector storage & retrieval (S3 backend) |
 | S3 | File storage (input/, output/, images/) |

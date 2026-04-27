@@ -17,58 +17,50 @@ import boto3
 from botocore.exceptions import ClientError
 
 try:
-    from ._clients import bedrock_agent, bedrock_runtime, dynamodb, dynamodb_client, s3_client
-    from .conversation import (
-        get_conversation_history,
-        store_conversation_turn,
-        update_conversation_turn,
-    )
-    from .filters import (
+    from ._compat import (
+        _augment_with_id_lookup,
         _get_filter_components,
         _get_filter_examples,
-        extract_kb_scalar,
-        get_config_manager,
-    )
-    from .media import fetch_image_for_converse, format_timestamp
-    from .retrieval import (
-        _augment_with_id_lookup,
-        build_conversation_messages,
-        build_retrieval_query,
-    )
-    from .sources import extract_sources
-except ImportError:
-    from _clients import (  # type: ignore[import-not-found,no-redef]
         bedrock_agent,
         bedrock_runtime,
+        build_conversation_messages,
+        build_retrieval_query,
         dynamodb,
         dynamodb_client,
-        s3_client,
-    )
-    from conversation import (  # type: ignore[import-not-found,no-redef]
+        extract_sources,
+        fetch_image_for_converse,
+        format_timestamp,
+        get_config_manager,
         get_conversation_history,
+        s3_client,
         store_conversation_turn,
         update_conversation_turn,
     )
-    from filters import (  # type: ignore[import-not-found,no-redef]
+except ImportError:
+    from _compat import (  # type: ignore[import-not-found,no-redef]
+        _augment_with_id_lookup,
         _get_filter_components,
         _get_filter_examples,
-        extract_kb_scalar,
-        get_config_manager,
-    )
-    from media import (  # type: ignore[import-not-found,no-redef]
-        fetch_image_for_converse,
-        format_timestamp,
-    )
-    from retrieval import (  # type: ignore[import-not-found,no-redef]
-        _augment_with_id_lookup,
+        bedrock_agent,
+        bedrock_runtime,
         build_conversation_messages,
         build_retrieval_query,
+        dynamodb,
+        dynamodb_client,
+        extract_sources,
+        fetch_image_for_converse,
+        format_timestamp,
+        get_config_manager,
+        get_conversation_history,
+        s3_client,
+        store_conversation_turn,
+        update_conversation_turn,
     )
-    from sources import extract_sources  # type: ignore[import-not-found,no-redef]
 
 from ragstack_common.auth import check_public_access
 from ragstack_common.config import get_knowledge_base_config
 from ragstack_common.demo_mode import is_demo_mode_enabled
+from ragstack_common.kb_filters import extract_kb_scalar
 from ragstack_common.storage import parse_s3_uri
 from ragstack_common.types import ChatResponse
 
@@ -197,7 +189,7 @@ def atomic_quota_check_and_increment(tracking_id: str, is_authenticated: bool, r
         logger.error(f"Error in quota transaction: {e}")
         return fallback_model
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Error in quota check: {e}")
         # On error, default to fallback model (conservative approach)
         return fallback_model
@@ -214,6 +206,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     Returns:
         dict: ChatResponse with answer, conversationId, sources, and optional error
     """
+    # Clear config cache at handler entry to ensure fresh reads per invocation
+    get_config_manager().clear_cache()
+
     # Detect async invocation from AppSync resolver
     is_async = event.get("asyncInvocation", False)
     turn_number = event.get("turnNumber")
@@ -267,7 +262,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         try:
             sts = boto3.client("sts")
             account_id = sts.get_caller_identity()["Account"]
-        except Exception as e:
+        except ClientError as e:
             logger.error(f"Failed to get account ID from STS: {e}")
             raise ValueError("Could not determine AWS account ID for ARN construction") from e
 
@@ -372,58 +367,55 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                     logger.info(f"Generated filter: {json.dumps(generated_filter)}")
                 else:
                     logger.info("No filter intent detected in query")
-            except Exception as e:
+            except (ClientError, ValueError, KeyError, TypeError) as e:
                 logger.warning(f"Filter generation failed, proceeding without filter: {e}")
 
         # Single unified query with optional metadata filter
-        try:
-            if multislice_enabled and generated_filter:
-                # Use multi-slice retrieval with filter
-                _, _, multislice_retriever = _get_filter_components(filtered_score_boost)
-                logger.info(
-                    f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
-                )
-                retrieval_results = multislice_retriever.retrieve(
-                    query=retrieval_query,
-                    knowledge_base_id=knowledge_base_id,
-                    data_source_id=None,  # No data source filtering with unified content/
-                    metadata_filter=generated_filter,
-                    num_results=25,
-                )
-                logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
-                for i, r in enumerate(retrieval_results):
-                    uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
-                    score = r.get("score", "N/A")
-                    logger.debug(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
-            else:
-                # Standard single-query retrieval
-                retrieval_config: dict[str, Any] = {
-                    "vectorSearchConfiguration": {
-                        "numberOfResults": 25,
-                    }
-                }
-                # Apply generated filter if available
-                if generated_filter:
-                    retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
-
-                # Log exactly what we're sending to the KB
-                logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
-
-                retrieve_response = bedrock_agent.retrieve(
-                    knowledgeBaseId=knowledge_base_id,
-                    retrievalQuery={"text": retrieval_query},
-                    retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
-                )
-                retrieval_results = list(retrieve_response.get("retrievalResults", []))
-            logger.info(f"Retrieved {len(retrieval_results)} results")
-
-            # Log each result's URI and score for debugging
+        if multislice_enabled and generated_filter:
+            # Use multi-slice retrieval with filter
+            _, _, multislice_retriever = _get_filter_components(filtered_score_boost)
+            logger.info(
+                f"[MULTISLICE REQUEST] kb_id={knowledge_base_id}, filter={generated_filter}"
+            )
+            retrieval_results = multislice_retriever.retrieve(
+                query=retrieval_query,
+                knowledge_base_id=knowledge_base_id,
+                data_source_id=None,  # No data source filtering with unified content/
+                metadata_filter=generated_filter,
+                num_results=25,
+            )
+            logger.info(f"[MULTISLICE] Retrieved {len(retrieval_results)} results")
             for i, r in enumerate(retrieval_results):
                 uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
                 score = r.get("score", "N/A")
-                logger.debug(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
-        except Exception as e:
-            logger.warning(f"Retrieval failed: {e}")
+                logger.debug(f"[MULTISLICE] Result {i}: score={score}, uri={uri}")
+        else:
+            # Standard single-query retrieval
+            retrieval_config: dict[str, Any] = {
+                "vectorSearchConfiguration": {
+                    "numberOfResults": 25,
+                }
+            }
+            # Apply generated filter if available
+            if generated_filter:
+                retrieval_config["vectorSearchConfiguration"]["filter"] = generated_filter
+
+            # Log exactly what we're sending to the KB
+            logger.info(f"[RETRIEVE REQUEST] kb={knowledge_base_id}")
+
+            retrieve_response = bedrock_agent.retrieve(
+                knowledgeBaseId=knowledge_base_id,
+                retrievalQuery={"text": retrieval_query},
+                retrievalConfiguration=retrieval_config,  # type: ignore[arg-type]
+            )
+            retrieval_results = list(retrieve_response.get("retrievalResults", []))
+        logger.info(f"Retrieved {len(retrieval_results)} results")
+
+        # Log each result's URI and score for debugging
+        for i, r in enumerate(retrieval_results):
+            uri = r.get("location", {}).get("s3Location", {}).get("uri", "N/A")
+            score = r.get("score", "N/A")
+            logger.debug(f"[RETRIEVE] Result {i}: score={score}, uri={uri}")
 
         logger.info(f"Retrieved {len(retrieval_results)} total results from KB")
 
@@ -518,9 +510,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                 # Extract document_id from URI (content/{docId}/...)
                 doc_id = None
                 if s3_uri:
-                    uri_parts = s3_uri.replace("s3://", "").split("/")
-                    if len(uri_parts) >= 3 and uri_parts[1] == "content":
-                        doc_id = uri_parts[2]
+                    try:
+                        _, s3_key = parse_s3_uri(s3_uri)
+                        key_parts = s3_key.split("/")
+                        if len(key_parts) >= 2 and key_parts[0] == "content":
+                            doc_id = key_parts[1]
+                    except (ValueError, IndexError):
+                        logger.warning(f"Skipping visual enrichment for malformed URI: {s3_uri}")
 
                 if doc_id and tracking_table:
                     try:
@@ -572,7 +568,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
                                     txt = resp["Body"].read().decode("utf-8")
                                     visual_context = f"\nTranscript (first segment): {txt}"
                                     logger.info(f"Visual video match: {doc_id}")
-                    except Exception as e:
+                    except (ClientError, KeyError, UnicodeDecodeError) as e:
                         logger.warning(f"Failed to get visual context for {doc_id}: {e}")
 
                 # Build visual hint with context - use tracking table type for label
@@ -711,8 +707,12 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         error_msg = e.response.get("Error", {}).get("Message", "")
-        logger.error(f"Bedrock client error: {error_code} - {error_msg}")
-        error_msg_for_user = f"Failed to query knowledge base: {error_msg}"
+        if error_code == "ThrottlingException":
+            logger.warning(f"Throttled by Bedrock: {error_msg}")
+            error_msg_for_user = "The system is currently busy. Please try again in a moment."
+        else:
+            logger.error(f"Bedrock client error: {error_code} - {error_msg}")
+            error_msg_for_user = "Unable to search the knowledge base. Please try again."
         if is_async and conversation_id and turn_number:
             update_conversation_turn(
                 conversation_id=conversation_id,
@@ -728,7 +728,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> ChatResponse:
         }
 
     except Exception as e:
-        # Generic error handling
+        # Safety net: catch unexpected errors to return user-friendly message
         logger.error(f"Error querying KB: {e}", exc_info=True)
         error_msg_for_user = "Failed to query knowledge base. Please try again."
         if is_async and conversation_id and turn_number:

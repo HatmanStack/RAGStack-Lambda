@@ -1,6 +1,6 @@
 # Configuration
 
-All settings are stored in DynamoDB. Changes are read on each Lambda request (no caching), so updates apply immediately without redeployment.
+All settings are stored in DynamoDB. Lambda uses request-scoped caching (reads config once per invocation, cleared per request). Changes take effect on the next Lambda invocation, so updates apply without redeployment.
 
 ## Settings UI
 
@@ -398,6 +398,6 @@ Demo mode restricts functionality for public showcases and trial deployments.
 - Showcase environments with limited AWS quotas
 - Trial deployments before production
 
-**Enable:** `python publish.py --project-name demo --admin-email admin@example.com --demo-mode`
+**Enable:** `python publish.py --stack-name demo --admin-email admin@example.com --demo-mode`
 
 **Disable:** Redeploy without `--demo-mode` flag.

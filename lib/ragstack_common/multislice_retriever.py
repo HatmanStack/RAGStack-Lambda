@@ -138,7 +138,6 @@ def compute_adaptive_boost(
 
 def merge_slices_with_guaranteed_minimum(
     slice_results: dict[str, list[dict[str, Any]]],
-    min_per_slice: int = 3,
     total_results: int = 10,
     filtered_score_boost: float = 1.0,
 ) -> list[dict[str, Any]]:
@@ -162,7 +161,6 @@ def merge_slices_with_guaranteed_minimum(
     Args:
         slice_results: Dict mapping slice name to its result list.
             The "filtered" key (if present) receives the score boost.
-        min_per_slice: Unused, kept for API compatibility.
         total_results: Maximum total results to return.
         filtered_score_boost: Max boost ceiling for adaptive computation
             (e.g., 1.25 = up to 25% boost). Configurable at runtime.
@@ -375,7 +373,6 @@ class MultiSliceRetriever:
         total = sum(len(r) for r in slice_results.values())
         merged = merge_slices_with_guaranteed_minimum(
             slice_results,
-            min_per_slice=min(3, num_results),
             total_results=num_results * 2,
             filtered_score_boost=self.filtered_score_boost,
         )

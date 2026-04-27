@@ -107,9 +107,10 @@ def _mock_dependencies():
             },
         ),
     ):
-        # Clear cached module so it reimports with mocks
-        if "index" in sys.modules:
-            del sys.modules["index"]
+        # Clear cached modules so they reimport with mocks
+        for mod_name in list(sys.modules):
+            if mod_name == "index" or mod_name.startswith("resolvers"):
+                del sys.modules[mod_name]
 
         # Ensure our path is at the front of sys.path
         appsync_path = str(Path(__file__).parents[3] / "src" / "lambda" / "appsync_resolvers")
@@ -134,8 +135,9 @@ def _mock_dependencies():
 
         # Cleanup
         sys.path = old_path
-        if "index" in sys.modules:
-            del sys.modules["index"]
+        for mod_name in list(sys.modules):
+            if mod_name == "index" or mod_name.startswith("resolvers"):
+                del sys.modules[mod_name]
 
 
 class TestQueryKnowledgeBaseMutation:
@@ -231,8 +233,10 @@ class TestQueryKnowledgeBaseMutation:
         mock_table.query.return_value = {"Items": []}
         index._test_dynamodb.Table.return_value = mock_table
 
-        # Set identity via _current_event
-        index._current_event = {"identity": {"sub": "user-123"}}
+        # Set identity via shared module's current event
+        from resolvers.shared import set_current_event
+
+        set_current_event({"identity": {"sub": "user-123"}})
 
         args = {
             "query": "test query",

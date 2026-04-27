@@ -41,6 +41,32 @@ from ragstack_common.storage import delete_s3_object, parse_s3_uri, read_s3_text
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# Module-level AWS clients (reused across warm Lambda invocations)
+_s3: Any = None
+_lambda_client: Any = None
+_dynamodb: Any = None
+
+
+def _get_s3() -> Any:
+    global _s3
+    if _s3 is None:
+        _s3 = boto3.client("s3")
+    return _s3
+
+
+def _get_lambda_client() -> Any:
+    global _lambda_client
+    if _lambda_client is None:
+        _lambda_client = boto3.client("lambda")
+    return _lambda_client
+
+
+def _get_dynamodb() -> Any:
+    global _dynamodb
+    if _dynamodb is None:
+        _dynamodb = boto3.resource("dynamodb")
+    return _dynamodb
+
 
 def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
     """
@@ -52,8 +78,6 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
     if not prefix.endswith("/"):
         prefix += "/"
 
-    s3 = boto3.client("s3")
-
     # List objects with pagination (handles >1000 objects)
     partial_files: list[dict[str, Any]] = []
     pattern = re.compile(r"pages_(\d+)-(\d+)\.txt$")
@@ -64,7 +88,7 @@ def _list_partial_files(output_s3_prefix: str) -> list[dict[str, Any]]:
         if continuation_token:
             list_kwargs["ContinuationToken"] = continuation_token
 
-        response = s3.list_objects_v2(**list_kwargs)
+        response = _get_s3().list_objects_v2(**list_kwargs)
 
         for obj in response.get("Contents", []):
             key = obj["Key"]
@@ -99,8 +123,6 @@ def _invoke_ingest_to_kb(document_id: str, output_s3_uri: str) -> None:
         logger.warning("INGEST_TO_KB_FUNCTION_ARN not set, skipping ingestion")
         return
 
-    lambda_client = boto3.client("lambda")
-
     payload = {
         "document_id": document_id,
         "output_s3_uri": output_s3_uri,
@@ -108,7 +130,7 @@ def _invoke_ingest_to_kb(document_id: str, output_s3_uri: str) -> None:
 
     logger.info(f"Invoking IngestToKB for document {document_id}")
 
-    lambda_client.invoke(
+    _get_lambda_client().invoke(
         FunctionName=ingest_function_arn,
         InvocationType="Event",  # Async invocation
         Payload=json.dumps(payload),
@@ -198,8 +220,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             logger.warning(f"Failed to delete partial file {partial_uri}: {e}")
 
     # Update DynamoDB tracking table
-    dynamodb = boto3.resource("dynamodb")
-    table = dynamodb.Table(tracking_table)
+    table = _get_dynamodb().Table(tracking_table)
 
     table.update_item(
         Key={"document_id": document_id},

@@ -5,9 +5,10 @@ into a RAGStack knowledge base. Supports documents, images, video, and audio
 files with automatic transcription and semantic search.
 """
 
-import os
 import json
+import os
 import sys
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -193,7 +194,9 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
             snippet = s.get("snippet", "")
             output.append(f"  - {doc_id}" + (f" ({url})" if url else ""))
             if snippet:
-                output.append(f"    \"{snippet[:200]}...\"" if len(snippet) > 200 else f"    \"{snippet}\"")
+                output.append(
+                    f'    "{snippet[:200]}..."' if len(snippet) > 200 else f'    "{snippet}"'
+                )
 
     if conv_id:
         output.append(f"\n[Conversation ID: {conv_id}]")
@@ -759,7 +762,9 @@ def submit_image(
     if data.get("errorMessage"):
         return f"Submit failed: {data['errorMessage']}"
 
-    final_caption = data.get("caption") or data.get("userCaption") or data.get("aiCaption") or "None"
+    final_caption = (
+        data.get("caption") or data.get("userCaption") or data.get("aiCaption") or "None"
+    )
 
     return (
         f"Image submitted successfully!\n\n"
@@ -899,31 +904,41 @@ def get_configuration() -> str:
     # Organize by category
     categories = {
         "Chat Settings": [
-            "chat_primary_model", "chat_fallback_model", "chat_global_quota_daily",
-            "chat_per_user_quota_daily", "chat_allow_document_access", "chat_system_prompt"
+            "chat_primary_model",
+            "chat_fallback_model",
+            "chat_global_quota_daily",
+            "chat_per_user_quota_daily",
+            "chat_allow_document_access",
+            "chat_system_prompt",
         ],
         "Metadata Extraction": [
-            "metadata_extraction_enabled", "metadata_extraction_model",
-            "metadata_extraction_mode", "metadata_manual_keys", "metadata_max_keys"
+            "metadata_extraction_enabled",
+            "metadata_extraction_model",
+            "metadata_extraction_mode",
+            "metadata_manual_keys",
+            "metadata_max_keys",
         ],
         "Query-Time Filtering": [
-            "filter_generation_enabled", "filter_generation_model",
-            "multislice_enabled", "multislice_count", "multislice_timeout_ms"
+            "filter_generation_enabled",
+            "filter_generation_model",
+            "multislice_enabled",
+            "multislice_count",
+            "multislice_timeout_ms",
         ],
         "Public Access": [
-            "public_access_chat", "public_access_search", "public_access_upload",
-            "public_access_image_upload", "public_access_scrape"
+            "public_access_chat",
+            "public_access_search",
+            "public_access_upload",
+            "public_access_image_upload",
+            "public_access_scrape",
         ],
-        "Document Processing": [
-            "ocr_backend", "bedrock_ocr_model_id", "image_caption_prompt"
-        ],
+        "Document Processing": ["ocr_backend", "bedrock_ocr_model_id", "image_caption_prompt"],
         "Media Processing": [
-            "transcribe_language_code", "speaker_diarization_enabled",
-            "media_segment_duration_seconds"
+            "transcribe_language_code",
+            "speaker_diarization_enabled",
+            "media_segment_duration_seconds",
         ],
-        "Budget": [
-            "budget_alert_enabled", "budget_alert_threshold"
-        ],
+        "Budget": ["budget_alert_enabled", "budget_alert_threshold"],
     }
 
     output = ["RAGStack Configuration (read-only)\n"]
@@ -950,7 +965,7 @@ def get_configuration() -> str:
     for keys in categories.values():
         categorized_keys.update(keys)
 
-    other_keys = [k for k in merged.keys() if k not in categorized_keys]
+    other_keys = [k for k in merged if k not in categorized_keys]
     if other_keys:
         output.append("=== Other ===")
         for key in sorted(other_keys):
@@ -1052,7 +1067,9 @@ def get_metadata_stats() -> str:
 
     keys = data.get("keys", [])
     if not keys:
-        return "No metadata keys found. Run analyze_metadata() to discover keys from your documents."
+        return (
+            "No metadata keys found. Run analyze_metadata() to discover keys from your documents."
+        )
 
     total = data.get("totalKeys", len(keys))
     last_analyzed = data.get("lastAnalyzed", "Never")

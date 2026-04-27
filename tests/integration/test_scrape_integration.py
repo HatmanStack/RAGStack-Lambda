@@ -1,7 +1,7 @@
 """
 Integration tests for web scraping pipeline.
 
-These tests require running against real AWS resources or LocalStack.
+These tests require running against real AWS resources or MiniStack.
 Run with: pytest -m integration
 """
 

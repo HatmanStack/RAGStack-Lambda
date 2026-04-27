@@ -76,6 +76,7 @@ For customization or development:
 **Prerequisites:**
 - AWS Account with admin access
 - Python 3.13+, Node.js 24+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 - AWS CLI, SAM CLI (configured)
 - Docker (for Lambda layer builds)
 
@@ -83,14 +84,12 @@ For customization or development:
 git clone https://github.com/HatmanStack/RAGStack-Lambda.git
 cd RAGStack-Lambda
 
-# Create virtual environment and install dependencies
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# Install dependencies
+uv sync
 
 # Deploy (defaults to us-east-1 for Nova Multimodal Embeddings)
 python publish.py \
-  --project-name my-docs \
+  --stack-name my-docs \
   --admin-email admin@example.com
 ```
 
@@ -204,11 +203,14 @@ Ask questions about your content. Sources show where answers came from.
 
 - [Configuration](docs/CONFIGURATION.md) - Settings, quotas, API keys & document management
 - [Nested Stack Deployment](docs/NESTED_STACK_DEPLOYMENT.md) - Deploy as part of larger CloudFormation stack
+- [Image Upload](docs/IMAGE_UPLOAD.md) - Image upload and captioning
 - [Web Scraping](docs/WEB_SCRAPING.md) - Scrape websites
 - [Metadata Filtering](docs/METADATA_FILTERING.md) - Auto-discover metadata and filter results
 - [Chat Component](docs/RAGSTACK_CHAT.md) - Embed chat anywhere
+- [API Reference](docs/API_REFERENCE.md) - GraphQL API documentation
 - [Architecture](docs/ARCHITECTURE.md) - System design & API reference
 - [Development](docs/DEVELOPMENT.md) - Local dev
+- [Migration](docs/MIGRATION.md) - Version migration guide
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 - [Library Reference](docs/LIBRARY_REFERENCE.md) - Public API for lib/ragstack_common
 
@@ -224,16 +226,16 @@ npm run check  # Lint + test all (backend + frontend)
 
 ```bash
 # Full deployment (defaults to us-east-1)
-python publish.py --project-name myapp --admin-email admin@example.com
+python publish.py --stack-name myapp --admin-email admin@example.com
 
 # Skip dashboard build (still builds web component)
-python publish.py --project-name myapp --admin-email admin@example.com --skip-ui
+python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui
 
 # Skip ALL UI builds (dashboard and web component)
-python publish.py --project-name myapp --admin-email admin@example.com --skip-ui-all
+python publish.py --stack-name myapp --admin-email admin@example.com --skip-ui-all
 
 # Enable demo mode (rate limits: 5 uploads/day, 30 chats/day; disables reindex/reprocess/delete)
-python publish.py --project-name myapp --admin-email admin@example.com --demo-mode
+python publish.py --stack-name myapp --admin-email admin@example.com --demo-mode
 ```
 
 ### Publish to AWS Marketplace (Maintainers)

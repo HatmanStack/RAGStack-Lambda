@@ -40,37 +40,24 @@ export const useScrape = () => {
       // Check for GraphQL errors in the response
       if (response.errors && response.errors.length > 0) {
         const errorDetails = response.errors.map(e => e.message).join('; ');
-        console.error('[useScrape] GraphQL errors:', response.errors);
         throw new Error(errorDetails);
       }
 
       const job = response.data?.startScrape as ScrapeJob | undefined;
       if (!job) {
-        console.error('[useScrape] No job returned in response');
         throw new Error('No job data returned from server');
       }
 
       setJobs(prev => [job, ...prev]);
       return job;
     } catch (err) {
-      // Log full error details
-      console.error('[useScrape] Error starting scrape:', err);
-      const typedErr = err as { message?: string; errors?: Array<{ message: string }>; data?: unknown; stack?: string };
-      console.error('[useScrape] Error details:', {
-        message: typedErr.message,
-        errors: typedErr.errors,
-        data: typedErr.data,
-        stack: typedErr.stack
-      });
-
-      // Extract the most useful error message
+      const typedErr = err as { message?: string; errors?: Array<{ message: string }> };
       let errorMessage = 'Failed to start scrape';
       if (typedErr.errors && typedErr.errors.length > 0) {
         errorMessage = typedErr.errors.map(e => e.message).join('; ');
       } else if (typedErr.message) {
         errorMessage = typedErr.message;
       }
-
       setError(errorMessage);
       throw err;
     } finally {

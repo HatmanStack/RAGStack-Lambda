@@ -25,7 +25,6 @@ const RedirectOnAuth = ({ user, from, navigate }: RedirectOnAuthProps) => {
       checkUser().then(() => {
         navigate(from, { replace: true });
       }).catch((err: unknown) => {
-        console.error('[Login] Failed to sync AuthProvider:', err);
         setSyncError(err instanceof Error ? err : new Error('Unknown error'));
         setSyncing(false);
       });
@@ -80,7 +79,7 @@ export const Login = () => {
             loginMechanisms={['email']}
             signUpAttributes={['email']}
           >
-            {({ signOut: _signOut, user }) => ( // eslint-disable-line no-unused-vars
+            {({ signOut: _signOut, user }) => (
               <RedirectOnAuth user={user} from={from} navigate={navigate} />
             )}
           </Authenticator>

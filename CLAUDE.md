@@ -46,15 +46,14 @@ npm run lint:frontend     # TypeScript (ESLint --max-warnings 0)
 npm run check             # Lint + test (CI equivalent)
 
 # Deployment (defaults to us-east-1 for Nova Multimodal Embeddings)
-python publish.py --project-name my-docs --admin-email admin@example.com
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
-python publish.py --project-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
-python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode   # Enable demo mode (rate limits, disabled features)
-python publish.py --project-name my-docs --admin-email admin@example.com --demo-mode    # Enable demo mode
+python publish.py --stack-name my-docs --admin-email admin@example.com
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui      # Skip dashboard
+python publish.py --stack-name my-docs --admin-email admin@example.com --skip-ui-all  # Skip all UI
+python publish.py --stack-name my-docs --admin-email admin@example.com --demo-mode    # Enable demo mode
 
 # Development
 sam build
-sam local invoke ProcessDocumentFunction --event tests/events/s3-put.json
+sam local invoke ProcessDocumentFunction --event tests/events/sqs-processing-message.json
 cd src/ui && npm run dev  # Frontend dev server
 ```
 
@@ -65,12 +64,17 @@ cd src/ui && npm run dev  # Frontend dev server
 ```
 ├── lib/ragstack_common/          # Shared Python utilities (OCR, embeddings, config, storage)
 ├── src/
-│   ├── lambda/                   # Lambda function handlers
+│   ├── lambda/                   # 32 Lambda functions (see docs/ARCHITECTURE.md for full list)
 │   │   ├── process_document/     # OCR extraction (Textract/Bedrock)
+│   │   ├── process_text/         # Text extraction (HTML, CSV, JSON, XML, EPUB, DOCX, XLSX)
+│   │   ├── process_media/        # Video/audio transcription (AWS Transcribe)
 │   │   ├── ingest_to_kb/         # Ingest embeddings to Bedrock KB
 │   │   ├── query_kb/             # Query knowledge base (chat API)
+│   │   ├── search_kb/            # Direct KB search (no chat context)
 │   │   ├── appsync_resolvers/    # GraphQL resolvers for AppSync
-│   │   └── configuration_resolver/ # DynamoDB config resolver
+│   │   │   └── resolvers/        # Domain modules (chat, documents, images, metadata, scrape)
+│   │   ├── configuration_resolver/ # DynamoDB config resolver
+│   │   └── ...                   # And 23 more
 │   ├── ui/                       # React 19 + Vite dashboard (Cloudscape Design)
 │   ├── ragstack-chat/            # Reusable chat React component + web component
 │   ├── api/                      # GraphQL schema

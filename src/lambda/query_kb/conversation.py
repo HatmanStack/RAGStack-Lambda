@@ -16,9 +16,9 @@ from botocore.exceptions import ClientError
 from ragstack_common.types import SourceInfo
 
 try:
-    from ._clients import dynamodb
+    from ._compat import dynamodb
 except ImportError:
-    from _clients import dynamodb  # type: ignore[import-not-found,no-redef]
+    from _compat import dynamodb  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger()
 

@@ -9,16 +9,26 @@ import logging
 import re
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 try:
-    from ._clients import bedrock_runtime, dynamodb, s3_client
-    from .conversation import MAX_MESSAGE_LENGTH
-except ImportError:
-    from _clients import (  # type: ignore[import-not-found,no-redef]
+    from ._compat import (
+        MAX_MESSAGE_LENGTH,
         bedrock_runtime,
         dynamodb,
+        get_config_manager,
         s3_client,
     )
-    from conversation import MAX_MESSAGE_LENGTH  # type: ignore[import-not-found,no-redef]
+except ImportError:
+    from _compat import (  # type: ignore[import-not-found,no-redef]
+        MAX_MESSAGE_LENGTH,
+        bedrock_runtime,
+        dynamodb,
+        get_config_manager,
+        s3_client,
+    )
+
+from ragstack_common.storage import parse_s3_uri
 
 logger = logging.getLogger()
 
@@ -118,15 +128,12 @@ def _augment_with_id_lookup(
                 # Try to read text content from output (extracted) or input
                 uri_to_read = output_uri or input_uri
                 try:
-                    uri_path = uri_to_read.replace("s3://", "")
-                    parts = uri_path.split("/", 1)
-                    if len(parts) == 2:
-                        bucket, key = parts
-                        s3_response = s3_client.get_object(Bucket=bucket, Key=key)
-                        content = s3_response["Body"].read().decode("utf-8")[:10000]
+                    r_bucket, r_key = parse_s3_uri(uri_to_read)
+                    s3_response = s3_client.get_object(Bucket=r_bucket, Key=r_key)
+                    content = s3_response["Body"].read().decode("utf-8")[:10000]
                 except UnicodeDecodeError:
                     logger.info(f"Binary file, adding as source only: {filename}")
-                except Exception as e:
+                except ClientError as e:
                     logger.warning(f"Could not read content for {filename}: {e}")
 
             # Add as a retrieval result (always include in sources)
@@ -147,7 +154,7 @@ def _augment_with_id_lookup(
 
         return retrieval_results
 
-    except Exception as e:
+    except ClientError as e:
         logger.warning(f"DynamoDB fallback lookup failed: {e}")
         return retrieval_results
 
@@ -199,7 +206,7 @@ def build_retrieval_query(current_query: str, history: list[dict[str, Any]]) -> 
         if rewritten and rewritten != current_query:
             logger.info(f"Query rewritten: '{current_query[:50]}...' -> '{rewritten[:50]}...'")
         return rewritten or current_query
-    except Exception as e:
+    except (ClientError, KeyError, ValueError) as e:
         logger.warning(f"Query rewrite failed, using original: {e}")
         return current_query
 
@@ -233,11 +240,6 @@ RULES:
 QUERY TO USE FOR SEARCH:"""
 
     # Use a lightweight model for query rewriting (configurable via DynamoDB)
-    try:
-        from .filters import get_config_manager
-    except ImportError:
-        from filters import get_config_manager  # type: ignore[import-not-found,no-redef]
-
     rewrite_model = str(
         get_config_manager().get_parameter(
             "chat_query_rewrite_model", default="us.amazon.nova-lite-v1:0"

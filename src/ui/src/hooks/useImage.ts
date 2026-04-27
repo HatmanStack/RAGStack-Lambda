@@ -8,6 +8,7 @@ import { submitImage as submitImageMutation } from '../graphql/mutations/submitI
 import { deleteImage as deleteImageMutation } from '../graphql/mutations/deleteImage';
 import { getImage as getImageQuery } from '../graphql/queries/getImage';
 import type { GqlResponse } from '../types/graphql';
+import { gqlQuery } from '../utils/graphql';
 
 export interface ImageUpload {
   id: string;
@@ -41,7 +42,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createImageUploadUrl as unknown as string,
+        query: gqlQuery(createImageUploadUrl),
         variables: { filename }
       }) as GqlResponse;
 
@@ -51,7 +52,6 @@ export const useImage = () => {
 
       return response.data.createImageUploadUrl as { imageId: string; s3Uri: string };
     } catch (err) {
-      console.error('Failed to create upload URL:', err);
       setError(err instanceof Error ? err.message : 'Failed to create upload URL');
       throw err;
     }
@@ -107,7 +107,6 @@ export const useImage = () => {
       return { imageId, s3Uri, filename: file.name };
 
     } catch (err) {
-      console.error('Upload failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload image');
       throw err;
     } finally {
@@ -121,7 +120,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: generateCaptionMutation as unknown as string,
+        query: gqlQuery(generateCaptionMutation),
         variables: { imageS3Uri }
       }) as GqlResponse;
 
@@ -132,7 +131,6 @@ export const useImage = () => {
 
       return captionResult?.caption || '';
     } catch (err) {
-      console.error('Caption generation failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate caption');
       throw err;
     } finally {
@@ -151,7 +149,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: submitImageMutation as unknown as string,
+        query: gqlQuery(submitImageMutation),
         variables: {
           input: {
             imageId,
@@ -177,7 +175,6 @@ export const useImage = () => {
 
       return submitResult;
     } catch (err) {
-      console.error('Submit failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to submit image');
       throw err;
     }
@@ -188,7 +185,7 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: deleteImageMutation as unknown as string,
+        query: gqlQuery(deleteImageMutation),
         variables: { imageId }
       }) as GqlResponse;
 
@@ -200,7 +197,6 @@ export const useImage = () => {
 
       return false;
     } catch (err) {
-      console.error('Delete failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete image');
       throw err;
     }
@@ -211,13 +207,12 @@ export const useImage = () => {
 
     try {
       const response = await client.graphql({
-        query: getImageQuery as unknown as string,
+        query: gqlQuery(getImageQuery),
         variables: { imageId }
       }) as GqlResponse;
 
       return response.data?.getImage;
     } catch (err) {
-      console.error('Failed to get image:', err);
       setError(err instanceof Error ? err.message : 'Failed to get image');
       throw err;
     }
@@ -235,7 +230,7 @@ export const useImage = () => {
     setError(null);
     try {
       const response = await client.graphql({
-        query: createZipUploadUrlMutation as unknown as string,
+        query: gqlQuery(createZipUploadUrlMutation),
         variables: { generateCaptions }
       }) as GqlResponse;
 
@@ -245,7 +240,6 @@ export const useImage = () => {
 
       return response.data.createZipUploadUrl as { uploadId: string };
     } catch (err) {
-      console.error('Failed to create ZIP upload URL:', err);
       setError(err instanceof Error ? err.message : 'Failed to create ZIP upload URL');
       throw err;
     }
@@ -278,7 +272,6 @@ export const useImage = () => {
       return { uploadId };
 
     } catch (err) {
-      console.error('ZIP upload failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload ZIP');
       throw err;
     } finally {

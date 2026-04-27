@@ -104,7 +104,7 @@ echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":10,"messages":[{"ro
 | Stack creation fails with `ROLLBACK_COMPLETE` | IAM, S3, or CloudFormation permission issue | Check CloudFormation events for the specific failing resource. Stack creation does not invoke Bedrock models, so this is not a model agreement issue. |
 | `Invalid email address` error | Bad email format | Use valid email: `python publish.py --admin-email valid@example.com` |
 | `User is not authorized` | Insufficient IAM permissions | Need: `iam:*`, `cloudformation:*`, `lambda:*`, `s3:*` |
-| S3 bucket name exists | Bucket name collision | Change project name: `python publish.py --project-name <unique-name>` |
+| S3 bucket name exists | Bucket name collision | Change stack name: `python publish.py --stack-name <unique-name>` |
 | `sam build` fails | Python version mismatch | Check: `python3.13 --version`. Install Python 3.13+ if needed. |
 | Docker connection error | Docker not running | Start Docker: macOS (open Docker Desktop), Linux (`sudo systemctl start docker`) |
 | SAM build timeout | Network or resource issue | `sam build --use-container` |
@@ -235,7 +235,7 @@ aws dynamodb scan --table-name RAGStack-<project>-Documents
 
 # Check configuration
 aws dynamodb get-item --table-name RAGStack-<project>-Configuration \
-  --key '{"PK": {"S": "Schema"}}'
+  --key '{"Configuration": {"S": "Schema"}}'
 ```
 
 **Check Bedrock Knowledge Base**

@@ -218,7 +218,6 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         await onReindex(documentIds);
         setSelectedItems([]);
       } catch (err) {
-        console.error('Reindex failed:', err);
         addNotification('error', `Reindex failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
@@ -245,7 +244,6 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         await onReprocess(documentIds);
         setSelectedItems([]);
       } catch (err) {
-        console.error('Reprocess failed:', err);
         addNotification('error', `Reprocess failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
@@ -264,7 +262,6 @@ export const DocumentTable = ({ documents, loading, onRefresh, onSelectDocument,
         await onDelete(documentIds);
         setSelectedItems([]);
       } catch (err) {
-        console.error('Delete failed:', err);
         addNotification('error', `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setActionInProgress(null);
