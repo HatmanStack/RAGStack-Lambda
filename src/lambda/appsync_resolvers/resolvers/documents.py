@@ -1267,7 +1267,7 @@ def process_document(args: dict[str, Any]) -> dict[str, Any]:
                 bucket, _ = parse_s3_uri(str(input_s3_uri))
                 output_s3_prefix = f"s3://{bucket}/content/{document_id}/"
             except ValueError:
-                logger.warning(f"Could not parse input_s3_uri for {document_id}: {input_s3_uri}")
+                logger.warning(f"Could not parse input_s3_uri for {document_id}: {input_s3_uri!r}")
         execution_input = {
             "document_id": document_id,
             "input_s3_uri": input_s3_uri,
