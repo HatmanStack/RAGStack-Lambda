@@ -93,7 +93,7 @@ def search_knowledge_base(query: str, max_results: int = 5) -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("searchKnowledgeBase")
+    data = (result.get("data") or {}).get("searchKnowledgeBase")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -171,7 +171,7 @@ def chat_with_knowledge_base(query: str, conversation_id: str | None = None) -> 
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("queryKnowledgeBase")
+    data = (result.get("data") or {}).get("queryKnowledgeBase")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -309,7 +309,7 @@ def start_scrape_job(
     if errors:
         return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
 
-    data = result.get("data", {}).get("startScrape", {})
+    data = (result.get("data") or {}).get("startScrape", {})
     job_id = data.get("jobId", "Unknown")
     status = data.get("status", "Unknown")
 
@@ -362,7 +362,7 @@ def get_scrape_job_status(job_id: str) -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    job = result.get("data", {}).get("getScrapeJob", {}).get("job", {})
+    job = (result.get("data") or {}).get("getScrapeJob", {}).get("job", {})
     if not job:
         return f"Job {job_id} not found."
 
@@ -418,7 +418,7 @@ def list_scrape_jobs(limit: int = 10) -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    items = result.get("data", {}).get("listScrapeJobs", {}).get("items", [])
+    items = (result.get("data") or {}).get("listScrapeJobs", {}).get("items", [])
     if not items:
         return "No scrape jobs found."
 
@@ -500,10 +500,10 @@ def upload_document_url(filename: str) -> str:
     if errors:
         return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
 
-    data = result.get("data", {}).get("createUploadUrl", {})
+    data = (result.get("data") or {}).get("createUploadUrl", {})
     upload_url = data.get("uploadUrl", "")
     doc_id = data.get("documentId", "")
-    fields = data.get("fields", "{}")
+    fields = data.get("fields") or "{}"
 
     return (
         f"Upload URL generated!\n\n"
@@ -573,14 +573,14 @@ def upload_image_url(filename: str) -> str:
     if errors:
         return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
 
-    data = result.get("data", {}).get("createImageUploadUrl")
+    data = (result.get("data") or {}).get("createImageUploadUrl")
     if data is None:
         return "Error: No response from server"
 
     upload_url = data.get("uploadUrl", "")
     image_id = data.get("imageId", "")
     s3_uri = data.get("s3Uri", "")
-    fields = data.get("fields", "{}")
+    fields = data.get("fields") or "{}"
 
     return (
         f"Image upload URL generated!\n\n"
@@ -651,7 +651,7 @@ def generate_image_caption(s3_uri: str) -> str:
     if errors:
         return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
 
-    data = result.get("data", {}).get("generateCaption")
+    data = (result.get("data") or {}).get("generateCaption")
     if data is None:
         return "Error: No response from server"
 
@@ -755,7 +755,7 @@ def submit_image(
     if errors:
         return f"GraphQL error: {errors[0].get('message', 'Unknown error')}"
 
-    data = result.get("data", {}).get("submitImage")
+    data = (result.get("data") or {}).get("submitImage")
     if data is None:
         return "Error: No response from server"
 
@@ -883,7 +883,7 @@ def get_configuration() -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("getConfiguration")
+    data = (result.get("data") or {}).get("getConfiguration")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -1058,7 +1058,7 @@ def get_metadata_stats() -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("getMetadataStats")
+    data = (result.get("data") or {}).get("getMetadataStats")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -1171,7 +1171,7 @@ def get_filter_examples() -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("getFilterExamples")
+    data = (result.get("data") or {}).get("getFilterExamples")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -1194,7 +1194,7 @@ def get_filter_examples() -> str:
         name = ex.get("name", "Unnamed")
         desc = ex.get("description", "No description")
         use_case = ex.get("useCase", "General")
-        filter_json = ex.get("filter", "{}")
+        filter_json = ex.get("filter") or "{}"
 
         # Parse and pretty-print the filter
         try:
@@ -1276,7 +1276,7 @@ def get_key_library() -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    keys = result.get("data", {}).get("getKeyLibrary")
+    keys = (result.get("data") or {}).get("getKeyLibrary")
     if keys is None:
         errors = result.get("errors", [])
         if errors:
@@ -1381,7 +1381,7 @@ def check_key_similarity(key_name: str, threshold: float = 0.8) -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("checkKeySimilarity")
+    data = (result.get("data") or {}).get("checkKeySimilarity")
     if data is None:
         errors = result.get("errors", [])
         if errors:
@@ -1499,7 +1499,7 @@ def analyze_metadata() -> str:
     if "error" in result:
         return f"Error: {result['error']}"
 
-    data = result.get("data", {}).get("analyzeMetadata")
+    data = (result.get("data") or {}).get("analyzeMetadata")
     if data is None:
         errors = result.get("errors", [])
         if errors:

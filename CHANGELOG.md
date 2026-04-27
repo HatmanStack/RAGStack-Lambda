@@ -1,5 +1,12 @@
 # Changelog
 
+## [ragstack-mcp 0.1.7] - 2026-04-27
+
+### Fixed
+
+- **`get_key_library` (and 14 other tools) crashed with `'NoneType' object has no attribute 'get'`**: Every tool used `result.get("data", {}).get("fieldName")` to extract its GraphQL payload, but the dict-`get` default only fires when the key is missing — when GraphQL sets `data` itself to null (which it does on errors or absent fields), the inner `.get` runs on `None`. Switched all 15 call sites to `(result.get("data") or {}).get(...)`.
+- **Same defaults bug in `data.get("fields"/"filter", "{}")`** (3 places, used by `upload_document_url`, `upload_image_url`, `get_filter_examples`): would store `None` and crash on the subsequent `json.loads`. Fixed with `or "{}"` fallback.
+
 ## [ragstack-mcp 0.1.6] - 2026-04-27
 
 ### Fixed
