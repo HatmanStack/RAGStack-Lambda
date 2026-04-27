@@ -47,11 +47,11 @@ Report detected state to the user before continuing.
 ## Pre-Flight: Role File Validation
 
 Before spawning any agents, verify all required role prompt files exist using **Glob**:
-- `.claude/skills/pipeline/planner.md`
-- `.claude/skills/pipeline/plan_reviewer.md`
-- `.claude/skills/pipeline/doc-engineer.md`
-- `.claude/skills/pipeline/doc-reviewer.md`
-- `.claude/skills/pipeline/doc-auditor.md`
+- `skills/pipeline/planner.md`
+- `skills/pipeline/plan_reviewer.md`
+- `skills/pipeline/doc-engineer.md`
+- `skills/pipeline/doc-reviewer.md`
+- `skills/pipeline/doc-auditor.md`
 
 If any file is missing, **stop and report** which files are absent.
 
@@ -68,7 +68,7 @@ Auditor agents are **token-expensive**. They run exactly twice in the full lifec
 
 **NEVER** re-run the doc auditor agent at any point during the pipeline. The planner, doc engineer, and verification reviewer work from doc-audit.md and feedback.md.
 
-## Stage 2: Planning (Planner ↔ Plan Reviewer GAN Loop)
+## Stage 2: Planning (Planner ↔ Plan Reviewer Adversarial Loop)
 
 **Max iterations: 3.**
 
@@ -113,7 +113,7 @@ Standard plan review process — see main SKILL.md Stage 1b.
 
 Loop until `PLAN_APPROVED` or max iterations.
 
-## Stage 3: Implementation (Per-Phase Doc Engineer ↔ Doc Reviewer GAN Loop)
+## Stage 3: Implementation (Per-Phase Doc Engineer ↔ Doc Reviewer Adversarial Loop)
 
 **Max iterations per phase: 3.**
 

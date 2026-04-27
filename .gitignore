@@ -13,6 +13,7 @@ build/
 .claude/*
 !.claude/agents/
 !.claude/skills/
+!.claude/skill-runs.json
 !.claude/SUBAGENTS_USAGE.md
 
 # AWS

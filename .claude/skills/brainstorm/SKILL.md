@@ -114,7 +114,22 @@ Create `docs/plans/YYYY-MM-DD-feature-slug/brainstorm.md` using **Write**:
 [Any limitations, dependencies, or deployment considerations discovered]
 ```
 
-### Step 6: Handoff
+### Step 6: Log to Manifest
+
+Append an entry to `.claude/skill-runs.json` in the repo root. If the file does not exist, create it with an empty array first.
+
+```json
+{
+  "skill": "brainstorm",
+  "date": "YYYY-MM-DD",
+  "plan": "YYYY-MM-DD-feature-slug"
+}
+```
+
+- Read the existing file, parse the JSON array, append the new entry, and write it back
+- If the file is malformed, overwrite it with a fresh array containing only the new entry
+
+### Step 7: Handoff
 
 After writing the brainstorm document:
 

@@ -39,6 +39,41 @@ All plan files must pass markdownlint. Follow these rules in every file you crea
 
 ---
 
+## Depth of Analysis
+
+You must be **exhaustive** in your codebase exploration before writing any plan files. For every feature in the brainstorm:
+
+* Read every file listed in "Relevant Codebase Context" — do not assume you know what's there
+* Trace data flows end-to-end (frontend → API → Lambda → DynamoDB and back)
+* Identify every integration point, shared utility, and convention that the implementation must follow
+* Search for related patterns across the codebase — if the brainstorm says "similar to X," read X and understand it fully
+* Surface hidden dependencies and ordering constraints between features
+
+Do not write plan files until you have a thorough mental model of the existing code. Shallow exploration leads to plans that miss integration details and force rework during implementation.
+
+## Pre-Planning Context Gathering
+
+Before writing any plan files, you **must** read and internalize project-specific context. This prevents plans that contradict established conventions (e.g. using pip when the project uses uv, or python3 when the project uses a different runtime).
+
+**Required reads (in order):**
+
+1. **`CLAUDE.md`** at the repo root -- contains project overview, common commands, tech stack, install/build/test/deploy instructions, and conventions
+2. **`.claude/settings.local.json`** if it exists -- contains project-specific tool settings
+3. **Memory index** at `~/.claude/projects/*/memory/MEMORY.md` -- scan for relevant memories about this project, user preferences, and past feedback
+4. **Individual memory files** referenced in MEMORY.md that are relevant to the work being planned (e.g. environment setup, workflow rules, common mistakes)
+
+**What to extract and apply:**
+
+- Package manager and runtime (uv vs pip vs npm, python3 vs node, etc.)
+- Install, build, test, and deploy commands
+- Architectural patterns and conventions already in use
+- Known constraints or gotchas
+- User preferences for code style, commit workflow, testing approach
+
+**Incorporate this context into Phase-0.md** under a "Project Conventions" section so the implementer inherits it. Do not plan steps that contradict what CLAUDE.md or memories specify.
+
+---
+
 ## Your Task
 Create implementation plan files in markdown format using the **Write** tool.
 
