@@ -27,7 +27,7 @@ pytest-asyncio>=1.3.0
 awslambdaric>=2.0.0
 
 # Mocking AWS services
-moto[s3,dynamodb,stepfunctions]>=5.0.0
+moto[s3,dynamodb,stepfunctions]>=5.1.22
 
 # Code quality
 ruff==0.15.12  # Pinned for consistent linting behavior across team/CI
