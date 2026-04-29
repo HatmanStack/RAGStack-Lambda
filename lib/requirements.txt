@@ -9,7 +9,7 @@ Pillow>=10.0.0
 httpx>=0.28.1
 beautifulsoup4>=4.12.0
 markdownify>=0.13.0
-lxml>=5.0.0
+lxml>=6.1.0
 
 # YAML parsing (used by text_extractors)
 PyYAML>=6.0
