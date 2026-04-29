@@ -8,7 +8,7 @@ Pillow>=12.2.0
 # Web scraping dependencies
 httpx>=0.28.1
 beautifulsoup4>=4.12.0
-markdownify>=0.13.0
+markdownify>=1.2.2
 lxml>=6.1.0
 
 # YAML parsing (used by text_extractors)
