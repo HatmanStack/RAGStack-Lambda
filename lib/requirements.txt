@@ -16,5 +16,5 @@ PyYAML>=6.0
 
 # Text extraction
 python-docx>=1.1    # DOCX extraction
-openpyxl>=3.1       # XLSX extraction
+openpyxl>=3.1.5       # XLSX extraction
 ebooklib>=0.18      # EPUB extraction
