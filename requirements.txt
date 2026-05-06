@@ -40,4 +40,4 @@ boto3-stubs[bedrock,bedrock-agent,bedrock-agent-runtime,s3,sqs,dynamodb,cognito-
 ebooklib>=0.18      # EPUB extraction
 python-docx>=1.1    # DOCX extraction
 openpyxl>=3.1.5       # XLSX extraction
-PyYAML>=6.0         # YAML parsing
+PyYAML>=6.0.3         # YAML parsing
