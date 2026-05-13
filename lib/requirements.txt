@@ -15,6 +15,6 @@ lxml>=6.1.0
 PyYAML>=6.0.3
 
 # Text extraction
-python-docx>=1.1    # DOCX extraction
+python-docx>=1.2.0    # DOCX extraction
 openpyxl>=3.1.5       # XLSX extraction
 ebooklib>=0.20      # EPUB extraction
