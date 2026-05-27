@@ -18,7 +18,7 @@
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.4",
     "@cloudscape-design/collection-hooks": "^1.0.96",
-    "@cloudscape-design/components": "^3.0.1298",
+    "@cloudscape-design/components": "^3.0.1301",
     "@cloudscape-design/global-styles": "^1.0.59",
     "aws-amplify": "^6.17.0",
     "fastest-levenshtein": "^1.0.16",
