@@ -2,7 +2,7 @@
 boto3>=1.43.36
 
 # PDF and image processing
-PyMuPDF>=1.27.2.3
+PyMuPDF>=1.28.0
 Pillow>=12.2.0
 
 # Web scraping dependencies
