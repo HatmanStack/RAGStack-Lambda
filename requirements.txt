@@ -5,7 +5,7 @@ boto3>=1.43.36,<2.0
 # Image processing (for ragstack_common.image)
 # Note: AVIF support requires Pillow 11+ compiled with libavif
 # Lambda layer may need libavif for full AVIF support
-Pillow>=12.2.0,<13
+Pillow>=12.3.0,<13
 
 # PDF processing (for ragstack_common.ocr)
 PyMuPDF>=1.27.2.3,<2.0
