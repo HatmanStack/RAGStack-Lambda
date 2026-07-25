@@ -26,7 +26,7 @@ vi.mock('../../hooks/useScrape', () => ({
 import { Scrape } from './index';
 
 describe('Scrape Component', () => {
-  it('renders the scrape form header', { timeout: 10000 }, () => {
+  it('renders the scrape form header', () => {
     render(
       <MemoryRouter>
         <Scrape />
