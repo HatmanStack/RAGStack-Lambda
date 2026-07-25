@@ -168,7 +168,7 @@ describe('SourceList', () => {
     expect(screen.getByText('abc123')).toBeInTheDocument();
   });
 
-  it('renders image source with thumbnail', { timeout: 10000 }, () => {
+  it('renders image source with thumbnail', () => {
     const sources = [
       {
         documentId: 'img-123',

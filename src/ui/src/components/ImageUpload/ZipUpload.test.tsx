@@ -160,7 +160,7 @@ describe('ZipUpload', () => {
     });
   });
 
-  it('passes generateCaptions=false when unchecked', { timeout: 10000 }, async () => {
+  it('passes generateCaptions=false when unchecked', async () => {
     render(<ZipUpload />);
 
     const mockFile = new File(['test content'], 'images.zip', { type: 'application/zip' });
