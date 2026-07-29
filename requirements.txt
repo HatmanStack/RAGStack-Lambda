@@ -13,7 +13,7 @@ PyMuPDF>=1.28.0,<2.0
 # Web scraping (for ragstack_common.scraper)
 httpx>=0.28.1
 beautifulsoup4>=4.15.0
-markdownify>=1.2.2
+markdownify>=1.2.3
 lxml>=6.1.1
 
 # Development Dependencies
