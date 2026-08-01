@@ -22,7 +22,7 @@ export default defineConfig([
     ignores: ['*.config.js'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs.flat['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -45,7 +45,7 @@ export default defineConfig([
     extends: [
       js.configs.recommended,
       ...tseslint.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs.flat['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -66,6 +66,21 @@ export default defineConfig([
       'no-empty': 'off',
       'no-useless-catch': 'off',
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  // eslint-plugin-react-hooks v7 turns on a set of React Compiler era rules that
+  // v5 did not have, so this codebase has never been checked against them. They
+  // flag 15 existing sites (12 set-state-in-effect, 2 preserve-manual-memoization,
+  // 1 refs). Those are real refactors with behavioural risk, not lint noise, so
+  // they are held off here rather than fixed blind inside a dependency bump.
+  // TODO: address these and drop this block.
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    ignores: ['*.config.js', '*.config.ts', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/refs': 'off',
     },
   },
 ])
