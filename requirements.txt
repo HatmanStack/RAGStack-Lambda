@@ -1,6 +1,6 @@
 # Production Dependencies
 # Core AWS SDK (botocore managed by boto3)
-boto3>=1.43.39,<2.0
+boto3>=1.43.59,<2.0
 
 # Image processing (for ragstack_common.image)
 # Note: AVIF support requires Pillow 11+ compiled with libavif
@@ -13,7 +13,7 @@ PyMuPDF>=1.28.0,<2.0
 # Web scraping (for ragstack_common.scraper)
 httpx>=0.28.1
 beautifulsoup4>=4.15.0
-markdownify>=1.2.2
+markdownify>=1.2.3
 lxml>=6.1.1
 
 # Development Dependencies
@@ -33,7 +33,7 @@ moto[s3,dynamodb,stepfunctions]>=5.2.2
 ruff==0.15.19  # Pinned for consistent linting behavior across team/CI
 
 # Type checking
-mypy>=2.1.0
+mypy>=2.3.0
 boto3-stubs[bedrock,bedrock-agent,bedrock-agent-runtime,s3,sqs,dynamodb,cognito-idp,stepfunctions,codebuild,cloudwatch,textract]
 
 # Text extraction (for ragstack_common.text_extractors)

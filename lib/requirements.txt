@@ -1,5 +1,5 @@
 # Core AWS SDK
-boto3>=1.43.39
+boto3>=1.43.59
 
 # PDF and image processing
 PyMuPDF>=1.28.0
@@ -8,7 +8,7 @@ Pillow>=12.3.0
 # Web scraping dependencies
 httpx>=0.28.1
 beautifulsoup4>=4.15.0
-markdownify>=1.2.2
+markdownify>=1.2.3
 lxml>=6.1.1
 
 # YAML parsing (used by text_extractors)
