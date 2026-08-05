@@ -24,7 +24,7 @@ pytest-xdist>=3.8.0  # For parallel test execution
 pytest-asyncio>=1.4.0
 
 # Local Lambda testing
-awslambdaric>=4.0.0
+awslambdaric>=4.0.2
 
 # Mocking AWS services
 moto[s3,dynamodb,stepfunctions]>=5.2.2
