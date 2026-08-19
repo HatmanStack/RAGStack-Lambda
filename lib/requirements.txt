@@ -1,5 +1,5 @@
 # Core AWS SDK
-boto3>=1.43.67
+boto3>=1.43.72
 
 # PDF and image processing
 PyMuPDF>=1.28.2
