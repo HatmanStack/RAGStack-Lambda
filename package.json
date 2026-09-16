@@ -29,7 +29,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@vitest/ui": "^5.0.0",
-    "happy-dom": "^20.14.0",
+    "happy-dom": "^20.14.5",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   }
