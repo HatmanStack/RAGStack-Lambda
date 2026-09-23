@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.15.6",
-    "@cloudscape-design/collection-hooks": "^1.0.108",
-    "@cloudscape-design/components": "^3.0.1377",
+    "@cloudscape-design/collection-hooks": "^1.0.109",
+    "@cloudscape-design/components": "^3.0.1382",
     "@cloudscape-design/global-styles": "^1.0.70",
     "aws-amplify": "^6.19.0",
     "fastest-levenshtein": "^1.0.16",
@@ -27,7 +27,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.18.3"
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
