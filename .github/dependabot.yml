@@ -16,6 +16,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    ignore:
+      # held: ops/docs/blockers.md #2 — remove when typescript-eslint and ts-jest accept TS 7
+      - dependency-name: "typescript"
+        versions: [">=7"]
     groups:
       dev-dependencies:
         dependency-type: development
@@ -27,6 +31,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    ignore:
+      # held: ops/docs/blockers.md #2 — remove when typescript-eslint and ts-jest accept TS 7
+      - dependency-name: "typescript"
+        versions: [">=7"]
     groups:
       dev-dependencies:
         dependency-type: development
