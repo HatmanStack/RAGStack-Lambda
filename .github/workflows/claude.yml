@@ -49,7 +49,7 @@ jobs:
           # interpreter (python/node/sh): that would make the allowlist
           # decorative. Safe only because the job is gated on
           # author_association above.
-          claude_args: '--allowed-tools "Bash(npm ci:*),Bash(npm test:*),Bash(npm run:*),Bash(npx vitest:*),Bash(npx tsc:*),Bash(npx eslint:*),Bash(uv venv:*),Bash(uv pip install:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(ruff:*),Bash(python -m ruff:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)"'
+          claude_args: '--model claude-opus-5-5 --allowed-tools "Bash(npm ci:*),Bash(npm test:*),Bash(npm run:*),Bash(npx vitest:*),Bash(npx tsc:*),Bash(npx eslint:*),Bash(uv venv:*),Bash(uv pip install:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(ruff:*),Bash(python -m ruff:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*)"'
 
           # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
           # prompt: 'Update the pull request description to include a summary of changes.'
