@@ -8,7 +8,7 @@ boto3>=1.43.126,<2.0
 Pillow>=13.0.0,<14
 
 # PDF processing (for ragstack_common.ocr)
-PyMuPDF>=1.28.2,<2.0
+PyMuPDF>=2.1,<3.0
 
 # Web scraping (for ragstack_common.scraper)
 httpx>=0.28.1
