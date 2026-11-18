@@ -27,7 +27,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@vitest/ui": "^5.1.0",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
