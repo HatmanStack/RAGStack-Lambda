@@ -30,7 +30,7 @@ awslambdaric>=4.2.3
 moto[s3,dynamodb,stepfunctions]>=5.2.5
 
 # Code quality
-ruff==0.17.4  # Pinned for consistent linting behavior across team/CI
+ruff==0.17.6  # Pinned for consistent linting behavior across team/CI
 
 # Type checking
 mypy>=2.4.1
